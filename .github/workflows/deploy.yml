@@ -57,16 +57,33 @@ jobs:
             --var "WHOP_ENV:$WHOP_ENV" --var "WHOP_APP_ID:$WHOP_APP_ID" | tee "$RUNNER_TEMP/deploy.log"
           rm -f "$RUNNER_TEMP/secrets.json"
 
+      # Right after a first deployment, the workers.dev address can answer 404 "error code: 1042"
+      # for a minute or two, before requests reach the Worker: keep asking for up to 3 minutes.
       - name: Check the deployed Worker
         run: |
           url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' "$RUNNER_TEMP/deploy.log" | head -1)
+          if [ -z "$url" ]; then
+            echo "::error::wrangler printed no workers.dev address"
+            exit 1
+          fi
           echo "StayPut: $url"
-          health=$(curl -sS --retry 6 --retry-all-errors --retry-delay 5 "$url/health")
-          echo "$health"
+          body_file="$RUNNER_TEMP/health.json"
+          for attempt in $(seq 1 18); do
+            rm -f "$body_file"
+            code=$(curl -sS -o "$body_file" -w '%{http_code}' --max-time 15 "$url/health") || true
+            body=$(cat "$body_file" 2>/dev/null || true)
+            echo "Attempt $attempt: HTTP $code $body"
+            if grep -q '"status":"ok"' "$body_file" 2>/dev/null; then
+              break
+            fi
+            if [ "$attempt" -lt 18 ]; then
+              sleep 10
+            fi
+          done
           {
-            echo "### StayPut is live"
+            echo "### StayPut"
             echo ""
             echo "- URL: $url"
-            echo "- Health: \`$health\`"
+            echo "- /health: HTTP $code \`$body\`"
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "$health" | grep -q '"status":"ok"'
+          grep -q '"status":"ok"' "$body_file"
