@@ -145,16 +145,17 @@ part dans tous les cas.
 
 ## 8. Offre Alumni (décision du 30/09/2026, `SPEC.md` 5.9)
 
-Tout ce qu'il faut existe dans l'API ; seule l'invitation automatique reste à essayer.
+Tout ce qu'il faut existe dans l'API. Essai sandbox du 30/09/2026 : l'invitation automatique
+répond `403` ; StayPut passe donc par le **lien de repli** (`purchase_url` du variant gratuit).
 
 | Étape | Point d'accès | Détail | Permission | Statut |
 | --- | --- | --- | --- | --- |
 | Créer le produit « Alumni » | `POST /products` | `account_id`, `title`, `description`, `visibility` | `access_pass:create` | OK |
-| Créer le variant gratuit | `POST /variants` (`/plans` dans le SDK 2.0.0) | `product_id`, `initial_price: 0` (« use 0 for free »), `plan_type: one_time`, `visibility: hidden` : accessible seulement par son lien direct (`purchase_url`), qui sert aussi de lien de repli | `plan:create` | OK (`/plans` ou `/variants` : à trancher en sandbox) |
+| Créer le variant gratuit | `POST /variants` (`/plans` dans le SDK 2.0.0) | `product_id`, `initial_price: 0` (« use 0 for free »), `plan_type: one_time`, `visibility: hidden` : accessible seulement par son lien direct (`purchase_url`), qui sert aussi de lien de repli | `plan:create` | OK : `POST /variants` → 200 en sandbox (identifiant `plan_…`, `purchase_url` renvoyé) ; `DELETE /variants/{id}` → 200 |
 | Créer l'expérience StayPut « Alumni » | `POST /experiences` | `account_id`, `app_id` (StayPut), `name` | `experience:create` | OK |
 | La rattacher au produit | `POST /experiences/{id}/attach` | `product_id` | `experience:attach` | OK |
-| Inviter l'ancien membre | `POST /memberships/invite` | `plan_id` (variant gratuit) + `user_id` **ou** `email` ; réponse `202 { invitation_sent: true }` ; Whop envoie l'e-mail, et l'acceptation donne la membership sans paiement | `membership:create` | **INCERTAIN** : expérimental, réservé aux comptes activés par Whop (sinon `403`) ; à essayer en sandbox |
-| Repli | lien direct du variant (`purchase_url`) | affiché dans le questionnaire de départ et sur la page de confirmation | — | OK |
+| Inviter l'ancien membre | `POST /memberships/invite` | `plan_id` (variant gratuit) + `user_id` **ou** `email` ; réponse `202 { invitation_sent: true }` ; Whop envoie l'e-mail, et l'acceptation donne la membership sans paiement | `membership:create` | **403 en sandbox** (30/09/2026) : « This endpoint is not available for your account. » Le compte n'est pas activé pour ce point d'accès expérimental. Non utilisé en V1 ; à redemander à Whop plus tard |
+| Repli | lien direct du variant (`purchase_url`) | affiché dans le questionnaire de départ et sur la page de confirmation | — | **Retenu** : `https://sandbox.whop.com/checkout/plan_…` obtenu en sandbox |
 | Séquence J+7, J+30, J+60 | `POST /notifications` | `experience_id` = l'expérience Alumni (elle appartient à StayPut), `user_ids` = l'ancien membre (il y a accès), `rest_path` vers l'offre | `notification:create` | OK |
 | Code promo de retour | `POST /promo_codes` | code aléatoire, `stock: 1`, `one_per_customer: true`, `expires_at` = +7 jours, `product_id` = le produit quitté, `new_users_only: false` | `promo_code:create` | OK |
 | Départ de l'Alumni | `membership.deactivated` sur la membership Alumni | l'ancien membre n'est plus jamais relancé | `webhook_receive:memberships` | OK |
@@ -194,17 +195,26 @@ Tout ce qu'il faut existe dans l'API ; seule l'invitation automatique reste à e
 
 ## 11. Ce qui reste à vérifier, et ce qu'il faut pour le faire
 
-L'invitation Alumni, `/plans` ou `/variants`, les dates des tickets support et la livraison des
-événements de chat aux webhooks d'app se vérifient en sandbox. Il faut pour cela :
+**Fait le 30/09/2026** avec `NODE_USE_ENV_PROXY=1 node scripts/sandbox/check-invite.mjs <e-mail> --cleanup`
+et une clé API de compte sandbox (`WHOP_SANDBOX_API_KEY`) :
 
-1. un compte sur `sandbox.whop.com` avec une entreprise de test ;
-2. une **clé API de compte** sandbox avec au moins `access_pass:create`, `plan:create` et
-   `membership:create`, rangée dans les variables d'environnement de l'environnement cloud sous
-   le nom **`WHOP_SANDBOX_API_KEY`** (jamais collée dans la conversation) ;
-3. puis `node scripts/sandbox/check-invite.mjs <e-mail de test>` (dans une session cloud :
-   précédé de `NODE_USE_ENV_PROXY=1`), qui crée un produit et un variant gratuits cachés,
-   envoie l'invitation et affiche la réponse de Whop. Le script est prêt : essayé avec une clé
-   invalide, il joint bien le sandbox, qui répond 401.
+| Appel | Réponse |
+| --- | --- |
+| `GET /accounts/me` | 200 |
+| `POST /products` (produit caché) | 200 |
+| `POST /variants` (variant gratuit caché) | 200 : `plan_…`, `purchase_url` = `https://sandbox.whop.com/checkout/plan_…` |
+| `POST /memberships/invite` | **403** `forbidden` : « This endpoint is not available for your account. » |
+| `DELETE /variants/{id}`, `DELETE /products/{id}` | 200 (nettoyage) |
+
+Conclusions :
+
+- **`/variants`** fonctionne : StayPut l'utilise (pas `/plans`).
+- **Invitation** : refusée pour ce compte (point d'accès réservé aux comptes activés par Whop).
+  L'offre Alumni passe par le **lien de repli** (`purchase_url` du variant gratuit). On pourra
+  demander l'activation au support Whop et brancher l'invitation plus tard, sans changer le reste.
+
+Reste à vérifier en sandbox (non bloquant pour la Phase 1) : les dates des tickets support et la
+livraison des événements de chat aux webhooks d'app.
 
 ## 12. À trancher au début de la Phase 1
 
