@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# builds
+dist/
+.wrangler/
+coverage/
+*.tsbuildinfo
+
+# secrets: only the committed examples
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
