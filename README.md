@@ -12,7 +12,7 @@ il a sauvé.
 
 | Phase | Statut |
 | --- | --- |
-| 0. Vérification de l'API Whop | Rapport fait ; il reste l'essai de l'invitation Alumni dans le sandbox |
+| 0. Vérification de l'API Whop | Faite, essai sandbox compris (30/09/2026) ; en attente de validation |
 | 1. Fondations | À faire après validation de la Phase 0 |
 
 ## Stack prévue (`SPEC.md`, section 2)
@@ -24,8 +24,10 @@ Vite sur Cloudflare Pages pour la vue créateur et la vue membre ; Supabase (Pos
 ## Outils de la Phase 0
 
 ```bash
-# Essai de « Invite to a Membership » dans le sandbox Whop (clé de compte sandbox requise)
-WHOP_SANDBOX_API_KEY=... node scripts/sandbox/check-invite.mjs you+test@example.com --cleanup
+# Essai de « Invite to a Membership » dans le sandbox Whop. La clé de compte sandbox vient de la
+# variable d'environnement WHOP_SANDBOX_API_KEY ; NODE_USE_ENV_PROXY=1 derrière un proxy
+# (sessions cloud). Résultat du 30/09/2026 : docs/whop-api-verification.md, section 11.
+NODE_USE_ENV_PROXY=1 node scripts/sandbox/check-invite.mjs you+test@example.com --cleanup
 ```
 
 Aucun secret dans le dépôt : les clés se rangent dans `.dev.vars` / `.env.local` (ignorés par

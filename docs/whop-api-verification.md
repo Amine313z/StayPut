@@ -15,7 +15,8 @@ documentation officielle.
 3. **Le SDK Python officiel `whop-sdk` 2.0.0** (PyPI), pour le seul détail que le SDK
    TypeScript ne contient plus : la vérification du jeton de l'iframe.
 
-**Pas encore d'appel au sandbox** : il faut une clé API sandbox (section 11).
+**Essai dans le sandbox le 30/09/2026** : produit et variant gratuits créés, invitation refusée
+(sections 8 et 11).
 
 **Statuts.** `OK` : confirmé par la documentation (ou par la spécification OpenAPI). `INCERTAIN`
 : la documentation ne tranche pas, ou il faut l'essayer en sandbox. `NON TROUVÉ` : n'existe ni
@@ -26,11 +27,12 @@ dans la documentation ni dans le SDK.
 | Sujet | `SPEC.md` (version initiale) | Réalité vérifiée | Suite |
 | --- | --- | --- | --- |
 | SDK | `new Whop({ appID, apiKey, webhookKey })` | Ancien SDK (≤ 0.0.42). La 2.0.0 : `new WhopClient({ token, apiVersionDate, environment })`, et la vérification des webhooks est une fonction à part, `unwrapWebhook` | On suit la 2.0.0. |
-| Vocabulaire | « company », « plan » | L'API courante dit **account** (identifiants toujours `biz_…`) et, dans la documentation du 29/09, **variant** au lieu de plan (`/variants` ; le SDK 2.0.0 expose encore `/plans`) | Le client `packages/whop` isole ces noms ; `/plans` ou `/variants` à trancher en sandbox. |
+| Vocabulaire | « company », « plan » | L'API courante dit **account** (identifiants toujours `biz_…`) et, dans la documentation du 29/09, **variant** au lieu de plan (`/variants` ; le SDK 2.0.0 expose encore `/plans`) | Le client `packages/whop` isole ces noms ; `/variants` fonctionne en sandbox (section 11) : StayPut l'utilise. |
 | Installation / désinstallation | Événement « s'il existe » | **Aucun événement** | Installation détectée à la première ouverture de la vue créateur ; désinstallation déduite des refus de l'API (section 5). |
 | Code promo « pour ce membre » | Lié au membre | Un code ne se lie pas à un membre | **Décision du 30/09** : code unique, usage unique, valable 7 jours, limité au produit du créateur (`SPEC.md`, Phase 4). |
 | Relance des paiements échoués | StayPut relance à 24 h puis 72 h | Whop relance déjà : `next_payment_attempt_at`, `retryable` | **Décision du 30/09** : relance seulement si Whop n'a rien prévu (`SPEC.md`, Phase 4). |
 | Reconquête par notification | Notification Whop | **Impossible** : une notification n'atteint que les utilisateurs qui ont accès à l'expérience visée, et l'expérience doit appartenir à l'app | **Décision du 30/09 : offre Alumni** (`SPEC.md`, 5.9) ; vérification en section 8. |
+| Entrée dans l'Alumni | Invitation automatique (« Invite to a Membership ») | **`403` en sandbox** : point d'accès expérimental, ouvert compte par compte selon la documentation (le compte du créateur qui invite) | Repli déjà prévu par la décision du 30/09 : **lien d'accès** (section 8). Seul un membre qui voit le lien avant de perdre l'accès peut entrer. |
 | Permissions des actions sur les memberships | — | Pause, reprise, jours offerts exigent **`member:manage`** (ma première version supposait `membership:update`) | Corrigé en section 6. |
 
 ## 2. Appeler l'API au nom d'une entreprise qui a installé l'app
@@ -148,6 +150,15 @@ part dans tous les cas.
 Tout ce qu'il faut existe dans l'API. Essai sandbox du 30/09/2026 : l'invitation automatique
 répond `403` ; StayPut passe donc par le **lien de repli** (`purchase_url` du variant gratuit).
 
+**Conséquence.** Le lien ne peut être montré qu'à un membre qui a encore accès à StayPut : dans
+le questionnaire de départ (envoyé quand il programme son annulation) et sur la page de
+confirmation. Un membre qui part sans annulation programmée (paiement échoué jusqu'au bout,
+remboursement, retrait par le créateur) ne voit pas le lien et n'est plus joignable ensuite.
+L'invitation lèverait cette limite, mais la documentation la réserve aux « accounts enabled for
+membership invitations » : elle s'ouvre compte par compte (le compte du créateur, qui invite), et
+rien n'indique qu'une app puisse l'obtenir pour tous ses créateurs. On ne compte donc pas dessus
+en V1 (question à poser au support, section 11).
+
 | Étape | Point d'accès | Détail | Permission | Statut |
 | --- | --- | --- | --- | --- |
 | Créer le produit « Alumni » | `POST /products` | `account_id`, `title`, `description`, `visibility` | `access_pass:create` | OK |
@@ -186,7 +197,8 @@ répond `403` ; StayPut passe donc par le **lien de repli** (`purchase_url` du v
 **Facultatives** (la fonction se désactive si le créateur refuse)
 
 - Offre Alumni : `access_pass:create`, `plan:create`, `experience:create`,
-  `experience:attach`, `membership:create`.
+  `experience:attach`. (`membership:create` ne servirait qu'à l'invitation, refusée en sandbox :
+  on ne la demande pas en V1.)
 - Activité et tickets : `chat:read`, `forum:read`, `support_chat:read`, `webhook_receive:chat`.
 - Progression : `courses:read`, `course_analytics:read`, `webhook_receive:courses`.
 - Annonces publiques : `chat:message:create`.
@@ -210,8 +222,10 @@ Conclusions :
 
 - **`/variants`** fonctionne : StayPut l'utilise (pas `/plans`).
 - **Invitation** : refusée pour ce compte (point d'accès réservé aux comptes activés par Whop).
-  L'offre Alumni passe par le **lien de repli** (`purchase_url` du variant gratuit). On pourra
-  demander l'activation au support Whop et brancher l'invitation plus tard, sans changer le reste.
+  L'offre Alumni passe par le **lien de repli** (`purchase_url` du variant gratuit), avec la
+  limite décrite en section 8. On pourra demander l'activation au support Whop
+  (`support@whop.com`), en lui demandant aussi si une app peut l'obtenir pour tous les créateurs
+  qui l'installent, et brancher l'invitation plus tard, sans changer le reste.
 
 Reste à vérifier en sandbox (non bloquant pour la Phase 1) : les dates des tickets support et la
 livraison des événements de chat aux webhooks d'app.

@@ -27,19 +27,26 @@ Guidance for Claude Code in this repository.
 
 ## Status
 
-- **Phase 0** (Whop API check): done, except the sandbox test of « Invite to a Membership »
-  (`SPEC.md` 5.9):
+- **Phase 0** (Whop API check): done, waiting for the founder's validation. Sandbox test of
+  2026-09-30 (`docs/whop-api-verification.md`, sections 8 and 11): `POST /variants` works (use
+  it, not `/plans`); `POST /memberships/invite` answers `403` (enabled account by account), so
+  the Alumni offer enters through the free variant's `purchase_url`, shown only to members who
+  still have access (exit survey, confirmation page). To re-run the test:
 
   ```bash
   NODE_USE_ENV_PROXY=1 node scripts/sandbox/check-invite.mjs <test e-mail> --cleanup
   ```
 
-  It reads `WHOP_SANDBOX_API_KEY` from the environment (never print it). Report the result in
-  sections 8 and 11 of `docs/whop-api-verification.md`, then ask the founder to validate
-  Phase 0.
-- **Phase 1** (foundations): not started; waits for the founder's validation of Phase 0.
+  It reads `WHOP_SANDBOX_API_KEY` from the environment (never print it).
+- **Phase 1** (foundations): not started; waits for the founder's validation of Phase 0. Open
+  points to settle first: `docs/whop-api-verification.md`, section 12.
 
 ## Environment notes
+
+- The cloud environment « StayPut » is shared by every session (SAHA included). Its **setup
+  script must stay empty**: a line there that is not a shell command (a domain name, a key)
+  makes every new session fail at startup (« Setup script failed »). Keys belong in its
+  environment variables (`WHOP_SANDBOX_API_KEY=…`, one per line).
 
 - Cloud sessions go through an HTTP proxy: Node's built-in `fetch` needs
   `NODE_USE_ENV_PROXY=1` to use it (otherwise the proxy answers 403 "Host not in allowlist").
