@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { withHyperdriveBinding } from '../../../scripts/deploy/hyperdrive';
-import { cloudflareAccountId, prepare } from '../../../scripts/deploy/prepare';
+import { cloudflareAccountId, prepare, secretValue } from '../../../scripts/deploy/prepare';
 
 const ID = '0123456789abcdef0123456789abcdef';
 
@@ -37,12 +37,31 @@ describe('cloudflareAccountId', () => {
   });
 });
 
+describe('secretValue', () => {
+  it('keeps a value pasted alone, spaces aside', () => {
+    expect(secretValue('WHOP_API_KEY', ' apik_abc \n')).toBe('apik_abc');
+    expect(secretValue('WHOP_WEBHOOK_SECRET', 'ws_a=b')).toBe('ws_a=b');
+  });
+
+  it('drops the .env line around it, as Whop shows the key', () => {
+    expect(secretValue('WHOP_API_KEY', 'WHOP_API_KEY=apik_abc')).toBe('apik_abc');
+    expect(secretValue('WHOP_API_KEY', 'WHOP_API_KEY="apik_abc"')).toBe('apik_abc');
+    expect(secretValue('WHOP_API_KEY', "'apik_abc'")).toBe('apik_abc');
+    expect(
+      secretValue('WHOP_API_KEY', 'NEXT_PUBLIC_WHOP_APP_ID=app_x\r\nWHOP_API_KEY=apik_abc\n'),
+    ).toBe('apik_abc');
+    expect(secretValue('WHOP_API_KEY', 'WHOP_API_KEY=')).toBe('');
+    expect(secretValue('WHOP_API_KEY', undefined)).toBe('');
+  });
+});
+
 describe('prepare', () => {
   it('requires Cloudflare and the database, and only warns about Whop', () => {
     expect(prepare({})).toEqual({
       accountId: null,
       missingRequired: ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'SUPABASE_DB_URL'],
       missingOptional: ['WHOP_API_KEY', 'WHOP_WEBHOOK_SECRET'],
+      cleaned: [],
       secrets: {},
     });
   });
@@ -54,6 +73,19 @@ describe('prepare', () => {
       prepare({ ...base, WHOP_ENV: 'production', WHOP_APP_ID: 'app_prod' }).missingRequired,
     ).toEqual([]);
     expect(prepare({ ...base, WHOP_ENV: 'sandbox' }).missingRequired).toEqual([]);
+  });
+
+  it('uploads the cleaned value and says which secret needed it', () => {
+    const result = prepare({
+      CLOUDFLARE_API_TOKEN: 't',
+      CLOUDFLARE_ACCOUNT_ID: ID,
+      SUPABASE_DB_URL: 'x',
+      WHOP_API_KEY: 'WHOP_API_KEY=apik_abc',
+      WHOP_WEBHOOK_SECRET: 'WHOP_WEBHOOK_SECRET=',
+    });
+    expect(result.secrets).toEqual({ WHOP_API_KEY: 'apik_abc' });
+    expect(result.cleaned).toEqual(['WHOP_API_KEY']);
+    expect(result.missingOptional).toEqual(['WHOP_WEBHOOK_SECRET']);
   });
 
   it('keeps only the Worker secrets that are set', () => {

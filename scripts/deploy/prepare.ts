@@ -28,26 +28,52 @@ export function cloudflareAccountId(raw: string | undefined): string | null {
   return raw?.match(/(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])/i)?.[0].toLowerCase() ?? null;
 }
 
+/**
+ * A Worker secret as the Worker needs it. Whop shows the app's key as a `.env` line
+ * (`WHOP_API_KEY=apik_…`): a pasted `NAME=` prefix (alone or among other lines) and surrounding
+ * quotes are dropped.
+ */
+export function secretValue(name: string, raw: string | undefined): string {
+  const text = raw?.trim() ?? '';
+  const line = text
+    .split(/\r?\n/)
+    .map((candidate) => candidate.trim())
+    .find((candidate) => candidate.startsWith(`${name}=`));
+  const value = line === undefined ? text : line.slice(name.length + 1).trim();
+  const quoted = /^(["'])(.*)\1$/s.exec(value);
+  return quoted ? (quoted[2] ?? '').trim() : value;
+}
+
 export function prepare(env: Record<string, string | undefined>): {
   accountId: string | null;
   missingRequired: string[];
   missingOptional: string[];
+  /** Secrets whose pasted value needed cleaning (secretValue): names only. */
+  cleaned: string[];
   secrets: Record<string, string>;
 } {
   const accountId = cloudflareAccountId(env.CLOUDFLARE_ACCOUNT_ID);
+  const secrets: Record<string, string> = {};
+  const cleaned: string[] = [];
+  for (const name of WORKER_SECRETS) {
+    const value = secretValue(name, env[name]);
+    if (!value) continue;
+    secrets[name] = value;
+    if (value !== env[name]?.trim()) cleaned.push(name);
+  }
   const present = (name: string) =>
-    name === 'CLOUDFLARE_ACCOUNT_ID' ? accountId !== null : Boolean(env[name]?.trim());
+    name === 'CLOUDFLARE_ACCOUNT_ID'
+      ? accountId !== null
+      : WORKER_SECRETS.includes(name)
+        ? name in secrets
+        : Boolean(env[name]?.trim());
   const required =
     env.WHOP_ENV?.trim() === 'production' ? [...REQUIRED, ...PRODUCTION_VARS] : REQUIRED;
-  const secrets: Record<string, string> = {};
-  for (const name of WORKER_SECRETS) {
-    const value = env[name]?.trim();
-    if (value) secrets[name] = value;
-  }
   return {
     accountId,
     missingRequired: required.filter((name) => !present(name)),
     missingOptional: WORKER_SECRETS.filter((name) => !present(name)),
+    cleaned,
     secrets,
   };
 }
@@ -55,9 +81,12 @@ export function prepare(env: Record<string, string | undefined>): {
 function main() {
   const [secretsFile] = process.argv.slice(2);
   if (!secretsFile) throw new Error('usage: prepare.ts <secrets file>');
-  const { accountId, missingRequired, missingOptional, secrets } = prepare(process.env);
+  const { accountId, missingRequired, missingOptional, cleaned, secrets } = prepare(process.env);
   for (const name of missingOptional) {
     console.warn(`::warning::${name} is not set yet: the matching features stay off.`);
+  }
+  for (const name of cleaned) {
+    console.info(`::notice::${name}: kept only the value (dropped a pasted "${name}=" or quotes).`);
   }
   if (missingRequired.length > 0) {
     throw new Error(
