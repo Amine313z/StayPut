@@ -38,7 +38,11 @@ Guidance for Claude Code in this repository.
   left » message (`SPEC.md` 5.9).
 - **Phase 1** (foundations): done, waiting for the founder's validation. Not deployed yet: the
   first deployment needs the founder's Cloudflare account, the Supabase connection string (for
-  Hyperdrive) and the Whop sandbox app (README.md, Deployment).
+  Hyperdrive) and the Whop sandbox app, stored as repository secrets (README.md, Deployment).
+- **Deploying**: the `Deploy` workflow (`.github/workflows/deploy.yml`, `workflow_dispatch`),
+  started from GitHub's Actions tab or through the GitHub API (`actions_run_trigger`, workflow
+  `deploy.yml`, ref `main`). It migrates the database, creates Hyperdrive if needed, publishes
+  the Worker and fails unless `/health` answers `"status":"ok"`.
 
 ## Commands
 
