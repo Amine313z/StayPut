@@ -15,7 +15,6 @@ jobs:
     timeout-minutes: 20
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -25,8 +24,11 @@ jobs:
       - run: npm ci
       - run: npm run check
 
+      # Also writes the cleaned CLOUDFLARE_ACCOUNT_ID to $GITHUB_ENV for the next steps (the
+      # secret may hold a dashboard address around the id).
       - name: Check the configuration and prepare the Worker secrets
         env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           WHOP_API_KEY: ${{ secrets.WHOP_API_KEY }}
           WHOP_WEBHOOK_SECRET: ${{ secrets.WHOP_WEBHOOK_SECRET }}
