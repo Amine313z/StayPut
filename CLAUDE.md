@@ -11,6 +11,10 @@ Guidance for Claude Code in this repository.
   how to reach them, and what to do there. When a step can be prefilled (for example a
   `https://claude.ai/code?prompt=…&repositories=…&environment=…` link for a new session),
   give the prefilled link.
+- Act as the senior full-stack engineer (the founder's words): when something blocks, look for
+  the solution yourself (documentation, API, sandbox) before handing the founder an errand
+  (searching a dashboard, writing to support). Only ask for what truly needs them: a click in
+  an account only they can reach, a decision, a secret stored in the environment.
 - Never ask for a secret (API key, password, connection string) in the chat. Secrets go in
   the cloud environment's variables (environment menu in the session title bar → Edit →
   Environment variables); a new session picks them up.
@@ -30,8 +34,11 @@ Guidance for Claude Code in this repository.
 - **Phase 0** (Whop API check): done, waiting for the founder's validation. Sandbox test of
   2026-09-30 (`docs/whop-api-verification.md`, sections 8 and 11): `POST /variants` works (use
   it, not `/plans`); `POST /memberships/invite` answers `403` (enabled account by account), so
-  the Alumni offer enters through the free variant's `purchase_url`, shown only to members who
-  still have access (exit survey, confirmation page). To re-run the test:
+  the Alumni offer enters through the free variant's `purchase_url`. That link reaches leavers
+  through Whop's native « User left » automated message (dashboard → Support chats, DM + e-mail,
+  set up by the creator during onboarding, no API), the exit survey and the confirmation page;
+  an existing free product of the creator can also carry the Alumni experience (`SPEC.md` 5.9).
+  To re-run the test:
 
   ```bash
   NODE_USE_ENV_PROXY=1 node scripts/sandbox/check-invite.mjs <test e-mail> --cleanup

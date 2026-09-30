@@ -32,7 +32,7 @@ dans la documentation ni dans le SDK.
 | Code promo « pour ce membre » | Lié au membre | Un code ne se lie pas à un membre | **Décision du 30/09** : code unique, usage unique, valable 7 jours, limité au produit du créateur (`SPEC.md`, Phase 4). |
 | Relance des paiements échoués | StayPut relance à 24 h puis 72 h | Whop relance déjà : `next_payment_attempt_at`, `retryable` | **Décision du 30/09** : relance seulement si Whop n'a rien prévu (`SPEC.md`, Phase 4). |
 | Reconquête par notification | Notification Whop | **Impossible** : une notification n'atteint que les utilisateurs qui ont accès à l'expérience visée, et l'expérience doit appartenir à l'app | **Décision du 30/09 : offre Alumni** (`SPEC.md`, 5.9) ; vérification en section 8. |
-| Entrée dans l'Alumni | Invitation automatique (« Invite to a Membership ») | **`403` en sandbox** : point d'accès expérimental, ouvert compte par compte selon la documentation (le compte du créateur qui invite) | Repli déjà prévu par la décision du 30/09 : **lien d'accès** (section 8). Seul un membre qui voit le lien avant de perdre l'accès peut entrer. |
+| Entrée dans l'Alumni | Invitation automatique (« Invite to a Membership ») | **`403` en sandbox** : point d'accès expérimental, ouvert compte par compte selon la documentation (le compte du créateur qui invite) | Repli déjà prévu par la décision du 30/09 : **lien d'accès**, porté à chaque départ par le message automatique « User left » de Whop (section 8). |
 | Permissions des actions sur les memberships | — | Pause, reprise, jours offerts exigent **`member:manage`** (ma première version supposait `membership:update`) | Corrigé en section 6. |
 
 ## 2. Appeler l'API au nom d'une entreprise qui a installé l'app
@@ -150,14 +150,22 @@ part dans tous les cas.
 Tout ce qu'il faut existe dans l'API. Essai sandbox du 30/09/2026 : l'invitation automatique
 répond `403` ; StayPut passe donc par le **lien de repli** (`purchase_url` du variant gratuit).
 
-**Conséquence.** Le lien ne peut être montré qu'à un membre qui a encore accès à StayPut : dans
-le questionnaire de départ (envoyé quand il programme son annulation) et sur la page de
-confirmation. Un membre qui part sans annulation programmée (paiement échoué jusqu'au bout,
-remboursement, retrait par le créateur) ne voit pas le lien et n'est plus joignable ensuite.
-L'invitation lèverait cette limite, mais la documentation la réserve aux « accounts enabled for
-membership invitations » : elle s'ouvre compte par compte (le compte du créateur, qui invite), et
-rien n'indique qu'une app puisse l'obtenir pour tous ses créateurs. On ne compte donc pas dessus
-en V1 (question à poser au support, section 11).
+**Le problème.** StayPut ne peut montrer le lien qu'à un membre qui a encore accès à son
+expérience : questionnaire de départ (annulation programmée) et page de confirmation. Un membre
+qui part autrement (paiement échoué jusqu'au bout, remboursement, retrait par le créateur)
+échappe à ces deux écrans. L'invitation aurait réglé ce cas, mais la documentation la réserve aux
+« accounts enabled for membership invitations » : elle s'ouvre compte par compte (le compte du
+créateur, qui invite), et rien n'indique qu'une app puisse l'obtenir pour tous ses créateurs.
+
+**La solution (sans rien demander à Whop).** Whop envoie déjà, s'il est activé, un **message
+automatique « User left »** à chaque membre qui quitte la communauté : un DM sur Whop et, case
+cochée, un e-mail, signés par le membre de l'équipe choisi (guide « Support Chats », tableau de
+bord → Support chats). Le créateur y met le lien Alumni une fois pour toutes ; l'onboarding de
+StayPut lui donne le texte et le chemin. Aucune API ne permet de l'activer à sa place : c'est une
+action d'une minute pendant l'onboarding, que StayPut ne peut pas vérifier (le créateur la coche).
+Si le créateur a déjà un **produit gratuit**, l'expérience Alumni lui est aussi rattachée : un
+ancien membre resté dans ce produit n'a pas « quitté la communauté », il reçoit directement les
+notifications.
 
 | Étape | Point d'accès | Détail | Permission | Statut |
 | --- | --- | --- | --- | --- |
@@ -167,6 +175,8 @@ en V1 (question à poser au support, section 11).
 | La rattacher au produit | `POST /experiences/{id}/attach` | `product_id` | `experience:attach` | OK |
 | Inviter l'ancien membre | `POST /memberships/invite` | `plan_id` (variant gratuit) + `user_id` **ou** `email` ; réponse `202 { invitation_sent: true }` ; Whop envoie l'e-mail, et l'acceptation donne la membership sans paiement | `membership:create` | **403 en sandbox** (30/09/2026) : « This endpoint is not available for your account. » Le compte n'est pas activé pour ce point d'accès expérimental. Non utilisé en V1 ; à redemander à Whop plus tard |
 | Repli | lien direct du variant (`purchase_url`) | affiché dans le questionnaire de départ et sur la page de confirmation | — | **Retenu** : `https://sandbox.whop.com/checkout/plan_…` obtenu en sandbox |
+| Lien envoyé à chaque départ | message automatique « User left » (tableau de bord du créateur → Support chats ; pas d'API) | DM + e-mail envoyés par Whop, texte du créateur avec le lien Alumni, variables `recipient_name` et `whop_name` | — (réglage du créateur) | OK (guide « Support Chats ») ; départs involontaires (paiement échoué, remboursement) à vérifier en sandbox |
+| Anciens membres restés dans un produit gratuit | `POST /experiences/{id}/attach` sur ce produit | ils gardent l'accès à l'expérience Alumni, donc aux notifications | `experience:attach` | OK |
 | Séquence J+7, J+30, J+60 | `POST /notifications` | `experience_id` = l'expérience Alumni (elle appartient à StayPut), `user_ids` = l'ancien membre (il y a accès), `rest_path` vers l'offre | `notification:create` | OK |
 | Code promo de retour | `POST /promo_codes` | code aléatoire, `stock: 1`, `one_per_customer: true`, `expires_at` = +7 jours, `product_id` = le produit quitté, `new_users_only: false` | `promo_code:create` | OK |
 | Départ de l'Alumni | `membership.deactivated` sur la membership Alumni | l'ancien membre n'est plus jamais relancé | `webhook_receive:memberships` | OK |
@@ -176,9 +186,9 @@ en V1 (question à poser au support, section 11).
 
 | Question | Réponse | Statut |
 | --- | --- | --- |
-| Abonnement mensuel | Selon la présentation des apps, Whop gère la facturation. L'app a une fiche produit (`App.product_id`) et Whop émet des événements `app_membership.*` et `app_payment.*`. Pas de guide de tarification des apps trouvé dans la documentation. | INCERTAIN — à confirmer avec Whop |
+| Abonnement mensuel | Selon la présentation des apps, Whop gère la facturation. L'app a une fiche produit (`App.product_id`) et Whop émet des événements `app_membership.*` et `app_payment.*`. Pas de guide de tarification des apps trouvé dans la documentation. | INCERTAIN — on regardera les réglages de tarification de l'app dans le tableau de bord développeur en la créant (Phase 1) |
 | Prix par membre | Aucun mécanisme natif : paliers Free / Pro / Scale et contrôle du nombre de membres par StayPut. | NON TROUVÉ |
-| Montant variable chaque mois (plan Performance) | Techniquement : facture à prélèvement automatique sur un moyen de paiement enregistré (`POST /invoices`, `payment_method_id`), ou `POST /payments` avec `member_id` + `payment_method_id`. Rien ne dit que c'est permis pour facturer une app. | INCERTAIN — à demander au support Whop (le plan reste derrière un feature flag, `SPEC.md` Phase 7) |
+| Montant variable chaque mois (plan Performance) | Techniquement : facture à prélèvement automatique sur un moyen de paiement enregistré (`POST /invoices`, `payment_method_id`), ou `POST /payments` avec `member_id` + `payment_method_id`. Rien ne dit que c'est permis pour facturer une app. | INCERTAIN — à demander au support Whop en Phase 7, pas avant (le plan reste derrière un feature flag, `SPEC.md` Phase 7) |
 
 ## 10. Permissions à déclarer
 
@@ -223,12 +233,12 @@ Conclusions :
 - **`/variants`** fonctionne : StayPut l'utilise (pas `/plans`).
 - **Invitation** : refusée pour ce compte (point d'accès réservé aux comptes activés par Whop).
   L'offre Alumni passe par le **lien de repli** (`purchase_url` du variant gratuit), avec la
-  limite décrite en section 8. On pourra demander l'activation au support Whop
-  (`support@whop.com`), en lui demandant aussi si une app peut l'obtenir pour tous les créateurs
-  qui l'installent, et brancher l'invitation plus tard, sans changer le reste.
+  solution décrite en section 8 (message automatique « User left » de Whop). Si Whop ouvre un
+  jour l'invitation aux apps, on la branchera en plus, sans changer le reste.
 
-Reste à vérifier en sandbox (non bloquant pour la Phase 1) : les dates des tickets support et la
-livraison des événements de chat aux webhooks d'app.
+Reste à vérifier en sandbox (non bloquant pour la Phase 1) : les dates des tickets support, la
+livraison des événements de chat aux webhooks d'app (Phase 2), et le déclenchement du message
+« User left » après un départ involontaire (Phase 4).
 
 ## 12. À trancher au début de la Phase 1
 
@@ -259,7 +269,8 @@ Documentation Whop, lue le 30/09/2026 :
 [Direct Messages](https://docs.whop.com/developer/guides/chat/direct-messages),
 [Test in the Sandbox](https://docs.whop.com/developer/guides/sandbox),
 [Troubleshooting](https://docs.whop.com/developer/troubleshooting),
-[Whop Apps](https://docs.whop.com/developer/apps/overview) ; pages de référence :
+[Whop Apps](https://docs.whop.com/developer/apps/overview),
+[Support Chats](https://docs.whop.com/manage-your-business/growth-marketing/automated-messaging) ; pages de référence :
 [Pause Membership](https://docs.whop.com/api-reference/beta/memberships/pause-membership),
 [Invite to a Membership](https://docs.whop.com/api-reference/beta/memberships/invite-to-a-membership),
 [Retry Payment](https://docs.whop.com/api-reference/beta/payments/retry-payment),
