@@ -1,0 +1,19 @@
+{
+  "name": "@stayput/whop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@stayput/core": "*",
+    "jose": "6.2.12"
+  },
+  "devDependencies": {
+    "@whop/sdk": "2.0.0"
+  }
+}
