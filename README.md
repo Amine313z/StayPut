@@ -64,28 +64,32 @@ npm run db:migrate     # applique les migrations (DATABASE_URL, voir .env.exampl
 
 ## Déploiement
 
-Première mise en ligne (à faire une fois, commandes depuis `apps/worker`) :
+Par GitHub Actions, sans rien installer : **Actions → Deploy → Run workflow**
+([`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml)). Le workflow vérifie le code,
+applique les migrations manquantes, crée la connexion Hyperdrive au premier passage (cache
+désactivé), construit l'interface, publie le Worker avec ses secrets, puis vérifie `/health`.
 
-1. **Base** : Supabase → SQL Editor → coller tout [`supabase/install.sql`](./supabase/install.sql)
-   → Run (ou `npm run db:migrate`). À refaire après chaque nouvelle migration : seules les
-   migrations manquantes s'appliquent.
-2. **Hyperdrive** (connexion du Worker à la base, cache désactivé) :
-   `npx wrangler hyperdrive create stayput-db --connection-string="<URI de connexion Supabase>" --caching-disabled`,
-   puis recopier l'`id` affiché dans le bloc `[[hyperdrive]]` de `apps/worker/wrangler.toml`.
-3. **Secrets** : `npx wrangler secret put WHOP_API_KEY`, puis
-   `npx wrangler secret put WHOP_WEBHOOK_SECRET`. `WHOP_APP_ID` et `WHOP_ENV` sont dans
-   `wrangler.toml` (`[vars]`).
-4. **Mise en ligne** : `npm run deploy` (depuis la racine), qui construit l'interface puis publie
-   le Worker. `https://<nom>.<sous-domaine>.workers.dev/health` doit répondre
-   `"status":"ok"`.
+Tout se range dans **Settings → Secrets and variables → Actions** du dépôt, jamais dans le code :
 
-Wrangler s'authentifie avec `CLOUDFLARE_API_TOKEN` et `CLOUDFLARE_ACCOUNT_ID` (variables
-d'environnement), ou `npx wrangler login`. Aucun secret dans le dépôt : `.dev.vars` et `.env`
-sont ignorés par Git.
+| Nom                     | Type     | Contenu                                                          | Requis            |
+| ----------------------- | -------- | ---------------------------------------------------------------- | ----------------- |
+| `CLOUDFLARE_API_TOKEN`  | secret   | jeton « Edit Cloudflare Workers » + permission Hyperdrive : Edit | oui               |
+| `CLOUDFLARE_ACCOUNT_ID` | secret   | identifiant du compte Cloudflare                                 | oui               |
+| `SUPABASE_DB_URL`       | secret   | URI « Session pooler » de Supabase, mot de passe compris         | oui               |
+| `WHOP_API_KEY`          | secret   | clé API de l'app Whop                                            | pour l'API Whop   |
+| `WHOP_WEBHOOK_SECRET`   | secret   | secret `ws_…` du webhook                                         | pour les webhooks |
+| `WHOP_APP_ID`           | variable | identifiant de l'app (`app_…`)                                   | pour la connexion |
+| `WHOP_ENV`              | variable | `sandbox` (par défaut) ou `production`                           | non               |
 
-À déclarer ensuite dans Whop (tableau de bord développeur → l'app) : l'URL de base, le chemin de
-la vue tableau de bord `/dashboard/[companyId]`, celui de la vue expérience
-`/experiences/[experienceId]`, et le webhook `https://<domaine>/webhooks/whop`.
+À déclarer ensuite dans Whop (tableau de bord développeur → l'app) : l'URL de base
+`https://stayput.<sous-domaine>.workers.dev`, le chemin de la vue tableau de bord
+`/dashboard/[companyId]`, celui de la vue expérience `/experiences/[experienceId]`, et le webhook
+`https://stayput.<sous-domaine>.workers.dev/webhooks/whop`.
+
+Sans GitHub Actions : `supabase/install.sql` dans le SQL Editor de Supabase, puis depuis
+`apps/worker` `npx wrangler hyperdrive create stayput-db --connection-string="…" --caching-disabled`
+(recopier l'`id` dans un bloc `[[hyperdrive]]` de `wrangler.toml`), `npx wrangler secret put …`
+et `npm run deploy` à la racine. `.dev.vars` et `.env` sont ignorés par Git.
 
 ## Outils de la Phase 0
 
