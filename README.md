@@ -76,25 +76,40 @@ une nouvelle adresse ne répond pas encore, relancer le workflow quelques minute
 
 Tout se range dans **Settings → Secrets and variables → Actions** du dépôt, jamais dans le code :
 
-| Nom                     | Type     | Contenu                                                          | Requis            |
-| ----------------------- | -------- | ---------------------------------------------------------------- | ----------------- |
-| `CLOUDFLARE_API_TOKEN`  | secret   | jeton « Edit Cloudflare Workers » + permission Hyperdrive : Edit | oui               |
-| `CLOUDFLARE_ACCOUNT_ID` | secret   | identifiant du compte Cloudflare                                 | oui               |
-| `SUPABASE_DB_URL`       | secret   | URI « Session pooler » de Supabase, mot de passe compris         | oui               |
-| `WHOP_API_KEY`          | secret   | clé API de l'app Whop                                            | pour l'API Whop   |
-| `WHOP_WEBHOOK_SECRET`   | secret   | secret `ws_…` du webhook                                         | pour les webhooks |
-| `WHOP_APP_ID`           | variable | identifiant de l'app (`app_…`)                                   | pour la connexion |
-| `WHOP_ENV`              | variable | `sandbox` (par défaut) ou `production`                           | non               |
-
-À déclarer ensuite dans Whop (tableau de bord développeur → l'app) : l'URL de base
-`https://stayput.<sous-domaine>.workers.dev`, le chemin de la vue tableau de bord
-`/dashboard/[companyId]`, celui de la vue expérience `/experiences/[experienceId]`, et le webhook
-`https://stayput.<sous-domaine>.workers.dev/webhooks/whop`.
+| Nom                     | Type     | Contenu                                                                       | Requis            |
+| ----------------------- | -------- | ----------------------------------------------------------------------------- | ----------------- |
+| `CLOUDFLARE_API_TOKEN`  | secret   | jeton « Edit Cloudflare Workers » + permission Hyperdrive : Edit              | oui               |
+| `CLOUDFLARE_ACCOUNT_ID` | secret   | identifiant du compte Cloudflare                                              | oui               |
+| `SUPABASE_DB_URL`       | secret   | URI « Session pooler » de Supabase, mot de passe compris                      | oui               |
+| `WHOP_API_KEY`          | secret   | clé API **de l'app** Whop (pas celle du compte)                               | pour l'API Whop   |
+| `WHOP_WEBHOOK_SECRET`   | secret   | secret `ws_…` du webhook de l'app                                             | pour les webhooks |
+| `WHOP_ENV`              | variable | `production` au passage en production (sinon `sandbox`, dans `wrangler.toml`) | non               |
+| `WHOP_APP_ID`           | variable | l'app de production (`app_…`) ; celle du sandbox est dans `wrangler.toml`     | en production     |
 
 Sans GitHub Actions : `supabase/install.sql` dans le SQL Editor de Supabase, puis depuis
 `apps/worker` `npx wrangler hyperdrive create stayput-db --connection-string="…" --caching-disabled`
 (recopier l'`id` dans un bloc `[[hyperdrive]]` de `wrangler.toml`), `npx wrangler secret put …`
 et `npm run deploy` à la racine. `.dev.vars` et `.env` sont ignorés par Git.
+
+### L'app Whop du sandbox
+
+Créée le 30/09/2026 par l'API du sandbox (compte « StayPut Test », `biz_2whAzkbCRpcGqQ`), avec
+la clé de compte `WHOP_SANDBOX_API_KEY` :
+
+- app **`app_rjFkp2xKgjfPxY`** « StayPut », type `b2b_app`, statut `hidden` ; URL de base
+  `https://stayput.chezbenz18.workers.dev`, vue tableau de bord `/dashboard/[companyId]`, vue
+  expérience `/experiences/[experienceId]` (`POST /apps` puis `PATCH /apps/{id}`) ;
+- webhook **`hook_M3uOKxSzLzx8u`** de l'app vers `/webhooks/whop`, version épinglée
+  `2026-09-29`, avec les 10 événements de `docs/whop-api-verification.md` (section 5)
+  (`POST /webhooks`, `resource_id` = l'app) ;
+- restent au tableau de bord (`https://sandbox.whop.com/dashboard/developer` → StayPut) : la clé
+  API de l'app et le secret du webhook, à ranger dans les secrets GitHub ; les **permissions**
+  (l'API les refuse aux clés : il faut une session) ; l'installation, par
+  `https://sandbox.whop.com/apps/app_rjFkp2xKgjfPxY/install`.
+
+Le guide sandbox de Whop déconseille les apps et la messagerie dans le sandbox (« Known
+limitations ») : si l'app ne s'y affiche pas, le fondateur décidera de la tester sur un compte
+Whop de production (la Phase 1 ne fait que lire).
 
 ## Outils de la Phase 0
 

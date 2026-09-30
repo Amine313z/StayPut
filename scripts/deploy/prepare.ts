@@ -12,7 +12,13 @@ export const REQUIRED = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'SUPAB
 
 /** Without these the Worker runs, but Whop features answer "not configured". */
 export const WORKER_SECRETS = ['WHOP_API_KEY', 'WHOP_WEBHOOK_SECRET'];
-export const WORKER_VARS = ['WHOP_APP_ID'];
+
+/**
+ * WHOP_ENV and WHOP_APP_ID default to wrangler.toml (the sandbox app); repository variables of
+ * the same name replace them. Production needs its own app: WHOP_ENV=production alone would
+ * check production tokens against the sandbox app.
+ */
+export const PRODUCTION_VARS = ['WHOP_APP_ID'];
 
 /**
  * The 32-character account id, whether the secret holds the id alone or a dashboard address
@@ -31,6 +37,8 @@ export function prepare(env: Record<string, string | undefined>): {
   const accountId = cloudflareAccountId(env.CLOUDFLARE_ACCOUNT_ID);
   const present = (name: string) =>
     name === 'CLOUDFLARE_ACCOUNT_ID' ? accountId !== null : Boolean(env[name]?.trim());
+  const required =
+    env.WHOP_ENV?.trim() === 'production' ? [...REQUIRED, ...PRODUCTION_VARS] : REQUIRED;
   const secrets: Record<string, string> = {};
   for (const name of WORKER_SECRETS) {
     const value = env[name]?.trim();
@@ -38,8 +46,8 @@ export function prepare(env: Record<string, string | undefined>): {
   }
   return {
     accountId,
-    missingRequired: REQUIRED.filter((name) => !present(name)),
-    missingOptional: [...WORKER_SECRETS, ...WORKER_VARS].filter((name) => !present(name)),
+    missingRequired: required.filter((name) => !present(name)),
+    missingOptional: WORKER_SECRETS.filter((name) => !present(name)),
     secrets,
   };
 }
@@ -53,8 +61,9 @@ function main() {
   }
   if (missingRequired.length > 0) {
     throw new Error(
-      `missing or unreadable repository secrets: ${missingRequired.join(', ')}` +
-        ' (CLOUDFLARE_ACCOUNT_ID must contain the 32-character account id)',
+      `missing or unreadable repository settings: ${missingRequired.join(', ')}` +
+        ' (CLOUDFLARE_ACCOUNT_ID must contain the 32-character account id; production needs' +
+        ' the WHOP_APP_ID variable)',
     );
   }
   // The next steps (Hyperdrive, wrangler) read the cleaned id from their environment.

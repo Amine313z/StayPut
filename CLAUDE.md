@@ -39,8 +39,12 @@ Guidance for Claude Code in this repository.
 - **Phase 1** (foundations): done and deployed on 2026-09-30 at
   `https://stayput.chezbenz18.workers.dev` (Worker `stayput` on the founder's Cloudflare account,
   Hyperdrive `stayput-db`, migrations 0001–0004 applied to the Supabase project `stayput`);
-  `/health` answers `ok`. Next: the Whop sandbox app (`WHOP_API_KEY`, `WHOP_APP_ID`, then the
-  webhook and `WHOP_WEBHOOK_SECRET`), a test inside Whop, then the founder's validation.
+  `/health` answers `ok`. Whop sandbox app `app_rjFkp2xKgjfPxY` and its webhook
+  `hook_M3uOKxSzLzx8u` created through the API (README.md, « L'app Whop du sandbox »). Next: the
+  founder stores the app's API key and the webhook secret as GitHub secrets, a redeploy, then
+  installs and opens the app in the sandbox, then validates. Whop's sandbox guide advises
+  against apps in the sandbox: if the app does not render there, the founder decides whether to
+  test on a production Whop account.
 - **Deploying**: the `Deploy` workflow (`.github/workflows/deploy.yml`, `workflow_dispatch`),
   started from GitHub's Actions tab or through the GitHub API (`actions_run_trigger`, workflow
   `deploy.yml`, ref `main`). It migrates the database, creates Hyperdrive if needed, publishes
@@ -98,6 +102,12 @@ npm run db:bundle    # after adding a migration: supabase/install.sql + schema-v
 - The Whop hosts (`docs.whop.com`, `api.whop.com`, `sandbox-api.whop.com`) are allowed in the
   environment's network settings; `developers.cloudflare.com` and `supabase.com` are not (use
   web search, or the docs shipped in npm packages).
+- `WHOP_SANDBOX_API_KEY` (an account key of the sandbox account « StayPut Test »,
+  `biz_2whAzkbCRpcGqQ`) can create and configure apps (`POST /apps`, `PATCH /apps/{id}`) and
+  webhooks (`POST /webhooks`, `resource_id` = the app). App permissions cannot be set with a key
+  (`developer:update_app_authorization` needs a user session): the founder sets them in the
+  dashboard. A create response carries secrets (`webhook_secret`): never print it; the dashboard
+  shows it again to the founder.
 - To re-run the Phase 0 sandbox check:
   `NODE_USE_ENV_PROXY=1 node scripts/sandbox/check-invite.mjs <test e-mail> --cleanup` (reads
   `WHOP_SANDBOX_API_KEY`, never print it).

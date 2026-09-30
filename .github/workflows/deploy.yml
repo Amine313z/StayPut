@@ -32,6 +32,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           WHOP_API_KEY: ${{ secrets.WHOP_API_KEY }}
           WHOP_WEBHOOK_SECRET: ${{ secrets.WHOP_WEBHOOK_SECRET }}
+          WHOP_ENV: ${{ vars.WHOP_ENV }}
           WHOP_APP_ID: ${{ vars.WHOP_APP_ID }}
         run: npx tsx scripts/deploy/prepare.ts "$RUNNER_TEMP/secrets.json"
 
@@ -47,18 +48,24 @@ jobs:
 
       - run: npm run build
 
+      # WHOP_ENV and WHOP_APP_ID come from wrangler.toml (the sandbox app) unless the repository
+      # variables of the same name are set (production).
       - name: Publish the Worker
         working-directory: apps/worker
         env:
           WHOP_APP_ID: ${{ vars.WHOP_APP_ID }}
-          WHOP_ENV: ${{ vars.WHOP_ENV || 'sandbox' }}
+          WHOP_ENV: ${{ vars.WHOP_ENV }}
         run: |
-          npx wrangler deploy --secrets-file "$RUNNER_TEMP/secrets.json" \
-            --var "WHOP_ENV:$WHOP_ENV" --var "WHOP_APP_ID:$WHOP_APP_ID" | tee "$RUNNER_TEMP/deploy.log"
+          overrides=()
+          if [ -n "$WHOP_ENV" ]; then overrides+=(--var "WHOP_ENV:$WHOP_ENV"); fi
+          if [ -n "$WHOP_APP_ID" ]; then overrides+=(--var "WHOP_APP_ID:$WHOP_APP_ID"); fi
+          npx wrangler deploy --secrets-file "$RUNNER_TEMP/secrets.json" "${overrides[@]}" |
+            tee "$RUNNER_TEMP/deploy.log"
           rm -f "$RUNNER_TEMP/secrets.json"
 
-      # Right after a first deployment, the workers.dev address can answer 404 "error code: 1042"
-      # for a minute or two, before requests reach the Worker: keep asking for up to 3 minutes.
+      # A new workers.dev address can answer 404 "error code: 1042", then nothing, before requests
+      # reach the Worker (about 8 minutes for StayPut's first deployment): keep asking for up to 3
+      # minutes, then re-run the workflow if the address is still coming up.
       - name: Check the deployed Worker
         run: |
           url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' "$RUNNER_TEMP/deploy.log" | head -1)

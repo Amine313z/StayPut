@@ -240,6 +240,13 @@ Reste à vérifier en sandbox (non bloquant pour la Phase 1) : les dates des tic
 livraison des événements de chat aux webhooks d'app (Phase 2), et le déclenchement du message
 « User left » après un départ involontaire (Phase 4).
 
+**Limite du sandbox** (guide « Test in the Sandbox », section « Known limitations », relu le
+30/09/2026) : Whop déconseille les **apps et la messagerie** dans le sandbox. L'API des apps y
+répond pourtant (`POST /apps`, `PATCH /apps/{id}`, `POST /webhooks` → 200 le 30/09/2026) ; reste à
+voir si l'app s'affiche dans l'iframe du sandbox (Phase 1), et si les notifications partent
+(Phases 3 et 4). À défaut, ces essais se feront sur un compte Whop de production, sur décision du
+fondateur.
+
 ## 12. À trancher au début de la Phase 1
 
 - **Même origine** : le jeton de l'iframe n'est envoyé qu'à l'origine de l'app. Le Worker (API)

@@ -14,8 +14,9 @@ run_worker_first = ["/api/*", "/webhooks/*", "/health", "/badge/*", "/v/*"]
 [vars]
 # "sandbox" until the switch to production (SPEC, rule 4).
 WHOP_ENV = "sandbox"
-# The app's id (app_…), from Whop's developer dashboard. Not a secret.
-WHOP_APP_ID = ""
+# The Whop app (not a secret): StayPut in the sandbox, created on 2026-09-30 (README.md). At the
+# switch to production, the repository variables WHOP_ENV and WHOP_APP_ID replace both values.
+WHOP_APP_ID = "app_rjFkp2xKgjfPxY"
 
 # Secrets, never in this file: `npx wrangler secret put WHOP_API_KEY` and
 # `npx wrangler secret put WHOP_WEBHOOK_SECRET` (README.md, Deployment).

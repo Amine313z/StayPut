@@ -102,3 +102,24 @@ quelles à Postgres (`jsonb`) plutôt qu'analysées dans le Worker.
   distingue ainsi d'une adresse qui ne répond pas encore.
 - `CLOUDFLARE_ACCOUNT_ID` peut contenir une adresse du tableau de bord Cloudflare collée par
   erreur : l'étape de préparation en extrait l'identifiant de 32 caractères.
+
+### L'app Whop du sandbox, créée par l'API
+
+- L'app (`app_rjFkp2xKgjfPxY`) et son webhook (`hook_M3uOKxSzLzx8u`) ont été créés par l'API du
+  sandbox avec la clé de compte déjà fournie pour la Phase 0, plutôt qu'à la main : les adresses
+  et les 10 événements sont exacts du premier coup, et le fondateur n'a plus qu'à copier deux
+  secrets. Le webhook est épinglé sur la version `2026-09-29` (celle du client `packages/whop`) :
+  les événements portent `account_id` (les webhooks non épinglés disent encore `company_id` ;
+  `companyIdOf` lit les deux).
+- L'identifiant de l'app sandbox est dans `wrangler.toml` (ce n'est pas un secret) : une variable
+  GitHub de moins. Les variables `WHOP_ENV` et `WHOP_APP_ID` du dépôt remplacent ces valeurs au
+  passage en production, et le déploiement refuse `WHOP_ENV=production` sans `WHOP_APP_ID` (sinon
+  les jetons de production seraient vérifiés contre l'app du sandbox, donc tous refusés).
+- Les permissions de l'app restent à cocher au tableau de bord : l'API les refuse aux clés. La
+  Phase 1 n'en a pas besoin (la vérification d'accès ne demande que la clé de l'app) ; elles
+  seront réglées au début de la Phase 2, avec la liste de `docs/whop-api-verification.md`
+  (section 10).
+- Le guide sandbox de Whop dit de ne pas utiliser les apps ni la messagerie dans le sandbox
+  (« Known limitations »). On essaie quand même le sandbox d'abord (règle 4 du cahier des
+  charges) ; si l'iframe ne s'y affiche pas, le choix de tester sur un compte Whop de production
+  revient au fondateur.

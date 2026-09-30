@@ -42,9 +42,18 @@ describe('prepare', () => {
     expect(prepare({})).toEqual({
       accountId: null,
       missingRequired: ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'SUPABASE_DB_URL'],
-      missingOptional: ['WHOP_API_KEY', 'WHOP_WEBHOOK_SECRET', 'WHOP_APP_ID'],
+      missingOptional: ['WHOP_API_KEY', 'WHOP_WEBHOOK_SECRET'],
       secrets: {},
     });
+  });
+
+  it('refuses production without its own app id (the sandbox one is in wrangler.toml)', () => {
+    const base = { CLOUDFLARE_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: ID, SUPABASE_DB_URL: 'x' };
+    expect(prepare({ ...base, WHOP_ENV: 'production' }).missingRequired).toEqual(['WHOP_APP_ID']);
+    expect(
+      prepare({ ...base, WHOP_ENV: 'production', WHOP_APP_ID: 'app_prod' }).missingRequired,
+    ).toEqual([]);
+    expect(prepare({ ...base, WHOP_ENV: 'sandbox' }).missingRequired).toEqual([]);
   });
 
   it('keeps only the Worker secrets that are set', () => {
