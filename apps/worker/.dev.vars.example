@@ -1,0 +1,18 @@
+# Local development of the Worker (`npm run dev:worker`): copy this file to apps/worker/.dev.vars
+# (ignored by Git) and fill it in. In production these are `vars` of wrangler.toml and secrets
+# (`npx wrangler secret put <NAME>`), never this file.
+
+# "sandbox" or "production" (sandbox by default).
+WHOP_ENV=sandbox
+# The app's id (app_…), Whop developer dashboard -> your app.
+WHOP_APP_ID=app_xxxxxxxxxxxxxx
+# Secret: the app's API key (same page).
+WHOP_API_KEY=
+# Secret: the webhook's signing secret (ws_…), shown when the webhook is created.
+WHOP_WEBHOOK_SECRET=
+
+# Outside Whop's iframe there is no user token: in development only, every request acts as
+# DEV_USER_ID, with DEV_ACCESS_LEVEL (admin or customer) when WHOP_API_KEY is empty.
+ENVIRONMENT=development
+DEV_USER_ID=user_dev
+DEV_ACCESS_LEVEL=admin

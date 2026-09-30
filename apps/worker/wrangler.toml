@@ -1,0 +1,34 @@
+# StayPut: one Worker serves the React app (static assets) and the API on the same origin, so
+# that Whop's iframe token reaches /api (DECISIONS.md, 2026-09-30).
+name = "stayput"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "../web/dist"
+not_found_handling = "single-page-application"
+# These paths run the Worker; every other path is a file of the React build (or index.html).
+run_worker_first = ["/api/*", "/webhooks/*", "/health", "/badge/*", "/v/*"]
+
+[vars]
+# "sandbox" until the switch to production (SPEC, rule 4).
+WHOP_ENV = "sandbox"
+# The app's id (app_…), from Whop's developer dashboard. Not a secret.
+WHOP_APP_ID = ""
+
+# Secrets, never in this file: `npx wrangler secret put WHOP_API_KEY` and
+# `npx wrangler secret put WHOP_WEBHOOK_SECRET` (README.md, Deployment).
+
+# The database, through Hyperdrive: added at the first deployment, once the Hyperdrive
+# configuration exists (README.md). Without it the Worker runs, database features off.
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "<id printed by npx wrangler hyperdrive create>"
+
+[triggers]
+# Hourly work, and the weekly analyses on Monday 07:30 UTC (src/cron.ts).
+crons = ["0 * * * *", "30 7 * * 1"]
+
+[observability]
+enabled = true
