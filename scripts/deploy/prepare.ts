@@ -56,7 +56,7 @@ export function secretValue(name: string, raw: string | undefined): string {
 }
 
 /** Known beginnings of Whop values, safe to print: they are formats, not secrets. */
-const KNOWN_PREFIXES = ['apik_', 'ws_', 'whsec_', 'app_', 'biz_'];
+const KNOWN_PREFIXES = ['apik_', 'ws_', 'whsec_', 'app_', 'biz_', 'hook_', 'https://'];
 
 /**
  * What a stored value looks like, for the logs, without any of its secret characters: its lines,
@@ -157,6 +157,9 @@ function main() {
   }
   writeFileSync(secretsFile, JSON.stringify(secrets), { mode: 0o600 });
   console.info(`Worker secrets to upload: ${Object.keys(secrets).join(', ') || 'none'}.`);
+  for (const [name, value] of Object.entries(secrets)) {
+    console.info(`  ${name}: ${describeValue(value)}`);
+  }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

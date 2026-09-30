@@ -92,6 +92,13 @@ describe('describeValue', () => {
     );
   });
 
+  it('names the other public beginnings a wrong paste may have', () => {
+    expect(describeValue('hook_abc')).toBe('1 line: hook_… (8 characters)');
+    expect(describeValue('https://stayput.example/webhooks/whop')).toBe(
+      '1 line: https://… (37 characters)',
+    );
+  });
+
   it('never takes a key followed by "=" for a variable name', () => {
     const shape = describeValue('apik_SeCrEt123=\nABC');
     expect(shape).toBe('2 lines: apik_… (15 characters); other text (3 characters)');
