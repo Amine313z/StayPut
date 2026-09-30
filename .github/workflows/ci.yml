@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Typecheck, lint, format and every test (PGlite: no database service needed).
+      - run: npm run check
+      # The frontend build, then the Worker bundle exactly as `wrangler deploy` would upload it.
+      - run: npm run build
+      - run: npm run bundle -w @stayput/worker

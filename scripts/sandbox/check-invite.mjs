@@ -93,7 +93,10 @@ if (variant.status >= 300) {
 console.info(`free variant: ${variant.json.id} via ${variantPath}`);
 console.info(`fallback link (purchase_url): ${variant.json.purchase_url}`);
 
-const invite = await call('POST', '/memberships/invite', { plan_id: variant.json.id, ...recipient });
+const invite = await call('POST', '/memberships/invite', {
+  plan_id: variant.json.id,
+  ...recipient,
+});
 console.info('invite answer:', JSON.stringify(invite.json));
 console.info(
   invite.status === 202
