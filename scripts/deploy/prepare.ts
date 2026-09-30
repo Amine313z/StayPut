@@ -28,19 +28,29 @@ export function cloudflareAccountId(raw: string | undefined): string | null {
   return raw?.match(/(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])/i)?.[0].toLowerCase() ?? null;
 }
 
+/** `NAME=…` (or `NAME = …`, `NAME: …`, `export NAME=…`) with an upper-case variable NAME. */
+const ASSIGNMENT = /^(?:export\s+)?([A-Z][A-Z0-9_]{1,40})\s*[=:]\s*(.*)$/;
+
 /**
- * A Worker secret as the Worker needs it. Whop shows the app's key as a `.env` line
- * (`WHOP_API_KEY=apik_…`): a pasted `NAME=` prefix (alone or among other lines, `NAME = …`,
- * `NAME: …` or `export NAME=…` too) and surrounding quotes are dropped.
+ * A Worker secret as the Worker needs it. Whop shows the app's variables as a `.env` block
+ * (`WHOP_API_KEY=apik_…`, then `NEXT_PUBLIC_WHOP_APP_ID=app_…`), easy to paste whole or in
+ * part: the value is this NAME's line of the block, or else the one line that assigns no other
+ * variable; surrounding quotes are dropped. Anything else is returned as is (then refused as
+ * not one single value). Variable names are upper case, so a key is never read as a name.
  */
 export function secretValue(name: string, raw: string | undefined): string {
-  const text = raw?.trim() ?? '';
-  const named = new RegExp(`^(?:export\\s+)?${name}\\s*[=:]\\s*(.*)$`);
-  const match = text
+  const lines = (raw ?? '')
     .split(/\r?\n/)
-    .map((line) => named.exec(line.trim()))
-    .find((found) => found !== null);
-  const value = match ? (match[1] ?? '').trim() : text;
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+  const assignments = lines.map((line) => ASSIGNMENT.exec(line));
+  const own = assignments.find((found) => found?.[1] === name);
+  const others = lines.filter((_, index) => assignments[index] === null);
+  const value = own
+    ? (own[2] ?? '').trim()
+    : others.length === 1
+      ? (others[0] ?? '')
+      : lines.join('\n');
   const quoted = /^(["'])(.*)\1$/s.exec(value);
   return quoted ? (quoted[2] ?? '').trim() : value;
 }
@@ -59,7 +69,7 @@ export function describeValue(raw: string): string {
     .map((line) => line.trim())
     .filter((line) => line !== '');
   const kinds = lines.map((line) => {
-    const name = /^(?:export\s+)?([A-Z][A-Z0-9_]{1,40})\s*[=:]/.exec(line)?.[1];
+    const name = ASSIGNMENT.exec(line)?.[1];
     const prefix = KNOWN_PREFIXES.find((known) => line.startsWith(known));
     const kind = name ? `${name}=…` : prefix ? `${prefix}…` : 'other text';
     return `${kind} (${line.length} characters)`;
@@ -121,7 +131,9 @@ function main() {
     console.warn(`::warning::${name} is not set yet: the matching features stay off.`);
   }
   for (const name of cleaned) {
-    console.info(`::notice::${name}: kept only the value (dropped a pasted "${name}=" or quotes).`);
+    console.info(
+      `::notice::${name}: kept only the value (dropped other pasted lines, "${name}=" or quotes).`,
+    );
   }
   for (const { name, shape } of malformed) {
     console.error(`::error::${name} is not one single value: ${shape}.`);

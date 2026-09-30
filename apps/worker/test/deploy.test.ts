@@ -68,6 +68,18 @@ describe('secretValue', () => {
       'OTHER_WHOP_API_KEY=apik_abc',
     );
   });
+
+  it("keeps the one line that assigns no other variable (Whop's block pasted in part)", () => {
+    expect(secretValue('WHOP_API_KEY', 'apik_abc\nNEXT_PUBLIC_WHOP_APP_ID=app_x')).toBe('apik_abc');
+    expect(secretValue('WHOP_API_KEY', 'NEXT_PUBLIC_WHOP_APP_ID=app_x\n"apik_abc"\n')).toBe(
+      'apik_abc',
+    );
+    // A key cut in two, or two values: no way to tell which is right, so nothing is dropped.
+    expect(secretValue('WHOP_API_KEY', 'apik_ab\ncd')).toBe('apik_ab\ncd');
+    expect(secretValue('WHOP_API_KEY', 'apik_abc\nws_def\nNEXT_PUBLIC_WHOP_APP_ID=app_x')).toBe(
+      'apik_abc\nws_def\nNEXT_PUBLIC_WHOP_APP_ID=app_x',
+    );
+  });
 });
 
 describe('describeValue', () => {
