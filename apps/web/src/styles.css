@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+
+/* `dark:` follows the theme applied on <html> (theme-init.js, then src/theme.tsx). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Colors exist only here, as tokens. Every text / background pair used by the screens reaches
+ * WCAG AA in both themes (test/contrast.test.ts computes it).
+ */
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #14171f;
+  --muted: #525a68;
+  --border: #dde1e7;
+  --accent: #1f6f5c;
+  --on-accent: #ffffff;
+  --danger: #b42318;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0e1116;
+  --surface: #161a22;
+  --text: #e8ebf0;
+  --muted: #a1a9b8;
+  --border: #2a303c;
+  --accent: #56c7a6;
+  --on-accent: #0e1116;
+  --danger: #ff8a7a;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-line: var(--border);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
