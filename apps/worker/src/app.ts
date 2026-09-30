@@ -57,6 +57,8 @@ type AppEnv = {
 /** Whop's deliveries are small JSON documents; anything bigger is refused unread. */
 export const MAX_WEBHOOK_BYTES = 256 * 1024;
 const HEALTH_CACHE_MS = 30_000;
+/** /health never waits longer than this for the database: a silent database is reported. */
+export const HEALTH_DB_TIMEOUT_MS = 5_000;
 
 export function createApp(deps: AppDeps) {
   const app = new Hono<AppEnv>();
@@ -240,15 +242,23 @@ export function createApp(deps: AppDeps) {
 
 async function databaseState(db: Db | null): Promise<HealthReport['database']> {
   if (!db) return 'not_configured';
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const silence = new Promise<'timeout'>((resolve) => {
+    timer = setTimeout(() => resolve('timeout'), HEALTH_DB_TIMEOUT_MS);
+  });
   try {
-    const [row] = await db.query<{ name: string | null }>(
-      'select max(name) as name from stayput.schema_migrations',
-    );
-    return row?.name === LATEST_MIGRATION ? 'ok' : 'outdated';
+    const answer = await Promise.race([
+      db.query<{ name: string | null }>('select max(name) as name from stayput.schema_migrations'),
+      silence,
+    ]);
+    if (answer === 'timeout') return 'timeout';
+    return answer[0]?.name === LATEST_MIGRATION ? 'ok' : 'outdated';
   } catch (error) {
     // 42P01 / 3F000: the table or the schema is missing, the database is reachable.
     const code = isObject(error) ? error.code : undefined;
     return code === '42P01' || code === '3F000' ? 'outdated' : 'unreachable';
+  } finally {
+    clearTimeout(timer);
   }
 }
 

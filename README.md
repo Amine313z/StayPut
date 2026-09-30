@@ -12,11 +12,11 @@ il a sauvé.
 
 ## État
 
-| Phase                         | Statut                                       |
-| ----------------------------- | -------------------------------------------- |
-| 0. Vérification de l'API Whop | Validée le 30/09/2026                        |
-| 1. Fondations                 | Faite (30/09/2026), en attente de validation |
-| 2. Collecte des données       | À faire après validation de la Phase 1       |
+| Phase                         | Statut                                                   |
+| ----------------------------- | -------------------------------------------------------- |
+| 0. Vérification de l'API Whop | Validée le 30/09/2026                                    |
+| 1. Fondations                 | Faite et déployée (30/09/2026), en attente de validation |
+| 2. Collecte des données       | À faire après validation de la Phase 1                   |
 
 ## Architecture
 
@@ -67,7 +67,12 @@ npm run db:migrate     # applique les migrations (DATABASE_URL, voir .env.exampl
 Par GitHub Actions, sans rien installer : **Actions → Deploy → Run workflow**
 ([`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml)). Le workflow vérifie le code,
 applique les migrations manquantes, crée la connexion Hyperdrive au premier passage (cache
-désactivé), construit l'interface, publie le Worker avec ses secrets, puis vérifie `/health`.
+désactivé), construit l'interface, publie le Worker avec ses secrets, puis vérifie `/health`
+(jusqu'à 3 minutes).
+
+Adresse actuelle (sandbox Whop) : **https://stayput.chezbenz18.workers.dev**. La toute première
+publication a mis environ 8 minutes à répondre (Cloudflare affichait `error code: 1042`) : si
+une nouvelle adresse ne répond pas encore, relancer le workflow quelques minutes plus tard.
 
 Tout se range dans **Settings → Secrets and variables → Actions** du dépôt, jamais dans le code :
 

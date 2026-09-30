@@ -36,13 +36,17 @@ Guidance for Claude Code in this repository.
 - **Phase 0** (Whop API check): validated on 2026-09-30. Invitations answer `403`; the Alumni
   offer enters through the free variant's `purchase_url`, carried by Whop's native « User
   left » message (`SPEC.md` 5.9).
-- **Phase 1** (foundations): done, waiting for the founder's validation. Not deployed yet: the
-  first deployment needs the founder's Cloudflare account, the Supabase connection string (for
-  Hyperdrive) and the Whop sandbox app, stored as repository secrets (README.md, Deployment).
+- **Phase 1** (foundations): done and deployed on 2026-09-30 at
+  `https://stayput.chezbenz18.workers.dev` (Worker `stayput` on the founder's Cloudflare account,
+  Hyperdrive `stayput-db`, migrations 0001–0004 applied to the Supabase project `stayput`);
+  `/health` answers `ok`. Next: the Whop sandbox app (`WHOP_API_KEY`, `WHOP_APP_ID`, then the
+  webhook and `WHOP_WEBHOOK_SECRET`), a test inside Whop, then the founder's validation.
 - **Deploying**: the `Deploy` workflow (`.github/workflows/deploy.yml`, `workflow_dispatch`),
   started from GitHub's Actions tab or through the GitHub API (`actions_run_trigger`, workflow
   `deploy.yml`, ref `main`). It migrates the database, creates Hyperdrive if needed, publishes
-  the Worker and fails unless `/health` answers `"status":"ok"`.
+  the Worker and fails unless `/health` answers `"status":"ok"` within 3 minutes. The first
+  publication took about 8 minutes to answer on workers.dev (404 `error code: 1042`, then
+  timeouts): re-run the workflow if a new address is still coming up.
 
 ## Commands
 
@@ -89,6 +93,8 @@ npm run db:bundle    # after adding a migration: supabase/install.sql + schema-v
   environment variables (`WHOP_SANDBOX_API_KEY=…`, one per line).
 - Cloud sessions go through an HTTP proxy: Node's built-in `fetch` needs
   `NODE_USE_ENV_PROXY=1` to use it (otherwise the proxy answers 403 "Host not in allowlist").
+- `*.workers.dev` is not reachable from cloud sessions (the proxy answers 403): the live Worker
+  is checked by the last step of the `Deploy` workflow (its log prints each `/health` answer).
 - The Whop hosts (`docs.whop.com`, `api.whop.com`, `sandbox-api.whop.com`) are allowed in the
   environment's network settings; `developers.cloudflare.com` and `supabase.com` are not (use
   web search, or the docs shipped in npm packages).

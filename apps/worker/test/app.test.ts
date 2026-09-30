@@ -1,9 +1,15 @@
 import type { AccessLevel } from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
 import { SignJWT, generateKeyPair, type CryptoKey } from 'jose';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AccessCache } from '../src/access';
-import { MAX_WEBHOOK_BYTES, companyIdOf, createApp, type AppDeps } from '../src/app';
+import {
+  HEALTH_DB_TIMEOUT_MS,
+  MAX_WEBHOOK_BYTES,
+  companyIdOf,
+  createApp,
+  type AppDeps,
+} from '../src/app';
 import { withUser, type ClosableDb, type Db } from '../src/db';
 import type { Env } from '../src/env';
 import { createTestDb, type TestDb } from './helpers/db';
@@ -95,6 +101,20 @@ describe('GET /health', () => {
     expect(await outdated.json()).toMatchObject({ status: 'degraded', database: 'outdated' });
     const down = await setup({}, { db: failing() }).request('/health');
     expect(await down.json()).toMatchObject({ database: 'unreachable' });
+  });
+
+  it('answers within the time limit when the database stays silent', async () => {
+    vi.useFakeTimers();
+    try {
+      const silent: Db = { query: () => new Promise(() => {}) };
+      const pending = setup({}, { db: silent }).request('/health');
+      await vi.advanceTimersByTimeAsync(HEALTH_DB_TIMEOUT_MS);
+      const res = await pending;
+      expect(res.status).toBe(503);
+      expect(await res.json()).toMatchObject({ status: 'degraded', database: 'timeout' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

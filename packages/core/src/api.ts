@@ -41,5 +41,6 @@ export interface MemberSession {
 export interface HealthReport {
   status: 'ok' | 'degraded';
   whopEnv: 'sandbox' | 'production';
-  database: 'ok' | 'unreachable' | 'outdated' | 'not_configured';
+  /** `timeout`: no answer within 5 s (HEALTH_DB_TIMEOUT_MS in apps/worker). */
+  database: 'ok' | 'unreachable' | 'timeout' | 'outdated' | 'not_configured';
 }

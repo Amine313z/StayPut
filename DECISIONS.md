@@ -85,3 +85,20 @@ test vérifie que ces réglages sont ignorés partout ailleurs.
 100 000 requêtes/jour. Conséquences : le score se calcule en SQL, la synchronisation avance par
 petits lots avec un curseur par créateur, et les grosses réponses de Whop sont passées telles
 quelles à Postgres (`jsonb`) plutôt qu'analysées dans le Worker.
+
+## 2026-09-30 — Premier déploiement
+
+### Déploiement par GitHub Actions, vérifié par `/health`
+
+- Le workflow `Deploy` (lancé à la main) vérifie le code, applique les migrations, crée
+  Hyperdrive (`stayput-db`, cache désactivé) au premier passage, publie le Worker avec ses
+  secrets, puis interroge `/health` jusqu'à 3 minutes. Rien à installer chez le fondateur :
+  tout vient des secrets et variables du dépôt.
+- La première publication de l'adresse `workers.dev` a mis environ 8 minutes à répondre : d'abord
+  `404 error code: 1042` (avant même le Worker), puis des requêtes sans réponse, puis `ok`.
+  D'autres utilisateurs signalent le même délai sur le forum de Cloudflare : ce n'est pas une
+  erreur du code. D'où l'attente dans la vérification plutôt qu'un échec immédiat.
+- `/health` n'attend jamais la base plus de 5 s (`database: "timeout"`) : une base muette se
+  distingue ainsi d'une adresse qui ne répond pas encore.
+- `CLOUDFLARE_ACCOUNT_ID` peut contenir une adresse du tableau de bord Cloudflare collée par
+  erreur : l'étape de préparation en extrait l'identifiant de 32 caractères.
