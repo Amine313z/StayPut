@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { checkWhopKey, deployedVar } from '../../../scripts/deploy/check-whop';
 import { withHyperdriveBinding } from '../../../scripts/deploy/hyperdrive';
 import { cloudflareAccountId, prepare, secretValue } from '../../../scripts/deploy/prepare';
 
@@ -108,5 +109,57 @@ describe('prepare', () => {
       prepare({ CLOUDFLARE_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: 'oops', SUPABASE_DB_URL: 'x' })
         .missingRequired,
     ).toEqual(['CLOUDFLARE_ACCOUNT_ID']);
+  });
+});
+
+describe('deployedVar', () => {
+  const toml = '[vars]\n# "sandbox" first\nWHOP_ENV = "sandbox"\nWHOP_APP_ID = "app_sandbox"\n';
+
+  it("reads wrangler.toml's value unless the repository variable is set", () => {
+    expect(deployedVar('WHOP_ENV', undefined, toml)).toBe('sandbox');
+    expect(deployedVar('WHOP_ENV', ' ', toml)).toBe('sandbox');
+    expect(deployedVar('WHOP_ENV', 'production', toml)).toBe('production');
+    expect(deployedVar('WHOP_APP_ID', '', toml)).toBe('app_sandbox');
+    expect(deployedVar('MISSING', undefined, toml)).toBeUndefined();
+  });
+});
+
+describe('checkWhopKey', () => {
+  const answer = (status: number) => () =>
+    Promise.resolve(
+      new Response(JSON.stringify({ error: { type: `type_${status}`, message: 'm' } }), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+  const noSleep = () => Promise.resolve();
+
+  it('asks with the access check the Worker makes, about a user that does not exist', async () => {
+    const urls: string[] = [];
+    const fetch = (input: string) => {
+      urls.push(input);
+      return answer(404)();
+    };
+    expect(await checkWhopKey('apik_x', 'sandbox', { fetch, sleep: noSleep })).toEqual({
+      check: 'accepted',
+      detail: '404 type_404',
+    });
+    expect(urls).toEqual([
+      'https://sandbox-api.whop.com/api/v1/users/user_xxxxxxxxxxxxx/access/biz_xxxxxxxxxxxxxx',
+    ]);
+  });
+
+  it('fails a key Whop refuses, and only that', async () => {
+    const check = async (status: number) =>
+      (await checkWhopKey('apik_x', 'production', { fetch: answer(status), sleep: noSleep })).check;
+    expect(await check(401)).toBe('refused');
+    expect(await check(403)).toBe('accepted');
+    expect(await check(422)).toBe('accepted');
+    expect(await check(429)).toBe('unreachable');
+    expect(await check(503)).toBe('unreachable');
+    const offline = () => Promise.reject(new TypeError('fetch failed'));
+    expect(
+      (await checkWhopKey('apik_x', 'sandbox', { fetch: offline, sleep: noSleep })).check,
+    ).toBe('unreachable');
   });
 });

@@ -36,6 +36,13 @@ jobs:
           WHOP_APP_ID: ${{ vars.WHOP_APP_ID }}
         run: npx tsx scripts/deploy/prepare.ts "$RUNNER_TEMP/secrets.json"
 
+      # A key copied wrong stops here, before anything changes (Whop answers 401 to it).
+      - name: Ask Whop whether it accepts the app key
+        env:
+          WHOP_API_KEY: ${{ secrets.WHOP_API_KEY }}
+          WHOP_ENV: ${{ vars.WHOP_ENV }}
+        run: npx tsx scripts/deploy/check-whop.ts apps/worker/wrangler.toml
+
       - name: Apply the database migrations
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
