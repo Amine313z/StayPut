@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { checkWhopKey, deployedVar } from '../../../scripts/deploy/check-whop';
 import { withHyperdriveBinding } from '../../../scripts/deploy/hyperdrive';
-import { cloudflareAccountId, prepare, secretValue } from '../../../scripts/deploy/prepare';
+import {
+  cloudflareAccountId,
+  describeValue,
+  prepare,
+  secretValue,
+} from '../../../scripts/deploy/prepare';
 
 const ID = '0123456789abcdef0123456789abcdef';
 
@@ -54,6 +59,32 @@ describe('secretValue', () => {
     expect(secretValue('WHOP_API_KEY', 'WHOP_API_KEY=')).toBe('');
     expect(secretValue('WHOP_API_KEY', undefined)).toBe('');
   });
+
+  it('reads the other ways of writing that line', () => {
+    expect(secretValue('WHOP_API_KEY', 'WHOP_API_KEY = apik_abc')).toBe('apik_abc');
+    expect(secretValue('WHOP_API_KEY', 'WHOP_API_KEY: "apik_abc"')).toBe('apik_abc');
+    expect(secretValue('WHOP_API_KEY', 'export WHOP_API_KEY=apik_abc')).toBe('apik_abc');
+    expect(secretValue('WHOP_API_KEY', 'OTHER_WHOP_API_KEY=apik_abc')).toBe(
+      'OTHER_WHOP_API_KEY=apik_abc',
+    );
+  });
+});
+
+describe('describeValue', () => {
+  it('describes each line by its known beginning and its length, never its secret part', () => {
+    expect(describeValue('apik_abcdef\nws_12345\n')).toBe(
+      '2 lines: apik_… (11 characters); ws_… (8 characters)',
+    );
+    expect(describeValue(' NEXT_PUBLIC_WHOP_APP_ID="app_x"\r\nsomething')).toBe(
+      '2 lines: NEXT_PUBLIC_WHOP_APP_ID=… (31 characters); other text (9 characters)',
+    );
+  });
+
+  it('never takes a key followed by "=" for a variable name', () => {
+    const shape = describeValue('apik_SeCrEt123=\nABC');
+    expect(shape).toBe('2 lines: apik_… (15 characters); other text (3 characters)');
+    expect(shape).not.toContain('SeCrEt');
+  });
 });
 
 describe('prepare', () => {
@@ -63,6 +94,7 @@ describe('prepare', () => {
       missingRequired: ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'SUPABASE_DB_URL'],
       missingOptional: ['WHOP_API_KEY', 'WHOP_WEBHOOK_SECRET'],
       cleaned: [],
+      malformed: [],
       secrets: {},
     });
   });
@@ -86,6 +118,20 @@ describe('prepare', () => {
     });
     expect(result.secrets).toEqual({ WHOP_API_KEY: 'apik_abc' });
     expect(result.cleaned).toEqual(['WHOP_API_KEY']);
+    expect(result.missingOptional).toEqual(['WHOP_WEBHOOK_SECRET']);
+  });
+
+  it('refuses a secret that is not one single value, and says what it looks like', () => {
+    const result = prepare({
+      CLOUDFLARE_API_TOKEN: 't',
+      CLOUDFLARE_ACCOUNT_ID: ID,
+      SUPABASE_DB_URL: 'x',
+      WHOP_API_KEY: 'apik_abc\nws_def',
+    });
+    expect(result.secrets).toEqual({});
+    expect(result.malformed).toEqual([
+      { name: 'WHOP_API_KEY', shape: '2 lines: apik_… (8 characters); ws_… (6 characters)' },
+    ]);
     expect(result.missingOptional).toEqual(['WHOP_WEBHOOK_SECRET']);
   });
 
@@ -157,6 +203,11 @@ describe('checkWhopKey', () => {
     expect(await check(422)).toBe('accepted');
     expect(await check(429)).toBe('unreachable');
     expect(await check(503)).toBe('unreachable');
+    const never = () => Promise.reject(new Error('Whop must not be called'));
+    expect(await checkWhopKey('apik_a\nws_b', 'sandbox', { fetch: never })).toEqual({
+      check: 'refused',
+      detail: 'not one single value',
+    });
     const offline = () => Promise.reject(new TypeError('fetch failed'));
     expect(
       (await checkWhopKey('apik_x', 'sandbox', { fetch: offline, sleep: noSleep })).check,

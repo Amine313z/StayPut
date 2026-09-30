@@ -36,6 +36,8 @@ export async function checkWhopKey(
     sleep?: (ms: number) => Promise<void>;
   } = {},
 ): Promise<{ check: KeyCheck; detail: string }> {
+  // Spaces or line breaks cannot travel in a header: Whop would never see such a key.
+  if (!/^\S+$/.test(apiKey)) return { check: 'refused', detail: 'not one single value' };
   const whop = createWhopClient({ apiKey, env, ...inject });
   try {
     await whop.checkAccess(PROBE_USER, PROBE_ACCOUNT);

@@ -30,18 +30,41 @@ export function cloudflareAccountId(raw: string | undefined): string | null {
 
 /**
  * A Worker secret as the Worker needs it. Whop shows the app's key as a `.env` line
- * (`WHOP_API_KEY=apik_…`): a pasted `NAME=` prefix (alone or among other lines) and surrounding
- * quotes are dropped.
+ * (`WHOP_API_KEY=apik_…`): a pasted `NAME=` prefix (alone or among other lines, `NAME = …`,
+ * `NAME: …` or `export NAME=…` too) and surrounding quotes are dropped.
  */
 export function secretValue(name: string, raw: string | undefined): string {
   const text = raw?.trim() ?? '';
-  const line = text
+  const named = new RegExp(`^(?:export\\s+)?${name}\\s*[=:]\\s*(.*)$`);
+  const match = text
     .split(/\r?\n/)
-    .map((candidate) => candidate.trim())
-    .find((candidate) => candidate.startsWith(`${name}=`));
-  const value = line === undefined ? text : line.slice(name.length + 1).trim();
+    .map((line) => named.exec(line.trim()))
+    .find((found) => found !== null);
+  const value = match ? (match[1] ?? '').trim() : text;
   const quoted = /^(["'])(.*)\1$/s.exec(value);
   return quoted ? (quoted[2] ?? '').trim() : value;
+}
+
+/** Known beginnings of Whop values, safe to print: they are formats, not secrets. */
+const KNOWN_PREFIXES = ['apik_', 'ws_', 'whsec_', 'app_', 'biz_'];
+
+/**
+ * What a stored value looks like, for the logs, without any of its secret characters: its lines,
+ * each described by a known prefix, or by the NAME of a `NAME=` line (upper case only, so a key
+ * followed by `=` is never taken for a name), and its length.
+ */
+export function describeValue(raw: string): string {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+  const kinds = lines.map((line) => {
+    const name = /^(?:export\s+)?([A-Z][A-Z0-9_]{1,40})\s*[=:]/.exec(line)?.[1];
+    const prefix = KNOWN_PREFIXES.find((known) => line.startsWith(known));
+    const kind = name ? `${name}=…` : prefix ? `${prefix}…` : 'other text';
+    return `${kind} (${line.length} characters)`;
+  });
+  return `${lines.length} line${lines.length === 1 ? '' : 's'}: ${kinds.join('; ')}`;
 }
 
 export function prepare(env: Record<string, string | undefined>): {
@@ -50,14 +73,21 @@ export function prepare(env: Record<string, string | undefined>): {
   missingOptional: string[];
   /** Secrets whose pasted value needed cleaning (secretValue): names only. */
   cleaned: string[];
+  /** Secrets that are not one single value once cleaned (spaces, several lines): never used. */
+  malformed: { name: string; shape: string }[];
   secrets: Record<string, string>;
 } {
   const accountId = cloudflareAccountId(env.CLOUDFLARE_ACCOUNT_ID);
   const secrets: Record<string, string> = {};
   const cleaned: string[] = [];
+  const malformed: { name: string; shape: string }[] = [];
   for (const name of WORKER_SECRETS) {
     const value = secretValue(name, env[name]);
     if (!value) continue;
+    if (!/^\S+$/.test(value)) {
+      malformed.push({ name, shape: describeValue(env[name] ?? '') });
+      continue;
+    }
     secrets[name] = value;
     if (value !== env[name]?.trim()) cleaned.push(name);
   }
@@ -72,8 +102,11 @@ export function prepare(env: Record<string, string | undefined>): {
   return {
     accountId,
     missingRequired: required.filter((name) => !present(name)),
-    missingOptional: WORKER_SECRETS.filter((name) => !present(name)),
+    missingOptional: WORKER_SECRETS.filter(
+      (name) => !present(name) && !malformed.some((bad) => bad.name === name),
+    ),
     cleaned,
+    malformed,
     secrets,
   };
 }
@@ -81,12 +114,23 @@ export function prepare(env: Record<string, string | undefined>): {
 function main() {
   const [secretsFile] = process.argv.slice(2);
   if (!secretsFile) throw new Error('usage: prepare.ts <secrets file>');
-  const { accountId, missingRequired, missingOptional, cleaned, secrets } = prepare(process.env);
+  const { accountId, missingRequired, missingOptional, cleaned, malformed, secrets } = prepare(
+    process.env,
+  );
   for (const name of missingOptional) {
     console.warn(`::warning::${name} is not set yet: the matching features stay off.`);
   }
   for (const name of cleaned) {
     console.info(`::notice::${name}: kept only the value (dropped a pasted "${name}=" or quotes).`);
+  }
+  for (const { name, shape } of malformed) {
+    console.error(`::error::${name} is not one single value: ${shape}.`);
+  }
+  if (malformed.length > 0) {
+    throw new Error(
+      `store ${malformed.map(({ name }) => name).join(' and ')} again: only the value itself, on` +
+        ' one line (apik_… for WHOP_API_KEY, ws_… for WHOP_WEBHOOK_SECRET).',
+    );
   }
   if (missingRequired.length > 0) {
     throw new Error(
