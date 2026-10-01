@@ -13,7 +13,13 @@
  */
 import { appendFileSync } from 'node:fs';
 import postgres from 'postgres';
-import { removeSeed, rescoreNow, riskReport, runSeed } from './seed/sandbox-members';
+import {
+  planActionsNow,
+  removeSeed,
+  rescoreNow,
+  riskReport,
+  runSeed,
+} from './seed/sandbox-members';
 
 /** « StayPut Test », the founder's sandbox account (not a secret). */
 const SANDBOX_COMPANY = 'biz_2whAzkbCRpcGqQ';
@@ -58,12 +64,14 @@ async function main() {
   const now = new Date();
   if (action === 'seed') {
     const result = await runSeed(db, companyId, now);
-    // Their scores and the weekly analyses at once, with the rules of this code.
+    // Their scores and the weekly analyses at once, with the rules of this code, then the
+    // actions their state calls for.
     const scored = await rescoreNow(db, companyId, now);
+    const planned = await planActionsNow(db, companyId, now);
     console.info(
       `Seeded ${companyId}: ${result.members} fake members, ${result.items} items (memberships, ` +
         `payments, messages, reactions, lessons, posts); ${scored} risk scores computed, ` +
-        'weekly analyses run.',
+        `weekly analyses run; ${planned} actions planned.`,
     );
   } else if (action === 'report') {
     // Printed, and added to the run's summary on GitHub.

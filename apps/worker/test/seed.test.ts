@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PROFILES, removeSeed, runSeed, seedMembers } from '../../../scripts/seed/sandbox-members';
+import {
+  PROFILES,
+  planActionsNow,
+  removeSeed,
+  runSeed,
+  seedMembers,
+} from '../../../scripts/seed/sandbox-members';
 import { readMembers } from '../src/members';
 import { createTestDb, type TestDb } from './helpers/db';
 
@@ -98,10 +104,7 @@ describe('the sandbox seed', () => {
   });
 
   it('gives each trigger of the actions something to act on (SPEC Phase 4)', async () => {
-    await t.db.query('select stayput.plan_actions($1, $2::timestamptz)', [
-      COMPANY,
-      NOW.toISOString(),
-    ]);
+    expect(await planActionsNow(t.db, COMPANY, NOW)).toBeGreaterThanOrEqual(8);
     const planned = await t.db.query<{ type: string; n: number }>(
       `select type, count(*)::int as n from stayput.actions where company_id = $1
         group by type order by type`,
@@ -115,6 +118,48 @@ describe('the sandbox seed', () => {
       payment_action_notice: 1,
       exit_survey: 3,
     });
+  });
+
+  it('gives fresh payment problems on a company seeded days before', async () => {
+    // Whop never changes when a payment was created: an earlier run's payments keep their date.
+    // Payment ids are Whop's, unique across companies: a database of its own.
+    const other = await createTestDb();
+    try {
+      await other.db.query('select stayput.ensure_company($1, $2::timestamptz)', [
+        COMPANY,
+        NOW.toISOString(),
+      ]);
+      await runSeed(other.db, COMPANY, new Date(NOW.getTime() - 5 * DAY));
+      await runSeed(other.db, COMPANY, NOW);
+      const problems = await other.db.query<{ status: string }>(
+        `select status from stayput.payments where company_id = $1 and id like 'pay\\_seed%x%'
+          order by status`,
+        [COMPANY],
+      );
+      // Only this run's: three declined renewals and one waiting for the bank.
+      expect(problems.map((p) => p.status)).toEqual([
+        'failed',
+        'failed',
+        'failed',
+        'requires_action',
+      ]);
+      await other.db.query('select stayput.plan_actions($1, $2::timestamptz)', [
+        COMPANY,
+        NOW.toISOString(),
+      ]);
+      const planned = await other.db.query<{ type: string; n: number }>(
+        `select type, count(*)::int as n from stayput.actions where company_id = $1
+          group by type order by type`,
+        [COMPANY],
+      );
+      expect(Object.fromEntries(planned.map((row) => [row.type, row.n]))).toMatchObject({
+        payment_failed_notice: 3,
+        payment_retry: 1,
+        payment_action_notice: 1,
+      });
+    } finally {
+      await other.close();
+    }
   });
 
   it('is the same members when run again, and leaves without a trace', async () => {

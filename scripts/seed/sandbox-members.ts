@@ -215,7 +215,6 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
     });
     for (let p = 0; p <= periods; p += 1) {
       const at = new Date(m.joinedAt.getTime() + p * 30 * DAY);
-      const last = p === periods;
       payments.push({
         id: `pay_${m.memberId.slice(5)}p${p}`,
         membership_id: `mem_${m.memberId.slice(5)}`,
@@ -223,7 +222,21 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
         created_at: iso(at),
         currency: 'usd',
         total: { amount: PRICE.toFixed(2), currency: 'usd' },
-        ...(last && due ? due : { status: 'paid', substatus: 'succeeded', paid_at: iso(at) }),
+        status: 'paid',
+        substatus: 'succeeded',
+        paid_at: iso(at),
+      });
+    }
+    if (due) {
+      // A new payment at each run, its id naming the hour: Whop never changes when a payment was
+      // created, so one already stored would keep its old date, too old for the triggers.
+      payments.push({
+        id: `${problemPrefix(m)}${Math.floor(now.getTime() / 3_600_000)}`,
+        membership_id: `mem_${m.memberId.slice(5)}`,
+        member_id: m.memberId,
+        currency: 'usd',
+        total: { amount: PRICE.toFixed(2), currency: 'usd' },
+        ...due,
       });
     }
   }
@@ -286,6 +299,9 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
   }
   return pages;
 }
+
+/** The id of a member's payment problem, but for the hour of the run: `pay_seed18x…`. */
+const problemPrefix = (m: SeedMember) => `pay_${m.memberId.slice(5)}x`;
 
 const hoursAgo = (now: Date, hours: number) =>
   new Date(now.getTime() - hours * 3_600_000).toISOString();
@@ -375,6 +391,17 @@ function generator(seed: number): () => number {
 
 /** Writes the fake members into `companyId`, then recomputes its statistics. */
 export async function runSeed(db: SeedDb, companyId: string, now: Date) {
+  // The payment problems of an earlier run give way to this run's.
+  await db.query(
+    `delete from stayput.payments where company_id = $1 and id like 'pay\\_seed%x%'
+        and id <> all (string_to_array($2, ','))`,
+    [
+      companyId,
+      seedMembers(now)
+        .map((m) => `${problemPrefix(m)}${Math.floor(now.getTime() / 3_600_000)}`)
+        .join(','),
+    ],
+  );
   let items = 0;
   for (const page of seedPages(now)) {
     if (page.data.length === 0) continue;
@@ -391,6 +418,20 @@ export async function runSeed(db: SeedDb, companyId: string, now: Date) {
     companyId,
   ]);
   return { members: seedMembers(now).length, items };
+}
+
+/**
+ * The actions the members' state calls for (SPEC Phase 4), planned at once rather than at the
+ * Worker's next hourly run: in manual mode they wait for the creator's approval, in test mode
+ * they are only simulated. Returns how many were planned.
+ */
+export async function planActionsNow(db: SeedDb, companyId: string, now: Date): Promise<number> {
+  const [row] = await db.query<{ planned: number }>(
+    `select stayput.plan_actions($1, $2::timestamptz)
+              + stayput.plan_alumni_followups($1, $2::timestamptz) as planned`,
+    [companyId, now.toISOString()],
+  );
+  return Number(row?.planned ?? 0);
 }
 
 /** Takes every fake member away (their activity, statistics, memberships and payments too). */

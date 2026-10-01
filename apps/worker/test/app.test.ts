@@ -1688,9 +1688,18 @@ describe('the actions (SPEC Phase 4)', () => {
 
   it('runs what the creator approves, in test mode a simulation, and cancels what they drop', async () => {
     const { request, init } = await withProposal('biz_ActQ2', 'user_bob');
+    // NOW is the real time: quiet hours away from it, or the message would wait for the morning
+    // whenever the tests run at night.
+    const hour = NOW.getUTCHours();
     await request(
       '/api/creator/biz_ActQ2/settings/actions',
-      json(init, 'PUT', { ...DEFAULTS, locale: 'fr', dryRun: true }),
+      json(init, 'PUT', {
+        ...DEFAULTS,
+        locale: 'fr',
+        dryRun: true,
+        quietHoursStart: (hour + 2) % 24,
+        quietHoursEnd: (hour + 3) % 24,
+      }),
     );
     await settle();
     const [proposal] = (
