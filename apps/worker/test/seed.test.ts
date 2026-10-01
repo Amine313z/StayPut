@@ -97,6 +97,26 @@ describe('the sandbox seed', () => {
     expect(stats?.messages).toBe(events?.n);
   });
 
+  it('gives each trigger of the actions something to act on (SPEC Phase 4)', async () => {
+    await t.db.query('select stayput.plan_actions($1, $2::timestamptz)', [
+      COMPANY,
+      NOW.toISOString(),
+    ]);
+    const planned = await t.db.query<{ type: string; n: number }>(
+      `select type, count(*)::int as n from stayput.actions where company_id = $1
+        group by type order by type`,
+      [COMPANY],
+    );
+    expect(Object.fromEntries(planned.map((row) => [row.type, row.n]))).toMatchObject({
+      // Declined 30, 10 and 5 hours ago; StayPut retries only the one Whop leaves to it.
+      payment_failed_notice: 3,
+      payment_retry: 1,
+      // An active member's renewal waiting for the bank's check.
+      payment_action_notice: 1,
+      exit_survey: 3,
+    });
+  });
+
   it('is the same members when run again, and leaves without a trace', async () => {
     await runSeed(t.db, COMPANY, NOW);
     const count = async (table: string) =>

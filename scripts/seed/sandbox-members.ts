@@ -191,17 +191,24 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
 
   const memberships: unknown[] = [];
   const payments: unknown[] = [];
+  const owing = members.filter((m) => m.profile === 'failed_payment');
+  // An active member whose renewal waits for the bank's 3D Secure check.
+  const checking = members.find((m) => m.profile === 'active');
   for (const m of members) {
     // Monthly renewals since joining; the next one is the end of the current period.
     const periods = Math.floor((now.getTime() - m.joinedAt.getTime()) / (30 * DAY));
     const periodEnd = new Date(m.joinedAt.getTime() + (periods + 1) * 30 * DAY);
-    const failed = m.profile === 'failed_payment';
+    const due = owing.includes(m)
+      ? declinedPayment(owing.indexOf(m), now)
+      : m === checking
+        ? waitingPayment(now)
+        : null;
     memberships.push({
       id: `mem_${m.memberId.slice(5)}`,
       user_id: m.userId,
       product_id: SEED_PRODUCT,
       plan_id: SEED_PLAN,
-      status: failed ? 'past_due' : 'active',
+      status: due?.substatus === 'failed' ? 'past_due' : 'active',
       cancel_at_period_end: m.profile === 'scheduled_cancellation',
       created_at: iso(m.joinedAt),
       current_period_end: iso(periodEnd),
@@ -216,16 +223,7 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
         created_at: iso(at),
         currency: 'usd',
         total: { amount: PRICE.toFixed(2), currency: 'usd' },
-        ...(last && failed
-          ? {
-              status: 'open',
-              substatus: 'failed',
-              failure_message: 'Your card was declined.',
-              retryable: true,
-              next_payment_attempt_at: iso(new Date(now.getTime() + 2 * DAY)),
-              paid_at: null,
-            }
-          : { status: 'paid', substatus: 'succeeded', paid_at: iso(at) }),
+        ...(last && due ? due : { status: 'paid', substatus: 'succeeded', paid_at: iso(at) }),
       });
     }
   }
@@ -287,6 +285,59 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
     pages.push({ kind: 'forum_posts', scope: FORUM, data: posts });
   }
   return pages;
+}
+
+const hoursAgo = (now: Date, hours: number) =>
+  new Date(now.getTime() - hours * 3_600_000).toISOString();
+
+/**
+ * The declined renewal of a member with a failed payment, recent enough for each trigger of SPEC
+ * Phase 4 to show: declined 30 hours ago and left to StayPut (a notice, and a retry 24 hours
+ * after the decline), declined 10 hours ago with Whop's own retry planned, and declined 5 hours
+ * ago for good (a notice only, both).
+ */
+function declinedPayment(k: number, now: Date): Record<string, unknown> {
+  const declined = {
+    status: 'open',
+    substatus: 'failed',
+    failure_message: 'Your card was declined.',
+    paid_at: null,
+  };
+  switch (k % 3) {
+    case 0:
+      return {
+        ...declined,
+        created_at: hoursAgo(now, 30),
+        retryable: true,
+        next_payment_attempt_at: null,
+      };
+    case 1:
+      return {
+        ...declined,
+        created_at: hoursAgo(now, 10),
+        retryable: true,
+        next_payment_attempt_at: new Date(now.getTime() + 2 * DAY).toISOString(),
+      };
+    default:
+      return {
+        ...declined,
+        created_at: hoursAgo(now, 5),
+        retryable: false,
+        next_payment_attempt_at: null,
+      };
+  }
+}
+
+/** A renewal waiting 2 hours for the bank's 3D Secure check: the notice with its link. */
+function waitingPayment(now: Date): Record<string, unknown> {
+  return {
+    status: 'open',
+    substatus: 'requires_action',
+    retryable: false,
+    recovery_url: 'https://sandbox.whop.com/',
+    created_at: hoursAgo(now, 2),
+    paid_at: null,
+  };
 }
 
 /** When the member was last seen in the community, as Whop would report it. */
