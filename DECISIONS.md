@@ -1052,3 +1052,44 @@ nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en
 - À trancher : un ancien membre entré dans l'Alumni voit aussi l'espace de progression (son
   objectif peut lui donner envie de revenir) ; ses ouvertures ne comptent dans aucun score
   (les membres de l'Alumni n'en ont pas).
+
+### Les preuves par capture (migration 0021)
+
+- **Le parcours** : sous la saisie d'un résultat, « Joindre une capture ». Le navigateur du
+  membre lit la capture avec Tesseract.js, propose les nombres qu'il y trouve (le plus proche de
+  là où en est le membre est présélectionné pour un objectif « où j'en suis ») ; le membre touche
+  le sien ou le tape, puis note. Seuls l'empreinte SHA-256 de l'image et les nombres lus
+  (trente au plus, jamais le texte de la capture, qui peut contenir des noms) partent au
+  serveur ; **l'image ne quitte jamais l'appareil**, et StayPut ne propose pas de la garder
+  (`image_stored` reste faux) : la carte témoignage et la page publique n'en ont pas besoin.
+- **Justifié ou déclaré** : un résultat est « justifié » quand le nombre noté figure parmi ceux
+  lus sur la capture, au centime près (le Worker le vérifie, la base ne reçoit la preuve que dans
+  ce cas) ; sinon il compte quand même, comme « déclaré », et l'écran le dit avant l'envoi
+  (« Ce nombre n'est pas sur la capture »). C'est un niveau de confiance, pas une preuve
+  infalsifiable : le navigateur du membre fait la lecture. L'empreinte permet de vérifier plus
+  tard une capture que le membre montrerait.
+- **Une capture appuie un seul résultat** dans une communauté (index unique sur l'empreinte) :
+  la même image une seconde fois laisse le résultat « déclaré », et l'écran le dit.
+- **Badge « Première preuve »** au premier résultat justifié ; les résultats justifiés portent
+  « Appuyé par une capture » dans la liste.
+- **Les nombres d'une capture** : montants, nombres et pourcentages, dans l'ordre où ils
+  apparaissent, chacun une fois ; les dates (01/10/2026, 2026-10-01) et les heures (23:45) ne
+  sont pas des résultats et sont écartées ; un nombre qui se lit de deux façons (« 3,250 » :
+  3 250 en anglais, 3,25 en français) donne les deux, le membre touche le bon. Un signe moins
+  dans un mot (« COVID-19 ») n'en est pas un.
+- **Tesseract, servi par StayPut** : le moteur (le worker, trois cœurs WebAssembly selon ce que
+  le navigateur sait faire, ~3,9 Mo chacun, et le modèle anglais « best_int », 2,9 Mo, qui lit
+  les chiffres quelle que soit la langue autour) est copié dans le site au moment de la
+  construction (`apps/web/src/ocr-files.ts`, versions vérifiées), sous un dossier qui porte sa
+  version (cache d'un an) : jamais de CDN, les pages n'autorisent que leur propre origine. Il ne
+  se charge que quand un membre choisit une capture (le navigateur le garde ensuite).
+- **La politique de sécurité du site** autorise désormais `'wasm-unsafe-eval'` : WebAssembly
+  seulement, pas l'`eval` de JavaScript. Vérifié dans Chromium (Playwright) sur le site construit
+  servi avec ces en-têtes : une capture de tableau de bord (« Chiffre d'affaires 3 250,00 € »,
+  « Ventes 12 », « Panier moyen 270,83 € », date et heure) est lue en un peu plus d'une seconde,
+  les nombres proposés sont 3 250, 12 et 270,83, et la page n'a aucune erreur. Sans cette
+  autorisation, le cœur WebAssembly est refusé et le worker ne répond plus jamais : la lecture
+  abandonne donc après deux minutes, ou dès que le worker signale une erreur, et le membre peut
+  taper son résultat.
+- **L'essai de l'équipe** lit aussi les captures (dans le navigateur, rien n'est envoyé) et
+  applique les mêmes règles : justifié, déclaré, une capture par résultat.

@@ -354,6 +354,23 @@ export const en = {
   'space.celebrate.badge': 'New badge: {badge}',
   'space.celebrate.saved': 'Recorded. Keep it up!',
   'space.celebrate.close': 'Close',
+  'space.proof.attach': 'Add a screenshot',
+  'space.proof.loading': 'Getting the reading ready… {percent}',
+  'space.proof.reading': 'Reading the screenshot… {percent}',
+  'space.proof.found': 'Numbers read on your screenshot: tap yours.',
+  'space.proof.none':
+    'No number could be read on this screenshot: type yours, it will be recorded as declared.',
+  'space.proof.private':
+    'Your screenshot stays on your device: only its fingerprint and the numbers read are sent.',
+  'space.proof.mismatch': 'This number is not on the screenshot: it will be recorded as declared.',
+  'space.proof.remove': 'Remove the screenshot',
+  'space.proof.failed': 'This screenshot could not be read. Try another one, or type your result.',
+  'space.proof.justified': 'Your screenshot backs this result.',
+  'space.proof.declared':
+    'The number was not on the screenshot: the result is recorded as declared.',
+  'space.proof.duplicate':
+    'This screenshot already backs another result: this one is recorded as declared.',
+  'space.proof.label': 'Backed by a screenshot',
   'space.unknown.title': 'Your space is getting ready',
   'space.unknown.body':
     'StayPut is reading your membership from Whop. Come back in a few minutes to set your goal.',

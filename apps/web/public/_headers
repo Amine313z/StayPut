@@ -1,11 +1,17 @@
 # Headers of the static files (Workers static assets). The Worker's own routes (/api, /webhooks,
-# /health…) set theirs in apps/worker/src/http.ts.
+# /health…) set theirs in apps/worker/src/http.ts. 'wasm-unsafe-eval' lets WebAssembly run (no
+# JavaScript eval): Tesseract reads a member's screenshot in their browser, in a worker of this
+# origin.
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'
 
 # Vite fingerprints these file names: they never change.
 /assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Tesseract's files (apps/web/src/ocr-files.ts): their folder names their version.
+/ocr/*
   Cache-Control: public, max-age=31536000, immutable

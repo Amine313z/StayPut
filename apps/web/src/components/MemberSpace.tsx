@@ -4,7 +4,8 @@ import {
   GOAL_TITLE_MAX,
   GOAL_UNIT_MAX,
   MILESTONES,
-  goalValue,
+  parseLocaleNumber,
+  proofJustifies,
   type BadgeCode,
   type EarnedBadge,
   type GoalCategory,
@@ -14,6 +15,7 @@ import {
   type MemberGoal,
   type MemberSpaceView,
   type Milestone,
+  type ProofInput,
   type ResultAnswer,
   type ResultEntry,
 } from '@stayput/core';
@@ -27,7 +29,9 @@ import {
   Flame,
   HeartHandshake,
   Hourglass,
+  ImagePlus,
   LifeBuoy,
+  LoaderCircle,
   Lock,
   Mountain,
   PartyPopper,
@@ -42,12 +46,13 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useId, useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { postJson, useApi } from '../api';
 import { useI18n } from '../i18n';
+import { readScreenshot, type ReadingStage } from '../ocr';
 import { trialGoal, trialResult, trialStart } from '../trial';
 import { Badge, Notice } from '../ui/Badge';
-import { Button } from '../ui/Button';
+import { Button, buttonClass } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { FIELD } from './SettingsParts';
 
@@ -58,6 +63,8 @@ interface Celebration {
   achieved: boolean;
   /** A result recorded: thanks, even without a milestone. */
   recorded: boolean;
+  /** What its screenshot came to (ResultAnswer). */
+  proof: ResultAnswer['proof'];
 }
 
 /**
@@ -115,10 +122,12 @@ export function MemberSpace({ api }: { api: string }) {
 function TrialSpace({ preview }: { preview: MemberSpaceView }) {
   const { t } = useI18n();
   const [start, setStart] = useState(() => trialStart(preview));
+  // The screenshots that backed a result in this trial: each backs one only, as in StayPut.
+  const used = useRef(new Set<string>());
   const backend: SpaceBackend = {
     setGoal: (goal, current) => Promise.resolve(trialGoal(current, goal, new Date())),
     recordResult: (entry, current) => {
-      const answer = trialResult(current, entry, new Date());
+      const answer = trialResult(current, entry, new Date(), used.current);
       return answer ? Promise.resolve(answer) : Promise.reject(new Error('no goal under way'));
     },
   };
@@ -134,7 +143,10 @@ function TrialSpace({ preview }: { preview: MemberSpaceView }) {
             variant="secondary"
             size="sm"
             className="mt-2"
-            onClick={() => setStart(trialStart(preview))}
+            onClick={() => {
+              used.current = new Set();
+              setStart(trialStart(preview));
+            }}
             icon={<RotateCcw aria-hidden="true" className="size-4" />}
           >
             {t('space.trial.reset')}
@@ -173,7 +185,7 @@ function Space({
   const celebration: Celebration | null = current
     ? current.celebration
     : view.fresh.length > 0
-      ? { milestones: [], badges: view.fresh, achieved: false, recorded: false }
+      ? { milestones: [], badges: view.fresh, achieved: false, recorded: false, proof: null }
       : null;
   const celebrationKey = current ? `answer:${current.n}` : `opening:${view.fresh.join()}`;
 
@@ -227,6 +239,7 @@ function Space({
                   badges: result.badges,
                   achieved: result.achieved,
                   recorded: true,
+                  proof: result.proof,
                 });
               }}
             />
@@ -247,28 +260,6 @@ function useWithUnit(): (value: number, unit: string) => string {
     if (locale === 'en' && ['$', '€', '£'].includes(unit)) return `${unit}${n}`;
     return `${n}\u00a0${unit}`;
   };
-}
-
-/**
- * A number as people type it: « 3 000,5 », « 3,000.5 » and « 3000.5 » are 3000.5. With both
- * separators, the last one starts the decimals; a comma alone does too, except in English
- * between groups of three digits (« 3,000 »).
- */
-export function parseNumber(text: string, locale: string): number | null {
-  let normal = text.replace(/[\s\u00a0\u202f']/g, '');
-  if (!normal) return null;
-  const comma = normal.lastIndexOf(',');
-  const dot = normal.lastIndexOf('.');
-  if (comma >= 0 && dot >= 0) {
-    normal = comma > dot ? normal.replace(/\./g, '').replace(',', '.') : normal.replace(/,/g, '');
-  } else if (comma >= 0) {
-    normal =
-      locale === 'en' && /^-?\d{1,3}(,\d{3})+$/.test(normal)
-        ? normal.replace(/,/g, '')
-        : normal.replace(',', '.');
-  }
-  if (!/^-?\d+(\.\d+)?$/.test(normal)) return null;
-  return goalValue(Number(normal));
 }
 
 const CATEGORY_LABELS: Readonly<Record<GoalCategory, MessageKey>> = {
@@ -383,8 +374,8 @@ function GoalForm({
 
   const today = localDay(new Date());
   const latest = inMonths(GOAL_MAX_YEARS * 12);
-  const startValue = parseNumber(start, locale);
-  const targetValue = parseNumber(target, locale);
+  const startValue = parseLocaleNumber(start, locale);
+  const targetValue = parseLocaleNumber(target, locale);
   const errors = {
     title: title.trim() ? null : t('space.form.required'),
     unit: unit.trim() ? null : t('space.form.required'),
@@ -632,9 +623,22 @@ function GoalProgress({
         ) : (
           <ul className="mt-1.5 divide-y divide-line text-sm">
             {results.slice(0, 5).map((result) => (
-              <li key={result.id} className="flex justify-between gap-3 py-1.5">
+              <li
+                key={result.id}
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-1.5"
+              >
                 <span className="text-muted">{relative(new Date(result.recordedAt))}</span>
-                <span className="tabular font-medium">{withUnit(result.value, goal.unit)}</span>
+                <span className="flex items-center gap-2">
+                  {result.proof ? (
+                    <Badge
+                      tone="accent"
+                      icon={<ShieldCheck aria-hidden="true" className="size-3" />}
+                    >
+                      {t('space.proof.label')}
+                    </Badge>
+                  ) : null}
+                  <span className="tabular font-medium">{withUnit(result.value, goal.unit)}</span>
+                </span>
               </li>
             ))}
           </ul>
@@ -695,7 +699,17 @@ function ProgressBar({ progress, reached }: { progress: number; reached: Set<num
   );
 }
 
-/** One gesture: where the member stands now, or what they add (with « +1 » for counting). */
+/** The member's screenshot: being read, read (its fingerprint and numbers), or unreadable. */
+type Screenshot =
+  | { state: 'reading'; stage: ReadingStage; ratio: number }
+  | { state: 'read'; proof: ProofInput }
+  | { state: 'failed' };
+
+/**
+ * One gesture: where the member stands now, or what they add (with « +1 » for counting). A
+ * screenshot can back the number (SPEC Phase 5, point 3): read in the browser, it proposes the
+ * numbers it shows; the image never leaves the device.
+ */
 function ResultForm({
   goal,
   onResult,
@@ -703,21 +717,56 @@ function ResultForm({
   goal: MemberGoal;
   onResult: (entry: ResultEntry) => Promise<void>;
 }) {
-  const { t, locale } = useI18n();
+  const { t, locale, number, percent } = useI18n();
   const id = useId();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState<'form' | 'one' | null>(null);
   const [failed, setFailed] = useState(false);
+  const [shot, setShot] = useState<Screenshot | null>(null);
+  // The screenshot being read: a newer choice wins over an older one still being read.
+  const reading = useRef(0);
   const adding = goal.entry === 'add';
-  const value = parseNumber(text, locale);
+  const value = parseLocaleNumber(text, locale);
   const usable = value !== null && !(adding && value === 0);
+  const proof = shot?.state === 'read' ? shot.proof : null;
+
+  const pick = async (file: File) => {
+    const n = ++reading.current;
+    setShot({ state: 'reading', stage: 'loading', ratio: 0 });
+    try {
+      const read = await readScreenshot(file, (stage, ratio) => {
+        if (reading.current === n) setShot({ state: 'reading', stage, ratio });
+      });
+      if (reading.current !== n) return;
+      setShot({ state: 'read', proof: read });
+      // Where the member stands: the number of the screenshot closest to their last one.
+      if (!adding && !text.trim() && read.numbers.length > 0) {
+        const closest = read.numbers.reduce((best, candidate) =>
+          Math.abs(candidate - goal.current) < Math.abs(best - goal.current) ? candidate : best,
+        );
+        setText(String(closest));
+      }
+    } catch {
+      if (reading.current === n) setShot({ state: 'failed' });
+    }
+  };
+
+  const forget = () => {
+    reading.current += 1;
+    setShot(null);
+  };
 
   const send = async (amount: number, how: 'form' | 'one') => {
     setBusy(how);
     setFailed(false);
     try {
-      await onResult({ goalId: goal.id, value: amount });
+      await onResult({
+        goalId: goal.id,
+        value: amount,
+        ...(proof && how === 'form' ? { proof } : {}),
+      });
       setText('');
+      if (how === 'form') forget();
     } catch {
       setFailed(true);
     } finally {
@@ -731,46 +780,132 @@ function ResultForm({
         event.preventDefault();
         if (usable && value !== null) void send(value, 'form');
       }}
-      className="rounded-xl bg-surface-2 p-3"
+      className="space-y-3 rounded-xl bg-surface-2 p-3"
       noValidate
     >
-      <label htmlFor={id} className="text-sm font-medium">
-        {t(adding ? 'space.result.add' : 'space.result.total')}
-      </label>
-      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2">
-          <input
-            id={id}
-            value={text}
-            inputMode="decimal"
-            autoComplete="off"
-            onChange={(event) => setText(event.target.value)}
-            className={`${FIELD} tabular w-32`}
-          />
-          <span className="text-sm text-muted">{goal.unit}</span>
-        </div>
-        <Button
-          type="submit"
-          loading={busy === 'form'}
-          disabled={!usable || busy !== null}
-          icon={<PenLine aria-hidden="true" className="size-4" />}
-        >
-          {t(adding ? 'space.result.addSave' : 'space.result.save')}
-        </Button>
-        {adding ? (
+      <div>
+        <label htmlFor={id} className="text-sm font-medium">
+          {t(adding ? 'space.result.add' : 'space.result.total')}
+        </label>
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2">
+            <input
+              id={id}
+              value={text}
+              inputMode="decimal"
+              autoComplete="off"
+              onChange={(event) => setText(event.target.value)}
+              className={`${FIELD} tabular w-32`}
+            />
+            <span className="text-sm text-muted">{goal.unit}</span>
+          </div>
           <Button
-            variant="secondary"
-            loading={busy === 'one'}
-            disabled={busy !== null}
-            onClick={() => void send(1, 'one')}
-            icon={<Plus aria-hidden="true" className="size-4" />}
+            type="submit"
+            loading={busy === 'form'}
+            disabled={!usable || busy !== null || shot?.state === 'reading'}
+            icon={<PenLine aria-hidden="true" className="size-4" />}
           >
-            {t('space.result.plusOne')}
+            {t(adding ? 'space.result.addSave' : 'space.result.save')}
           </Button>
-        ) : null}
+          {adding ? (
+            <Button
+              variant="secondary"
+              loading={busy === 'one'}
+              disabled={busy !== null}
+              onClick={() => void send(1, 'one')}
+              icon={<Plus aria-hidden="true" className="size-4" />}
+            >
+              {t('space.result.plusOne')}
+            </Button>
+          ) : null}
+        </div>
       </div>
+
+      {shot === null || shot.state === 'failed' ? (
+        <label
+          className={buttonClass(
+            'ghost',
+            'sm',
+            'cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent',
+          )}
+        >
+          <ImagePlus aria-hidden="true" className="size-4" />
+          {t('space.proof.attach')}
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) void pick(file);
+            }}
+          />
+        </label>
+      ) : null}
+      {shot?.state === 'failed' ? (
+        <p role="alert" className="flex items-center gap-1.5 text-sm text-danger">
+          <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
+          {t('space.proof.failed')}
+        </p>
+      ) : null}
+      {shot?.state === 'reading' ? (
+        <p role="status" className="flex items-center gap-2 text-sm text-muted">
+          <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-accent" />
+          {t(shot.stage === 'loading' ? 'space.proof.loading' : 'space.proof.reading', {
+            percent: percent(shot.ratio),
+          })}
+        </p>
+      ) : null}
+      {proof ? (
+        <div className="space-y-2 text-sm">
+          {proof.numbers.length > 0 ? (
+            <>
+              <p id={`${id}-numbers`}>{t('space.proof.found')}</p>
+              <div
+                role="group"
+                aria-labelledby={`${id}-numbers`}
+                className="flex flex-wrap gap-1.5"
+              >
+                {proof.numbers.map((candidate) => (
+                  <button
+                    key={candidate}
+                    type="button"
+                    aria-pressed={value === candidate}
+                    onClick={() => setText(String(candidate))}
+                    className={`tabular rounded-full border px-2.5 py-0.5 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                      value === candidate
+                        ? 'border-accent bg-accent-soft text-accent'
+                        : 'border-line bg-surface hover:bg-surface-2'
+                    }`}
+                  >
+                    {number(candidate)}
+                  </button>
+                ))}
+              </div>
+              {value !== null && !proofJustifies(proof, value) ? (
+                <p className="text-warning">{t('space.proof.mismatch')}</p>
+              ) : null}
+            </>
+          ) : (
+            <p className="text-warning">{t('space.proof.none')}</p>
+          )}
+          <p className="flex items-start gap-1.5 text-muted">
+            <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            {t('space.proof.private')}
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={forget}
+            icon={<X aria-hidden="true" className="size-4" />}
+          >
+            {t('space.proof.remove')}
+          </Button>
+        </div>
+      ) : null}
       {failed ? (
-        <p role="alert" className="mt-2 flex items-center gap-1.5 text-sm text-danger">
+        <p role="alert" className="flex items-center gap-1.5 text-sm text-danger">
           <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
           {t('common.failed')}
         </p>
@@ -814,6 +949,7 @@ const BADGES: Readonly<Record<BadgeCode, { icon: LucideIcon; name: MessageKey }>
 /** The badges every member can earn today; the others show once earned. */
 const ALWAYS_SHOWN: readonly BadgeCode[] = [
   'first_result',
+  'first_proof',
   'streak_7_days',
   'milestone_25',
   'milestone_50',
@@ -889,6 +1025,12 @@ function BadgesCard({ badges }: { badges: EarnedBadge[] }) {
   );
 }
 
+const PROOF_OUTCOMES: Readonly<Record<NonNullable<ResultAnswer['proof']>, MessageKey>> = {
+  justified: 'space.proof.justified',
+  declared: 'space.proof.declared',
+  duplicate: 'space.proof.duplicate',
+};
+
 /** What a result or an opening brought: the goal, a milestone, new badges, or thanks. */
 function CelebrationNotice({
   celebration,
@@ -907,6 +1049,7 @@ function CelebrationNotice({
   }
   const festive = lines.length > 0;
   if (!festive && celebration.recorded) lines.push(t('space.celebrate.saved'));
+  if (celebration.proof) lines.push(t(PROOF_OUTCOMES[celebration.proof]));
   if (lines.length === 0) return null;
   return (
     <div role="status">

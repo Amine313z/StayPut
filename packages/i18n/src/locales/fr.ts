@@ -360,6 +360,24 @@ export const fr: Messages = {
   'space.celebrate.badge': 'Nouveau badge : {badge}',
   'space.celebrate.saved': 'C’est noté. Continuez comme ça !',
   'space.celebrate.close': 'Fermer',
+  'space.proof.attach': 'Joindre une capture',
+  'space.proof.loading': 'Préparation de la lecture… {percent}',
+  'space.proof.reading': 'Lecture de la capture… {percent}',
+  'space.proof.found': 'Nombres lus sur votre capture : touchez le vôtre.',
+  'space.proof.none':
+    'Aucun nombre lisible sur cette capture : tapez le vôtre, il sera noté comme déclaré.',
+  'space.proof.private':
+    'Votre capture reste sur votre appareil : seuls son empreinte et les nombres lus sont envoyés.',
+  'space.proof.mismatch': 'Ce nombre n’est pas sur la capture : il sera noté comme déclaré.',
+  'space.proof.remove': 'Retirer la capture',
+  'space.proof.failed':
+    'Cette capture n’a pas pu être lue. Essayez-en une autre, ou tapez votre résultat.',
+  'space.proof.justified': 'Votre capture appuie ce résultat.',
+  'space.proof.declared':
+    'Le nombre n’était pas sur la capture : le résultat est noté comme déclaré.',
+  'space.proof.duplicate':
+    'Cette capture appuie déjà un autre résultat : celui-ci est noté comme déclaré.',
+  'space.proof.label': 'Appuyé par une capture',
   'space.unknown.title': 'Votre espace se prépare',
   'space.unknown.body':
     'StayPut lit votre adhésion sur Whop. Revenez dans quelques minutes pour fixer votre objectif.',

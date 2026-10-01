@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   BADGE_CODES,
   GOAL_CATEGORIES,
+  MAX_PROOF_NUMBERS,
   MAX_GOAL_PROPOSALS,
   NICHE_GOALS,
+  extractNumbers,
   goalProgress,
   goalValue,
   isBadgeCode,
@@ -12,7 +14,10 @@ import {
   nicheGoalProposals,
   parseGoalInput,
   parseGoalProposals,
+  parseLocaleNumber,
+  parseProof,
   parseResultEntry,
+  proofJustifies,
 } from '../src/goals';
 import { NICHES } from '../src/risk';
 
@@ -160,5 +165,101 @@ describe('the progress of a goal', () => {
     expect(milestonesAt(24)).toEqual([]);
     expect(milestonesAt(75)).toEqual([25, 50, 75]);
     expect(milestonesAt(100)).toEqual([25, 50, 75, 100]);
+  });
+});
+
+describe('a number as people type it', () => {
+  it('reads both ways of writing it', () => {
+    expect(parseLocaleNumber('3 000,5', 'fr')).toBe(3000.5);
+    expect(parseLocaleNumber('3,000.5', 'en')).toBe(3000.5);
+    expect(parseLocaleNumber('3000.5', 'fr')).toBe(3000.5);
+    expect(parseLocaleNumber('1.234,56', 'en')).toBe(1234.56);
+    expect(parseLocaleNumber('3,000', 'en')).toBe(3000);
+    expect(parseLocaleNumber('3,000', 'fr')).toBe(3);
+    expect(parseLocaleNumber('2,5', 'en')).toBe(2.5);
+    expect(parseLocaleNumber('−4', 'fr')).toBe(-4);
+    expect(parseLocaleNumber('12\u202f500', 'fr')).toBe(12500);
+  });
+
+  it('refuses what is not one', () => {
+    expect(parseLocaleNumber('', 'fr')).toBeNull();
+    expect(parseLocaleNumber('12 kg', 'fr')).toBeNull();
+    expect(parseLocaleNumber('1,2,3', 'fr')).toBeNull();
+    expect(parseLocaleNumber('1e5', 'en')).toBeNull();
+    expect(parseLocaleNumber('999999999999', 'en')).toBeNull();
+  });
+});
+
+describe('the numbers of a screenshot (SPEC Phase 5, point 3)', () => {
+  it('reads the amounts of a French dashboard, not its dates and times', () => {
+    const text = [
+      'Tableau de bord — 01/10/2026 23:45',
+      "Chiffre d'affaires 3 250,00 €",
+      'Ventes 12   Panier moyen 270,83 €',
+      'Évolution +12,5 % depuis le 2026-09-01',
+    ].join('\n');
+    expect(extractNumbers(text)).toEqual([3250, 12, 270.83, 12.5]);
+  });
+
+  it('reads an English one, and a trade’s loss', () => {
+    expect(extractNumbers('Net P&L: -1,250.50 USD\nWin rate 64.2%\nTrades: 37')).toEqual([
+      -1250.5, 64.2, 37,
+    ]);
+    // A minus inside a word is no sign.
+    expect(extractNumbers('COVID-19 relief')).toEqual([19]);
+  });
+
+  it('gives both readings of an ambiguous number, the member taps the right one', () => {
+    expect(extractNumbers('Total 3,250')).toEqual([3250, 3.25]);
+    expect(extractNumbers('Weight 85.250 kg')).toEqual([85250, 85.25]);
+  });
+
+  it('keeps numbers apart that only a space separates', () => {
+    expect(extractNumbers('12 34')).toEqual([12, 34]);
+    expect(extractNumbers('1 234 567,89 €')).toEqual([1234567.89]);
+    expect(extractNumbers("CHF 12'500.00")).toEqual([12500]);
+    expect(extractNumbers('1.234.567')).toEqual([1234567]);
+  });
+
+  it('keeps each number once, thirty at most', () => {
+    expect(extractNumbers('5 kg, 5 kg, 5 kg')).toEqual([5]);
+    const many = Array.from({ length: 40 }, (_, i) => `item ${i + 1}`).join('\n');
+    expect(extractNumbers(many)).toHaveLength(MAX_PROOF_NUMBERS);
+    expect(extractNumbers('nothing here')).toEqual([]);
+  });
+});
+
+describe('a proof', () => {
+  const sha256 = 'a'.repeat(64);
+
+  it('is a fingerprint and the numbers read, each once', () => {
+    expect(parseProof({ sha256, numbers: [3250, 12, 3250, 270.833] })).toEqual({
+      sha256,
+      numbers: [3250, 12, 270.83],
+    });
+    expect(parseProof({ sha256: 'A'.repeat(64), numbers: [] })).toBeNull();
+    expect(parseProof({ sha256, numbers: ['12'] })).toBeNull();
+    expect(parseProof({ sha256, numbers: Array.from({ length: 31 }, (_, i) => i) })).toBeNull();
+    expect(parseProof('proof')).toBeNull();
+  });
+
+  it('comes with a result, or the result is refused', () => {
+    const goalId = '0b9d4c8e-3f2a-4c1d-9e8f-7a6b5c4d3e2f';
+    expect(parseResultEntry({ goalId, value: 3250, proof: { sha256, numbers: [3250] } })).toEqual({
+      goalId,
+      value: 3250,
+      proof: { sha256, numbers: [3250] },
+    });
+    expect(parseResultEntry({ goalId, value: 3250, proof: null })).toEqual({ goalId, value: 3250 });
+    expect(
+      parseResultEntry({ goalId, value: 3250, proof: { sha256: 'x', numbers: [] } }),
+    ).toBeNull();
+  });
+
+  it('backs a number that is on the screenshot, to the cent', () => {
+    const proof = { sha256, numbers: [3250, 270.83] };
+    expect(proofJustifies(proof, 3250)).toBe(true);
+    expect(proofJustifies(proof, 270.83)).toBe(true);
+    expect(proofJustifies(proof, 3200)).toBe(false);
   });
 });

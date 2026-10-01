@@ -7,6 +7,7 @@ import {
   isNiche,
   nicheGoalProposals,
   parseGoalProposals,
+  proofJustifies,
   type BadgeCode,
   type EarnedBadge,
   type GoalInput,
@@ -17,6 +18,7 @@ import {
   type MemberSpaceView,
   type Milestone,
   type ResultAnswer,
+  type ResultEntry,
   type TemplateLocale,
 } from '@stayput/core';
 import { withUser, type Db, type TransactionalDb } from './db';
@@ -47,7 +49,7 @@ interface SpaceRow {
     createdAt: string;
     milestones: { percent: number; reachedAt: string }[];
   } | null;
-  results: { id: string; value: number; recordedAt: string }[];
+  results: { id: string; value: number; recordedAt: string; proof: string | null }[];
   badges: { code: string; awardedAt: string }[];
 }
 
@@ -125,6 +127,7 @@ export async function readMemberSpace(
       id: r.id,
       value: Number(r.value),
       recordedAt: iso(r.recordedAt),
+      proof: r.proof === 'justified' || r.proof === 'connected' ? r.proof : null,
     })),
     badges: space.badges
       .flatMap((b): EarnedBadge[] =>
@@ -176,29 +179,48 @@ export async function setGoal(
   return Boolean(row?.id);
 }
 
-/** A result on the member's goal under way: what it brought, or null when there is no such goal. */
+/**
+ * A result on the member's goal under way, with its screenshot when one was sent: the proof
+ * goes to the database only when the number recorded is on it (else the result stands as
+ * declared). What it brought, or null when there is no such goal.
+ */
 export async function recordResult(
   db: Db,
   companyId: string,
   userId: string,
-  entry: { goalId: string; value: number },
+  entry: ResultEntry,
   now: Date,
 ): Promise<Omit<ResultAnswer, 'space'> | null> {
+  const proof = entry.proof && proofJustifies(entry.proof, entry.value) ? entry.proof : null;
   const [row] = await db.query<{
-    result: { milestones?: unknown; badges?: unknown; achieved?: unknown } | null;
-  }>('select stayput.record_result($1, $2, $3::uuid, $4::numeric, $5::timestamptz) as result', [
-    companyId,
-    userId,
-    entry.goalId,
-    String(entry.value),
-    now.toISOString(),
-  ]);
+    result: { milestones?: unknown; badges?: unknown; achieved?: unknown; proof?: unknown } | null;
+  }>(
+    `select stayput.record_result($1, $2, $3::uuid, $4::numeric, $5::timestamptz,
+                                  $6::text::jsonb) as result`,
+    [
+      companyId,
+      userId,
+      entry.goalId,
+      String(entry.value),
+      now.toISOString(),
+      proof ? JSON.stringify(proof) : null,
+    ],
+  );
   const result = row?.result;
   if (!result) return null;
   const milestones = Array.isArray(result.milestones)
     ? result.milestones.map(Number).filter(isMilestone)
     : [];
-  return { milestones, badges: badgesOf(result.badges), achieved: result.achieved === true };
+  return {
+    milestones,
+    badges: badgesOf(result.badges),
+    achieved: result.achieved === true,
+    proof: !entry.proof
+      ? null
+      : result.proof === 'justified' || result.proof === 'duplicate'
+        ? result.proof
+        : 'declared',
+  };
 }
 
 /** The goals proposed to the company's members, read as the creator (under RLS). */

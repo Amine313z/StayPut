@@ -26,9 +26,13 @@ import type { Locale } from '@stayput/i18n';
 import { RouterProvider, createMemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '../src/App';
+import { readScreenshot } from '../src/ocr';
 import { LIVE_REFRESH_MS } from '../src/components/PlatformActivityCard';
 import { I18nProvider } from '../src/i18n';
 import { ThemeProvider, resolveTheme } from '../src/theme';
+
+// Tesseract reads screenshots in a real browser only: the tests say what it read.
+vi.mock('../src/ocr', () => ({ readScreenshot: vi.fn() }));
 
 type Answer = { status: number; body: unknown } | Error;
 
@@ -1930,6 +1934,7 @@ describe('member space', () => {
       milestones: [25],
       badges: ['first_result', 'milestone_25'],
       achieved: false,
+      proof: null,
       space: space({
         goal: {
           ...WEIGHT,
@@ -1937,7 +1942,7 @@ describe('member space', () => {
           progress: 25,
           milestones: [{ percent: 25, reachedAt: '2026-10-01T09:00:00.000Z' }],
         },
-        results: [{ id: 'r1', value: 90.25, recordedAt: '2026-10-01T09:00:00.000Z' }],
+        results: [{ id: 'r1', value: 90.25, recordedAt: '2026-10-01T09:00:00.000Z', proof: null }],
         badges: [
           { code: 'first_result', awardedAt: '2026-10-01T09:00:00.000Z' },
           { code: 'milestone_25', awardedAt: '2026-10-01T09:00:00.000Z' },
@@ -2016,6 +2021,7 @@ describe('member space', () => {
               milestones: [],
               badges: [],
               achieved: false,
+              proof: null,
               space: space({ goal: { ...sessions, start: 0, target: 20, current: 4 } }),
             } satisfies ResultAnswer,
           },
@@ -2025,6 +2031,7 @@ describe('member space', () => {
               milestones: [25],
               badges: [],
               achieved: false,
+              proof: null,
               space: space({ goal: { ...sessions, start: 0, target: 20, current: 5.5 } }),
             } satisfies ResultAnswer,
           },
@@ -2135,6 +2142,78 @@ describe('member space', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start the trial again' }));
     expect(screen.getByRole('button', { name: /Train regularly/ })).toBeTruthy();
     expect(screen.queryByText(/^Earned /)).toBeNull();
+  });
+
+  it('reads a screenshot in the browser, and sends only its fingerprint and numbers', async () => {
+    const read = { sha256: 'a'.repeat(64), numbers: [12, 90.25] };
+    vi.mocked(readScreenshot).mockImplementation((_file, onProgress) => {
+      onProgress('reading', 0.5);
+      return Promise.resolve(read);
+    });
+    open({
+      '/api/member/exp_E1/space?lang=en': [{ status: 200, body: space({ goal: WEIGHT }) }],
+      'POST /api/member/exp_E1/space/result?lang=en': [
+        {
+          status: 200,
+          body: {
+            milestones: [25],
+            badges: ['first_result', 'first_proof', 'milestone_25'],
+            achieved: false,
+            proof: 'justified',
+            space: space({
+              goal: { ...WEIGHT, current: 90.25, progress: 25 },
+              results: [
+                {
+                  id: 'r1',
+                  value: 90.25,
+                  recordedAt: '2026-10-01T09:00:00.000Z',
+                  proof: 'justified',
+                },
+              ],
+            }),
+          } satisfies ResultAnswer,
+        },
+      ],
+    });
+    const picker = await screen.findByLabelText('Add a screenshot');
+    fireEvent.change(picker, {
+      target: { files: [new File(['png'], 'dashboard.png', { type: 'image/png' })] },
+    });
+    // The numbers read, the closest to where the member stands chosen.
+    expect(await screen.findByText('Numbers read on your screenshot: tap yours.')).toBeTruthy();
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Where are you now?' });
+    expect(input.value).toBe('90.25');
+    expect(screen.getByRole('button', { name: '90.25' }).getAttribute('aria-pressed')).toBe('true');
+    // A number not on it would be the member's word only.
+    fireEvent.change(input, { target: { value: '91' } });
+    expect(
+      screen.getByText('This number is not on the screenshot: it will be recorded as declared.'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '90.25' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record' }));
+    expect(await screen.findByText('Your screenshot backs this result.')).toBeTruthy();
+    expect(screen.getByText('New badge: First proof')).toBeTruthy();
+    expect(bodies.get('POST /api/member/exp_E1/space/result?lang=en')).toEqual({
+      goalId: WEIGHT.id,
+      value: 90.25,
+      proof: read,
+    });
+    expect(screen.getByText('Backed by a screenshot')).toBeTruthy();
+    // The screenshot is gone with the result: the next one starts afresh.
+    expect(screen.getByLabelText('Add a screenshot')).toBeTruthy();
+  });
+
+  it('says when a screenshot cannot be read', async () => {
+    vi.mocked(readScreenshot).mockRejectedValue(new Error('not an image'));
+    open({ '/api/member/exp_E1/space?lang=en': [{ status: 200, body: space({ goal: WEIGHT }) }] });
+    fireEvent.change(await screen.findByLabelText('Add a screenshot'), {
+      target: { files: [new File(['?'], 'notes.txt', { type: 'image/png' })] },
+    });
+    expect(
+      await screen.findByText(
+        'This screenshot could not be read. Try another one, or type your result.',
+      ),
+    ).toBeTruthy();
   });
 
   it('tells a member not read yet that their space comes', async () => {

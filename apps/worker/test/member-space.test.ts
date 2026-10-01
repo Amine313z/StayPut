@@ -98,23 +98,27 @@ describe('the member’s goal', () => {
       milestones: [25],
       badges: ['first_result', 'milestone_25'],
       achieved: false,
+      proof: null,
     });
     // Back up a little: nothing is taken away.
     expect(await recordResult(t.db, c, user, { goalId, value: 91 }, at(2))).toEqual({
       milestones: [],
       badges: [],
       achieved: false,
+      proof: null,
     });
     expect(await recordResult(t.db, c, user, { goalId, value: 88.5 }, at(3))).toEqual({
       milestones: [50],
       badges: ['milestone_50'],
       achieved: false,
+      proof: null,
     });
     // Beyond the target in one go: the last two milestones, the goal reached.
     expect(await recordResult(t.db, c, user, { goalId, value: 84.2 }, at(4))).toEqual({
       milestones: [75, 100],
       badges: ['milestone_75', 'milestone_100'],
       achieved: true,
+      proof: null,
     });
 
     const after = await space(c, user);
@@ -212,6 +216,97 @@ describe('the member’s goal', () => {
     expect(events[0]!.external_id).toBe(`goal:${goalId}`);
     expect(events[1]!.external_id).toMatch(/^result:/);
     expect(events.every((e) => e.metadata.goal_id === goalId)).toBe(true);
+  });
+});
+
+describe('a screenshot backing a result (migration 0021)', () => {
+  const sha = (c: string) => c.repeat(64);
+
+  it('justifies the result whose number is on it, once, with the badge of the first proof', async () => {
+    const { c, user, member } = await community();
+    await setGoal(t.db, c, user, { ...CLIENTS, entry: 'total', target: 5000 }, NOW);
+    const goalId = (await space(c, user)).goal!.id;
+    const proof = { sha256: sha('a'), numbers: [3250, 12, 270.83] };
+    expect(await recordResult(t.db, c, user, { goalId, value: 3250, proof }, at(1))).toEqual({
+      milestones: [25, 50],
+      badges: ['first_result', 'first_proof', 'milestone_25', 'milestone_50'],
+      achieved: false,
+      proof: 'justified',
+    });
+    // The same screenshot again: the result counts, as declared.
+    expect(
+      await recordResult(t.db, c, user, { goalId, value: 270.83, proof }, at(2)),
+    ).toMatchObject({ badges: [], proof: 'duplicate' });
+    // A number that is not on it: declared, and the screenshot is not kept.
+    expect(
+      await recordResult(
+        t.db,
+        c,
+        user,
+        { goalId, value: 3300, proof: { sha256: sha('b'), numbers: [3250] } },
+        at(3),
+      ),
+    ).toMatchObject({ proof: 'declared' });
+    // No screenshot: nothing to say about one.
+    expect(await recordResult(t.db, c, user, { goalId, value: 3400 }, at(4))).toMatchObject({
+      proof: null,
+    });
+
+    const after = await space(c, user);
+    expect(after.results.map((r) => [r.value, r.proof])).toEqual([
+      [3400, null],
+      [3300, null],
+      [270.83, null],
+      [3250, 'justified'],
+    ]);
+    const proofs = await t.db.query<{
+      level: string;
+      image_sha256: string;
+      image_stored: boolean;
+      ocr_values: unknown;
+    }>(
+      `select level, image_sha256, image_stored, ocr_values from stayput.proofs
+        where company_id = $1 and member_id = $2`,
+      [c, member],
+    );
+    // The fingerprint and the numbers read, never the image.
+    expect(proofs).toEqual([
+      {
+        level: 'justified',
+        image_sha256: sha('a'),
+        image_stored: false,
+        ocr_values: { numbers: [3250, 12, 270.83], matched: 3250 },
+      },
+    ]);
+  });
+
+  it('backs one result in the whole community', async () => {
+    const one = await community();
+    const two = await community();
+    for (const { c, user } of [one, two]) {
+      await setGoal(t.db, c, user, CLIENTS, NOW);
+    }
+    const proof = { sha256: sha('c'), numbers: [2] };
+    const first = (await space(one.c, one.user)).goal!.id;
+    expect(
+      await recordResult(t.db, one.c, one.user, { goalId: first, value: 2, proof }, at(1)),
+    ).toMatchObject({ proof: 'justified' });
+    // Another community: its own proofs.
+    const second = (await space(two.c, two.user)).goal!.id;
+    expect(
+      await recordResult(t.db, two.c, two.user, { goalId: second, value: 2, proof }, at(1)),
+    ).toMatchObject({ proof: 'justified' });
+  });
+
+  it('keeps the Worker of before 0021 working, without a screenshot', async () => {
+    const { c, user } = await community();
+    await setGoal(t.db, c, user, CLIENTS, NOW);
+    const goalId = (await space(c, user)).goal!.id;
+    const [row] = await t.db.query<{ r: { badges: string[]; proof: null } }>(
+      'select stayput.record_result($1, $2, $3::uuid, 1::numeric, $4::timestamptz) as r',
+      [c, user, goalId, at(1).toISOString()],
+    );
+    expect(row!.r).toMatchObject({ badges: ['first_result'], proof: null });
   });
 });
 

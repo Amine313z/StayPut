@@ -388,19 +388,135 @@ export function parseGoalInput(value: unknown, now: Date): GoalInput | null {
   return { ...proposal, start, target, targetDate: item.targetDate };
 }
 
-/** A result the member records: on which goal, and the number they typed. */
+/**
+ * A screenshot backing a result (SPEC Phase 5, point 3), as the member's browser read it: the
+ * SHA-256 of the image and the numbers OCR found on it. The image itself never leaves the
+ * member's device.
+ */
+export interface ProofInput {
+  sha256: string;
+  numbers: number[];
+}
+
+/** A result the member records: on which goal, the number they typed, and its screenshot. */
 export interface ResultEntry {
   goalId: string;
   /** Where they stand now (`total`), or what they add (`add`, may correct with a negative). */
   value: number;
+  proof?: ProofInput;
 }
 
+/** The numbers kept from a screenshot: enough for any dashboard, never its whole text. */
+export const MAX_PROOF_NUMBERS = 30;
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** A screenshot's fingerprint and numbers as sent; null when they are not right. */
+export function parseProof(value: unknown): ProofInput | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const item = value as Record<string, unknown>;
+  if (typeof item.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(item.sha256)) return null;
+  if (!Array.isArray(item.numbers) || item.numbers.length > MAX_PROOF_NUMBERS) return null;
+  const numbers: number[] = [];
+  for (const raw of item.numbers) {
+    const number = goalValue(raw);
+    if (number === null) return null;
+    if (!numbers.includes(number)) numbers.push(number);
+  }
+  return { sha256: item.sha256, numbers };
+}
 
 export function parseResultEntry(value: unknown): ResultEntry | null {
   if (typeof value !== 'object' || value === null) return null;
   const item = value as Record<string, unknown>;
   if (typeof item.goalId !== 'string' || !UUID.test(item.goalId)) return null;
   const number = goalValue(item.value);
-  return number === null ? null : { goalId: item.goalId, value: number };
+  if (number === null) return null;
+  if (item.proof === undefined || item.proof === null)
+    return { goalId: item.goalId, value: number };
+  const proof = parseProof(item.proof);
+  return proof ? { goalId: item.goalId, value: number, proof } : null;
+}
+
+/**
+ * Whether a screenshot backs the number typed: it is among the numbers read on it, to the cent.
+ * Otherwise the result stands as declared.
+ */
+export function proofJustifies(proof: ProofInput, value: number): boolean {
+  const cents = Math.round(value * 100);
+  return proof.numbers.some((number) => Math.round(number * 100) === cents);
+}
+
+/**
+ * A number as people type it: « 3 000,5 », « 3,000.5 » and « 3000.5 » are 3000.5. With both
+ * separators, the last one starts the decimals; a comma alone does too, except in English
+ * between groups of three digits (« 3,000 »). Null when it is not a number the database keeps.
+ */
+export function parseLocaleNumber(text: string, locale: TemplateLocale): number | null {
+  let normal = text.replace(/[\s\u00a0\u202f'’]/g, '').replace(/^[−–]/, '-');
+  if (!normal) return null;
+  const comma = normal.lastIndexOf(',');
+  const dot = normal.lastIndexOf('.');
+  if (comma >= 0 && dot >= 0) {
+    normal = comma > dot ? normal.replace(/\./g, '').replace(',', '.') : normal.replace(/,/g, '');
+  } else if (comma >= 0) {
+    normal =
+      locale === 'en' && /^-?\d{1,3}(,\d{3})+$/.test(normal)
+        ? normal.replace(/,/g, '')
+        : normal.replace(',', '.');
+  }
+  if (!/^-?\d+(\.\d+)?$/.test(normal)) return null;
+  return goalValue(Number(normal));
+}
+
+/** One run of digits and separators, read the ways it can be: one or two numbers. */
+function readRun(run: string): number[] {
+  const parts = run.split(' ');
+  // « 3 250,00 »: thousands apart by spaces. Else the spaces part numbers (« 12 34 »).
+  const grouped =
+    parts.length > 1 &&
+    /^-?\d{1,3}$/.test(parts[0]!) &&
+    parts.slice(1, -1).every((part) => /^\d{3}$/.test(part)) &&
+    /^\d{3}([.,]\d+)?$/.test(parts.at(-1)!);
+  if (parts.length > 1 && !grouped) return parts.flatMap(readRun);
+  const text = parts.join('').replace(/['’]/g, '');
+  const separators = text.replace(/[^.,]/g, '');
+  if (!separators) return [Number(text)];
+  if (separators.includes(',') && separators.includes('.')) {
+    const comma = text.lastIndexOf(',');
+    const dot = text.lastIndexOf('.');
+    const decimal = comma > dot ? ',' : '.';
+    const thousands = decimal === ',' ? /\./g : /,/g;
+    return [Number(text.replace(thousands, '').replace(decimal, '.'))];
+  }
+  if (separators.length > 1) {
+    // « 1.234.567 »: thousands only.
+    return /^-?\d{1,3}([.,]\d{3})+$/.test(text) ? [Number(text.replace(/[.,]/g, ''))] : [];
+  }
+  // One separator: « 85.2 » is a decimal; « 3,250 » reads both ways (3 250, or 3.25 in French).
+  const decimal = Number(text.replace(',', '.'));
+  return /[.,]\d{3}$/.test(text) ? [Number(text.replace(/[.,]/, '')), decimal] : [decimal];
+}
+
+/**
+ * The numbers a screenshot shows, from the text OCR read on it: amounts, counts, percentages, in
+ * the order they appear, each once, at most thirty. Dates and times are no results: left out.
+ * A number that reads two ways gives both, and the member taps the right one.
+ */
+export function extractNumbers(text: string): number[] {
+  const clean = text
+    .replace(/[\u00a0\u202f\u2009]/g, ' ')
+    .replace(/[−–]/g, '-')
+    .replace(/\b\d{1,4}[/.-]\d{1,2}[/.-]\d{1,4}\b/g, ' ')
+    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, ' ');
+  const found: number[] = [];
+  // A minus sign counts when it stands before the number, not inside a word (« COVID-19 »).
+  for (const [run] of clean.matchAll(/(?<![\p{L}\d])-?\d(?:[\d.,'’]| (?=\d))*\d|\d/gu)) {
+    for (const value of readRun(run)) {
+      const number = goalValue(value);
+      if (number !== null && !found.includes(number)) found.push(number);
+      if (found.length === MAX_PROOF_NUMBERS) return found;
+    }
+  }
+  return found;
 }

@@ -19,7 +19,7 @@ il a sauvé.
 | 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation |
 | 3. Détection (score de risque) | Faite, en attente de validation                           |
 | 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les droits |
-| 5. Espace membre               | En cours : objectifs, résultats, jalons et badges faits   |
+| 5. Espace membre               | En cours : objectifs, résultats, badges, preuves faits    |
 
 ## Architecture
 
@@ -222,7 +222,10 @@ le retrouvent dans leur vue de l'espace Alumni avec le bouton pour revenir. Dét
 Dans la **vue membre**, le membre choisit son objectif parmi ceux du créateur (ou écrit le sien)
 avec une cible, une unité et une date, puis note ses résultats en un geste : où il en est, ou ce
 qu'il ajoute (« Ajouter 1 »). Il voit sa progression, les jalons de 25, 50, 75 et 100 % et ses
-badges (premier résultat, 7 jours d'affilée, chaque jalon), avec une petite fête à chaque étape.
+badges (premier résultat, première preuve, 7 jours d'affilée, chaque jalon), avec une petite fête
+à chaque étape. Une capture d'écran peut appuyer un résultat : le navigateur du membre la lit
+(Tesseract.js) et propose les nombres qu'il y voit ; seuls l'empreinte de l'image et ces nombres
+partent, jamais l'image.
 Chaque ouverture de l'espace et chaque résultat comptent comme de l'activité dans le score. Le
 créateur choisit les objectifs proposés dans **Réglages** (ceux de sa niche par défaut) ; dans
 la vue membre, l'équipe essaie l'espace sans rien enregistrer. Détails : `DECISIONS.md`,

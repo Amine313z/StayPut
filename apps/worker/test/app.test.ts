@@ -2145,6 +2145,49 @@ describe('the member space (SPEC Phase 5)', () => {
     expect((await request(`${base}/result`, json(lina, 'POST', { goalId }))).status).toBe(400);
   });
 
+  it('takes a screenshot’s fingerprint and numbers, and justifies only what is on it', async () => {
+    const { request, lina, base } = await community(4);
+    const goal = {
+      title: 'Atteindre mon chiffre d’affaires mensuel',
+      unit: '€',
+      category: 'income',
+      entry: 'total',
+      start: 0,
+      target: 5000,
+      targetDate: new Date(NOW.getTime() + 90 * 86_400_000).toISOString().slice(0, 10),
+    };
+    const set = (await (
+      await request(`${base}/goal`, json(lina, 'POST', goal))
+    ).json()) as MemberSpaceView;
+    const goalId = set.goal!.id;
+    const proof = { sha256: 'f'.repeat(64), numbers: [3250, 270.83] };
+    const justified = (await (
+      await request(`${base}/result`, json(lina, 'POST', { goalId, value: 3250, proof }))
+    ).json()) as ResultAnswer;
+    expect(justified).toMatchObject({
+      proof: 'justified',
+      badges: expect.arrayContaining(['first_proof']) as unknown,
+    });
+    expect(justified.space.results[0]).toMatchObject({ value: 3250, proof: 'justified' });
+    const declared = (await (
+      await request(
+        `${base}/result`,
+        json(lina, 'POST', { goalId, value: 3300, proof: { ...proof, sha256: 'e'.repeat(64) } }),
+      )
+    ).json()) as ResultAnswer;
+    expect(declared.proof).toBe('declared');
+    // A fingerprint that is none, or numbers that are no numbers: refused.
+    for (const bad of [
+      { sha256: 'image.png', numbers: [1] },
+      { sha256: 'd'.repeat(64), numbers: ['1'] },
+    ]) {
+      expect(
+        (await request(`${base}/result`, json(lina, 'POST', { goalId, value: 1, proof: bad })))
+          .status,
+      ).toBe(400);
+    }
+  });
+
   it('shows the team a preview where nothing is recorded', async () => {
     const { request, company, boss, base } = await community(2);
     const preview = (await (await request(`${base}?lang=en`, boss)).json()) as MemberSpaceView;

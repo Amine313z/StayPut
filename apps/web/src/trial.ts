@@ -2,6 +2,7 @@ import {
   goalProgress,
   goalValue,
   milestonesAt,
+  proofJustifies,
   type BadgeCode,
   type GoalInput,
   type MemberSpaceView,
@@ -45,11 +46,15 @@ export function trialGoal(view: MemberSpaceView, goal: GoalInput, now: Date): Me
   };
 }
 
-/** A result on the goal under way: its milestones and badges, as StayPut gives them. */
+/**
+ * A result on the goal under way: its milestones and badges, and its screenshot's outcome, as
+ * StayPut gives them. `used` holds the screenshots that backed a result in this trial.
+ */
 export function trialResult(
   view: MemberSpaceView,
   entry: ResultEntry,
   now: Date,
+  used: Set<string> = new Set(),
 ): ResultAnswer | null {
   const goal = view.goal;
   if (!goal || goal.id !== entry.goalId || goal.status !== 'active') return null;
@@ -59,15 +64,28 @@ export function trialResult(
   const progress = goalProgress(goal.start, goal.target, value);
   const reached = new Set(goal.milestones.map((m) => m.percent));
   const milestones = milestonesAt(progress).filter((m) => !reached.has(m));
+  const proof = !entry.proof
+    ? null
+    : !proofJustifies(entry.proof, entry.value)
+      ? 'declared'
+      : used.has(entry.proof.sha256)
+        ? 'duplicate'
+        : 'justified';
+  if (proof === 'justified' && entry.proof) used.add(entry.proof.sha256);
   const owned = new Set(view.badges.map((b) => b.code));
   const badges = (
-    ['first_result', ...milestones.map((m) => `milestone_${m}`)] as BadgeCode[]
+    [
+      'first_result',
+      ...(proof === 'justified' ? ['first_proof'] : []),
+      ...milestones.map((m) => `milestone_${m}`),
+    ] as BadgeCode[]
   ).filter((code) => !owned.has(code));
   const achieved = progress >= 100;
   return {
     milestones,
     badges,
     achieved,
+    proof,
     space: {
       ...view,
       goal: {
@@ -81,7 +99,12 @@ export function trialResult(
         ],
       },
       results: [
-        { id: `trial-result-${view.results.length}-${at}`, value, recordedAt: at },
+        {
+          id: `trial-result-${view.results.length}-${at}`,
+          value,
+          recordedAt: at,
+          proof: proof === 'justified' ? ('justified' as const) : null,
+        },
         ...view.results,
       ].slice(0, 10),
       badges: [...view.badges, ...badges.map((code) => ({ code, awardedAt: at }))],

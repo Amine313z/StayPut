@@ -540,6 +540,8 @@ export interface GoalResult {
   /** Where the member stood after this result (an `add` goal adds up its entries). */
   value: number;
   recordedAt: string;
+  /** A screenshot backs it (`justified`); null: declared, the member's word. */
+  proof: 'justified' | 'connected' | null;
 }
 
 export interface EarnedBadge {
@@ -554,6 +556,12 @@ export interface ResultAnswer {
   badges: BadgeCode[];
   /** The goal is reached with this result. */
   achieved: boolean;
+  /**
+   * The screenshot sent with it: `justified`, the number is on it; `declared`, it is not (the
+   * result stands as the member's word); `duplicate`, it backed another result already. Null:
+   * none was sent.
+   */
+  proof: 'justified' | 'declared' | 'duplicate' | null;
 }
 
 /** GET and PUT /api/creator/:companyId/goals: the goals proposed to members. */

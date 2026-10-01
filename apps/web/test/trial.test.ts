@@ -1,0 +1,61 @@
+import type { MemberSpaceView } from '@stayput/core';
+import { describe, expect, it } from 'vitest';
+import { trialGoal, trialResult, trialStart } from '../src/trial';
+
+/**
+ * The team's trial of the member space, computed in the browser: it must answer as StayPut would
+ * (apps/worker/test/member-space.test.ts says what StayPut answers).
+ */
+
+const NOW = new Date('2026-10-01T08:00:00Z');
+const preview: MemberSpaceView = {
+  preview: true,
+  known: false,
+  goal: null,
+  results: [],
+  badges: [],
+  proposals: [],
+  fresh: [],
+};
+
+describe('the trial', () => {
+  it('counts milestones and badges as StayPut does, and each screenshot once', () => {
+    const used = new Set<string>();
+    let view = trialGoal(
+      trialStart(preview),
+      {
+        title: 'Revenue',
+        unit: '$',
+        category: 'income',
+        entry: 'total',
+        start: 0,
+        target: 5000,
+        targetDate: '2026-12-31',
+      },
+      NOW,
+    );
+    const goalId = view.goal!.id;
+    const proof = { sha256: 'a'.repeat(64), numbers: [3250, 12] };
+    const first = trialResult(view, { goalId, value: 3250, proof }, NOW, used)!;
+    expect(first).toMatchObject({
+      milestones: [25, 50],
+      badges: ['first_result', 'first_proof', 'milestone_25', 'milestone_50'],
+      proof: 'justified',
+    });
+    view = first.space;
+    expect(view.results[0]).toMatchObject({ value: 3250, proof: 'justified' });
+    expect(trialResult(view, { goalId, value: 12, proof }, NOW, used)).toMatchObject({
+      badges: [],
+      proof: 'duplicate',
+    });
+    const other = { sha256: 'b'.repeat(64), numbers: [1] };
+    expect(trialResult(view, { goalId, value: 4000, proof: other }, NOW, used)).toMatchObject({
+      milestones: [75],
+      proof: 'declared',
+    });
+    // Reached: no more results on it.
+    const done = trialResult(view, { goalId, value: 5000 }, NOW, used)!;
+    expect(done).toMatchObject({ achieved: true, milestones: [75, 100], proof: null });
+    expect(trialResult(done.space, { goalId, value: 5100 }, NOW, used)).toBeNull();
+  });
+});
