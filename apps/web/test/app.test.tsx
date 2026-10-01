@@ -1,5 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type {
+  ActionRow,
+  ActionSettingsView,
+  ActionsPage,
   DiscordChannelChoice,
   InsightsReport,
   IntegrationsStatus,
@@ -244,6 +247,22 @@ const INTEGRATIONS: IntegrationsStatus = {
 };
 
 /** The calls of an opened dashboard: the session, the members, the sync status, the sources. */
+const ACTION_SETTINGS: ActionSettingsView = {
+  mode: 'manual',
+  locale: 'en',
+  dryRun: false,
+  killSwitch: false,
+  quietHoursStart: 22,
+  quietHoursEnd: 8,
+  defaultSendHour: 19,
+  maxMessagesPer5Days: 1,
+  maxMessagesPerMonth: 4,
+  maxPaymentRetries: 2,
+  monthlyPromoCap: 10,
+  maxFreeDaysPerQuarter: 14,
+  templates: {},
+};
+
 const dashboard = (members: MembersPage = MEMBERS, integrations = INTEGRATIONS) => ({
   '/api/creator/biz_A1/session': [creatorSession],
   '/api/creator/biz_A1/members': [{ status: 200, body: members }],
@@ -864,6 +883,7 @@ describe('risk settings', () => {
     mockApi({
       ...dashboard(),
       '/api/creator/biz_A1/settings/risk': [{ status: 200, body: DEFAULTS }],
+      '/api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
       ...answers,
     });
   const share = (name: string) =>
@@ -1098,5 +1118,155 @@ describe('shell', () => {
   it('shows a not-found page for an unknown path', () => {
     renderAt('/nowhere');
     expect(screen.getByRole('heading', { name: 'Page not found' })).toBeTruthy();
+  });
+});
+
+describe('the actions (SPEC Phase 4)', () => {
+  const ID = '11111111-1111-4111-8111-111111111111';
+  const row = (over: Partial<ActionRow> = {}): ActionRow => ({
+    id: ID,
+    type: 'welcome_message',
+    status: 'proposed',
+    trigger: 'activation_radar',
+    member: { id: 'mber_1', name: 'Ana Lopez' },
+    sendAt: '2026-10-01T10:00:00.000Z',
+    sentAt: null,
+    createdAt: '2026-10-01T10:00:00.000Z',
+    blockedReason: null,
+    message: { title: 'Welcome, Ana', body: 'Glad to have you in Le Club.' },
+    note: null,
+    ...over,
+  });
+  const page = (
+    view: ActionsPage['view'],
+    actions: ActionRow[],
+    over: Partial<ActionsPage> = {},
+  ): { status: number; body: ActionsPage } => ({
+    status: 200,
+    body: {
+      view,
+      counts: { queue: 1, scheduled: 0, history: 4 },
+      actions,
+      mode: 'manual',
+      dryRun: false,
+      killSwitch: false,
+      ...over,
+    },
+  });
+
+  it('shows each action to approve with its message as it will read, and approves it', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/actions?view=queue': [page('queue', [row()]), page('queue', [])],
+      'POST /api/creator/biz_A1/actions/approve': [{ status: 200, body: { approved: 1 } }],
+    });
+    renderAt('/dashboard/biz_A1/actions');
+    expect(await screen.findByText('Welcome, Ana')).toBeTruthy();
+    expect(screen.getByText('Glad to have you in Le Club.')).toBeTruthy();
+    expect(screen.getByText('Leaves as soon as you approve it')).toBeTruthy();
+    expect(screen.getByText('Manual mode: nothing leaves without your approval.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Approve all (1)' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    await vi.waitFor(() => expect(calls).toContain('POST /api/creator/biz_A1/actions/approve'));
+    expect(bodies.get('POST /api/creator/biz_A1/actions/approve')).toEqual({ ids: [ID] });
+    expect(
+      await screen.findByText(
+        'Nothing to approve. StayPut proposes an action as soon as a member needs one.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('tells what happened: simulated in test mode, blocked with the reason, failed, cancelled', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/actions?view=queue': [page('queue', [row()], { dryRun: true })],
+      '/api/creator/biz_A1/actions?view=history': [
+        page(
+          'history',
+          [
+            row({ id: 'a', status: 'simulated', sentAt: '2026-10-01T11:00:00.000Z' }),
+            row({
+              id: 'b',
+              type: 'high_risk_message',
+              trigger: 'score_high',
+              status: 'blocked_by_guardrail',
+              blockedReason: 'message_spacing',
+              message: null,
+            }),
+            row({ id: 'c', status: 'failed', note: '403 forbidden: missing permission' }),
+            row({
+              id: 'd',
+              type: 'payment_retry',
+              trigger: 'payment_failed',
+              status: 'cancelled',
+              note: 'payment_no_longer_failed',
+              message: null,
+            }),
+          ],
+          { dryRun: true },
+        ),
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions');
+    expect(
+      await screen.findByText(
+        'Test mode: every action is computed and kept, nothing is sent to your members.',
+      ),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /History/ }));
+    expect(await screen.findByText('Another message within 5 days')).toBeTruthy();
+    expect(calls).toContain('/api/creator/biz_A1/actions?view=history');
+    expect(screen.getByText('Simulated')).toBeTruthy();
+    expect(screen.getByText('Error: 403 forbidden: missing permission')).toBeTruthy();
+    expect(screen.getByText('The payment went through in the meantime')).toBeTruthy();
+    expect(screen.getByText('Golden-hour message')).toBeTruthy();
+    // Done: nothing to approve or cancel any more.
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+  });
+
+  it('saves the action settings, within the limits, with the creator’s words', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/settings/risk': [
+        {
+          status: 200,
+          body: {
+            niche: 'other',
+            weights: { recency: 0.3, frequency: 0.25, progress: 0.2, payment: 0.15, friction: 0.1 },
+            recencyThresholdDays: 14,
+            mediumFrom: 40,
+            highFrom: 70,
+          },
+        },
+      ],
+      '/api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
+      'PUT /api/creator/biz_A1/settings/actions': [
+        { status: 200, body: { ...ACTION_SETTINGS, mode: 'auto', maxMessagesPerMonth: 2 } },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    const automatic = await screen.findByRole('radio', { name: /Automatic/ });
+    const save = () => screen.getByRole('button', { name: 'Save the action settings' });
+    expect(save().hasAttribute('disabled')).toBe(true);
+    fireEvent.click(automatic);
+    const month = screen.getByRole('spinbutton', { name: 'Messages per member, over 30 days' });
+    fireEvent.change(month, { target: { value: '5' } });
+    // Looser than StayPut's limit: not saved.
+    expect(save().hasAttribute('disabled')).toBe(true);
+    fireEvent.change(month, { target: { value: '2' } });
+    const title = screen.getAllByRole('textbox', { name: 'Title' })[4]!;
+    fireEvent.change(title, { target: { value: 'Hi {firstname}' } });
+    expect(screen.getByText('Unknown variable or unclosed [[ ]]: {firstname}')).toBeTruthy();
+    expect(save().hasAttribute('disabled')).toBe(true);
+    fireEvent.change(title, { target: { value: 'Hi {first_name}' } });
+    fireEvent.click(save());
+    await vi.waitFor(() => expect(calls).toContain('PUT /api/creator/biz_A1/settings/actions'));
+    expect(bodies.get('PUT /api/creator/biz_A1/settings/actions')).toMatchObject({
+      mode: 'auto',
+      maxMessagesPerMonth: 2,
+      templates: { en: { welcome_message: { title: 'Hi {first_name}', body: '' } } },
+    });
+    expect(await screen.findByText('Saved.')).toBeTruthy();
   });
 });

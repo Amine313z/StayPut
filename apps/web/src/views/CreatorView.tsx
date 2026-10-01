@@ -1,5 +1,5 @@
 import type { CreatorSession, IntegrationsStatus, MembersPage } from '@stayput/core';
-import { ChartColumn, LayoutDashboard, Plug, SlidersHorizontal, Users } from 'lucide-react';
+import { ChartColumn, LayoutDashboard, Plug, SlidersHorizontal, Users, Zap } from 'lucide-react';
 import { Outlet, useOutletContext, useParams } from 'react-router';
 import { useApi, useReloadOnReturn, type Loadable } from '../api';
 import { SignOut } from '../components/SignOut';
@@ -87,6 +87,11 @@ function Dashboard({ session }: { session: CreatorSession }) {
             to: `${root}/members`,
             label: t('creator.tab.members'),
             icon: <Users aria-hidden="true" className="size-4" />,
+          },
+          {
+            to: `${root}/actions`,
+            label: t('creator.tab.actions'),
+            icon: <Zap aria-hidden="true" className="size-4" />,
           },
           {
             to: `${root}/insights`,

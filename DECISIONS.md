@@ -650,9 +650,28 @@ culpabilisants, **au tutoiement** (le ton des communautés Whop ; le créateur l
 partie entre `[[ ]]` n'apparaît que si toutes ses variables ont une valeur : un prénom inconnu
 ne laisse jamais « Salut , ». L'emplacement d'une IA de rédaction existe, éteint.
 
+### L'écran du créateur (onglet Actions, réglages)
+
+- **Onglet Actions** : trois listes, _À valider_, _Programmées_, _Historique_, avec leur
+  compte. Chaque action montre le membre, ce qui l'a déclenchée et **le message exact** qu'il
+  recevra : l'aperçu est rendu par le même code que l'envoi, avec les modèles du créateur. On
+  valide une action ou toutes d'un clic ; on annule ce qui n'est pas parti. L'historique dit ce
+  qui s'est passé : envoyée, simulée (mode test), bloquée par un garde-fou avec la raison en
+  clair, annulée et pourquoi (« le paiement est passé entre-temps »), échouée avec l'erreur.
+- **Validée, elle passe tout de suite** les garde-fous, et ce qui est dû part aussitôt : pas
+  besoin d'attendre le passage de l'heure.
+- **Réglages** (onglet Réglages, sous le score) : mode manuel ou automatique, mode test, arrêt
+  d'urgence, langue des messages, heures silencieuses, heure d'envoi par défaut, limites et
+  textes des messages. Les limites ne peuvent être que **plus strictes** que celles du cahier
+  des charges (1 relance tous les 5 jours, 4 messages sur 30 jours, 2 relances de paiement,
+  14 jours offerts sur 90 jours) ; le plafond de codes promo est au choix du créateur (0 à 100),
+  comme le prévoit la SPEC. Un champ de message vide garde le texte de StayPut, affiché en
+  exemple ; une variable inconnue est refusée avant l'envoi au serveur.
+- **Liste « ne jamais contacter »** : l'API existe (`PUT /members/:id/contact`) ; le bouton
+  dans la liste des membres vient avec la vue membre.
+
 ### Reste à faire dans cette phase
 
-L'écran du créateur (file d'attente, validation, historique, réglages et modèles), la vue
-membre (questionnaire de départ et offres, liens de paiement), l'offre Alumni, et la
-démonstration de chaque déclencheur. Les défis de sauvetage et les binômes dépendent de la
-Phase 5 (espace membre).
+La vue membre (questionnaire de départ et offres, liens de paiement), le bouton « ne jamais
+contacter », l'offre Alumni, et la démonstration de chaque déclencheur. Les défis de sauvetage
+et les binômes dépendent de la Phase 5 (espace membre).

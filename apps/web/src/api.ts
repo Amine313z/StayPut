@@ -23,9 +23,12 @@ export function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return requestJson<T>('GET', path, signal);
 }
 
-/** POST on the Worker, with the header that tells the Worker the page itself sends it. */
-export function postJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  return requestJson<T>('POST', path, signal);
+/**
+ * POST on the Worker (a JSON body if given), with the header that tells the Worker the page
+ * itself sends it.
+ */
+export function postJson<T>(path: string, body?: unknown): Promise<T> {
+  return requestJson<T>('POST', path, undefined, body);
 }
 
 /** PUT a JSON body on the Worker (with the same header). */

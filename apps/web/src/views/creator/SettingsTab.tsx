@@ -12,7 +12,7 @@ import {
 } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
 import { CircleAlert, CircleCheck, RotateCcw, Save, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { putJson, useApi } from '../../api';
 import { LEVELS } from '../../components/Risk';
 import { ErrorPanel, Loading } from '../../components/Status';
@@ -20,7 +20,9 @@ import { useI18n } from '../../i18n';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
+import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { useCreatorData } from '../CreatorView';
+import { ActionSettings } from './ActionSettings';
 
 const NICHE_LABELS: Readonly<Record<Niche, MessageKey>> = {
   trading: 'niche.trading',
@@ -43,12 +45,10 @@ const FACTORS: Readonly<Record<keyof RiskWeights, { name: MessageKey; hint: Mess
 /** The Worker scores again in the background after a save: the members are read after this. */
 const RELOAD_AFTER_MS = 4_000;
 
-const FIELD =
-  'rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg shadow-card ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ' +
-  'aria-[invalid=true]:border-danger';
-
-/** The creator's settings (SPEC Phase 6, point 12; Phase 3 for now: how the score is computed). */
+/**
+ * The creator's settings (SPEC Phase 6, point 12): how the score is computed (Phase 3), and how
+ * the actions leave (Phase 4).
+ */
 export function SettingsTab() {
   const { api } = useCreatorData();
   const { state, retry } = useApi<RiskSettingsView>(`${api}/settings/risk`);
@@ -58,7 +58,12 @@ export function SettingsTab() {
       <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
     );
   }
-  return <RiskSettingsForm initial={state.data} />;
+  return (
+    <div className="space-y-6">
+      <RiskSettingsForm initial={state.data} />
+      <ActionSettings />
+    </div>
+  );
 }
 
 /** The form as typed: the weights as points of importance (any sum), the numbers as text. */
@@ -366,70 +371,5 @@ function RiskSettingsForm({ initial }: { initial: RiskSettingsView }) {
         </div>
       </form>
     </Card>
-  );
-}
-
-/** One setting: its name on the left (above on a phone), the controls on the right. */
-function Row({
-  label,
-  htmlFor,
-  labelId,
-  children,
-}: {
-  label: string;
-  htmlFor?: string;
-  labelId?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="grid grid-cols-1 gap-2 py-5 first:pt-0 md:grid-cols-[14rem_minmax(0,1fr)] md:gap-8">
-      {htmlFor ? (
-        <label htmlFor={htmlFor} className="text-sm font-semibold">
-          {label}
-        </label>
-      ) : (
-        <p id={labelId} className="text-sm font-semibold">
-          {label}
-        </p>
-      )}
-      <div className="min-w-0">{children}</div>
-    </div>
-  );
-}
-
-function NumberField({
-  id,
-  label,
-  value,
-  invalid,
-  min,
-  max,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  invalid: boolean;
-  min: number;
-  max: number;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm">
-        {label}
-      </label>
-      <input
-        id={id}
-        type="number"
-        inputMode="numeric"
-        min={min}
-        max={max}
-        value={value}
-        aria-invalid={invalid}
-        onChange={(event) => onChange(event.target.value)}
-        className={`${FIELD} tabular w-24`}
-      />
-    </div>
   );
 }

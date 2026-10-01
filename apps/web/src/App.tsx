@@ -2,6 +2,7 @@ import type { RouteObject } from 'react-router';
 import { AppShell } from './components/AppShell';
 import { Connected } from './views/Connected';
 import { CreatorView } from './views/CreatorView';
+import { ActionsTab } from './views/creator/ActionsTab';
 import { InsightsTab } from './views/creator/InsightsTab';
 import { MembersTab } from './views/creator/MembersTab';
 import { Overview } from './views/creator/Overview';
@@ -28,6 +29,7 @@ export const routes: RouteObject[] = [
         children: [
           { index: true, element: <Overview /> },
           { path: 'members', element: <MembersTab /> },
+          { path: 'actions', element: <ActionsTab /> },
           { path: 'insights', element: <InsightsTab /> },
           { path: 'sources', element: <SourcesTab /> },
           { path: 'settings', element: <SettingsTab /> },
