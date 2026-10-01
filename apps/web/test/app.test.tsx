@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type {
   AccountsView,
+  PlatformActivityView,
   ActionRow,
   ActionSettingsView,
   ActionsPage,
@@ -686,6 +687,81 @@ describe('activity sources', () => {
   };
 
   const NO_ACCOUNTS: AccountsView = { unlinked: [], linked: [], dismissed: [] };
+  const ACTIVITY: PlatformActivityView = {
+    from: '2026-09-02',
+    to: '2026-10-01',
+    platforms: [
+      {
+        platform: 'discord',
+        messages: 12,
+        authors: 3,
+        members: 1,
+        team: 1,
+        guests: 0,
+        unlinked: 1,
+        lastAt: '2026-10-01T09:00:00.000Z',
+        daily: [...Array<number>(29).fill(0), 12],
+      },
+      {
+        platform: 'telegram',
+        messages: 2,
+        authors: 1,
+        members: 0,
+        team: 1,
+        guests: 0,
+        unlinked: 0,
+        lastAt: '2026-09-30T08:00:00.000Z',
+        daily: [...Array<number>(28).fill(0), 2, 0],
+      },
+    ],
+    places: [
+      {
+        platform: 'discord',
+        id: '910000000000000001',
+        name: 'Le Club',
+        messages: 12,
+        lastAt: '2026-10-01T09:00:00.000Z',
+      },
+      {
+        platform: 'telegram',
+        id: '-1009000000001',
+        name: 'VIP',
+        messages: 2,
+        lastAt: '2026-09-30T08:00:00.000Z',
+      },
+    ],
+    topMembers: [
+      {
+        id: 'mber_1',
+        name: 'Alice Martin',
+        discord: 8,
+        telegram: 0,
+        lastAt: '2026-10-01T09:00:00.000Z',
+      },
+    ],
+  };
+
+  it('shows what StayPut saw on Discord and Telegram: per day, author, place and member', async () => {
+    mockApi({
+      ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/platform-activity': [{ status: 200, body: ACTIVITY }],
+      '/api/creator/biz_A1/accounts': [{ status: 200, body: NO_ACCOUNTS }],
+    });
+    renderAt('/dashboard/biz_A1/sources');
+    const places = (await screen.findByText('Servers and groups')).closest('section')!;
+    const card = places.parentElement!.parentElement!;
+    expect(within(card).getByText('12 messages')).toBeTruthy();
+    expect(within(card).getByText('1 member')).toBeTruthy();
+    expect(within(card).getAllByText('1 of the team')).toHaveLength(2);
+    expect(within(card).getByText('1 to tie')).toBeTruthy();
+    // Each chart says its last day, and holds its figures for screen readers.
+    expect(within(card).getByText('Messages per day on Discord')).toBeTruthy();
+    expect(within(card).getByText(/· 12 messages$/)).toBeTruthy();
+    expect(within(places).getByText('Le Club')).toBeTruthy();
+    expect(within(places).getByText('VIP')).toBeTruthy();
+    expect(within(card).getByText('Alice Martin')).toBeTruthy();
+    expect(within(card).getByText('8 on Discord')).toBeTruthy();
+  });
 
   it('ties an account to a member in one click, from what StayPut suggests', async () => {
     const alice = {
@@ -698,6 +774,7 @@ describe('activity sources', () => {
     } satisfies AccountsView['linked'][number];
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/platform-activity': [{ status: 200, body: ACTIVITY }],
       '/api/creator/biz_A1/accounts': [
         {
           status: 200,
@@ -786,6 +863,7 @@ describe('activity sources', () => {
     const waiting = { ...mine, messages: 2, lastAt: '2026-10-01T09:00:00.000Z', suggestions: [] };
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/platform-activity': [{ status: 200, body: ACTIVITY }],
       '/api/creator/biz_A1/accounts': [
         { status: 200, body: { unlinked: [waiting], linked: [], dismissed: [] } },
       ],
@@ -865,6 +943,7 @@ describe('activity sources', () => {
   it('chooses the channels of a connected server, then saves them', async () => {
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/platform-activity': [{ status: 200, body: ACTIVITY }],
       '/api/creator/biz_A1/discord/910000000000000001/channels': [
         {
           status: 200,
@@ -927,6 +1006,7 @@ describe('activity sources', () => {
   it('disconnects a group after asking once more', async () => {
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/platform-activity': [{ status: 200, body: ACTIVITY }],
       'DELETE /api/creator/biz_A1/telegram/-1009000000001': [
         { status: 200, body: { removed: true } },
       ],

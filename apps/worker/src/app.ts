@@ -36,7 +36,7 @@ import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
-import { accountOf, accountsView, readAccounts } from './accounts';
+import { accountOf, accountsView, readAccounts, readPlatformActivity } from './accounts';
 import { isActionView, readActionSettings, readActions, validActionSettings } from './action-views';
 import { executeDueActions, prepareActions } from './actions';
 import { createPostgresDb, type ClosableDb, type Db } from './db';
@@ -964,6 +964,20 @@ export function createApp(deps: AppDeps) {
     });
     return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
   });
+
+  /** What StayPut saw on Discord and Telegram over 30 days: per day, place, member. */
+  app.get(
+    '/api/creator/:companyId/platform-activity',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const view = await readPlatformActivity(db, c.get('userId'), c.get('companyId'), deps.now());
+      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+    },
+  );
 
   /** The creator ties an account to a member, unties it, or sets it aside (no member). */
   app.post(

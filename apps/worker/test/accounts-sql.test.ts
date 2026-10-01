@@ -1,3 +1,4 @@
+import type { PlatformActivityView } from '@stayput/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUser } from '../src/db';
 import { member, page } from './fixtures/whop';
@@ -386,5 +387,81 @@ describe('waiting activity', () => {
     expect(await named()).toEqual([{ display_name: 'Someone' }]);
     await rows('select stayput.purge_pending_activity($1::timestamptz)', ['2026-11-01T12:00:00Z']);
     expect(await named()).toEqual([]);
+  });
+});
+
+describe('the activity the creator sees', () => {
+  it('counts the messages per platform, day, author and place, over 30 days', async () => {
+    const { c, chat, ids, say } = await community([
+      { name: 'Alice Martin' },
+      { name: 'Bruno Petit' },
+    ]);
+    await say('7001', 'Alice Martin'); // tied by name: a member
+    await say('7001', 'Alice Martin');
+    await say('7002', 'Mexico 17'); // the creator, set aside as the team
+    await say('7003', 'Someone'); // not tied yet
+    await change('dismiss_account($1, $2, $3, $4::text, $5::timestamptz)', [
+      c,
+      'telegram',
+      '7002',
+      'team',
+      NOW,
+    ]);
+    // Beyond 30 days: not counted.
+    await rows(
+      `insert into stayput.activity_events (company_id, member_id, type, occurred_at, external_id)
+       values ($1, $2, 'telegram_message', '2026-08-01T10:00:00Z', 'old:1')`,
+      [c, ids[0]],
+    );
+    await admin(c, 'user_AccOwner3');
+    const read = async (user: string) =>
+      (
+        await withUser(t.db, user, (tx) =>
+          tx.query<{ view: PlatformActivityView | null }>(
+            'select stayput.platform_activity($1, $2::timestamptz) as view',
+            [c, NOW],
+          ),
+        )
+      )[0]?.view;
+
+    const view = (await read('user_AccOwner3'))!;
+    expect(view).toMatchObject({ from: '2026-09-02', to: '2026-10-01' });
+    const telegram = view.platforms.find((p) => p.platform === 'telegram')!;
+    expect(telegram).toMatchObject({
+      messages: 4,
+      authors: 3,
+      members: 1,
+      team: 1,
+      guests: 0,
+      unlinked: 1,
+    });
+    // 30 days, the messages on 30 September (the 29th of them).
+    expect(telegram.daily).toHaveLength(30);
+    expect(telegram.daily[28]).toBe(4);
+    expect(telegram.daily.reduce((a, b) => a + b, 0)).toBe(4);
+    expect(view.platforms.find((p) => p.platform === 'discord')).toMatchObject({
+      messages: 0,
+      authors: 0,
+      lastAt: null,
+    });
+    expect(view.places).toEqual([
+      {
+        platform: 'telegram',
+        id: chat,
+        name: 'Group',
+        messages: 4,
+        lastAt: expect.any(String) as string,
+      },
+    ]);
+    expect(view.topMembers).toEqual([
+      {
+        id: ids[0],
+        name: 'Alice Martin',
+        discord: 0,
+        telegram: 2,
+        lastAt: expect.any(String) as string,
+      },
+    ]);
+    expect(await read('user_AccNobody')).toBeNull();
   });
 });

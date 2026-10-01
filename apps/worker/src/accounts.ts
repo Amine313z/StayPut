@@ -1,4 +1,4 @@
-import type { AccountPlatform, AccountsView } from '@stayput/core';
+import type { AccountPlatform, AccountsView, PlatformActivityView } from '@stayput/core';
 import { withUser, type Db, type TransactionalDb } from './db';
 import type { DiscordClient } from './discord';
 import type { TelegramClient } from './telegram';
@@ -78,6 +78,22 @@ async function fillNames(db: Db, companyId: string, clients: AccountClients): Pr
       names.username,
     ]);
   }
+}
+
+/** What StayPut saw on Discord and Telegram over 30 days; null for someone not of the team. */
+export async function readPlatformActivity(
+  db: TransactionalDb,
+  userId: string,
+  companyId: string,
+  now: Date,
+): Promise<PlatformActivityView | null> {
+  const [row] = await withUser(db, userId, (tx) =>
+    tx.query<{ view: PlatformActivityView | null }>(
+      'select stayput.platform_activity($1, $2::timestamptz) as view',
+      [companyId, now.toISOString()],
+    ),
+  );
+  return row?.view ?? null;
 }
 
 /** The account a creator names in a request, when it is one. */

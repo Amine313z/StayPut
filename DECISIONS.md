@@ -474,6 +474,24 @@ propriétaire d'un compte le déclare sur son profil Whop, Whop a raison et le c
 - **Limite** : un membre n'a qu'un compte par plateforme. Pour une très grande communauté, la
   liste des membres à choisir est celle déjà chargée par le tableau de bord.
 
+### Voir ce que StayPut lit sur Discord et Telegram (même jour, demande du fondateur)
+
+« Comment avoir un suivi de Discord et Telegram sur StayPut si rien n'est affiché ? » Les
+messages comptaient (scores, activité des membres) mais ne se voyaient nulle part, et ceux de
+l'équipe pas du tout. Sources montre maintenant, dès qu'un serveur ou un groupe est relié, une
+carte **« Activité sur Discord et Telegram »** (migration 0014, `platform_activity`) :
+
+- par plateforme, les messages des **30 derniers jours** (dans le fuseau du créateur), la date
+  du dernier, **qui a écrit** (membres, équipe, invités, comptes à relier, chacun compté une
+  fois) et **un graphique en barres par jour** ;
+- les **membres les plus actifs** (l'équipe à part), et chaque **serveur et groupe** avec ses
+  messages.
+
+Les messages de l'équipe y apparaissent, jamais dans les scores. Un graphique par plateforme,
+d'une seule couleur : Discord et Telegram sont deux bleus trop proches pour partager un
+graphique (vérifié avec le validateur de palettes). Survoler une barre lit le jour ; les
+chiffres sont aussi dans un tableau pour les lecteurs d'écran.
+
 ### Interface : un vrai tableau de bord
 
 - Trois sections à onglets dans la vue créateur : vue d'ensemble (chiffres, « À surveiller »,

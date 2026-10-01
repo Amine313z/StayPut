@@ -439,6 +439,47 @@ export interface DismissedAccount {
   at: string;
 }
 
+/**
+ * GET /api/creator/:companyId/platform-activity: what StayPut saw on Discord and Telegram over
+ * the last 30 days, in the creator's time zone. Counts and names, never what was written.
+ */
+export interface PlatformActivityView {
+  /** The first and last days counted (yyyy-mm-dd). */
+  from: string;
+  to: string;
+  platforms: PlatformActivity[];
+  /** The servers and groups, the busiest first. */
+  places: {
+    platform: AccountPlatform;
+    id: string | null;
+    name: string | null;
+    messages: number;
+    lastAt: string;
+  }[];
+  /** The members who wrote the most (the team aside). */
+  topMembers: {
+    id: string;
+    name: string | null;
+    discord: number;
+    telegram: number;
+    lastAt: string;
+  }[];
+}
+
+export interface PlatformActivity {
+  platform: AccountPlatform;
+  messages: number;
+  /** Who wrote, counted once each: members, the team, guests, accounts not tied yet. */
+  authors: number;
+  members: number;
+  team: number;
+  guests: number;
+  unlinked: number;
+  lastAt: string | null;
+  /** Messages per day, from the first day to the last (30). */
+  daily: number[];
+}
+
 /** GET /api/creator/:companyId/accounts, and the answer of each change. */
 export interface AccountsView {
   unlinked: UnlinkedAccount[];

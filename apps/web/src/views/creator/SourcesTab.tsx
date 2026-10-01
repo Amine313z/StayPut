@@ -1,6 +1,7 @@
 import { ShieldCheck } from 'lucide-react';
 import { AccountsCard } from '../../components/AccountsCard';
 import { DiscordCard } from '../../components/DiscordCard';
+import { PlatformActivityCard } from '../../components/PlatformActivityCard';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { SyncPanel } from '../../components/SyncPanel';
 import { TelegramCard } from '../../components/TelegramCard';
@@ -14,13 +15,16 @@ import { useCreatorData } from '../CreatorView';
 export function SourcesTab() {
   const { t } = useI18n();
   const { sync, integrations, api, members } = useCreatorData();
-  const connected =
-    integrations.state.status === 'ready' &&
-    (integrations.state.data.discord.servers.length > 0 ||
-      integrations.state.data.telegram.groups.length > 0);
+  const status = integrations.state.status === 'ready' ? integrations.state.data : null;
+  const platforms = [
+    ...(status && status.discord.servers.length > 0 ? (['discord'] as const) : []),
+    ...(status && status.telegram.groups.length > 0 ? (['telegram'] as const) : []),
+  ];
+  const connected = platforms.length > 0;
   return (
     <div className="space-y-6">
       <SyncPanel sync={sync} />
+      {connected ? <PlatformActivityCard api={api} platforms={platforms} /> : null}
       {integrations.state.status === 'loading' ? (
         <Loading />
       ) : integrations.state.status === 'error' ? (

@@ -1,5 +1,6 @@
 import type {
   AccountsView,
+  PlatformActivityView,
   ActionsPage,
   AccessLevel,
   DiscordChannelChoice,
@@ -1147,6 +1148,26 @@ describe('Discord and Telegram', () => {
     expect((await request('/api/creator/biz_Int9/accounts', await asUser('user_eve'))).status).toBe(
       403,
     );
+
+    // What StayPut saw: the group's message, the member's again.
+    await change('link', { ...account, memberId: 'mber_Int9A' });
+    const activity = (await (
+      await request('/api/creator/biz_Int9/platform-activity', init)
+    ).json()) as PlatformActivityView;
+    expect(activity.platforms.find((p) => p.platform === 'telegram')).toMatchObject({
+      messages: 1,
+      authors: 1,
+      members: 1,
+    });
+    expect(activity.places).toEqual([
+      expect.objectContaining({ platform: 'telegram', name: 'VIP', messages: 1 }),
+    ]);
+    expect(activity.topMembers).toEqual([
+      expect.objectContaining({ id: 'mber_Int9A', name: 'Bruno Petit', telegram: 1 }),
+    ]);
+    expect(
+      (await request('/api/creator/biz_Int9/platform-activity', await asUser('user_eve'))).status,
+    ).toBe(403);
   });
 
   it('lets a member link their Telegram account, once the community has a group', async () => {
