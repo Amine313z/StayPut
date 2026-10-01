@@ -38,6 +38,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { postJson, useApi } from '../../api';
+import { AlumniCard } from '../../components/AlumniCard';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { REASON_LABELS } from '../../exit-reasons';
@@ -130,7 +131,9 @@ const NOTES: Readonly<Record<string, MessageKey>> = {
  */
 export function ActionsTab() {
   const { t, number } = useI18n();
-  const { api, root } = useCreatorData();
+  const { api, root, integrations } = useCreatorData();
+  const whopAppId =
+    integrations.state.status === 'ready' ? integrations.state.data.whopAppId : null;
   const [params, setParams] = useSearchParams();
   const view = ACTION_VIEWS.find((v) => v === params.get('view')) ?? 'queue';
   const { state, retry, reload } = useApi<ActionsPage>(`${api}/actions?view=${view}`);
@@ -159,87 +162,90 @@ export function ActionsTab() {
   );
 
   return (
-    <Card
-      icon={<Zap aria-hidden="true" className="size-4" />}
-      title={t('actions.title')}
-      description={t('actions.description')}
-      actions={settingsLink}
-    >
-      {state.status === 'loading' ? (
-        <Loading />
-      ) : state.status === 'error' ? (
-        <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
-      ) : (
-        <div className="space-y-4">
-          <div className="space-y-2">
-            {state.data.killSwitch ? (
-              <Notice tone="danger" icon={<OctagonPause aria-hidden="true" className="size-4" />}>
-                {t('actions.killSwitch')}
-              </Notice>
-            ) : null}
-            {state.data.dryRun ? (
-              <Notice tone="info" icon={<FlaskConical aria-hidden="true" className="size-4" />}>
-                {t('actions.dryRun')}
-              </Notice>
-            ) : null}
-            <p className="text-sm text-muted">
-              {t(state.data.mode === 'auto' ? 'actions.mode.auto' : 'actions.mode.manual')}
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div
-              role="group"
-              aria-label={t('actions.view.label')}
-              className="flex flex-wrap gap-1 rounded-xl bg-surface-2 p-1"
-            >
-              {ACTION_VIEWS.map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  aria-pressed={view === v}
-                  onClick={() => {
-                    const search = new URLSearchParams(params);
-                    if (v === 'queue') search.delete('view');
-                    else search.set('view', v);
-                    setParams(search, { replace: true });
-                  }}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                    view === v ? 'bg-surface text-fg shadow-card' : 'text-muted hover:text-fg'
-                  }`}
-                >
-                  {t(VIEWS[v].label)}
-                  <span className="tabular ms-1.5 text-xs text-muted">
-                    {number(state.data.counts[v])}
-                  </span>
-                </button>
-              ))}
+    <div className="space-y-6">
+      <Card
+        icon={<Zap aria-hidden="true" className="size-4" />}
+        title={t('actions.title')}
+        description={t('actions.description')}
+        actions={settingsLink}
+      >
+        {state.status === 'loading' ? (
+          <Loading />
+        ) : state.status === 'error' ? (
+          <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              {state.data.killSwitch ? (
+                <Notice tone="danger" icon={<OctagonPause aria-hidden="true" className="size-4" />}>
+                  {t('actions.killSwitch')}
+                </Notice>
+              ) : null}
+              {state.data.dryRun ? (
+                <Notice tone="info" icon={<FlaskConical aria-hidden="true" className="size-4" />}>
+                  {t('actions.dryRun')}
+                </Notice>
+              ) : null}
+              <p className="text-sm text-muted">
+                {t(state.data.mode === 'auto' ? 'actions.mode.auto' : 'actions.mode.manual')}
+              </p>
             </div>
-            {view === 'queue' && state.data.actions.some((a) => a.status === 'proposed') ? (
-              <ApproveAll
-                api={api}
-                count={state.data.actions.filter((a) => a.status === 'proposed').length}
-                onDone={changed}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div
+                role="group"
+                aria-label={t('actions.view.label')}
+                className="flex flex-wrap gap-1 rounded-xl bg-surface-2 p-1"
+              >
+                {ACTION_VIEWS.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    aria-pressed={view === v}
+                    onClick={() => {
+                      const search = new URLSearchParams(params);
+                      if (v === 'queue') search.delete('view');
+                      else search.set('view', v);
+                      setParams(search, { replace: true });
+                    }}
+                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                      view === v ? 'bg-surface text-fg shadow-card' : 'text-muted hover:text-fg'
+                    }`}
+                  >
+                    {t(VIEWS[v].label)}
+                    <span className="tabular ms-1.5 text-xs text-muted">
+                      {number(state.data.counts[v])}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {view === 'queue' && state.data.actions.some((a) => a.status === 'proposed') ? (
+                <ApproveAll
+                  api={api}
+                  count={state.data.actions.filter((a) => a.status === 'proposed').length}
+                  onDone={changed}
+                />
+              ) : null}
+            </div>
+            {state.data.actions.length === 0 ? (
+              <EmptyState
+                icon={(() => {
+                  const Icon = VIEWS[view].Icon;
+                  return <Icon aria-hidden="true" className="size-5" />;
+                })()}
+                body={t(VIEWS[view].empty)}
               />
-            ) : null}
+            ) : (
+              <ul className="divide-y divide-line">
+                {state.data.actions.map((action) => (
+                  <ActionItem key={action.id} action={action} api={api} onChange={changed} />
+                ))}
+              </ul>
+            )}
           </div>
-          {state.data.actions.length === 0 ? (
-            <EmptyState
-              icon={(() => {
-                const Icon = VIEWS[view].Icon;
-                return <Icon aria-hidden="true" className="size-5" />;
-              })()}
-              body={t(VIEWS[view].empty)}
-            />
-          ) : (
-            <ul className="divide-y divide-line">
-              {state.data.actions.map((action) => (
-                <ActionItem key={action.id} action={action} api={api} onChange={changed} />
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </Card>
+        )}
+      </Card>
+      <AlumniCard api={api} whopAppId={whopAppId} />
+    </div>
   );
 }
 

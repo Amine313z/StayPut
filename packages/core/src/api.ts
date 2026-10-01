@@ -433,6 +433,8 @@ export interface MemberRetentionView {
   creatorName: string | null;
   /** To open the payment page through Whop inside its iframe. */
   whopAppId: string | null;
+  /** The Alumni offer's link (SPEC 5.9), for a member who leaves: stay in touch for free. */
+  alumniUrl: string | null;
   /**
    * For the team, who preview what a member sees: the creator's offers, to try each reason with,
    * and whether test mode keeps the survey from members for now. Nothing is recorded or applied.
@@ -556,6 +558,39 @@ export interface PlatformActivity {
   lastAt: string | null;
   /** Messages per day, from the first day to the last (30). */
   daily: number[];
+}
+
+/**
+ * GET /api/creator/:companyId/alumni: the Alumni offer (SPEC 5.9), where former members stay in
+ * touch for free, and who entered it, left it, or came back to a paid offer.
+ */
+export interface AlumniView {
+  offer: {
+    name: string;
+    /** The free variant's direct link: how a former member enters. Null until Whop gave it. */
+    url: string | null;
+    createdAt: string;
+    /** Every step done on Whop: the offer is ready. */
+    completedAt: string | null;
+  } | null;
+  entered: number;
+  left: number;
+  returned: number;
+  /** The answer of a creation that stopped: the step, and the permission Whop lacked (403). */
+  problem?: AlumniProblem | null;
+}
+
+export type AlumniStep = 'product' | 'variant' | 'experience' | 'attach';
+
+export interface AlumniProblem {
+  step: AlumniStep;
+  /** The permission to grant, when Whop refused the step (403); null for another failure. */
+  permission: string | null;
+}
+
+/** POST /api/creator/:companyId/alumni: create the offer, or finish creating it. */
+export interface AlumniCreation {
+  name: string;
 }
 
 /**

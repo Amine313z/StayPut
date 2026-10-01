@@ -154,14 +154,21 @@ export function offerFor(reason: ExitReason, row: RetentionRow, now: Date): Exit
  */
 export function retentionView(
   row: RetentionRow,
-  options: { preview: boolean; whopAppId: string | null; manageUrl?: string | null },
+  options: {
+    preview: boolean;
+    whopAppId: string | null;
+    alumniUrl?: string | null;
+    manageUrl?: string | null;
+  },
 ): MemberRetentionView {
   const creatorName = row.company?.name ?? null;
   const whopAppId = options.whopAppId;
+  const alumniUrl = options.alumniUrl ?? null;
   if (options.preview) {
     return {
       creatorName,
       whopAppId,
+      alumniUrl,
       preview: row.company
         ? { offers: row.company.offers, testMode: row.company.dryRun }
         : { offers: DEFAULT_OFFERS, testMode: false },
@@ -180,6 +187,8 @@ export function retentionView(
   return {
     creatorName,
     whopAppId,
+    // Only to a member who leaves: the others have no use for it.
+    alumniUrl: surveyOpen(row) ? alumniUrl : null,
     preview: null,
     payment:
       payment && owed

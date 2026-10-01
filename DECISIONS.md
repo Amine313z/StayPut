@@ -860,10 +860,52 @@ son propre abonnement, jamais un score (SPEC 5.3) :
 - **L'historique** montre pour chaque offre la raison du membre, l'offre, le code et sa fin, la
   reprise après une pause, son accord, avec le statut « Appliquée ».
 
+### L'offre Alumni, première partie (migration 0018, même soir)
+
+SPEC 5.9 : un ancien membre garde le contact gratuitement. StayPut crée l'offre pour le
+créateur, depuis une carte **« Offre Alumni »** de l'onglet Actions, sur Whop et pas à pas :
+
+1. un produit caché de la boutique (`POST /products`, `visibility: hidden`) ;
+2. son prix gratuit, caché lui aussi (`POST /variants`, `one_time`, `initial_price: 0`), dont le
+   **lien direct** est la porte d'entrée (l'invitation de Whop répond 403 à ce compte) ;
+3. un espace StayPut (`POST /experiences` avec l'`app_id` de StayPut), par lequel passeront les
+   nouvelles de J+7, J+30 et J+60 ;
+4. rattaché au produit (`POST /experiences/{id}/attach`).
+
+Chaque étape a sa clé d'idempotence et ce qui est fait est gardé : si Whop refuse une étape (une
+permission pas encore accordée), la carte dit laquelle (`access_pass:create`, `plan:create`,
+`experience:create` ou `experience:attach`), et un nouveau clic termine le reste sans recréer
+ce qui existe. Une fois prête, la carte donne le **lien d'entrée** (à copier) et le texte du
+**message automatique « User left »** de Whop, lien compris, avec le chemin pour l'activer :
+c'est Whop qui l'envoie à chaque membre qui part, en message privé et par e-mail (aucune API ne
+permet de l'activer à la place du créateur).
+
+- **Le lien dans la vue membre** : sous le questionnaire de départ, « Gardez le contact,
+  gratuitement » et le bouton « Rejoindre l'Alumni » (pas pour un membre qui a gardé son
+  abonnement). L'aperçu de l'équipe le montre aussi.
+- **Qui entre, qui part, qui revient** : un déclencheur sur les memberships (webhooks et
+  synchronisation) tient `alumni_members` à jour. Un membre est **dans l'Alumni** quand il a un
+  accès Alumni en cours et qu'il ne paie plus : plus d'abonnement payant en cours, ou seulement
+  des abonnements annulés pour la fin de leur période. Un membre qui paie et prend le lien par
+  curiosité n'y entre qu'à la fin de son abonnement. Son accès Alumni se termine : il est
+  **parti**, et StayPut ne le relance plus jamais (SPEC 5.9). Il paie de nouveau : il est
+  **revenu**, y compris s'il annule son annulation. S'il repart ensuite alors que son accès Alumni
+  court toujours, il y est de nouveau, avec cette nouvelle date de départ.
+- **La date de départ** (d'où partent J+7, J+30 et J+60) : la fin du dernier abonnement payant
+  (la fin de la période pour une annulation programmée), jamais après le moment où StayPut l'a vu
+  partir : un abonnement arrêté avant la fin de sa période (un remboursement) garde cette fin
+  dans les données de Whop, et le premier message arriverait sinon trop tard.
+- **Hors du score de risque** : un membre dans l'Alumni ne paie plus. Son score est effacé et il
+  n'est plus calculé : ni message à l'heure d'or, ni message d'accueil (le radar d'activation
+  part du score). Revenu dans une offre payante, il est de nouveau suivi.
+- **Limite connue** : un membre de l'Alumni reste un membre de la communauté pour Whop ; il
+  apparaît donc dans l'onglet Membres (adhésion « Accès à vie »).
+
 ### Reste à faire dans cette phase
 
-L'offre Alumni, la démonstration de chaque déclencheur, et les permissions d'écriture à ajouter
-dans Whop (`member:manage`, `payment:manage`, `promo_code:create`, `promo_code:basic:read`,
+La seconde partie de l'offre Alumni (les nouvelles de J+7, J+30 et J+60 avec un code de retour,
+l'espace Alumni côté membre, le compte des retours), la démonstration de chaque déclencheur, et
+les permissions d'écriture à ajouter dans Whop (`member:manage`, `payment:manage`, `promo_code:create`, `promo_code:basic:read`,
 `notification:create`). À trancher au rapport de phase : un code promo valable 7 jours ne sert
 qu'à un nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en cours
 (`existing_memberships_only`). Les défis de sauvetage et les binômes dépendent de la Phase 5

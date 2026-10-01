@@ -14,6 +14,7 @@ import {
   type CreatorSession,
   type DiscordChannelsUpdate,
   type HealthReport,
+  type AlumniView,
   type MemberRetentionView,
   type MemberSession,
   type RiskSettingsView,
@@ -38,6 +39,7 @@ import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
+import { alumniUrl, createAlumniOffer, readAlumni } from './alumni';
 import {
   accountOf,
   accountsView,
@@ -1048,6 +1050,44 @@ export function createApp(deps: AppDeps) {
     return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
   });
 
+  /** The Alumni offer (SPEC 5.9): where former members stay in touch, and who is in it. */
+  app.get('/api/creator/:companyId/alumni', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const view = await readAlumni(db, c.get('userId'), c.get('companyId'));
+    return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+  });
+
+  /**
+   * Creates the Alumni offer on Whop, or finishes creating it: the answer says the step that
+   * stopped, and the permission Whop lacked.
+   */
+  app.post('/api/creator/:companyId/alumni', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const body = await c.req.json<{ name?: unknown }>().catch(() => null);
+    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    if (name.length < 1 || name.length > 80) {
+      return apiError('invalid_request', 'expected { name: 1 to 80 characters }');
+    }
+    const config = c.get('config');
+    const whop = deps.whopClient(config);
+    if (!whop || !config.appId) {
+      return apiError('not_configured', 'the Whop API key or app id is not set');
+    }
+    const companyId = c.get('companyId');
+    const problem = await createAlumniOffer(
+      db,
+      whop,
+      { companyId, userId: c.get('userId'), appId: config.appId, name },
+      deps.now(),
+    );
+    const view = await readAlumni(db, c.get('userId'), companyId);
+    return view
+      ? c.json({ ...view, problem } satisfies AlumniView)
+      : apiError('forbidden', 'not a team member of this company');
+  });
+
   /** The creator ties an account to a member, unties it, or sets it aside (no member). */
   app.post(
     '/api/creator/:companyId/accounts/:change{link|unlink|dismiss|restore}',
@@ -1334,6 +1374,7 @@ export function createApp(deps: AppDeps) {
     const view = retentionView(row, {
       preview: c.get('accessLevel') === 'admin',
       whopAppId: c.get('config').appId,
+      alumniUrl: await alumniUrl(db, companyId),
     });
     if (view.payment?.kind === 'failed' && !view.payment.url && row.payment?.membershipId) {
       // Where the member updates their payment method: Whop's page for their membership.

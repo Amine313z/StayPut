@@ -18,6 +18,7 @@ import {
   Eye,
   FlaskConical,
   Gift,
+  GraduationCap,
   HeartHandshake,
   Hourglass,
   Percent,
@@ -53,8 +54,16 @@ export function MemberRetention({ api }: { api: string }) {
   } | null>(null);
   const view = answer && answer.base === loaded ? answer.view : loaded;
   if (!view) return null;
-  if (view.preview)
-    return <Preview offers={view.preview.offers} testMode={view.preview.testMode} />;
+  if (view.preview) {
+    return (
+      <Preview
+        offers={view.preview.offers}
+        testMode={view.preview.testMode}
+        alumniUrl={view.alumniUrl}
+        whopAppId={view.whopAppId}
+      />
+    );
+  }
   return (
     <>
       {view.payment ? <PaymentCard payment={view.payment} whopAppId={view.whopAppId} /> : null}
@@ -62,6 +71,8 @@ export function MemberRetention({ api }: { api: string }) {
         <DepartureCard
           api={api}
           departure={view.departure}
+          alumniUrl={view.alumniUrl}
+          whopAppId={view.whopAppId}
           onAnswer={(next) => setAnswer({ base: loaded, view: next })}
         />
       ) : null}
@@ -101,10 +112,14 @@ function PaymentCard({ payment, whopAppId }: { payment: Payment; whopAppId: stri
 function DepartureCard({
   api,
   departure,
+  alumniUrl,
+  whopAppId,
   onAnswer,
 }: {
   api: string;
   departure: Departure;
+  alumniUrl: string | null;
+  whopAppId: string | null;
   onAnswer: (view: MemberRetentionView) => void;
 }) {
   const { t, date } = useI18n();
@@ -158,8 +173,29 @@ function DepartureCard({
             {t('common.failed')}
           </p>
         ) : null}
+        {/* Leaving all the same: the Alumni keeps them in touch (not once they kept it). */}
+        {alumniUrl && !departure.result?.kept ? (
+          <AlumniInvite url={alumniUrl} whopAppId={whopAppId} />
+        ) : null}
       </div>
     </Card>
+  );
+}
+
+/** The free Alumni offer (SPEC 5.9): news of the community, and an offer to come back. */
+function AlumniInvite({ url, whopAppId }: { url: string; whopAppId: string | null }) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-2 border-t border-line pt-4">
+      <p className="flex items-center gap-2 font-medium">
+        <GraduationCap aria-hidden="true" className="size-4 text-accent" />
+        {t('member.alumni.title')}
+      </p>
+      <p className="text-sm text-muted">{t('member.alumni.body')}</p>
+      <ExternalButton href={url} whopAppId={whopAppId} variant="secondary" size="sm">
+        {t('member.alumni.join')}
+      </ExternalButton>
+    </div>
   );
 }
 
@@ -441,9 +477,13 @@ async function copy(text: string): Promise<boolean> {
 function Preview({
   offers,
   testMode,
+  alumniUrl,
+  whopAppId,
 }: {
   offers: NonNullable<MemberRetentionView['preview']>['offers'];
   testMode: boolean;
+  alumniUrl: string | null;
+  whopAppId: string | null;
 }) {
   const { t } = useI18n();
   const [reason, setReason] = useState<ExitReason | null>(null);
@@ -494,6 +534,7 @@ function Preview({
               onChange={again}
             />
           )}
+          {alumniUrl ? <AlumniInvite url={alumniUrl} whopAppId={whopAppId} /> : null}
         </div>
         <p className="text-sm text-muted">{t('member.preview.payment')}</p>
       </div>

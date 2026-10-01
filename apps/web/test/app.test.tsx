@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type {
   AccountsView,
+  AlumniView,
   PlatformActivityView,
   ActionRow,
   ActionSettingsView,
@@ -277,11 +278,14 @@ const ACTION_SETTINGS: ActionSettingsView = {
   offers: { pauseDays: 30, promoPercent: 20, promoMonths: 3, extendDays: 7, coachingMessage: null },
 };
 
+const NO_ALUMNI: AlumniView = { offer: null, entered: 0, left: 0, returned: 0 };
+
 const dashboard = (members: MembersPage = MEMBERS, integrations = INTEGRATIONS) => ({
   '/api/creator/biz_A1/session': [creatorSession],
   '/api/creator/biz_A1/members': [{ status: 200, body: members }],
   '/api/creator/biz_A1/sync': [syncStatus()],
   '/api/creator/biz_A1/integrations?lang=en': [{ status: 200, body: integrations }],
+  '/api/creator/biz_A1/alumni': [{ status: 200, body: NO_ALUMNI }],
 });
 
 const NOBODY: MembersPage = {
@@ -1470,6 +1474,7 @@ describe('member view', () => {
     body: {
       creatorName: 'Le Club',
       whopAppId: 'app_stayput',
+      alumniUrl: null,
       preview: null,
       payment: null,
       departure: null,
@@ -1685,6 +1690,7 @@ describe('member view', () => {
       '/api/member/exp_E1/session': [memberSession],
       '/api/member/exp_E1/retention': [
         retention({
+          alumniUrl: 'https://whop.com/checkout/plan_Alumni',
           payment: {
             kind: 'action_required',
             amount: 49,
@@ -1704,6 +1710,10 @@ describe('member view', () => {
     });
     renderAt('/experiences/exp_E1', 'fr');
     expect(await screen.findByRole('link', { name: /Valider mon paiement/ })).toBeTruthy();
+    // Leaving all the same: the free Alumni keeps them in touch.
+    expect(screen.getByRole('link', { name: /Rejoindre l’Alumni/ }).getAttribute('href')).toBe(
+      'https://whop.com/checkout/plan_Alumni',
+    );
     expect(screen.getByText('Votre réponse : C’est trop cher')).toBeTruthy();
     expect(screen.getByText('20 % de réduction pendant 3 mois')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Non merci' })).toBeTruthy();
@@ -1906,6 +1916,55 @@ describe('the actions (SPEC Phase 4)', () => {
     // Applied to the membership, not sent.
     expect(screen.getAllByText('Applied')).toHaveLength(2);
     expect(screen.queryByText('Sent')).toBeNull();
+  });
+
+  it('creates the Alumni offer, says which permission is missing, then gives its link', async () => {
+    const stopped: AlumniView = {
+      offer: {
+        name: 'Alumni du Club',
+        url: 'https://whop.com/checkout/plan_Alu1',
+        createdAt: '2026-10-01T10:00:00.000Z',
+        completedAt: null,
+      },
+      entered: 0,
+      left: 0,
+      returned: 0,
+      problem: { step: 'experience', permission: 'experience:create' },
+    };
+    const ready: AlumniView = {
+      ...stopped,
+      offer: { ...stopped.offer!, completedAt: '2026-10-01T10:05:00.000Z' },
+      entered: 3,
+      returned: 1,
+      problem: null,
+    };
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/actions?view=queue': [page('queue', [])],
+      'POST /api/creator/biz_A1/alumni': [
+        { status: 200, body: stopped },
+        { status: 200, body: ready },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions');
+    const name = await screen.findByRole<HTMLInputElement>('textbox', {
+      name: 'Name of the offer',
+    });
+    expect(name.value).toBe('Alumni');
+    fireEvent.change(name, { target: { value: 'Alumni du Club' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create the Alumni offer' }));
+    expect(
+      await screen.findByText(/StayPut does not have the « experience:create » permission/),
+    ).toBeTruthy();
+    expect(bodies.get('POST /api/creator/biz_A1/alumni')).toEqual({ name: 'Alumni du Club' });
+    fireEvent.click(screen.getByRole('button', { name: 'Finish creating it' }));
+    expect(await screen.findByText('Your Alumni offer « Alumni du Club » is ready.')).toBeTruthy();
+    expect(screen.getByText('https://whop.com/checkout/plan_Alu1')).toBeTruthy();
+    expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: /User left/ }).value).toContain(
+      'join the Alumni: https://whop.com/checkout/plan_Alu1',
+    );
+    expect(screen.getByText('In the Alumni: 3 · came back: 1 · left: 0')).toBeTruthy();
+    expect(calls.filter((c) => c === 'POST /api/creator/biz_A1/alumni')).toHaveLength(2);
   });
 
   it('sets the departure offers, within their limits', async () => {

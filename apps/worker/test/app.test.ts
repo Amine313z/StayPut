@@ -1,5 +1,6 @@
 import type {
   AccountsView,
+  AlumniView,
   MemberRetentionView,
   PlatformActivityView,
   ActionsPage,
@@ -81,12 +82,33 @@ function fakeWhop(
 ) {
   const calls: string[] = [];
   const listed: string[] = [];
-  const writes: { method: string; path: string; body: unknown }[] = [];
+  const writes: { method: string; path: string; body: unknown; key?: string }[] = [];
+  /** Whop refuses these (`POST /experiences`…) with this error, once each. */
+  const refusals: Record<string, WhopApiError> = {};
   const client = {
     env: 'sandbox',
-    request(method: string, path: string, options?: { body?: unknown }) {
+    request(method: string, path: string, options?: { body?: unknown; idempotencyKey?: string }) {
       calls.push(`${method} ${path}`);
-      if (method !== 'GET') writes.push({ method, path, body: options?.body });
+      const refused = refusals[`${method} ${path}`];
+      if (refused) {
+        delete refusals[`${method} ${path}`];
+        return Promise.reject(refused);
+      }
+      if (method !== 'GET') {
+        writes.push({ method, path, body: options?.body, key: options?.idempotencyKey });
+      }
+      // What creating the Alumni offer asks of Whop.
+      if (method === 'POST' && path === '/products') return Promise.resolve({ id: 'prod_Alu1' });
+      if (method === 'POST' && path === '/variants') {
+        return Promise.resolve({
+          id: 'plan_Alu1',
+          purchase_url: 'https://sandbox.whop.com/checkout/plan_Alu1',
+        });
+      }
+      if (method === 'POST' && path === '/experiences') return Promise.resolve({ id: 'exp_Alu1' });
+      if (method === 'POST' && /^\/experiences\/exp_[A-Za-z0-9]+\/attach$/.test(path)) {
+        return Promise.resolve({ id: 'exp_Alu1' });
+      }
       // A member's membership, and what an accepted offer asks of Whop.
       const membership = /^\/memberships\/(mem_[A-Za-z0-9]+)/.exec(path)?.[1];
       if (method === 'GET' && membership) {
@@ -123,7 +145,7 @@ function fakeWhop(
       return Promise.resolve(lists[path] ?? EMPTY_PAGE);
     },
   } as unknown as WhopClient;
-  return { client, calls, listed, writes };
+  return { client, calls, listed, writes, refusals };
 }
 
 function setup(
@@ -1251,6 +1273,85 @@ describe('Discord and Telegram', () => {
   });
 });
 
+describe('the Alumni offer (SPEC 5.9)', () => {
+  const json = (init: RequestInit, method: string, body: unknown) => ({
+    ...init,
+    method,
+    headers: { ...init.headers, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  it('creates it on Whop step by step, and finishes it once a refused permission is granted', async () => {
+    const { request, whop } = setup({
+      'user_owner71:biz_Alu1': 'admin',
+      'user_eve:biz_Alu1': 'customer',
+    });
+    const owner = await asUser('user_owner71');
+    await request('/api/creator/biz_Alu1/session', owner);
+    await settle();
+    const path = '/api/creator/biz_Alu1/alumni';
+    expect(await (await request(path, owner)).json()).toEqual({
+      offer: null,
+      entered: 0,
+      left: 0,
+      returned: 0,
+    });
+    expect((await request(path, json(owner, 'POST', { name: ' ' }))).status).toBe(400);
+
+    // The app may not create experiences yet: the first two steps hold, the answer says why.
+    whop.refusals['POST /experiences'] = new WhopApiError(403, 'forbidden', 'missing permission', {
+      method: 'POST',
+      path: '/experiences',
+    });
+    const stopped = (await (
+      await request(path, json(owner, 'POST', { name: 'Alumni du Club' }))
+    ).json()) as AlumniView;
+    expect(stopped).toMatchObject({
+      offer: {
+        name: 'Alumni du Club',
+        url: 'https://sandbox.whop.com/checkout/plan_Alu1',
+        completedAt: null,
+      },
+      problem: { step: 'experience', permission: 'experience:create' },
+    });
+    // Granted: trying again finishes the rest, without a second product or variant.
+    const ready = (await (
+      await request(path, json(owner, 'POST', { name: 'Alumni du Club' }))
+    ).json()) as AlumniView;
+    expect(ready).toMatchObject({
+      offer: { completedAt: expect.any(String) as string },
+      problem: null,
+    });
+    expect(whop.writes.map((w) => `${w.method} ${w.path}`)).toEqual([
+      'POST /products',
+      'POST /variants',
+      'POST /experiences',
+      'POST /experiences/exp_Alu1/attach',
+    ]);
+    expect(whop.writes[0]).toMatchObject({
+      body: { account_id: 'biz_Alu1', title: 'Alumni du Club', visibility: 'hidden' },
+      key: 'stayput-alumni-biz_Alu1-product',
+    });
+    expect(whop.writes[1]?.body).toMatchObject({
+      product_id: 'prod_Alu1',
+      plan_type: 'one_time',
+      initial_price: 0,
+      visibility: 'hidden',
+    });
+    expect(whop.writes[2]?.body).toEqual({
+      account_id: 'biz_Alu1',
+      app_id: APP_ID,
+      name: 'Alumni du Club',
+    });
+    expect(whop.writes[3]?.body).toEqual({ product_id: 'prod_Alu1' });
+    // Ready: nothing more to ask of Whop.
+    await request(path, json(owner, 'POST', { name: 'Alumni du Club' }));
+    expect(whop.writes).toHaveLength(4);
+    // A member of the community sees nothing of it.
+    expect((await request(path, await asUser('user_eve'))).status).toBe(403);
+  });
+});
+
 describe('everyone on Discord and Telegram (the people)', () => {
   const MODULES: Env = {
     ...ENV,
@@ -1858,6 +1959,7 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     expect(preview).toEqual({
       creatorName: 'Le Club',
       whopAppId: APP_ID,
+      alumniUrl: null,
       preview: {
         offers: {
           pauseDays: 30,

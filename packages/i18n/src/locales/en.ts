@@ -382,6 +382,10 @@ export const en = {
     'A member whose payment failed or waits for their bank also sees a button here to settle it.',
   'member.preview.done': 'Preview: nothing was applied. A member would see the result here.',
   'member.preview.again': 'Try another answer',
+  'member.alumni.title': 'Stay in touch, for free',
+  'member.alumni.body':
+    'Join the Alumni space: the community’s news, and offers if you ever come back.',
+  'member.alumni.join': 'Join the Alumni',
   'home.point.members': 'Every member, their membership and their payments, read from Whop.',
   'home.point.payments':
     'Failed payments and scheduled cancellations, seen before the member leaves.',
@@ -608,6 +612,37 @@ export const en = {
   'actions.offer.kept': 'Membership kept, with the member’s consent',
   'actions.offer.followUp': 'Your turn: write to the member on Whop.',
   'actions.note.error': 'Error: {error}',
+
+  'alumni.title': 'Alumni offer',
+  'alumni.description':
+    'Your former members stay in touch for free: the community’s news, and an offer to come back.',
+  'alumni.createHint':
+    'StayPut creates on Whop a free offer hidden from your store, with a StayPut space for your former members. Its link is how they enter: the departure survey shows it, and Whop’s automatic « User left » message carries it to everyone who leaves. Needs 4 Whop permissions: access_pass:create, plan:create, experience:create and experience:attach.',
+  'alumni.name': 'Name of the offer',
+  'alumni.defaultName': 'Alumni',
+  'alumni.create': 'Create the Alumni offer',
+  'alumni.finish': 'Finish creating it',
+  'alumni.notConfigured': 'The Whop app id or API key is not set on this StayPut.',
+  'alumni.step.product': 'the product',
+  'alumni.step.variant': 'the free price',
+  'alumni.step.experience': 'the StayPut space',
+  'alumni.step.attach': 'attaching the space',
+  'alumni.problem.permission':
+    'Whop refused {step}: StayPut does not have the « {permission} » permission. Add it to the app’s permissions, have it approved (Whop → Settings → Authorized apps), then click again.',
+  'alumni.problem.other': 'Whop did not answer for {step}. Try again in a moment.',
+  'alumni.ready': 'Your Alumni offer « {name} » is ready.',
+  'alumni.link': 'Entry link',
+  'alumni.linkHint':
+    'Anyone with this link enters the Alumni for free. It is not shown in your store.',
+  'alumni.open': 'Open',
+  'alumni.copy': 'Copy',
+  'alumni.copied': 'Copied',
+  'alumni.userLeft.title': 'Whop’s automatic « User left » message',
+  'alumni.userLeft.how':
+    'Whop sends it to everyone who leaves your community, as a DM and by e-mail. In Whop: Dashboard → Support chats → automatic messages → « User left »: paste this text, tick the e-mail, then turn it on.',
+  'alumni.userLeft.text':
+    'Hi, thank you for being part of the community! To stay in touch for free (news and comeback offers), join the Alumni: {url}',
+  'alumni.stats': 'In the Alumni: {entered} · came back: {returned} · left: {left}',
 
   'actionSettings.title': 'Actions and guardrails',
   'actionSettings.description': 'How actions leave, and the limits StayPut never crosses.',

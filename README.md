@@ -192,7 +192,9 @@ est programmé et ce qui s'est passé ; tout passe par les garde-fous, et le mod
 sans rien envoyer. Dans la **vue membre**, un membre qui a programmé son annulation dit pourquoi
 en un clic et reçoit l'offre qui répond à sa raison (pause, code promo, aide, jours offerts) ;
 un membre dont le paiement attend voit le bouton pour le régler. L'équipe y voit un aperçu, où
-rien n'est enregistré. Détails : `DECISIONS.md`, « Phase 4 ».
+rien n'est enregistré. L'**offre Alumni** (onglet Actions) se crée en un clic sur Whop : une
+offre gratuite et cachée où les anciens membres gardent le contact. Détails : `DECISIONS.md`,
+« Phase 4 ».
 
 ## Outils de la Phase 0
 

@@ -204,6 +204,27 @@ async function main() {
         );
       }
     }
+    // The Alumni offer (migration 0018): which steps of its creation are done on Whop, and who
+    // entered, left or came back. Counts only.
+    const [alumni] = await sql`
+      select to_regclass('stayput.alumni_offers') is not null as present`;
+    if (alumni?.present) {
+      out();
+      table(
+        await sql`
+          select (o.company_id is not null) as offer, (o.product_id is not null) as product,
+                 (o.plan_id is not null) as variant, (o.experience_id is not null) as experience,
+                 (o.completed_at is not null) as ready,
+                 (select count(*) from stayput.alumni_members a
+                   where a.company_id = ${id as string} and a.status = 'entered') as entered,
+                 (select count(*) from stayput.alumni_members a
+                   where a.company_id = ${id as string} and a.status = 'left') as left_,
+                 (select count(*) from stayput.alumni_members a
+                   where a.company_id = ${id as string} and a.status = 'returned') as returned
+            from (select ${id as string}::text as company_id) c
+            left join stayput.alumni_offers o on o.company_id = c.company_id`,
+      );
+    }
     // The actions (migration 0009): how many of each type are at each step of their cycle,
     // with the reasons the guardrails gave. Counts only.
     const [actions] = await sql`
