@@ -281,3 +281,20 @@ vrais comptes de test, à créer à ce moment-là.
 - La synchronisation ne lit les listes de Whop que pour les entreprises dont l'équipe a ouvert
   StayPut au moins une fois (le backfill commence à la première visite, cahier des charges,
   Phase 2, point 2). Les webhooks d'une entreprise qui a installé l'app sont rangés avant cela.
+
+### Les permissions se ré-approuvent, entreprise par entreprise
+
+Les permissions ajoutées à l'app ne valent pour une entreprise qui l'a déjà installée qu'après
+qu'elle les a **ré-approuvées** dans Whop (« New scopes don't carry over until you accept them
+in Authorized apps », documentation Whop). Constaté le 01/10/2026 : 403 sur toutes les listes
+(« App API key is not authorized for the member:basic:read scope ») jusqu'à l'approbation par le
+fondateur, puis tout lu au premier « Synchroniser maintenant ». En conséquence :
+
+- un flux refusé est réessayé dans l'heure (et non à sa cadence normale, un jour pour certains),
+  et tout de suite à l'ouverture du tableau de bord ou sur « Synchroniser maintenant » ;
+- l'écran dit où approuver (« Settings → Authorized apps ») quand Whop refuse une permission ;
+- le workflow « Inspect » demande à Whop quelles permissions la clé de l'app possède vraiment
+  sur le compte sandbox (`GET /permissions`).
+
+Chaque nouvelle permission (Phase 4 : actions) demandera donc la même ré-approbation aux
+créateurs déjà installés : à prévoir dans le message de mise à jour.
