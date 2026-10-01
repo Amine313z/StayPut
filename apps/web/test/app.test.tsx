@@ -1401,6 +1401,19 @@ describe('back from Discord', () => {
       screen.getByText('"Le Club": 2 channels followed. The last 90 days are being read.'),
     ).toBeTruthy();
     expect(screen.getByText(/You can close this tab/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Back to StayPut/ })).toBeNull();
+  });
+
+  it('offers the way back when signed in to StayPut outside Whop', () => {
+    renderAt('/connected?source=discord&status=ok&name=Le%20Club&channels=2&company=biz_A1', 'fr');
+    expect(screen.getByRole('link', { name: /Revenir à StayPut/ }).getAttribute('href')).toBe(
+      '/dashboard/biz_A1/sources',
+    );
+    expect(screen.getByText(/Ou fermez cet onglet/)).toBeTruthy();
+    cleanup();
+    // Never a link built from anything but a company id.
+    renderAt('/connected?source=discord&status=ok&company=https://evil.example');
+    expect(screen.queryByRole('link', { name: /Back to StayPut/ })).toBeNull();
   });
 
   it('says why it did not work', () => {

@@ -1178,10 +1178,20 @@ export function createApp(deps: AppDeps) {
         now: deps.now(),
       });
       syncInBackground(c, install.companyId, 0);
+      // Signed in to StayPut outside Whop (sandbox): the page offers the way back to the
+      // dashboard. Inside Whop, the creator just closes the tab: there is nothing to go back to.
+      const session = config.oauthLogin
+        ? await verify(
+            readCookie(c.req.header('cookie'), SESSION_COOKIE),
+            await signingKey(config.apiKey),
+            { purpose: 'session', env: config.whopEnv, nowSeconds: nowSeconds() },
+          )
+        : null;
       return done({
         status: 'ok',
         name: server.name ?? '',
         channels: String(server.followed),
+        ...(session?.userId === install.userId ? { company: install.companyId } : {}),
       });
     } catch (error) {
       console.error('Discord server not connected:', describe(error));

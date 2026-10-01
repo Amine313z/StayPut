@@ -1,8 +1,10 @@
+import { isCompanyId } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
-import { CircleAlert, CircleCheck } from 'lucide-react';
+import { ArrowLeft, CircleAlert, CircleCheck } from 'lucide-react';
 import { useSearchParams } from 'react-router';
 import { useI18n } from '../i18n';
 import { DiscordIcon } from '../ui/BrandIcons';
+import { ButtonLink } from '../ui/Button';
 
 const REASONS: Record<string, MessageKey> = {
   denied: 'connected.reason.denied',
@@ -12,7 +14,8 @@ const REASONS: Record<string, MessageKey> = {
 
 /**
  * Where Discord's page sends the creator back (/auth/discord/callback, then here): it says how
- * the connection went. This tab can be closed: the dashboard in Whop updates by itself.
+ * the connection went. This tab can be closed: the dashboard in Whop updates by itself. Signed in
+ * to StayPut outside Whop (sandbox), the creator also gets a button back to their sources.
  */
 export function Connected() {
   const { t, plural } = useI18n();
@@ -20,6 +23,7 @@ export function Connected() {
   const ok = params.get('status') === 'ok';
   const name = params.get('name') || t('discord.unnamed');
   const channels = Number(params.get('channels') ?? 0);
+  const company = params.get('company');
   return (
     <div className="mx-auto max-w-lg rounded-2xl border border-line bg-surface p-8 text-center shadow-card">
       <span className="relative mx-auto flex size-14 items-center justify-center">
@@ -50,7 +54,19 @@ export function Connected() {
             })
           : t(REASONS[params.get('reason') ?? ''] ?? 'connected.reason.error')}
       </p>
-      <p className="mt-6 text-sm text-muted">{t('connected.back')}</p>
+      {isCompanyId(company) ? (
+        <div className="mt-6">
+          <ButtonLink
+            href={`/dashboard/${company}/sources`}
+            icon={<ArrowLeft aria-hidden="true" className="size-4" />}
+          >
+            {t('connected.return')}
+          </ButtonLink>
+        </div>
+      ) : null}
+      <p className="mt-6 text-sm text-muted">
+        {t(isCompanyId(company) ? 'connected.backHere' : 'connected.back')}
+      </p>
     </div>
   );
 }

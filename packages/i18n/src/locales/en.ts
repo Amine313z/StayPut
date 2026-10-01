@@ -297,6 +297,8 @@ export const en = {
   'connected.reason.error':
     'Something went wrong while connecting. Start again from StayPut in a moment.',
   'connected.back': 'You can close this tab and go back to Whop: your dashboard updates by itself.',
+  'connected.return': 'Back to StayPut',
+  'connected.backHere': 'Or close this tab: StayPut updates by itself in your other tab.',
   'member.goal.title': 'Your goal, soon',
   'member.goal.body': 'You will soon set a goal here and see your progress week after week.',
   'member.telegram.title': 'Your Telegram account',

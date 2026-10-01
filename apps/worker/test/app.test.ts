@@ -27,6 +27,7 @@ import {
   type AppDeps,
 } from '../src/app';
 import { withUser, type ClosableDb, type Db } from '../src/db';
+import { SESSION_COOKIE, sign, signingKey } from '../src/session';
 import type { DiscordClient } from '../src/discord';
 import type { Env } from '../src/env';
 import { telegramWebhookSecret, type TelegramClient } from '../src/telegram';
@@ -880,6 +881,23 @@ describe('Discord and Telegram', () => {
       { code: 'good', redirectUri: `${ORIGIN}/auth/discord/callback` },
     ]);
     await settle();
+
+    // Signed in to StayPut outside Whop (sandbox) as the creator who asked: the page offers the
+    // way back to their dashboard. Someone else's session: no.
+    const signedIn = async (userId: string) => {
+      const session = await sign(
+        { purpose: 'session', userId, env: 'sandbox', exp: Math.floor(NOW.getTime() / 1000) + 600 },
+        await signingKey('test_key'),
+      );
+      const again = await request(
+        `/auth/discord/callback?${new URLSearchParams({ code: 'good', state, guild_id: GUILD }).toString()}`,
+        { headers: { cookie: `${SESSION_COOKIE}=${session}` } },
+      );
+      await settle();
+      return new URL(again.headers.get('location')!, ORIGIN).searchParams.get('company');
+    };
+    expect(await signedIn('user_ivy')).toBe('biz_Int1');
+    expect(await signedIn('user_mallory')).toBeNull();
 
     const after = await integrations(request, 'biz_Int1', init);
     expect(after.discord.servers).toEqual([

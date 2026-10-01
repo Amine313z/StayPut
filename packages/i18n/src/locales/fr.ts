@@ -302,6 +302,9 @@ export const fr: Messages = {
   'connected.reason.error': 'La connexion a échoué. Recommencez depuis StayPut dans un instant.',
   'connected.back':
     'Vous pouvez fermer cet onglet et revenir sur Whop : votre tableau de bord se met à jour tout seul.',
+  'connected.return': 'Revenir à StayPut',
+  'connected.backHere':
+    'Ou fermez cet onglet : StayPut se met à jour tout seul dans votre autre onglet.',
   'member.goal.title': 'Votre objectif, bientôt',
   'member.goal.body':
     'Vous fixerez bientôt ici un objectif et suivrez vos progrès semaine après semaine.',
