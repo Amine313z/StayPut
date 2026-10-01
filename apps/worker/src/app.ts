@@ -175,6 +175,8 @@ export const HEALTH_DB_TIMEOUT_MS = 5_000;
 export const OPEN_SYNC_INTERVAL_SECONDS = 10 * 60;
 /** "Sync now" in the dashboard: at most once a minute. */
 export const MANUAL_SYNC_INTERVAL_SECONDS = 60;
+/** « Sync now » also reads the Discord channels not read for this long (their cadence is 3 h). */
+export const MANUAL_DISCORD_REFRESH_MINUTES = 10;
 const REQUEST_SYNC_BUDGET = SYNC_REQUEST_BUDGET - 2;
 
 export function createApp(deps: AppDeps) {
@@ -542,7 +544,10 @@ export function createApp(deps: AppDeps) {
     return c.json(await readSyncStatus(db, c.get('userId'), c.get('companyId')));
   });
 
-  /** "Sync now": reads what is due from Whop during the request, then the status. */
+  /**
+   * "Sync now": reads what is due from Whop during the request, and the Discord channels not
+   * read for a few minutes, then the status.
+   */
   app.post('/api/creator/:companyId/sync', authenticate, withDb, requireCreator, async (c) => {
     const db = c.get('db');
     const config = c.get('config');
@@ -554,7 +559,7 @@ export function createApp(deps: AppDeps) {
       { db, whop, discord: deps.discord(config), now, budget: { left: REQUEST_SYNC_BUDGET } },
       companyId,
       MANUAL_SYNC_INTERVAL_SECONDS,
-      { retryFailed: true },
+      { retryFailed: true, refreshDiscordAfterMinutes: MANUAL_DISCORD_REFRESH_MINUTES },
     );
     if (result) {
       console.info(summarize(result));

@@ -459,7 +459,7 @@ describe('creator view', () => {
     ).toBeTruthy();
   });
 
-  it('syncs now on demand, then reads the members again', async () => {
+  it('syncs now on demand, then reads the members and the sources again', async () => {
     const run = (ran: boolean): { status: number; body: SyncRun } => ({
       status: 200,
       body: {
@@ -475,6 +475,10 @@ describe('creator view', () => {
         { status: 200, body: NOBODY },
         { status: 200, body: MEMBERS },
       ],
+      '/api/creator/biz_A1/integrations?lang=en': [
+        { status: 200, body: INTEGRATIONS },
+        { status: 200, body: INTEGRATIONS },
+      ],
     });
     renderAt('/dashboard/biz_A1');
     const button = await screen.findByRole('button', { name: 'Sync now' });
@@ -487,6 +491,8 @@ describe('creator view', () => {
       await screen.findByText('A synchronization just ran. Try again in a minute.'),
     ).toBeTruthy();
     expect(calls.filter((c) => c === '/api/creator/biz_A1/members')).toHaveLength(2);
+    // « Sync now » reads Discord too: the sources are read again with the members.
+    expect(calls.filter((c) => c === '/api/creator/biz_A1/integrations?lang=en')).toHaveLength(2);
   });
 
   it('names the data StayPut could not read, and why', async () => {

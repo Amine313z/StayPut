@@ -22,7 +22,7 @@ export const en = {
   'creator.title': 'Retention dashboard',
   'creator.connected': 'Connected as a team member of {companyId}.',
 
-  'sync.title': 'Data from Whop',
+  'sync.title': 'Data sync',
   'sync.importing': 'Importing the last 90 days of your community. This can take a few minutes.',
   'sync.upToDate': 'Up to date.',
   'sync.never': 'Not synchronized yet.',

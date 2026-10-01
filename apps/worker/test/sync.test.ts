@@ -249,6 +249,25 @@ describe('planPass', () => {
     ).toBeNull();
   });
 
+  it('reads a Discord channel at once on « Sync now », unless it was just read', () => {
+    const discord = stream({ source: 'discord', everyHours: 3 });
+    const minutes = (n: number) => new Date(NOW.getTime() + n * 60_000);
+    const lastHour = state({ lastPassAt: minutes(-60), highWater: minutes(-90) });
+    const asked = { refreshDiscordAfterMinutes: 10 };
+    // Not due before 3 hours…
+    expect(planPass(discord, lastHour, NOW)).toBeNull();
+    // …but « Sync now » reads back to what it already has.
+    expect(planPass(discord, lastHour, NOW, asked)).toEqual({
+      cursor: null,
+      start: true,
+      until: minutes(-90),
+      complete: false,
+    });
+    expect(planPass(discord, state({ lastPassAt: minutes(-5) }), NOW, asked)).toBeNull();
+    // Whop's lists keep their cadence: their webhooks bring what is new.
+    expect(planPass(stream({ everyHours: 3 }), lastHour, NOW, asked)).toBeNull();
+  });
+
   it('lists every stream once, account-wide ones before the scoped ones they open', () => {
     const names = STREAMS.map((s) => s.name);
     expect(new Set(names).size).toBe(names.length);

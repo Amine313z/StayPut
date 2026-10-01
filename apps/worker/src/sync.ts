@@ -191,6 +191,12 @@ export interface PassOptions {
    * permission (opening the dashboard, « Sync now »).
    */
   retryFailed?: boolean;
+  /**
+   * « Sync now »: a Discord channel not read for this many minutes is read now, whatever its
+   * cadence. Nothing tells StayPut of a new Discord message (Whop and Telegram send theirs), so
+   * a creator trying it out would otherwise wait up to 3 hours.
+   */
+  refreshDiscordAfterMinutes?: number;
 }
 
 export interface PassPlan {
@@ -219,8 +225,13 @@ export function planPass(
     !since || now.getTime() - since.getTime() >= hours * 3_600_000 - DUE_MARGIN_MS;
   const failed = Boolean(state?.lastError);
   const retryNow = failed && options.retryFailed === true;
+  const refreshAfter = options.refreshDiscordAfterMinutes;
+  const refreshNow =
+    stream.source === 'discord' &&
+    refreshAfter !== undefined &&
+    (!state?.lastPassAt || now.getTime() - state.lastPassAt.getTime() >= refreshAfter * 60_000);
   const every = failed ? Math.min(stream.everyHours, 1) : stream.everyHours;
-  if (!retryNow && !due(state?.lastPassAt, every)) return null;
+  if (!retryNow && !refreshNow && !due(state?.lastPassAt, every)) return null;
   const complete =
     stream.stop === 'end' ||
     !state?.backfillDone ||

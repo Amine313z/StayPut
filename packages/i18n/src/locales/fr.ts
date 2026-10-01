@@ -22,7 +22,7 @@ export const fr: Messages = {
   'creator.title': 'Tableau de bord de rétention',
   'creator.connected': "Connecté en tant que membre de l'équipe de {companyId}.",
 
-  'sync.title': 'Données de Whop',
+  'sync.title': 'Synchronisation des données',
   'sync.importing':
     'Import des 90 derniers jours de votre communauté. Cela peut prendre quelques minutes.',
   'sync.upToDate': 'À jour.',

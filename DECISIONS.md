@@ -410,6 +410,15 @@ plus que de repli. Les liens faits avant restent valables leur heure. Même chos
 d'un membre. Et la page déclare sa langue avant d'être dessinée : Chrome proposait de
 « traduire depuis l'anglais » la page en français.
 
+### « Synchroniser maintenant » relit aussi Discord (même jour)
+
+Les salons Discord sont lus toutes les 3 heures (rien ne prévient StayPut d'un nouveau message
+Discord, alors que Whop et Telegram envoient les leurs). Un créateur qui essaie (« j'écris dans
+mon serveur, je regarde StayPut ») aurait attendu jusqu'à 3 heures. Le bouton relit maintenant
+aussi les salons Discord non lus depuis 10 minutes (au plus une fois par minute, comme avant),
+puis la page relit les sources. Le panneau s'appelle « Synchronisation des données », plus
+« Données de Whop ».
+
 ### Correctif : les listes Postgres arrivent en texte en production (même jour)
 
 Premier serveur Discord relié en production : « Sources d'activité » tombait en erreur. Le

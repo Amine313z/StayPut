@@ -43,9 +43,9 @@ export function CreatorView() {
 /**
  * The sections of the dashboard (SPEC Phase 2, then Phase 6): an overview, the members, the
  * analyses, the activity sources and the settings. The members and the sources are read once
- * here and kept while the creator moves between sections; the members are read again each time
- * a synchronization brings something new, the sources each time the creator comes back to the
- * page (after connecting one in another tab).
+ * here and kept while the creator moves between sections; both are read again each time a
+ * synchronization brings something new, the sources also each time the creator comes back to
+ * the page (after connecting one in another tab).
  */
 function Dashboard({ session }: { session: CreatorSession }) {
   const { t, locale } = useI18n();
@@ -53,10 +53,14 @@ function Dashboard({ session }: { session: CreatorSession }) {
   const api = `/api/creator/${encodeURIComponent(companyId)}`;
   const root = `/dashboard/${encodeURIComponent(companyId)}`;
   const members = useApi<MembersPage>(`${api}/members`);
-  const sync = useSync(companyId, members.reload);
   // The language goes along: the bot answers the creator's Telegram groups in it.
   const integrations = useApi<IntegrationsStatus>(`${api}/integrations?lang=${locale}`);
   useReloadOnReturn(integrations.reload);
+  // A synchronization may bring members and Discord messages (« Sync now » reads Discord too).
+  const sync = useSync(companyId, () => {
+    members.reload();
+    integrations.reload();
+  });
   const data: CreatorData = { companyId, root, api, members, sync, integrations };
 
   return (
