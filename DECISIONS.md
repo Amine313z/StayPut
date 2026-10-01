@@ -353,6 +353,28 @@ abonnement). Chaque module s'allume quand ses secrets existent (`DISCORD_BOT_TOK
   /setprivacy → Disable) avant de l'ajouter aux groupes, sinon il ne voit que les commandes ;
   l'écran le signale.
 
+### Vérification au déploiement (même jour, pendant la mise en route avec le fondateur)
+
+Un module « allumé » prouve seulement que ses secrets existent. La dernière étape du
+déploiement (`scripts/deploy/check-bots.ts`, une fois le Worker en ligne) demande donc à
+Discord et à Telegram s'ils les **acceptent**, comme `check-whop.ts` le fait pour la clé Whop :
+
+- **Discord** : `GET /applications/@me` avec le jeton du bot (l'appel que le Worker fait en
+  premier) ; puis le « Client Secret » sur un **code inventé** : Discord vérifie le secret avant
+  le code, il répond `invalid_client` (401) à un secret faux et `invalid_grant` (400) à un bon,
+  sans qu'aucun jeton ne soit créé. Puis l'adresse de retour (`redirect_uris` de l'application,
+  à l'identique), le bot public (sinon seul son propriétaire peut l'ajouter à un serveur) et
+  l'installation sur un serveur (« Guild Install »).
+- **Telegram** : `getMe` (jeton accepté, `can_read_all_group_messages` = mode confidentialité
+  désactivé, `can_join_groups` = ajout aux groupes permis) et `getWebhookInfo` (pas encore
+  déclaré, déclaré vers StayPut avec la dernière erreur de livraison, ou vers une autre
+  adresse, dont seule l'origine est affichée).
+
+Chaque problème est un **avertissement** avec la correction exacte (le menu à ouvrir), jamais
+un échec : les modules sont optionnels et un déploiement qui corrige autre chose ne doit pas
+attendre Discord ou Telegram. Le résultat s'affiche dans le résumé de l'exécution. Aucun
+secret n'est affiché : les adresses de Telegram contiennent le jeton, aucune n'est répétée.
+
 ### Interface : un vrai tableau de bord
 
 - Trois sections à onglets dans la vue créateur : vue d'ensemble (chiffres, « À surveiller »,

@@ -85,6 +85,7 @@ jobs:
             exit 1
           fi
           echo "StayPut: $url"
+          echo "WORKER_URL=$url" >> "$GITHUB_ENV"
           body_file="$RUNNER_TEMP/health.json"
           for attempt in $(seq 1 18); do
             rm -f "$body_file"
@@ -105,3 +106,13 @@ jobs:
             echo "- /health: HTTP $code \`$body\`"
           } >> "$GITHUB_STEP_SUMMARY"
           grep -q '"status":"ok"' "$body_file"
+
+      # The optional modules: Discord and Telegram say whether they accept the bots' secrets, and
+      # what a creator still relies on (the redirect, privacy mode, the webhook). Warnings only: a
+      # module never holds a deployment back.
+      - name: Ask Discord and Telegram whether they accept the bots
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: npx tsx scripts/deploy/check-bots.ts "$WORKER_URL"

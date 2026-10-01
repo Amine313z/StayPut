@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { checkDiscord, checkTelegram, type Finding } from '../../../scripts/deploy/check-bots';
 import { checkWhopKey, deployedVar } from '../../../scripts/deploy/check-whop';
 import {
   hyperdriveOrigin,
@@ -298,5 +299,269 @@ describe('checkWhopKey', () => {
     expect(
       (await checkWhopKey('apik_x', 'sandbox', { fetch: offline, sleep: noSleep })).check,
     ).toBe('unreachable');
+  });
+});
+
+describe('checkDiscord', () => {
+  const ORIGIN = 'https://stayput.example.workers.dev';
+  const BOT = 'MTIzNDU2Nzg5MDEyMzQ1Njc4.GabcDe.secret-part-of-the-bot-token';
+  const SECRET = 'client-secret-0123456789abcdefgh';
+  const APP = {
+    id: '123456789012345678',
+    name: 'StayPut',
+    bot_public: true,
+    redirect_uris: [`${ORIGIN}/auth/discord/callback`],
+    integration_types_config: { '0': {}, '1': {} },
+  };
+  const json = (status: number, body: unknown) =>
+    Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+  const discord = (
+    app: { status: number; body: unknown },
+    token: { status: number; body: unknown },
+  ) => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const fetch = (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return url.endsWith('/applications/@me')
+        ? json(app.status, app.body)
+        : json(token.status, token.body);
+    };
+    return { calls, fetch };
+  };
+  const levels = (findings: Finding[]) => findings.map((f) => f.level);
+  const never = (findings: Finding[]) => {
+    for (const { text } of findings) {
+      expect(text).not.toContain(BOT);
+      expect(text).not.toContain(SECRET);
+    }
+  };
+
+  it('asks for the application with the bot token, then tries the secret on a made-up code', async () => {
+    const { calls, fetch } = discord(
+      { status: 200, body: APP },
+      { status: 400, body: { error: 'invalid_grant' } },
+    );
+    const findings = await checkDiscord(
+      { botToken: BOT, clientSecret: SECRET, origin: ORIGIN },
+      { fetch },
+    );
+    expect(levels(findings)).toEqual(['ok', 'ok', 'ok']);
+    expect(findings[0]?.text).toContain('« StayPut » (123456789012345678)');
+    expect(findings[2]?.text).toContain(`${ORIGIN}/auth/discord/callback`);
+    never(findings);
+    expect(calls.map((c) => [c.init.method, c.url])).toEqual([
+      ['GET', 'https://discord.com/api/v10/applications/@me'],
+      ['POST', 'https://discord.com/api/v10/oauth2/token'],
+    ]);
+    const headers = (i: number) => calls[i]?.init.headers as Record<string, string>;
+    expect(headers(0).Authorization).toBe(`Bot ${BOT}`);
+    expect(headers(1).Authorization).toBe(
+      `Basic ${Buffer.from(`${APP.id}:${SECRET}`).toString('base64')}`,
+    );
+    const form = new URLSearchParams(calls[1]?.init.body as string);
+    expect(form.get('grant_type')).toBe('authorization_code');
+    expect(form.get('code')).toBe('stayput-deploy-check');
+    expect(form.get('redirect_uri')).toBe(`${ORIGIN}/auth/discord/callback`);
+  });
+
+  it('stops at a refused bot token, and says when it is not a bot token at all', async () => {
+    const { calls, fetch } = discord(
+      { status: 401, body: { message: '401: Unauthorized' } },
+      {
+        status: 500,
+        body: null,
+      },
+    );
+    const refused = await checkDiscord(
+      { botToken: BOT, clientSecret: SECRET, origin: ORIGIN },
+      { fetch },
+    );
+    expect(levels(refused)).toEqual(['warning']);
+    expect(refused[0]?.text).toContain('Discord refuses DISCORD_BOT_TOKEN (HTTP 401). Developer');
+    expect(refused[0]?.text).toContain('Reset Token');
+    expect(calls).toHaveLength(1);
+    const pasted = await checkDiscord(
+      { botToken: 'a'.repeat(64), clientSecret: SECRET, origin: ORIGIN },
+      { fetch },
+    );
+    expect(pasted[0]?.text).toContain('the Client Secret or the Public Key');
+    never([...refused, ...pasted]);
+  });
+
+  it('names each thing to fix: the secret, the redirect, a private bot, no server install', async () => {
+    const { fetch } = discord(
+      {
+        status: 200,
+        body: {
+          ...APP,
+          bot_public: false,
+          redirect_uris: [`${ORIGIN}/auth/discord/callback/`],
+          integration_types_config: { '1': {} },
+        },
+      },
+      { status: 401, body: { error: 'invalid_client' } },
+    );
+    const findings = await checkDiscord(
+      { botToken: BOT, clientSecret: SECRET, origin: ORIGIN },
+      { fetch },
+    );
+    expect(levels(findings)).toEqual(['ok', 'warning', 'warning', 'warning', 'warning']);
+    expect(findings[1]?.text).toContain('DISCORD_CLIENT_SECRET (HTTP 401 invalid_client)');
+    expect(findings[2]?.text).toContain(
+      `declared: ${ORIGIN}/auth/discord/callback/). Developer Portal → OAuth2 → Redirects`,
+    );
+    expect(findings[3]?.text).toContain('Public Bot: on');
+    expect(findings[4]?.text).toContain('Guild Install');
+    never(findings);
+  });
+
+  it('only warns when Discord cannot be asked or says nothing it can be sure of', async () => {
+    const offline = () => Promise.reject(new TypeError('fetch failed'));
+    expect(
+      await checkDiscord(
+        { botToken: BOT, clientSecret: SECRET, origin: ORIGIN },
+        { fetch: offline },
+      ),
+    ).toEqual([{ level: 'warning', text: 'Could not ask Discord (unreachable).' }]);
+    const { fetch } = discord(
+      { status: 200, body: { id: APP.id, name: 'StayPut' } },
+      { status: 429, body: { message: 'rate limited' } },
+    );
+    const findings = await checkDiscord(
+      { botToken: BOT, clientSecret: SECRET, origin: ORIGIN },
+      { fetch },
+    );
+    expect(levels(findings)).toEqual(['ok', 'warning', 'note']);
+    expect(findings[1]?.text).toBe(
+      'Could not tell whether Discord accepts DISCORD_CLIENT_SECRET (HTTP 429).',
+    );
+  });
+});
+
+describe('checkTelegram', () => {
+  const ORIGIN = 'https://stayput.example.workers.dev';
+  const TOKEN = '123456789:AAHsecret-part-of-the-telegram-token';
+  const telegram = (me: { status: number; body: unknown }, hook: unknown) => {
+    const methods: string[] = [];
+    const fetch = (url: string, init: RequestInit) => {
+      const method = url.split('/').pop() ?? '';
+      methods.push(`${init.method} ${url.replace(TOKEN, '<token>')}`);
+      const answer = method === 'getMe' ? me : { status: 200, body: { ok: true, result: hook } };
+      return Promise.resolve(
+        new Response(JSON.stringify(answer.body), {
+          status: answer.status,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    };
+    return { methods, fetch };
+  };
+  const BOT = {
+    id: 1,
+    is_bot: true,
+    username: 'StayPutBot',
+    can_join_groups: true,
+    can_read_all_group_messages: true,
+  };
+  const never = (findings: Finding[]) => {
+    for (const { text } of findings) expect(text).not.toContain(TOKEN.split(':')[1]);
+  };
+
+  it('reads the bot (getMe) and where its updates go, as the Worker calls Telegram', async () => {
+    const { methods, fetch } = telegram(
+      { status: 200, body: { ok: true, result: BOT } },
+      { url: '' },
+    );
+    const findings = await checkTelegram({ botToken: TOKEN, origin: ORIGIN }, { fetch });
+    expect(findings).toEqual([
+      { level: 'ok', text: 'Telegram accepts TELEGRAM_BOT_TOKEN: @StayPutBot.' },
+      {
+        level: 'ok',
+        text: 'Privacy mode is off: the bot sees every message of its groups (StayPut keeps only who and when).',
+      },
+      {
+        level: 'note',
+        text: 'No webhook yet: StayPut sets it the first time « Activity sources » is opened.',
+      },
+    ]);
+    expect(methods).toEqual([
+      'POST https://api.telegram.org/bot<token>/getMe',
+      'POST https://api.telegram.org/bot<token>/getWebhookInfo',
+    ]);
+  });
+
+  it('names what to change in BotFather: privacy mode, groups, and the webhook state', async () => {
+    const quiet = { ...BOT, can_join_groups: false, can_read_all_group_messages: false };
+    const own = await checkTelegram(
+      { botToken: TOKEN, origin: ORIGIN },
+      {
+        fetch: telegram(
+          { status: 200, body: { ok: true, result: quiet } },
+          {
+            url: `${ORIGIN}/webhooks/telegram`,
+            pending_update_count: 2,
+            last_error_date: 1_790_000_000,
+            last_error_message: 'Wrong response from the webhook: 401 Unauthorized',
+          },
+        ).fetch,
+      },
+    );
+    expect(own.map((f) => f.level)).toEqual(['ok', 'warning', 'warning', 'ok', 'warning']);
+    expect(own[1]?.text).toContain('/setjoingroups → @StayPutBot → Enable');
+    expect(own[2]?.text).toContain('/setprivacy → @StayPutBot → Disable');
+    expect(own[3]?.text).toBe(
+      `Telegram sends the updates to ${ORIGIN}/webhooks/telegram (2 waiting).`,
+    );
+    expect(own[4]?.text).toContain('401 Unauthorized');
+    const elsewhere = await checkTelegram(
+      { botToken: TOKEN, origin: ORIGIN },
+      {
+        fetch: telegram(
+          { status: 200, body: { ok: true, result: BOT } },
+          { url: 'https://other.example/hook?key=abc' },
+        ).fetch,
+      },
+    );
+    expect(elsewhere[2]).toEqual({
+      level: 'warning',
+      text:
+        'The updates go to https://other.example, not to StayPut: open « Activity sources »' +
+        ` once and StayPut points them back to ${ORIGIN}/webhooks/telegram.`,
+    });
+    never([...own, ...elsewhere]);
+  });
+
+  it('says a token is refused (401, or 404 when it is not even shaped like one)', async () => {
+    const refused = await checkTelegram(
+      { botToken: TOKEN, origin: ORIGIN },
+      {
+        fetch: telegram(
+          { status: 401, body: { ok: false, error_code: 401, description: 'Unauthorized' } },
+          null,
+        ).fetch,
+      },
+    );
+    expect(refused).toHaveLength(1);
+    expect(refused[0]?.text).toContain('Telegram refuses TELEGRAM_BOT_TOKEN (HTTP 401). In');
+    const shapeless = await checkTelegram(
+      { botToken: 'AAHsecret-without-the-bot-id', origin: ORIGIN },
+      {
+        fetch: telegram(
+          { status: 404, body: { ok: false, error_code: 404, description: 'Not Found' } },
+          null,
+        ).fetch,
+      },
+    );
+    expect(shapeless[0]?.text).toContain('(HTTP 404). It does not look like a bot token');
+    const offline = () => Promise.reject(new TypeError(`fetch failed: ${TOKEN}`));
+    expect(await checkTelegram({ botToken: TOKEN, origin: ORIGIN }, { fetch: offline })).toEqual([
+      { level: 'warning', text: 'Could not ask Telegram (unreachable).' },
+    ]);
+    never([...refused, ...shapeless]);
   });
 });

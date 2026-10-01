@@ -144,6 +144,11 @@ sinon. Réglages une fois pour toutes (détails et raisons : `DECISIONS.md`, 202
 Le créateur connecte ensuite son serveur ou ses groupes depuis **Sources d'activité** dans le
 tableau de bord ; chaque membre relie son Telegram depuis la vue membre.
 
+À chaque déploiement, la dernière étape demande à Discord et à Telegram s'ils **acceptent** ces
+secrets, et vérifie l'adresse de retour, le bot public, le mode confidentialité et le webhook.
+Le résultat est dans le résumé de l'exécution (« Discord and Telegram ») ; un problème y est un
+avertissement avec la correction à faire, jamais un échec du déploiement.
+
 ### Données du sandbox : synchronisation, inspection, membres fictifs
 
 - **Synchronisation** : automatique toutes les 10 minutes, et en arrière-plan à l'ouverture du
