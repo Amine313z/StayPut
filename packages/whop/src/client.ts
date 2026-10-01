@@ -62,6 +62,11 @@ export interface WhopClient {
     query?: Record<string, QueryValue>,
     cursor?: { after?: string | null; first?: number },
   ): Promise<string>;
+  /**
+   * One object as Whop sent it, unparsed (`GET /users/{id}` for the sync): Postgres reads it, as
+   * it reads the pages of listPageRaw.
+   */
+  getRaw(path: string, query?: Record<string, QueryValue>): Promise<string>;
   /** Pages one after the other, from `after`, at most `maxPages` of them. */
   paginate<T>(
     path: string,
@@ -185,6 +190,14 @@ export function createWhopClient(options: WhopClientOptions): WhopClient {
     return text;
   }
 
+  async function getRaw(path: string, query: Record<string, QueryValue> = {}): Promise<string> {
+    const text = await call('GET', path, { query });
+    if (!/^\s*\{/.test(text)) {
+      throw new WhopApiError(200, 'invalid_response', 'not an object', { method: 'GET', path });
+    }
+    return text;
+  }
+
   async function* paginate<T>(
     path: string,
     query: Record<string, QueryValue> = {},
@@ -219,7 +232,7 @@ export function createWhopClient(options: WhopClientOptions): WhopClient {
     return { hasAccess: body.has_access, accessLevel: body.access_level };
   }
 
-  return { env: options.env, request, listPage, listPageRaw, paginate, checkAccess };
+  return { env: options.env, request, listPage, listPageRaw, getRaw, paginate, checkAccess };
 }
 
 function buildUrl(baseUrl: string, path: string, query?: Record<string, QueryValue>): string {

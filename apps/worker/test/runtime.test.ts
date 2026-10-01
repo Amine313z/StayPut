@@ -20,6 +20,8 @@ describe('readConfig', () => {
       apiKey: null,
       webhookSecret: null,
       oauthLogin: false,
+      discord: null,
+      telegram: null,
       dev: null,
     });
   });
@@ -29,6 +31,18 @@ describe('readConfig', () => {
     expect(readConfig(app).oauthLogin).toBe(true);
     expect(readConfig({ ...app, WHOP_ENV: 'production' }).oauthLogin).toBe(false);
     expect(readConfig({ WHOP_APP_ID: 'app_1' }).oauthLogin).toBe(false);
+  });
+
+  it('turns the Discord and Telegram modules on with their bots', () => {
+    expect(readConfig({ DISCORD_BOT_TOKEN: 'bot' }).discord).toEqual({
+      botToken: 'bot',
+      clientSecret: null,
+    });
+    expect(
+      readConfig({ DISCORD_BOT_TOKEN: 'bot', DISCORD_CLIENT_SECRET: 'secret' }).discord,
+    ).toEqual({ botToken: 'bot', clientSecret: 'secret' });
+    expect(readConfig({ DISCORD_CLIENT_SECRET: 'secret' }).discord).toBeNull();
+    expect(readConfig({ TELEGRAM_BOT_TOKEN: '1:abc' }).telegram).toEqual({ botToken: '1:abc' });
   });
 
   it('refuses an unknown WHOP_ENV', () => {

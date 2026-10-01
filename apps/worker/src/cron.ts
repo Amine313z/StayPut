@@ -1,5 +1,6 @@
 import type { WhopClient } from '@stayput/whop';
 import type { ClosableDb } from './db';
+import type { DiscordClient } from './discord';
 import type { Config } from './env';
 import { refreshStats, replayWebhooks, syncWithWhop } from './jobs';
 
@@ -14,6 +15,8 @@ export interface JobContext {
   whop: WhopClient | null;
   /** The same API without retries, for the sync: one call is one subrequest of its budget. */
   syncWhop: WhopClient | null;
+  /** Discord's API with StayPut's bot, when the Discord module is set up. */
+  discord?: DiscordClient | null;
   /** The time the run was scheduled for: jobs never read the clock themselves. */
   now: Date;
 }

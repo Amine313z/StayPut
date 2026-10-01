@@ -6,6 +6,7 @@ import {
   isExperienceId,
   type AccessLevel,
   type CreatorSession,
+  type DiscordChannelsUpdate,
   type HealthReport,
   type MemberSession,
   type SignInMethod,
@@ -29,8 +30,24 @@ import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
 import { createPostgresDb, type ClosableDb, type Db } from './db';
+import { createDiscordClient, type DiscordClient } from './discord';
 import { readConfig, type Config, type Env } from './env';
 import { API_HEADERS, apiError } from './http';
+import {
+  DISCORD_CALLBACK_PATH,
+  TELEGRAM_WEBHOOK_PATH,
+  chooseDiscordChannels,
+  companyOfExperience,
+  connectDiscordServer,
+  disconnectDiscordServer,
+  disconnectTelegramGroup,
+  discordAvailable,
+  fileTelegramUpdate,
+  readDiscordChannels,
+  readIntegrations,
+  readMemberTelegram,
+  type LinkContext,
+} from './integrations';
 import { readMembers, readSyncStatus } from './members';
 import { LATEST_MIGRATION } from './schema-version';
 import {
@@ -46,6 +63,12 @@ import {
   verify,
 } from './session';
 import { SYNC_REQUEST_BUDGET, summarize, syncIfFree } from './sync';
+import {
+  createTelegramClient,
+  telegramWebhookSecret,
+  timingSafeEqual,
+  type TelegramClient,
+} from './telegram';
 
 /** What the routes depend on, injected so that tests run them against fakes. */
 export interface AppDeps {
@@ -61,10 +84,17 @@ export interface AppDeps {
   userTokenKeys(config: Config): JWTVerifyGetKey | CryptoKey;
   /** "Sign in with Whop" outside the iframe (sandbox), or null without an app id. */
   oauth(config: Config): WhopOAuth | null;
+  /** Discord's API with StayPut's bot, or null when the Discord module is not set up. */
+  discord(config: Config): DiscordClient | null;
+  /** Telegram's Bot API with StayPut's bot, or null when the Telegram module is not set up. */
+  telegram(config: Config): TelegramClient | null;
   accessCache: AccessCache;
 }
 
 export function productionDeps(): AppDeps {
+  // One client per token and isolate: they remember the application and the bot they read.
+  let discord: { key: string; client: DiscordClient } | null = null;
+  let telegram: { key: string; client: TelegramClient } | null = null;
   return {
     now: () => new Date(),
     openDb: (env) => (env.HYPERDRIVE ? createPostgresDb(env.HYPERDRIVE.connectionString) : null),
@@ -81,6 +111,28 @@ export function productionDeps(): AppDeps {
     userTokenKeys: (config) => whopUserTokenKeys(config.whopEnv),
     oauth: (config) =>
       config.appId ? createWhopOAuth({ env: config.whopEnv, clientId: config.appId }) : null,
+    discord: (config) => {
+      if (!config.discord) return null;
+      const key = `${config.discord.botToken}:${config.discord.clientSecret ?? ''}`;
+      if (discord?.key !== key) {
+        discord = {
+          key,
+          client: createDiscordClient({
+            botToken: config.discord.botToken,
+            clientSecret: config.discord.clientSecret,
+          }),
+        };
+      }
+      return discord.client;
+    },
+    telegram: (config) => {
+      if (!config.telegram) return null;
+      const key = config.telegram.botToken;
+      if (telegram?.key !== key) {
+        telegram = { key, client: createTelegramClient({ botToken: key }) };
+      }
+      return telegram.client;
+    },
     accessCache: new AccessCache(),
   };
 }
@@ -95,8 +147,13 @@ type AppEnv = {
     /** Set by requireCreator: the company of the route, checked with Whop. */
     companyId: string;
     accessLevel: AccessLevel;
+    /** Set by requireMember: the experience of the route, checked with Whop. */
+    experienceId: string;
   };
 };
+
+/** Telegram's updates are small JSON documents; anything bigger is refused unread. */
+export const MAX_TELEGRAM_UPDATE_BYTES = 64 * 1024;
 
 /** Whop's deliveries are small JSON documents; anything bigger is refused unread. */
 export const MAX_WEBHOOK_BYTES = 256 * 1024;
@@ -248,17 +305,25 @@ export function createApp(deps: AppDeps) {
     );
   }
 
-  /** Brings the company's data up to date after the response, unless it was done recently. */
-  function syncInBackground(c: Context<AppEnv>, companyId: string): void {
-    const whop = deps.whopClient(c.get('config'), { maxRetries: 0 });
+  /**
+   * Brings the company's data up to date after the response, unless it was done less than
+   * `minIntervalSeconds` ago.
+   */
+  function syncInBackground(
+    c: Context<AppEnv>,
+    companyId: string,
+    minIntervalSeconds = OPEN_SYNC_INTERVAL_SECONDS,
+  ): void {
+    const config = c.get('config');
+    const whop = deps.whopClient(config, { maxRetries: 0 });
     if (!whop) return;
     inBackground(c, 'Background sync', async (db) => {
       const now = deps.now();
       // The creator may have just granted a permission: what Whop refused is tried again.
       const result = await syncIfFree(
-        { db, whop, now, budget: { left: REQUEST_SYNC_BUDGET } },
+        { db, whop, discord: deps.discord(config), now, budget: { left: REQUEST_SYNC_BUDGET } },
         companyId,
-        OPEN_SYNC_INTERVAL_SECONDS,
+        minIntervalSeconds,
         { retryFailed: true },
       );
       if (!result) return;
@@ -470,12 +535,13 @@ export function createApp(deps: AppDeps) {
   /** "Sync now": reads what is due from Whop during the request, then the status. */
   app.post('/api/creator/:companyId/sync', authenticate, withDb, requireCreator, async (c) => {
     const db = c.get('db');
-    const whop = deps.whopClient(c.get('config'), { maxRetries: 0 });
+    const config = c.get('config');
+    const whop = deps.whopClient(config, { maxRetries: 0 });
     if (!db || !whop) return apiError('not_configured', 'the database or the Whop key is missing');
     const companyId = c.get('companyId');
     const now = deps.now();
     const result = await syncIfFree(
-      { db, whop, now, budget: { left: REQUEST_SYNC_BUDGET } },
+      { db, whop, discord: deps.discord(config), now, budget: { left: REQUEST_SYNC_BUDGET } },
       companyId,
       MANUAL_SYNC_INTERVAL_SECONDS,
       { retryFailed: true },
@@ -502,7 +568,230 @@ export function createApp(deps: AppDeps) {
     return c.json(await readMembers(db, c.get('userId'), c.get('companyId'), deps.now()));
   });
 
-  app.get('/api/member/:experienceId/session', authenticate, async (c) => {
+  /** What links to connect Discord and Telegram need to know of this request. */
+  async function linkContext(c: Context<AppEnv>): Promise<LinkContext> {
+    const config = c.get('config');
+    return {
+      config,
+      origin: new URL(c.req.url).origin,
+      now: deps.now(),
+      discord: deps.discord(config),
+      telegram: deps.telegram(config),
+      signingKey: config.apiKey ? await signingKey(config.apiKey) : null,
+    };
+  }
+
+  /** Discord and Telegram: what is connected, and the links to connect more. */
+  app.get(
+    '/api/creator/:companyId/integrations',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      return c.json(
+        await readIntegrations(db, c.get('userId'), c.get('companyId'), await linkContext(c)),
+      );
+    },
+  );
+
+  /** The text channels of a connected server: which the bot can read, which are followed. */
+  app.get(
+    '/api/creator/:companyId/discord/:guildId/channels',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      const discord = deps.discord(c.get('config'));
+      if (!db || !discord) return apiError('not_configured', 'Discord is not set up here');
+      try {
+        const channels = await readDiscordChannels(
+          db,
+          c.get('userId'),
+          c.get('companyId'),
+          c.req.param('guildId'),
+          discord,
+        );
+        return channels ? c.json(channels) : apiError('not_found', 'no such server here');
+      } catch (error) {
+        console.error('Discord channels unavailable:', describe(error));
+        return apiError('whop_unavailable', 'Discord did not answer');
+      }
+    },
+  );
+
+  /** The channels the company follows on its server: a stream each, read from the next run. */
+  app.put(
+    '/api/creator/:companyId/discord/:guildId/channels',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      const discord = deps.discord(c.get('config'));
+      if (!db || !discord) return apiError('not_configured', 'Discord is not set up here');
+      const body = await c.req.json<Partial<DiscordChannelsUpdate>>().catch(() => null);
+      const ids = body?.channelIds;
+      if (!Array.isArray(ids) || ids.length > 500 || !ids.every((id) => typeof id === 'string')) {
+        return apiError('invalid_request', 'expected { channelIds: string[] }');
+      }
+      let channels;
+      try {
+        channels = await chooseDiscordChannels(
+          db,
+          c.get('userId'),
+          c.get('companyId'),
+          c.req.param('guildId'),
+          ids,
+          discord,
+        );
+      } catch (error) {
+        console.error('Discord channels not saved:', describe(error));
+        return apiError('whop_unavailable', 'Discord did not answer');
+      }
+      if (!channels) return apiError('not_found', 'no such server here');
+      // The new channels start reading now rather than at the next run.
+      syncInBackground(c, c.get('companyId'), 0);
+      return c.json(channels);
+    },
+  );
+
+  /** The company stops reading a server, and the bot leaves it. */
+  app.delete(
+    '/api/creator/:companyId/discord/:guildId',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const removed = await disconnectDiscordServer(
+        db,
+        deps.discord(c.get('config')),
+        c.get('companyId'),
+        c.req.param('guildId'),
+      );
+      return removed ? c.json({ removed }) : apiError('not_found', 'no such server here');
+    },
+  );
+
+  /** The company stops counting a Telegram group, and the bot leaves it. */
+  app.delete(
+    '/api/creator/:companyId/telegram/:chatId',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const removed = await disconnectTelegramGroup(
+        db,
+        deps.telegram(c.get('config')),
+        c.get('companyId'),
+        c.req.param('chatId'),
+      );
+      return removed ? c.json({ removed }) : apiError('not_found', 'no such group here');
+    },
+  );
+
+  /**
+   * Back from Discord's page with the bot added: the server joins the company the signed `state`
+   * names, then the browser goes to /connected, which says how it went.
+   */
+  app.get(DISCORD_CALLBACK_PATH, async (c) => {
+    const config = c.get('config');
+    const discord = deps.discord(config);
+    const done = (query: Record<string, string>) =>
+      c.redirect(
+        `/connected?${new URLSearchParams({ source: 'discord', ...query }).toString()}`,
+        302,
+      );
+    if (!discordAvailable(config) || !discord || !config.apiKey) {
+      return done({ status: 'failed', reason: 'unavailable' });
+    }
+    const install = await verify(c.req.query('state'), await signingKey(config.apiKey), {
+      purpose: 'discord-install',
+      env: config.whopEnv,
+      nowSeconds: nowSeconds(),
+    });
+    if (!install) return done({ status: 'failed', reason: 'expired' });
+    if (c.req.query('error')) return done({ status: 'failed', reason: 'denied' });
+    const code = c.req.query('code');
+    const db = deps.openDb(c.env);
+    if (!code || !db) return done({ status: 'failed', reason: 'error' });
+    try {
+      const server = await connectDiscordServer(db, discord, {
+        companyId: install.companyId,
+        userId: install.userId,
+        code,
+        redirectUri: `${new URL(c.req.url).origin}${DISCORD_CALLBACK_PATH}`,
+        now: deps.now(),
+      });
+      syncInBackground(c, install.companyId, 0);
+      return done({
+        status: 'ok',
+        name: server.name ?? '',
+        channels: String(server.followed),
+      });
+    } catch (error) {
+      console.error('Discord server not connected:', describe(error));
+      return done({ status: 'failed', reason: 'error' });
+    } finally {
+      defer(c, db.close());
+    }
+  });
+
+  /**
+   * Telegram's updates for StayPut's bot (a group linked, a message, the bot added or removed,
+   * a member linking their account). Telegram repeats the secret StayPut gave it (setWebhook)
+   * and retries what is not answered 2xx.
+   */
+  app.post(TELEGRAM_WEBHOOK_PATH, async (c) => {
+    const config = c.get('config');
+    const telegram = deps.telegram(config);
+    if (!config.telegram || !telegram) return apiError('not_found', 'Telegram is not set up here');
+    const secret = await telegramWebhookSecret(config.telegram.botToken);
+    if (!timingSafeEqual(c.req.header('x-telegram-bot-api-secret-token') ?? '', secret)) {
+      return apiError('unauthenticated', 'invalid Telegram secret');
+    }
+    if (Number(c.req.header('content-length') ?? 0) > MAX_TELEGRAM_UPDATE_BYTES) {
+      return c.json({ ok: true, ignored: 'too large' });
+    }
+    const raw = await c.req.text();
+    let update: unknown;
+    try {
+      update = raw.length > MAX_TELEGRAM_UPDATE_BYTES ? null : JSON.parse(raw);
+    } catch {
+      update = null;
+    }
+    // An update StayPut cannot read never becomes readable: answered, so Telegram moves on.
+    if (update === null) return c.json({ ok: true, ignored: 'unreadable' });
+    const db = deps.openDb(c.env);
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    try {
+      const next = await fileTelegramUpdate(db, config.telegram.botToken, update, deps.now());
+      const { reply, leave } = next;
+      if (reply || leave) {
+        defer(
+          c,
+          (async () => {
+            if (reply) await telegram.sendMessage(reply.chatId, reply.text);
+            if (leave) await telegram.leaveChat(leave);
+          })().catch((error: unknown) => {
+            console.warn('Telegram reply failed:', describe(error));
+          }),
+        );
+      }
+      return c.json({ ok: true });
+    } finally {
+      defer(c, db.close());
+    }
+  });
+
+  /** The member routes: an experience id, and access to it (checked with Whop). */
+  const requireMember = createMiddleware<AppEnv>(async (c, next) => {
     const experienceId = c.req.param('experienceId');
     if (!isExperienceId(experienceId)) {
       return apiError('invalid_request', 'not a Whop experience id');
@@ -510,14 +799,72 @@ export function createApp(deps: AppDeps) {
     const level = await accessTo(c, experienceId);
     if (level instanceof Response) return level;
     if (!canOpenMemberView(level)) return apiError('forbidden', 'no access to this experience');
+    c.set('experienceId', experienceId);
+    c.set('accessLevel', level);
+    await next();
+    return undefined;
+  });
+
+  app.get('/api/member/:experienceId/session', authenticate, requireMember, (c) => {
     const session: MemberSession = {
-      experienceId,
+      experienceId: c.get('experienceId'),
       userId: c.get('userId'),
-      accessLevel: level,
+      accessLevel: c.get('accessLevel'),
       via: c.get('via'),
     };
     return c.json(session);
   });
+
+  /** The company of the route's experience, or the error response to send. */
+  async function memberCompany(c: Context<AppEnv>): Promise<string | Response> {
+    const whop = deps.whopClient(c.get('config'));
+    if (!whop) return apiError('not_configured', 'WHOP_API_KEY is not set');
+    try {
+      const companyId = await companyOfExperience(whop, c.get('experienceId'));
+      return companyId ?? apiError('not_found', 'no community for this experience');
+    } catch (error) {
+      console.error('Experience not read:', describe(error));
+      return apiError('whop_unavailable', 'could not read the experience with Whop');
+    }
+  }
+
+  /** Linking one's Telegram account, so that one's messages in the community's groups count. */
+  app.get('/api/member/:experienceId/telegram', authenticate, withDb, requireMember, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const companyId = await memberCompany(c);
+    if (companyId instanceof Response) return companyId;
+    const config = c.get('config');
+    return c.json(
+      await readMemberTelegram(db, {
+        companyId,
+        userId: c.get('userId'),
+        now: deps.now(),
+        config,
+        telegram: deps.telegram(config),
+        origin: new URL(c.req.url).origin,
+      }),
+    );
+  });
+
+  /** The member unlinks their Telegram account. */
+  app.delete(
+    '/api/member/:experienceId/telegram',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const [row] = await db.query<{ removed: boolean }>(
+        'select stayput.unlink_telegram_member($1, $2) as removed',
+        [companyId, c.get('userId')],
+      );
+      return c.json({ removed: row?.removed ?? false });
+    },
+  );
 
   // The public "Verified retention" badge (SPEC Phase 6): route reserved, answered once a
   // creator can turn the badge on.

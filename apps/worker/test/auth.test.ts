@@ -58,6 +58,8 @@ function setup(access: Record<string, AccessLevel> = {}) {
     whopClient: (config) => (config.apiKey ? whop : null),
     userTokenKeys: () => publicKey,
     oauth: () => fake.oauth,
+    discord: () => null,
+    telegram: () => null,
     accessCache: new AccessCache(),
   };
   const app = createApp(deps);
@@ -177,6 +179,8 @@ describe('signing in with Whop outside the iframe (sandbox)', () => {
     ).toString('base64url');
     expect(await unauthenticated(`${forged}.${signature}`)).toBe('/auth/login');
     expect(await unauthenticated(`${payload}.${signature}x`)).toBe('/auth/login');
+    // Not even base64url: refused the same way, not an error.
+    expect(await unauthenticated(`${payload}.a`)).toBe('/auth/login');
     expect(await unauthenticated(payload)).toBe('/auth/login');
 
     const rotated = { ...SANDBOX, WHOP_API_KEY: 'apik_two' };

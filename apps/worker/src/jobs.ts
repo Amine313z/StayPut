@@ -23,11 +23,12 @@ export const replayWebhooks: CronJob = {
 /** SPEC Phase 2, 2 and 3: the companies that waited longest, within the run's Whop calls. */
 export const syncWithWhop: CronJob = {
   name: 'sync',
-  async run({ db, syncWhop, now }) {
+  async run({ db, syncWhop, discord, now }) {
     if (!db || !syncWhop) return;
     const results = await syncDueCompanies({
       db,
       whop: syncWhop,
+      discord: discord ?? null,
       now,
       budget: { left: SYNC_REQUEST_BUDGET },
     });

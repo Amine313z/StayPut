@@ -223,6 +223,17 @@ describe('pagination', () => {
     });
   });
 
+  it('hands an object over unparsed, and refuses anything else', async () => {
+    const body = '{"id":"user_1","social_accounts":[]}';
+    const whop = fakeWhop(new Response(body), new Response('[]'));
+    const client = createWhopClient(whop.options);
+    expect(await client.getRaw('/users/user_1')).toBe(body);
+    expect(whop.calls[0]!.url.pathname).toBe('/api/v1/users/user_1');
+    await expect(client.getRaw('/users/user_2')).rejects.toMatchObject({
+      type: 'invalid_response',
+    });
+  });
+
   it('retries a raw page like any GET, and reports Whop errors the same way', async () => {
     const whop = fakeWhop(
       whopError(503, 'unavailable', 'try again'),

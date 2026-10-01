@@ -32,7 +32,21 @@ export interface LoginClaims {
   exp: number;
 }
 
-type Claims = SessionClaims | LoginClaims;
+/**
+ * The `state` of Discord's page that adds the bot to a server (30 minutes): which company, and
+ * which of its team, asked for it. Discord sends it back to /auth/discord/callback.
+ */
+export interface DiscordInstallClaims {
+  purpose: 'discord-install';
+  companyId: string;
+  userId: string;
+  env: string;
+  exp: number;
+}
+
+export const DISCORD_INSTALL_TTL_SECONDS = 30 * 60;
+
+type Claims = SessionClaims | LoginClaims | DiscordInstallClaims;
 
 const encoder = new TextEncoder();
 const keys = new Map<string, Promise<CryptoKey>>();
@@ -83,9 +97,18 @@ export async function verify<P extends Claims['purpose']>(
 ): Promise<Extract<Claims, { purpose: P }> | null> {
   const [payload, signature, extra] = value?.split('.') ?? [];
   if (!payload || !signature || extra !== undefined) return null;
-  const valid = await crypto.subtle
-    .verify('HMAC', key, fromBase64Url(signature), encoder.encode(payload))
-    .catch(() => false);
+  let valid: boolean;
+  try {
+    valid = await crypto.subtle.verify(
+      'HMAC',
+      key,
+      fromBase64Url(signature),
+      encoder.encode(payload),
+    );
+  } catch {
+    // Not base64url: nothing this Worker signed.
+    return null;
+  }
   if (!valid) return null;
   let claims: unknown;
   try {

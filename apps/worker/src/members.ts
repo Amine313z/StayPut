@@ -35,9 +35,12 @@ export async function readSyncStatus(
       last_run_at: Date | string | null;
       last_error: string | null;
     }>(
+      // Discord's channels have their own status (the integrations); this one is Whop's.
       `select stream, backfill_done, cursor is not null as in_progress, last_pass_at,
               last_run_at, last_error
-         from stayput.sync_state where company_id = $1 order by stream`,
+         from stayput.sync_state
+        where company_id = $1 and stream not like 'discord_messages:%'
+        order by stream`,
       [companyId],
     ),
   );
@@ -65,7 +68,7 @@ export function backfillDone(streams: readonly SyncStreamStatus[]): boolean {
   const byName = new Map(streams.map((s) => [s.stream, s]));
   const settled = (s: SyncStreamStatus) => s.backfillDone || /^(403|404)\b/.test(s.error ?? '');
   return (
-    STREAMS.filter((s) => !s.scoped).every((s) => {
+    STREAMS.filter((s) => !s.scoped && !s.source).every((s) => {
       const state = byName.get(s.name);
       return state !== undefined && settled(state);
     }) && streams.every(settled)

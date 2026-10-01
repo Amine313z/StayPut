@@ -21,6 +21,12 @@ export interface Env {
   /** Local development without a Whop API key: the access level that user has. */
   DEV_ACCESS_LEVEL?: string;
   HYPERDRIVE?: { connectionString: string };
+  /** Secret, optional: the token of StayPut's Discord bot (Discord module). */
+  DISCORD_BOT_TOKEN?: string;
+  /** Secret, optional: the client secret of StayPut's Discord application (adding the bot). */
+  DISCORD_CLIENT_SECRET?: string;
+  /** Secret, optional: the token of StayPut's Telegram bot (Telegram module). */
+  TELEGRAM_BOT_TOKEN?: string;
 }
 
 export interface Config {
@@ -34,6 +40,13 @@ export interface Config {
    * session cookie).
    */
   oauthLogin: boolean;
+  /**
+   * The Discord module (SPEC Phase 2, 5): reading needs the bot's token, adding the bot to a
+   * server needs the application's client secret too.
+   */
+  discord: { botToken: string; clientSecret: string | null } | null;
+  /** The Telegram module (decision of 2026-10-01). */
+  telegram: { botToken: string } | null;
   /** Set only in development (ENVIRONMENT=development), never in a deployed Worker. */
   dev: { userId: string; accessLevel: AccessLevel | null } | null;
 }
@@ -51,6 +64,10 @@ export function readConfig(env: Env): Config {
     apiKey,
     webhookSecret: env.WHOP_WEBHOOK_SECRET || null,
     oauthLogin: whopEnv === 'sandbox' && appId !== null && apiKey !== null,
+    discord: env.DISCORD_BOT_TOKEN
+      ? { botToken: env.DISCORD_BOT_TOKEN, clientSecret: env.DISCORD_CLIENT_SECRET || null }
+      : null,
+    telegram: env.TELEGRAM_BOT_TOKEN ? { botToken: env.TELEGRAM_BOT_TOKEN } : null,
     dev: devUser ? { userId: devUser, accessLevel: devLevel } : null,
   };
 }

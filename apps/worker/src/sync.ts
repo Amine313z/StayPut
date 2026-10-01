@@ -1,5 +1,6 @@
 import { WhopApiError, type QueryValue, type WhopClient } from '@stayput/whop';
 import type { Db } from './db';
+import { DiscordApiError, type DiscordClient } from './discord';
 
 /**
  * The synchronization with Whop (SPEC Phase 2, 2 to 4): each creator's lists read into the
@@ -7,15 +8,18 @@ import type { Db } from './db';
  * pages: Postgres parses them and keeps track of where each list stands (sync_page in
  * supabase/migrations/0005_data_collection.sql), so that a run stays under the free plan's
  * 10 ms of CPU. It also stays under its 50 subrequests: at most SYNC_REQUEST_BUDGET calls to Whop
- * per run, and what does not fit goes on at the next run, from the saved cursor.
+ * (and Discord) per run, and what does not fit goes on at the next run, from the saved cursor.
+ * The channels a creator chose on their Discord server are read the same way, last.
  */
 
-/** One Whop list, read in passes from its top. */
+/** One Whop list (or a Discord channel), read in passes from its top. */
 export interface Stream {
   /** `sync_state.stream`; a scoped stream is `<name>:<channel, forum or course id>`. */
   name: string;
   /** What ingest_page stores. */
   kind: string;
+  /** Where the pages come from: Whop, unless it says Discord. */
+  source?: 'discord';
   path: string;
   query(companyId: string, scope: string | null): Record<string, QueryValue>;
   /**
@@ -137,6 +141,20 @@ export const STREAMS: readonly Stream[] = [
     everyHours: 24,
     scoped: true,
   },
+  {
+    // The channels a creator follows on their Discord server (set_discord_channels creates one
+    // stream each): the newest messages first, 100 a page, the next page before the last one.
+    // Every 3 hours: a server has many channels, and a day's activity is what scores read.
+    name: 'discord_messages',
+    kind: 'discord_messages',
+    source: 'discord',
+    path: '/channels/{id}/messages',
+    query: () => ({}),
+    stop: 'oldest',
+    everyHours: 3,
+    backfillDays: 90,
+    scoped: true,
+  },
 ];
 
 /** Listings whose items open scoped streams. */
@@ -150,6 +168,11 @@ export const SYNC_LEASE_SECONDS = 5 * 60;
 export const SYNC_INTERVAL_SECONDS = 50 * 60;
 /** A pass due within this margin runs now rather than at the next run, 10 minutes later. */
 const DUE_MARGIN_MS = 5 * 60_000;
+/**
+ * Whop profiles read per company and run at most, for the Discord account members linked on
+ * Whop (link_member_discord): a large community is linked over a few runs.
+ */
+export const PROFILES_PER_RUN = 10;
 
 export interface StreamState {
   stream: string;
@@ -216,8 +239,15 @@ export interface SyncContext {
   db: Db;
   /** A client that never retries: each call is one subrequest, counted in `budget`. */
   whop: WhopClient;
+  /** Discord's API with the bot's token, when the Discord module is configured. */
+  discord?: DiscordClient | null;
   now: Date;
   budget: { left: number };
+  /**
+   * Set when Discord refused the bot's token (401) or asked to slow down (429): its channels
+   * wait for the next run, Whop's lists go on.
+   */
+  discordPaused?: string | null;
 }
 
 export type StreamOutcome = 'caught_up' | 'more' | 'failed';
@@ -226,6 +256,8 @@ export interface CompanySync {
   companyId: string;
   calls: number;
   streams: Record<string, StreamOutcome>;
+  /** Whop profiles read for the Discord account members linked. */
+  profiles: number;
   /** Why the run stopped here: Whop refuses the key (401) or asks to slow down (429). */
   stopped: string | null;
 }
@@ -236,10 +268,11 @@ export async function syncCompany(
   companyId: string,
   options: PassOptions = {},
 ): Promise<CompanySync> {
-  const result: CompanySync = { companyId, calls: 0, streams: {}, stopped: null };
+  const result: CompanySync = { companyId, calls: 0, streams: {}, profiles: 0, stopped: null };
   let states = await loadStates(ctx.db, companyId);
   let listed = false;
   for (const stream of STREAMS) {
+    if (stream.source === 'discord' && (!ctx.discord || ctx.discordPaused)) continue;
     if (stream.scoped && listed) {
       // Channels, forums or courses were just listed: their streams exist now.
       states = await loadStates(ctx.db, companyId);
@@ -256,6 +289,10 @@ export async function syncCompany(
       if (!read) continue;
       result.streams[name] = read.outcome;
       result.calls += read.calls;
+      if (read.stop && stream.source === 'discord') {
+        ctx.discordPaused = read.stop;
+        break;
+      }
       if (read.stop) {
         result.stopped = read.stop;
         return result;
@@ -263,7 +300,71 @@ export async function syncCompany(
       if (LISTINGS.has(stream.kind) && read.calls > 0) listed = true;
     }
   }
+  if (ctx.discord) {
+    const linking = await linkDiscordAccounts(ctx, companyId);
+    result.calls += linking.calls;
+    result.profiles = linking.calls;
+    if (linking.stop) result.stopped = linking.stop;
+  }
   return result;
+}
+
+/**
+ * The Discord account each member linked on Whop (their primary Discord, public to the apps of
+ * their communities), for a company that connected a Discord server: never read members first,
+ * then every week (members_to_link). A Whop user that does not exist is marked read.
+ */
+async function linkDiscordAccounts(
+  ctx: SyncContext,
+  companyId: string,
+): Promise<{ calls: number; stop?: string }> {
+  let calls = 0;
+  const limit = Math.min(PROFILES_PER_RUN, ctx.budget.left);
+  if (limit <= 0) return { calls };
+  const now = ctx.now.toISOString();
+  const users = await ctx.db.query<{ user_id: string }>(
+    'select stayput.members_to_link($1, $2::timestamptz, $3) as user_id',
+    [companyId, now, limit],
+  );
+  for (const { user_id: userId } of users) {
+    if (ctx.budget.left <= 0) break;
+    ctx.budget.left -= 1;
+    calls += 1;
+    let profile: string;
+    try {
+      profile = await ctx.whop.getRaw(`/users/${encodeURIComponent(userId)}`);
+    } catch (error) {
+      const status = error instanceof WhopApiError ? error.status : 0;
+      if (status === 401) return { calls, stop: 'Whop refuses the key (401)' };
+      if (status === 429) return { calls, stop: 'Whop asks to slow down (429)' };
+      if (status === 400 || status === 404 || status === 422) {
+        await ctx.db.query('select stayput.mark_discord_checked($1, $2, $3::timestamptz)', [
+          companyId,
+          userId,
+          now,
+        ]);
+        continue;
+      }
+      // Whop is unavailable: the next run tries again.
+      console.warn(`Whop profile ${userId} not read: ${describe(error)}`);
+      break;
+    }
+    try {
+      await ctx.db.query(
+        'select stayput.link_member_discord($1, $2::text::jsonb, $3::timestamptz)',
+        [companyId, profile, now],
+      );
+    } catch (error) {
+      // A profile Postgres cannot read: skipped until next week rather than read every run.
+      console.warn(`Whop profile ${userId} not stored: ${describe(error)}`);
+      await ctx.db.query('select stayput.mark_discord_checked($1, $2, $3::timestamptz)', [
+        companyId,
+        userId,
+        now,
+      ]);
+    }
+  }
+  return { calls };
 }
 
 async function readStream(
@@ -285,15 +386,22 @@ async function readStream(
     calls += 1;
     let page: string;
     try {
-      page = await ctx.whop.listPageRaw(stream.path, stream.query(companyId, scope), {
-        after: cursor,
-      });
+      page =
+        stream.source === 'discord' && ctx.discord
+          ? await ctx.discord.messagesRaw(scope ?? '', cursor)
+          : await ctx.whop.listPageRaw(stream.path, stream.query(companyId, scope), {
+              after: cursor,
+            });
     } catch (error) {
-      const status = error instanceof WhopApiError ? error.status : 0;
+      const status =
+        error instanceof WhopApiError || error instanceof DiscordApiError ? error.status : 0;
       await recordError(ctx, companyId, name, status, describe(error));
-      // These concern every company: the run stops.
-      if (status === 401) return { outcome: 'failed', calls, stop: 'Whop refuses the key (401)' };
-      if (status === 429) return { outcome: 'failed', calls, stop: 'Whop asks to slow down (429)' };
+      // These concern every company: the run stops (Whop), or leaves Discord for the next one.
+      const who = stream.source === 'discord' ? 'Discord' : 'Whop';
+      if (status === 401) return { outcome: 'failed', calls, stop: `${who} refuses the key (401)` };
+      if (status === 429) {
+        return { outcome: 'failed', calls, stop: `${who} asks to slow down (429)` };
+      }
       return { outcome: 'failed', calls };
     }
     let next: string | null;
@@ -421,6 +529,7 @@ export function summarize(result: CompanySync): string {
   return [
     `Sync ${result.companyId}: ${result.calls} call(s)`,
     behind.length > 0 ? behind.join(', ') : 'caught up',
+    result.profiles > 0 ? `${result.profiles} profile(s) read` : '',
     result.stopped ? `stopped: ${result.stopped}` : '',
   ]
     .filter(Boolean)

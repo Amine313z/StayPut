@@ -1,4 +1,12 @@
-import type { AccessLevel, MembersPage, SyncRun, SyncStatus } from '@stayput/core';
+import type {
+  AccessLevel,
+  DiscordChannelChoice,
+  IntegrationsStatus,
+  MemberTelegramStatus,
+  MembersPage,
+  SyncRun,
+  SyncStatus,
+} from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
 import { SignJWT, generateKeyPair, type CryptoKey } from 'jose';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -11,7 +19,9 @@ import {
   type AppDeps,
 } from '../src/app';
 import { withUser, type ClosableDb, type Db } from '../src/db';
+import type { DiscordClient } from '../src/discord';
 import type { Env } from '../src/env';
+import { telegramWebhookSecret, type TelegramClient } from '../src/telegram';
 import { member, membership, message, page, payment, variant } from './fixtures/whop';
 import { createTestDb, type TestDb } from './helpers/db';
 
@@ -57,11 +67,31 @@ const EMPTY_PAGE = '{"data":[],"page_info":{"end_cursor":null,"has_next_page":fa
  * A fake Whop answering access checks from a table, and every list with an empty page (or the
  * pages given); counts the calls.
  */
-function fakeWhop(access: Record<string, AccessLevel | Error>, lists: Record<string, string> = {}) {
+function fakeWhop(
+  access: Record<string, AccessLevel | Error>,
+  lists: Record<string, string> = {},
+  experiences: Record<string, string> = {},
+) {
   const calls: string[] = [];
   const listed: string[] = [];
   const client = {
     env: 'sandbox',
+    request(method: string, path: string) {
+      calls.push(`${method} ${path}`);
+      const experience = /^\/experiences\/(exp_[A-Za-z0-9]+)$/.exec(path)?.[1];
+      const company = experience ? experiences[experience] : undefined;
+      if (!company)
+        return Promise.reject(
+          new WhopApiError(404, 'not_found', 'no such thing', { method, path }),
+        );
+      return Promise.resolve({ id: experience, company: { id: company } });
+    },
+    getRaw(path: string) {
+      calls.push(`GET ${path}`);
+      return Promise.reject(
+        new WhopApiError(404, 'not_found', 'no such user', { method: 'GET', path }),
+      );
+    },
     checkAccess(userId: string, resourceId: string) {
       calls.push(`${userId}:${resourceId}`);
       const answer = access[`${userId}:${resourceId}`] ?? 'no_access';
@@ -78,10 +108,17 @@ function fakeWhop(access: Record<string, AccessLevel | Error>, lists: Record<str
 
 function setup(
   access: Record<string, AccessLevel | Error> = {},
-  options: { db?: Db | null; lists?: Record<string, string> } = {},
+  options: {
+    db?: Db | null;
+    lists?: Record<string, string>;
+    discord?: DiscordClient;
+    telegram?: TelegramClient;
+    /** The company of each experience, as Whop answers GET /experiences/{id}. */
+    experiences?: Record<string, string>;
+  } = {},
 ) {
   const db = options.db === undefined ? t.db : options.db;
-  const whop = fakeWhop(access, options.lists);
+  const whop = fakeWhop(access, options.lists, options.experiences);
   const clock = { now: NOW };
   const deps: AppDeps = {
     now: () => clock.now,
@@ -94,6 +131,8 @@ function setup(
     whopClient: (config) => (config.apiKey ? whop.client : null),
     userTokenKeys: () => keys.publicKey,
     oauth: () => null,
+    discord: (config) => (config.discord ? (options.discord ?? null) : null),
+    telegram: (config) => (config.telegram ? (options.telegram ?? null) : null),
     accessCache: new AccessCache(),
   };
   const app = createApp(deps);
@@ -569,5 +608,361 @@ describe('GET /api/creator/:companyId/members', () => {
     });
     // Nothing personal leaves the database: no e-mail, no phone.
     expect(JSON.stringify(body)).not.toMatch(/@mail\.test|\+33/);
+  });
+});
+
+describe('Discord and Telegram', () => {
+  const MODULES: Env = {
+    ...ENV,
+    DISCORD_BOT_TOKEN: 'discord-bot-token',
+    DISCORD_CLIENT_SECRET: 'discord-secret',
+    TELEGRAM_BOT_TOKEN: '123456:telegram-token',
+  };
+  const ORIGIN = 'http://localhost';
+  const GUILD = '910000000000000001';
+  const OTHER_GUILD = '910000000000000002';
+
+  /** StayPut's Discord bot: one server with two readable channels and a hidden one. */
+  function fakeDiscord() {
+    const left: string[] = [];
+    const exchanged: { code: string; redirectUri: string }[] = [];
+    const client: DiscordClient = {
+      messagesRaw: () => Promise.resolve('[]'),
+      application: () => Promise.resolve({ id: '700000000000000001', botId: '700000000000000001' }),
+      guildChannels: (guildId) =>
+        Promise.resolve(
+          guildId === GUILD
+            ? [
+                { id: '920000000000000001', name: 'general', category: null, readable: true },
+                { id: '920000000000000002', name: 'wins', category: 'Club', readable: true },
+                { id: '920000000000000003', name: 'staff', category: 'Club', readable: false },
+              ]
+            : [{ id: '930000000000000001', name: 'elsewhere', category: null, readable: true }],
+        ),
+      leaveGuild: (guildId) => {
+        left.push(guildId);
+        return Promise.resolve();
+      },
+      exchangeCode: (code, redirectUri) => {
+        exchanged.push({ code, redirectUri });
+        return code === 'bad'
+          ? Promise.reject(new Error('invalid_grant'))
+          : Promise.resolve({ guildId: GUILD, guildName: 'Le Club' });
+      },
+    };
+    return { client, left, exchanged };
+  }
+
+  function fakeTelegram() {
+    const sent: { chatId: string; text: string }[] = [];
+    const webhooks: { url: string; secret: string }[] = [];
+    const left: string[] = [];
+    const client: TelegramClient = {
+      bot: () => Promise.resolve({ username: 'StayPutBot', readsAllMessages: true }),
+      setWebhook: (url, secret) => {
+        webhooks.push({ url, secret });
+        return Promise.resolve();
+      },
+      sendMessage: (chatId, text) => {
+        sent.push({ chatId, text });
+        return Promise.resolve();
+      },
+      leaveChat: (chatId) => {
+        left.push(chatId);
+        return Promise.resolve();
+      },
+    };
+    return { client, sent, webhooks, left };
+  }
+
+  function modules(access: Record<string, AccessLevel>, experiences: Record<string, string> = {}) {
+    const discord = fakeDiscord();
+    const telegram = fakeTelegram();
+    const app = setup(access, {
+      discord: discord.client,
+      telegram: telegram.client,
+      experiences,
+    });
+    const request = (path: string, init: RequestInit = {}) => app.request(path, init, MODULES);
+    return { ...app, request, discord, telegram };
+  }
+
+  const integrations = async (
+    request: (path: string, init?: RequestInit) => Response | Promise<Response>,
+    companyId: string,
+    init: RequestInit,
+  ) =>
+    (await (
+      await request(`/api/creator/${companyId}/integrations`, init)
+    ).json()) as IntegrationsStatus;
+
+  /** The Telegram update, sent as Telegram does (with the secret StayPut gave it). */
+  async function telegramUpdate(
+    request: (path: string, init?: RequestInit) => Response | Promise<Response>,
+    update: unknown,
+    secret?: string,
+  ) {
+    return request('/webhooks/telegram', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-telegram-bot-api-secret-token':
+          secret ?? (await telegramWebhookSecret('123456:telegram-token')),
+      },
+      body: JSON.stringify(update),
+    });
+  }
+
+  it('offers nothing to connect while the modules are not set up', async () => {
+    const { request } = setup({ 'user_ivy:biz_Int0': 'admin' });
+    const init = await asUser('user_ivy');
+    await request('/api/creator/biz_Int0/session', init);
+    const status = (await (
+      await request('/api/creator/biz_Int0/integrations', init)
+    ).json()) as IntegrationsStatus;
+    expect(status.discord).toMatchObject({ available: false, install: null, servers: [] });
+    expect(status.telegram).toMatchObject({ available: false, addToGroup: null, groups: [] });
+    expect((await request('/webhooks/telegram', { method: 'POST', body: '{}' })).status).toBe(404);
+  });
+
+  it('connects a Discord server through Discord, following what the bot can read', async () => {
+    const { request, discord } = modules({ 'user_ivy:biz_Int1': 'admin' });
+    const init = await asUser('user_ivy');
+    await request('/api/creator/biz_Int1/session', init);
+    await settle();
+    const before = await integrations(request, 'biz_Int1', init);
+    expect(before.whopAppId).toBe(APP_ID);
+    const install = new URL(before.discord.install!.url);
+    expect(install.searchParams.get('redirect_uri')).toBe(`${ORIGIN}/auth/discord/callback`);
+    const state = install.searchParams.get('state')!;
+
+    // Discord sends the creator back with a code; the state says which company asked.
+    const back = await request(
+      `/auth/discord/callback?${new URLSearchParams({ code: 'good', state, guild_id: GUILD }).toString()}`,
+    );
+    expect(back.status).toBe(302);
+    const done = new URL(back.headers.get('location')!, ORIGIN);
+    expect(done.pathname).toBe('/connected');
+    expect(Object.fromEntries(done.searchParams)).toEqual({
+      source: 'discord',
+      status: 'ok',
+      name: 'Le Club',
+      channels: '2',
+    });
+    expect(discord.exchanged).toEqual([
+      { code: 'good', redirectUri: `${ORIGIN}/auth/discord/callback` },
+    ]);
+    await settle();
+
+    const after = await integrations(request, 'biz_Int1', init);
+    expect(after.discord.servers).toEqual([
+      {
+        guildId: GUILD,
+        name: 'Le Club',
+        connectedAt: NOW.toISOString(),
+        channels: [
+          expect.objectContaining({ id: '920000000000000001' }),
+          expect.objectContaining({ id: '920000000000000002' }),
+        ],
+      },
+    ]);
+  });
+
+  it('refuses a forged or expired state, and says when the creator declined', async () => {
+    const { request, discord, clock } = modules({ 'user_ivy:biz_Int6': 'admin' });
+    const init = await asUser('user_ivy');
+    await request('/api/creator/biz_Int6/session', init);
+    await settle();
+    const status = await integrations(request, 'biz_Int6', init);
+    const state = new URL(status.discord.install!.url).searchParams.get('state')!;
+    const failed = async (query: Record<string, string>) => {
+      const res = await request(`/auth/discord/callback?${new URLSearchParams(query).toString()}`);
+      return new URL(res.headers.get('location') ?? '/', ORIGIN).searchParams.get('reason');
+    };
+    expect(await failed({ code: 'good', state: 'forged.state' })).toBe('expired');
+    expect(await failed({ code: 'good' })).toBe('expired');
+    expect(await failed({ error: 'access_denied', state })).toBe('denied');
+    expect(await failed({ code: 'bad', state })).toBe('error');
+    clock.now = new Date(NOW.getTime() + 31 * 60_000);
+    expect(await failed({ code: 'good', state })).toBe('expired');
+    expect(discord.exchanged.map((e) => e.code)).toEqual(['bad']);
+  });
+
+  it('lets the team choose the channels, among the readable ones of its own server', async () => {
+    const { request, discord } = modules({
+      'user_jon:biz_Int2': 'admin',
+      'user_kim:biz_Int3': 'admin',
+    });
+    const jon = await asUser('user_jon');
+    await request('/api/creator/biz_Int2/session', jon);
+    await t.db.query('select stayput.connect_discord_guild($1, $2, $3, $4, $5::timestamptz)', [
+      'biz_Int2',
+      OTHER_GUILD,
+      'Second',
+      'user_jon',
+      NOW.toISOString(),
+    ]);
+    const channels = `/api/creator/biz_Int2/discord/${OTHER_GUILD}/channels`;
+    expect(await (await request(channels, jon)).json()).toEqual([
+      {
+        id: '930000000000000001',
+        name: 'elsewhere',
+        category: null,
+        readable: true,
+        followed: false,
+      },
+    ]);
+    const choose = (ids: unknown, init: RequestInit) =>
+      request(channels, {
+        ...init,
+        method: 'PUT',
+        headers: { ...init.headers, 'content-type': 'application/json' },
+        body: JSON.stringify({ channelIds: ids }),
+      });
+    // A channel of another server, and an unreadable one, are ignored.
+    const saved = (await (
+      await choose(['930000000000000001', '920000000000000001'], jon)
+    ).json()) as DiscordChannelChoice[];
+    expect(saved.filter((c) => c.followed).map((c) => c.id)).toEqual(['930000000000000001']);
+    expect((await choose('nope', jon)).status).toBe(400);
+
+    // Another company's team sees nothing of this server.
+    const kim = await asUser('user_kim');
+    await request('/api/creator/biz_Int3/session', kim);
+    expect(
+      (await request(`/api/creator/biz_Int3/discord/${OTHER_GUILD}/channels`, kim)).status,
+    ).toBe(404);
+    expect(
+      (await request(`/api/creator/biz_Int3/discord/${OTHER_GUILD}`, { method: 'DELETE', ...kim }))
+        .status,
+    ).toBe(404);
+
+    const removed = await request(`/api/creator/biz_Int2/discord/${OTHER_GUILD}`, {
+      method: 'DELETE',
+      ...jon,
+    });
+    expect(await removed.json()).toEqual({ removed: true });
+    expect(discord.left).toEqual([OTHER_GUILD]);
+  });
+
+  it('links a Telegram group with the signed link, then counts its messages', async () => {
+    const { request, telegram } = modules({ 'user_lea:biz_Int4': 'admin' });
+    const init = await asUser('user_lea');
+    await request('/api/creator/biz_Int4/session', init);
+    await settle();
+    const status = await integrations(request, 'biz_Int4', init);
+    expect(telegram.webhooks).toEqual([
+      {
+        url: `${ORIGIN}/webhooks/telegram`,
+        secret: await telegramWebhookSecret('123456:telegram-token'),
+      },
+    ]);
+    const start = new URL(status.telegram.addToGroup!.url).searchParams.get('startgroup')!;
+    const group = { id: -1009000000001, type: 'supergroup', title: 'VIP' };
+    const from = { id: 4242, is_bot: false, language_code: 'fr' };
+
+    expect((await telegramUpdate(request, {}, 'wrong')).status).toBe(401);
+    const linked = await telegramUpdate(request, {
+      update_id: 1,
+      message: {
+        message_id: 1,
+        date: NOW_S,
+        chat: group,
+        from,
+        text: `/start@StayPutBot ${start}`,
+      },
+    });
+    expect(linked.status).toBe(200);
+    await settle();
+    expect(telegram.sent).toEqual([
+      { chatId: '-1009000000001', text: expect.stringContaining('relié à StayPut') as string },
+    ]);
+    await telegramUpdate(request, {
+      update_id: 2,
+      message: { message_id: 2, date: NOW_S, chat: group, from, text: 'salut' },
+    });
+    const after = await integrations(request, 'biz_Int4', init);
+    expect(after.telegram.groups).toEqual([
+      {
+        chatId: '-1009000000001',
+        title: 'VIP',
+        connectedAt: NOW.toISOString(),
+        active: true,
+        lastMessageAt: NOW.toISOString(),
+      },
+    ]);
+    expect(after.telegram.unlinkedAuthors).toBe(1);
+
+    // A stale link: the bot says so and leaves.
+    await telegramUpdate(request, {
+      update_id: 3,
+      message: {
+        message_id: 1,
+        date: NOW_S,
+        chat: { id: -1009000000002, type: 'group', title: 'Other' },
+        from,
+        text: '/start abc_1_aaaaaaaaaaaaaaaaaaaaaa',
+      },
+    });
+    await settle();
+    expect(telegram.left).toEqual(['-1009000000002']);
+
+    const removed = await request('/api/creator/biz_Int4/telegram/-1009000000001', {
+      method: 'DELETE',
+      ...init,
+    });
+    expect(await removed.json()).toEqual({ removed: true });
+    expect(telegram.left).toEqual(['-1009000000002', '-1009000000001']);
+  });
+
+  it('lets a member link their Telegram account, once the community has a group', async () => {
+    const { request, telegram } = modules(
+      { 'user_mo:exp_Int5': 'customer', 'user_owner5:biz_Int5': 'admin' },
+      { exp_Int5: 'biz_Int5' },
+    );
+    const owner = await asUser('user_owner5');
+    await request('/api/creator/biz_Int5/session', owner);
+    await settle();
+    await t.db.query('select stayput.ingest_page($1, $2, null, $3::text::jsonb)', [
+      'biz_Int5',
+      'members',
+      JSON.stringify(page([member('mber_Int5', 'user_mo')])),
+    ]);
+    const mo = await asUser('user_mo');
+    const read = async () =>
+      (await (await request('/api/member/exp_Int5/telegram', mo)).json()) as MemberTelegramStatus;
+    expect(await read()).toMatchObject({ available: false, linked: false, link: null });
+
+    await t.db.query('select stayput.connect_telegram_chat($1, $2, $3, $4::timestamptz)', [
+      'biz_Int5',
+      '-1009000000005',
+      'VIP',
+      NOW.toISOString(),
+    ]);
+    const offer = await read();
+    expect(offer).toMatchObject({ available: true, linked: false, whopAppId: APP_ID });
+    const token = new URL(offer.link!.url).searchParams.get('start')!;
+
+    // The member opens the bot with it: Telegram says which account they are.
+    await telegramUpdate(request, {
+      update_id: 10,
+      message: {
+        message_id: 1,
+        date: NOW_S,
+        chat: { id: 5151, type: 'private' },
+        from: { id: 5151, is_bot: false, language_code: 'en' },
+        text: `/start ${token}`,
+      },
+    });
+    await settle();
+    expect(telegram.sent.at(-1)).toEqual({
+      chatId: '5151',
+      text: expect.stringContaining('Done') as string,
+    });
+    expect(await read()).toMatchObject({ linked: true });
+
+    const unlinked = await request('/api/member/exp_Int5/telegram', { method: 'DELETE', ...mo });
+    expect(await unlinked.json()).toEqual({ removed: true });
+    expect(await read()).toMatchObject({ linked: false });
   });
 });

@@ -131,6 +131,105 @@ export interface MemberRow {
   } | null;
 }
 
+/**
+ * GET /api/creator/:companyId/integrations: the activity sources beside Whop (SPEC Phase 2, 5,
+ * and the Telegram decision of 2026-10-01).
+ */
+export interface IntegrationsStatus {
+  discord: DiscordStatus;
+  telegram: TelegramStatus;
+  /** The app's id on Whop: a link is opened through Whop's frame with it (openExternalUrl). */
+  whopAppId: string | null;
+}
+
+/** A link made for this company, valid for a while (ISO date). */
+export interface ExpiringLink {
+  url: string;
+  expiresAt: string;
+}
+
+export interface DiscordStatus {
+  /** The Discord module is set up on this StayPut (the bot's token and client secret). */
+  available: boolean;
+  /** Discord's page that adds the bot to a server for this company; null when unavailable. */
+  install: ExpiringLink | null;
+  servers: DiscordServerStatus[];
+  /** Members whose Discord account StayPut knows: the one linked on their Whop profile. */
+  linkedMembers: number;
+  /** Discord accounts that wrote in the last 7 days and that no member linked. */
+  unlinkedAuthors: number;
+}
+
+export interface DiscordServerStatus {
+  guildId: string;
+  name: string | null;
+  connectedAt: string;
+  /** The channels StayPut reads. */
+  channels: DiscordChannelStatus[];
+}
+
+export interface DiscordChannelStatus {
+  id: string;
+  /** The 90-day history is read. */
+  backfillDone: boolean;
+  lastReadAt: string | null;
+  /** HTTP status and message of the last failure (403: the bot cannot read the channel). */
+  error: string | null;
+}
+
+/** GET (and PUT) /api/creator/:companyId/discord/:guildId/channels */
+export interface DiscordChannelChoice {
+  id: string;
+  name: string;
+  /** The category the channel is filed under on Discord. */
+  category: string | null;
+  /** StayPut's bot can see the channel and read its history. */
+  readable: boolean;
+  followed: boolean;
+}
+
+/** PUT /api/creator/:companyId/discord/:guildId/channels */
+export interface DiscordChannelsUpdate {
+  channelIds: string[];
+}
+
+export interface TelegramStatus {
+  /** The Telegram module is set up on this StayPut (the bot's token). */
+  available: boolean;
+  /** The link that adds the bot to a group for this company; null when unavailable. */
+  addToGroup: ExpiringLink | null;
+  /**
+   * The bot receives every message of its groups (privacy mode off). Off, it only sees the
+   * commands meant for it: nothing would count.
+   */
+  readsAllMessages: boolean;
+  groups: TelegramGroupStatus[];
+  /** Members who linked their Telegram account from StayPut. */
+  linkedMembers: number;
+  /** Telegram accounts that wrote in the last 7 days and that no member linked. */
+  unlinkedAuthors: number;
+}
+
+export interface TelegramGroupStatus {
+  chatId: string;
+  title: string | null;
+  connectedAt: string;
+  /** False once the bot was removed from the group. */
+  active: boolean;
+  /** The last message the group sent StayPut. */
+  lastMessageAt: string | null;
+}
+
+/** GET /api/member/:experienceId/telegram: linking one's Telegram account (member view). */
+export interface MemberTelegramStatus {
+  /** The community connected a Telegram group, and the module is set up. */
+  available: boolean;
+  linked: boolean;
+  /** The link to open in Telegram to link the account; null when not available. */
+  link: ExpiringLink | null;
+  whopAppId: string | null;
+}
+
 /** GET /health */
 export interface HealthReport {
   status: 'ok' | 'degraded';
