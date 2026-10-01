@@ -67,6 +67,9 @@ Guidance for Claude Code in this repository.
   `risk_scores`, cohorts and lessons, settings), `packages/core` `risk.ts` / `analyses.ts` (pure,
   tested edge cases), `apps/worker/src/risk.ts` (hourly `scoreMembers` job, after each sync,
   after new settings), routes `/insights` and `/settings/risk`, tabs Analyses and Settings.
+  Deployed on 2026-10-01 (0008 applied, `/health` ok); the sandbox's fake members were removed
+  and seeded again (titled lessons, one inactive newcomer), and the « Seed sandbox » workflow's
+  `report` action prints them by score with their reasons (the Phase 3 stop list).
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;
   Whop's side: `GET /webhooks/{id}/deliveries` and `POST /webhooks/{id}/test` with
