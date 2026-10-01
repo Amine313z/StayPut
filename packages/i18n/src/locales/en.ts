@@ -82,6 +82,13 @@ export const en = {
   'accounts.choose': 'Choose a member…',
   'accounts.link': 'Tie',
   'accounts.dismiss': 'Not a member',
+  'accounts.team': 'It’s me / my team',
+  'accounts.teamHint':
+    'Your own account, or a teammate’s? Choose « It’s me / my team »: the team’s activity does not count in the scores.',
+  'accounts.dismissed': 'Set aside ({count})',
+  'accounts.as.team': 'Team',
+  'accounts.as.guest': 'Not a member',
+  'accounts.restore': 'Bring back',
   'accounts.unlink': 'Untie',
   'accounts.unlinkConfirm': 'Yes, untie',
   'accounts.via.whop': 'Whop profile',

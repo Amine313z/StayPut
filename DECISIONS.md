@@ -466,6 +466,11 @@ propriétaire d'un compte le déclare sur son profil Whop, Whop a raison et le c
   n'ont pas de nom : StayPut le demande à Discord (`GET /users/{id}`) ou à Telegram
   (`getChatMember`, dans le groupe où il a écrit), 10 par affichage de la liste.
 - Le pseudo Whop des membres est maintenant lu (`members.username`), pour comparer les pseudos.
+- **Le compte du créateur** (migration 0013) : le propriétaire d'une communauté n'en est pas
+  membre sur Whop, il n'apparaît donc pas dans la liste. Ses comptes, et ceux de son équipe, se
+  mettent de côté avec « C'est moi / mon équipe » (l'activité de l'équipe ne compte pas dans
+  les scores), à part de « Pas un membre » (un invité). Les comptes mis de côté sont listés, et
+  « Remettre » corrige une erreur.
 - **Limite** : un membre n'a qu'un compte par plateforme. Pour une très grande communauté, la
   liste des membres à choisir est celle déjà chargée par le tableau de bord.
 

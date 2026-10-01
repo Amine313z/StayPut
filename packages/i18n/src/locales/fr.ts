@@ -83,6 +83,13 @@ export const fr: Messages = {
   'accounts.choose': 'Choisir un membre…',
   'accounts.link': 'Relier',
   'accounts.dismiss': 'Pas un membre',
+  'accounts.team': 'C’est moi / mon équipe',
+  'accounts.teamHint':
+    'Votre propre compte, ou celui d’un collaborateur ? Choisissez « C’est moi / mon équipe » : l’activité de l’équipe ne compte pas dans les scores.',
+  'accounts.dismissed': 'Mis de côté ({count})',
+  'accounts.as.team': 'Équipe',
+  'accounts.as.guest': 'Pas un membre',
+  'accounts.restore': 'Remettre',
   'accounts.unlink': 'Délier',
   'accounts.unlinkConfirm': 'Oui, délier',
   'accounts.via.whop': 'profil Whop',

@@ -429,10 +429,21 @@ export interface LinkedAccount {
   via: 'whop' | 'member' | 'name' | 'creator' | null;
 }
 
+/** An account the creator set aside: their own or their team's, or a guest's. */
+export interface DismissedAccount {
+  platform: AccountPlatform;
+  accountId: string;
+  name: string | null;
+  username: string | null;
+  as: 'team' | 'guest';
+  at: string;
+}
+
 /** GET /api/creator/:companyId/accounts, and the answer of each change. */
 export interface AccountsView {
   unlinked: UnlinkedAccount[];
   linked: LinkedAccount[];
+  dismissed: DismissedAccount[];
 }
 
 /** GET /health */

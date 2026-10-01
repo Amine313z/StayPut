@@ -1,6 +1,12 @@
-import type { AccountsView, LinkedAccount, MemberRow, UnlinkedAccount } from '@stayput/core';
+import type {
+  AccountsView,
+  DismissedAccount,
+  LinkedAccount,
+  MemberRow,
+  UnlinkedAccount,
+} from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
-import { EyeOff, Link2, Unlink, UsersRound } from 'lucide-react';
+import { EyeOff, Link2, Undo2, Unlink, UserRoundCheck, UsersRound } from 'lucide-react';
 import { useId, useState } from 'react';
 import { postJson, useApi } from '../api';
 import { useI18n } from '../i18n';
@@ -75,7 +81,7 @@ function Accounts({
   change: (what: Change, body: Record<string, string>) => Promise<void>;
 }) {
   const { t } = useI18n();
-  if (view.unlinked.length === 0 && view.linked.length === 0) {
+  if (view.unlinked.length === 0 && view.linked.length === 0 && view.dismissed.length === 0) {
     return <p className="text-sm text-muted">{t('accounts.empty')}</p>;
   }
   const choices = members
@@ -91,6 +97,9 @@ function Accounts({
         {view.unlinked.length === 0 ? (
           <p className="mt-2 text-sm text-muted">{t('accounts.allLinked')}</p>
         ) : (
+          <p className="mt-1 text-sm text-muted">{t('accounts.teamHint')}</p>
+        )}
+        {view.unlinked.length === 0 ? null : (
           <ul className="mt-3 space-y-3">
             {view.unlinked.map((account) => (
               <Unlinked
@@ -119,12 +128,28 @@ function Accounts({
           </ul>
         </section>
       ) : null}
+      {view.dismissed.length > 0 ? (
+        <details className="group">
+          <summary className="cursor-pointer text-sm font-semibold">
+            {t('accounts.dismissed', { count: view.dismissed.length })}
+          </summary>
+          <ul className="mt-3 divide-y divide-line">
+            {view.dismissed.map((account) => (
+              <Dismissed
+                key={`${account.platform}:${account.accountId}`}
+                account={account}
+                change={change}
+              />
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }
 
 /** Who an account is, as the creator sees them on Discord or Telegram. */
-function Who({ account }: { account: UnlinkedAccount | LinkedAccount }) {
+function Who({ account }: { account: UnlinkedAccount | LinkedAccount | DismissedAccount }) {
   const { t } = useI18n();
   const Icon = account.platform === 'discord' ? DiscordIcon : TelegramIcon;
   return (
@@ -179,16 +204,28 @@ function Unlinked({
             {t('accounts.lastSeen', { when: relative(new Date(account.lastAt)) })}
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={<EyeOff aria-hidden="true" className="size-4" />}
-          loading={busy === 'dismiss'}
-          disabled={busy !== null}
-          onClick={() => void run('dismiss', 'dismiss')}
-        >
-          {t('accounts.dismiss')}
-        </Button>
+        <div className="flex flex-wrap gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<UserRoundCheck aria-hidden="true" className="size-4" />}
+            loading={busy === 'team'}
+            disabled={busy !== null}
+            onClick={() => void run('team', 'dismiss', { as: 'team' })}
+          >
+            {t('accounts.team')}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<EyeOff aria-hidden="true" className="size-4" />}
+            loading={busy === 'guest'}
+            disabled={busy !== null}
+            onClick={() => void run('guest', 'dismiss', { as: 'guest' })}
+          >
+            {t('accounts.dismiss')}
+          </Button>
+        </div>
       </div>
       {account.suggestions.length > 0 ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -269,6 +306,47 @@ function Linked({
         icon={<Unlink aria-hidden="true" className="size-4" />}
         run={() => change('unlink', { platform: account.platform, accountId: account.accountId })}
       />
+    </li>
+  );
+}
+
+/** An account set aside, as the team's or a guest's: brought back to the list in one click. */
+function Dismissed({
+  account,
+  change,
+}: {
+  account: DismissedAccount;
+  change: (what: Change, body: Record<string, string>) => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle');
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-2 py-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+        <Who account={account} />
+        <Badge>{t(account.as === 'team' ? 'accounts.as.team' : 'accounts.as.guest')}</Badge>
+      </div>
+      <span className="inline-flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<Undo2 aria-hidden="true" className="size-4" />}
+          loading={state === 'busy'}
+          onClick={() => {
+            setState('busy');
+            change('restore', { platform: account.platform, accountId: account.accountId }).catch(
+              () => setState('failed'),
+            );
+          }}
+        >
+          {t('accounts.restore')}
+        </Button>
+        {state === 'failed' ? (
+          <span role="alert" className="text-xs text-danger">
+            {t('accounts.failed')}
+          </span>
+        ) : null}
+      </span>
     </li>
   );
 }

@@ -1001,11 +1001,19 @@ export function createApp(deps: AppDeps) {
             [...args, at],
           );
           break;
-        default:
+        default: {
+          // Set aside as the team's (the creator's own account, a teammate's) or a guest's.
+          const as =
+            c.req.param('change') === 'restore'
+              ? null
+              : (body as { as?: unknown } | null)?.as === 'team'
+                ? 'team'
+                : 'guest';
           changed = await done(
-            'select stayput.dismiss_account($1, $2, $3, $4, $5::timestamptz) as done',
-            [...args, c.req.param('change') === 'dismiss', at],
+            'select stayput.dismiss_account($1, $2, $3, $4::text, $5::timestamptz) as done',
+            [...args, as, at],
           );
+        }
       }
       if (!changed) return apiError('not_found', 'no such account or member here');
       const view = await accountsView(db, c.get('userId'), companyId);

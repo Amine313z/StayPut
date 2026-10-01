@@ -1087,6 +1087,7 @@ describe('Discord and Telegram', () => {
         },
       ],
       linked: [],
+      dismissed: [],
     });
 
     const change = (what: string, body: unknown) =>
@@ -1111,6 +1112,7 @@ describe('Discord and Telegram', () => {
           via: 'creator',
         },
       ],
+      dismissed: [],
     });
     expect((await integrations(request, 'biz_Int9', init)).telegram).toMatchObject({
       linkedMembers: 1,
@@ -1119,6 +1121,21 @@ describe('Discord and Telegram', () => {
     const unlinked = async (what: string) =>
       ((await (await change(what, account)).json()) as AccountsView).unlinked.length;
     expect(await unlinked('unlink')).toBe(1);
+    // The creator's own account: set aside as the team's.
+    const team = (await (
+      await change('dismiss', { ...account, as: 'team' })
+    ).json()) as AccountsView;
+    expect(team.unlinked).toEqual([]);
+    expect(team.dismissed).toEqual([
+      {
+        ...account,
+        name: 'Bruno',
+        username: 'bruno_p',
+        as: 'team',
+        at: expect.any(String) as string,
+      },
+    ]);
+    expect(await unlinked('restore')).toBe(1);
     expect(await unlinked('dismiss')).toBe(0);
     expect(await unlinked('restore')).toBe(1);
 

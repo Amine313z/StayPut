@@ -685,7 +685,7 @@ describe('activity sources', () => {
     },
   };
 
-  const NO_ACCOUNTS: AccountsView = { unlinked: [], linked: [] };
+  const NO_ACCOUNTS: AccountsView = { unlinked: [], linked: [], dismissed: [] };
 
   it('ties an account to a member in one click, from what StayPut suggests', async () => {
     const alice = {
@@ -714,6 +714,7 @@ describe('activity sources', () => {
               },
             ],
             linked: [alice],
+            dismissed: [],
           } satisfies AccountsView,
         },
       ],
@@ -733,6 +734,7 @@ describe('activity sources', () => {
                 via: 'creator',
               },
             ],
+            dismissed: [],
           } satisfies AccountsView,
         },
       ],
@@ -772,6 +774,57 @@ describe('activity sources', () => {
     await vi.waitFor(() =>
       expect(calls.filter((c) => c === '/api/creator/biz_A1/integrations?lang=en')).toHaveLength(2),
     );
+  });
+
+  it('sets the creator’s own account aside as the team’s, and brings it back', async () => {
+    const mine = {
+      platform: 'telegram',
+      accountId: '5550002',
+      name: 'Mexico 17',
+      username: null,
+    } as const;
+    const waiting = { ...mine, messages: 2, lastAt: '2026-10-01T09:00:00.000Z', suggestions: [] };
+    const calls = mockApi({
+      ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/accounts': [
+        { status: 200, body: { unlinked: [waiting], linked: [], dismissed: [] } },
+      ],
+      'POST /api/creator/biz_A1/accounts/dismiss': [
+        {
+          status: 200,
+          body: {
+            unlinked: [],
+            linked: [],
+            dismissed: [{ ...mine, as: 'team', at: '2026-10-01T10:00:00.000Z' }],
+          } satisfies AccountsView,
+        },
+      ],
+      'POST /api/creator/biz_A1/accounts/restore': [
+        { status: 200, body: { unlinked: [waiting], linked: [], dismissed: [] } },
+      ],
+      '/api/creator/biz_A1/integrations?lang=en': Array.from({ length: 3 }, () => ({
+        status: 200,
+        body: connected,
+      })),
+      '/api/creator/biz_A1/members': Array.from({ length: 3 }, () => ({
+        status: 200,
+        body: MEMBERS,
+      })),
+    });
+    renderAt('/dashboard/biz_A1/sources');
+    expect(await screen.findByText(/Your own account, or a teammate’s\?/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'It’s me / my team' }));
+    const setAside = await screen.findByText('Set aside (1)');
+    expect(bodies.get('POST /api/creator/biz_A1/accounts/dismiss')).toEqual({
+      platform: 'telegram',
+      accountId: '5550002',
+      as: 'team',
+    });
+    fireEvent.click(setAside);
+    expect(screen.getByText('Team')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Bring back' }));
+    expect(await screen.findByText('To tie (1)')).toBeTruthy();
+    expect(calls).toContain('POST /api/creator/biz_A1/accounts/restore');
   });
 
   it('offers to connect Discord and Telegram, with the steps', async () => {

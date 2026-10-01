@@ -309,7 +309,7 @@ describe('what the creator sees', () => {
     ]);
   });
 
-  it('sets an account aside, and brings it back', async () => {
+  it('sets an account aside as the team’s or a guest’s, and brings it back', async () => {
     const { c, say } = await community([{ name: 'Alice Martin' }]);
     await say('5001', 'A friend');
     await admin(c, 'user_AccOwner2');
@@ -320,18 +320,43 @@ describe('what the creator sees', () => {
         )
       )[0]?.accounts ?? 0;
     expect(await counted()).toBe(1);
-    const dismiss = (dismissed: boolean) =>
-      change('dismiss_account($1, $2, $3, $4, $5::timestamptz)', [
+    const dismiss = (as: string | null) =>
+      change('dismiss_account($1, $2, $3, $4::text, $5::timestamptz)', [
         c,
         'telegram',
         '5001',
-        dismissed,
+        as,
         NOW,
       ]);
-    expect(await dismiss(true)).toBe(true);
+    const setAside = async () =>
+      (
+        (
+          await withUser(t.db, 'user_AccOwner2', (tx) =>
+            tx.query<{ view: { dismissed: unknown[] } }>(
+              'select stayput.platform_accounts_view($1) as view',
+              [c],
+            ),
+          )
+        )[0]?.view.dismissed ?? []
+      ).map((d) => (d as { as: string }).as);
+    expect(await dismiss('team')).toBe(true);
     expect(await counted()).toBe(0);
-    expect(await dismiss(false)).toBe(true);
+    expect(await setAside()).toEqual(['team']);
+    expect(await dismiss(null)).toBe(true);
     expect(await counted()).toBe(1);
+    expect(await setAside()).toEqual([]);
+    await expect(dismiss('friend')).rejects.toThrow(/team or guest/);
+    // The Worker of 0012, during a deployment: a guest's.
+    expect(
+      await change('dismiss_account($1, $2, $3, $4::boolean, $5::timestamptz)', [
+        c,
+        'telegram',
+        '5001',
+        true,
+        NOW,
+      ]),
+    ).toBe(true);
+    expect(await setAside()).toEqual(['guest']);
   });
 });
 
