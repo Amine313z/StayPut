@@ -166,6 +166,19 @@ async function main() {
             from stayput.actions where company_id = ${id as string}
            group by 1, 2, 3 order by 1, 2, 3`,
       );
+      // How the actions run: the mode, the test mode, the stops, the hours and their zone, and
+      // whether StayPut knows the experience its notifications go through.
+      out();
+      table(
+        await sql`
+          select c.mode, c.locale, c.timezone, s.dry_run, s.kill_switch,
+                 (select g.kill_switch from stayput.app_settings g) as global_stop,
+                 concat(s.quiet_hours_start, '-', s.quiet_hours_end) as quiet_hours,
+                 s.default_send_hour, c.experience_id is not null as experience_known
+            from stayput.companies c
+            join stayput.company_settings s on s.company_id = c.id
+           where c.id = ${id as string}`,
+      );
     }
     // The risk score (migration 0008): members per level, when they were scored, the history
     // kept, and the weekly analyses. Counts only, like the rest.
