@@ -34,6 +34,8 @@ export const en = {
   'sync.problems': 'Some data could not be read:',
   'sync.problem.permission': '{stream}: the permission is not granted in Whop.',
   'sync.problem.other': '{stream}: Whop did not answer. StayPut will try again.',
+  'sync.permissionHint':
+    'In Whop, open Settings → Authorized apps, approve the permissions of StayPut, then come back here.',
   'sync.stream.plans': 'Prices',
   'sync.stream.members': 'Members',
   'sync.stream.memberships': 'Memberships',

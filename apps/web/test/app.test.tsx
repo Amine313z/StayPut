@@ -265,6 +265,11 @@ describe('creator view', () => {
     ).toBeTruthy();
     expect(screen.getByText("Paiements : Whop n'a pas répondu. StayPut réessaiera.")).toBeTruthy();
     expect(
+      screen.getByText(
+        'Dans Whop, ouvrez Settings → Authorized apps, approuvez les permissions de StayPut, puis revenez ici.',
+      ),
+    ).toBeTruthy();
+    expect(
       screen.getAllByRole('listitem').filter((li) => li.textContent?.startsWith('Messages')),
     ).toHaveLength(1);
   });

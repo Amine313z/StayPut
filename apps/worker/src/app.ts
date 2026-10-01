@@ -254,10 +254,12 @@ export function createApp(deps: AppDeps) {
     if (!whop) return;
     inBackground(c, 'Background sync', async (db) => {
       const now = deps.now();
+      // The creator may have just granted a permission: what Whop refused is tried again.
       const result = await syncIfFree(
         { db, whop, now, budget: { left: REQUEST_SYNC_BUDGET } },
         companyId,
         OPEN_SYNC_INTERVAL_SECONDS,
+        { retryFailed: true },
       );
       if (!result) return;
       console.info(summarize(result));
@@ -476,6 +478,7 @@ export function createApp(deps: AppDeps) {
       { db, whop, now, budget: { left: REQUEST_SYNC_BUDGET } },
       companyId,
       MANUAL_SYNC_INTERVAL_SECONDS,
+      { retryFailed: true },
     );
     if (result) {
       console.info(summarize(result));

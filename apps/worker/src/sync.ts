@@ -158,6 +158,16 @@ export interface StreamState {
   backfillDone: boolean;
   lastPassAt: Date | null;
   lastCompletePassAt: Date | null;
+  /** The last attempt failed (`403 …`: a permission the creator did not grant). */
+  lastError: string | null;
+}
+
+export interface PassOptions {
+  /**
+   * Try again now the streams whose last attempt failed: the creator may just have granted a
+   * permission (opening the dashboard, « Sync now »).
+   */
+  retryFailed?: boolean;
 }
 
 export interface PassPlan {
@@ -171,16 +181,23 @@ export interface PassPlan {
   complete: boolean;
 }
 
-/** What to read of a stream now, or null when it is caught up and not due. */
+/**
+ * What to read of a stream now, or null when it is caught up and not due. A stream whose last
+ * attempt failed is tried again within the hour, whatever its cadence.
+ */
 export function planPass(
   stream: Stream,
   state: StreamState | undefined,
   now: Date,
+  options: PassOptions = {},
 ): PassPlan | null {
   if (state?.cursor) return { cursor: state.cursor, start: false, until: null, complete: false };
   const due = (since: Date | null | undefined, hours: number) =>
     !since || now.getTime() - since.getTime() >= hours * 3_600_000 - DUE_MARGIN_MS;
-  if (!due(state?.lastPassAt, stream.everyHours)) return null;
+  const failed = Boolean(state?.lastError);
+  const retryNow = failed && options.retryFailed === true;
+  const every = failed ? Math.min(stream.everyHours, 1) : stream.everyHours;
+  if (!retryNow && !due(state?.lastPassAt, every)) return null;
   const complete =
     stream.stop === 'end' ||
     !state?.backfillDone ||
@@ -214,7 +231,11 @@ export interface CompanySync {
 }
 
 /** Reads a company's lists, within the budget. The caller holds the company (claimSync). */
-export async function syncCompany(ctx: SyncContext, companyId: string): Promise<CompanySync> {
+export async function syncCompany(
+  ctx: SyncContext,
+  companyId: string,
+  options: PassOptions = {},
+): Promise<CompanySync> {
   const result: CompanySync = { companyId, calls: 0, streams: {}, stopped: null };
   let states = await loadStates(ctx.db, companyId);
   let listed = false;
@@ -230,7 +251,8 @@ export async function syncCompany(ctx: SyncContext, companyId: string): Promise<
     for (const name of names) {
       if (ctx.budget.left <= 0) return result;
       const scope = stream.scoped ? name.slice(stream.name.length + 1) : null;
-      const read = await readStream(ctx, companyId, stream, name, scope, states.get(name));
+      const state = states.get(name);
+      const read = await readStream(ctx, companyId, stream, name, scope, state, options);
       if (!read) continue;
       result.streams[name] = read.outcome;
       result.calls += read.calls;
@@ -251,8 +273,9 @@ async function readStream(
   name: string,
   scope: string | null,
   state: StreamState | undefined,
+  options: PassOptions,
 ): Promise<{ outcome: StreamOutcome; calls: number; stop?: string } | null> {
-  const plan = planPass(stream, state, ctx.now);
+  const plan = planPass(stream, state, ctx.now, options);
   if (!plan) return null;
   let { cursor, start } = plan;
   let calls = 0;
@@ -311,8 +334,10 @@ async function loadStates(db: Db, companyId: string): Promise<Map<string, Stream
     backfill_done: boolean;
     last_pass_at: Date | string | null;
     last_complete_pass_at: Date | string | null;
+    last_error: string | null;
   }>(
-    `select stream, cursor, high_water, backfill_done, last_pass_at, last_complete_pass_at
+    `select stream, cursor, high_water, backfill_done, last_pass_at, last_complete_pass_at,
+            last_error
        from stayput.sync_state where company_id = $1`,
     [companyId],
   );
@@ -326,6 +351,7 @@ async function loadStates(db: Db, companyId: string): Promise<Map<string, Stream
         backfillDone: r.backfill_done,
         lastPassAt: toDate(r.last_pass_at),
         lastCompletePassAt: toDate(r.last_complete_pass_at),
+        lastError: r.last_error,
       },
     ]),
   );
@@ -355,6 +381,7 @@ export async function syncIfFree(
   ctx: SyncContext,
   companyId: string,
   minIntervalSeconds: number,
+  options: PassOptions = {},
 ): Promise<CompanySync | null> {
   const now = ctx.now.toISOString();
   const [claim] = await ctx.db.query<{ claimed: boolean }>(
@@ -363,7 +390,7 @@ export async function syncIfFree(
   );
   if (!claim?.claimed) return null;
   try {
-    return await syncCompany(ctx, companyId);
+    return await syncCompany(ctx, companyId, options);
   } finally {
     await ctx.db.query('select stayput.release_sync($1, $2::timestamptz)', [companyId, now]);
   }

@@ -131,6 +131,7 @@ describe('planPass', () => {
     backfillDone: true,
     lastPassAt: new Date('2026-10-01T11:00:00Z'),
     lastCompletePassAt: new Date('2026-09-01T00:00:00Z'),
+    lastError: null,
     ...over,
   });
 
@@ -167,6 +168,21 @@ describe('planPass', () => {
       until: null,
       complete: true,
     });
+  });
+
+  it('tries a refused stream again within the hour, or at once when asked', () => {
+    const daily = stream({ stop: 'end', everyHours: 24 });
+    const refused = state({ lastPassAt: hours(-0.5), lastError: '403 forbidden' });
+    expect(planPass(daily, state({ lastPassAt: hours(-2) }), NOW)).toBeNull();
+    expect(planPass(daily, refused, NOW)).toBeNull();
+    expect(planPass(daily, { ...refused, lastPassAt: hours(-1) }, NOW)).toMatchObject({
+      start: true,
+    });
+    expect(planPass(daily, refused, NOW, { retryFailed: true })).toMatchObject({ start: true });
+    // Asking to retry what failed leaves the streams that did not fail alone.
+    expect(
+      planPass(daily, state({ lastPassAt: hours(-2) }), NOW, { retryFailed: true }),
+    ).toBeNull();
   });
 
   it('lists every stream once, account-wide ones before the scoped ones they open', () => {
@@ -247,6 +263,26 @@ describe('syncing a company', () => {
         u('msg_new'),
       ]),
     ).toHaveLength(1);
+  });
+
+  it('reads a refused list again as soon as the dashboard asks', async () => {
+    const { id, u } = await company();
+    const whop = fakeWhop(community(u));
+    whop.failures['/members'] = new WhopApiError(403, 'forbidden', 'member:basic:read', {
+      method: 'GET',
+      path: '/members',
+    });
+    await syncIfFree(context(whop.client), id, 0);
+    expect(await count('members', id)).toBe(0);
+
+    // The creator approves the permission; ten minutes later the dashboard opens.
+    delete whop.failures['/members'];
+    whop.calls.length = 0;
+    await syncIfFree(context(whop.client, new Date(NOW.getTime() + 600_000)), id, 0, {
+      retryFailed: true,
+    });
+    expect(whop.calls).toEqual(['/members', '/members@2']);
+    expect(await count('members', id)).toBe(3);
   });
 
   it('records a refused list and goes on with the others', async () => {

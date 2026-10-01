@@ -35,6 +35,8 @@ export const fr: Messages = {
   'sync.problems': "Certaines données n'ont pas pu être lues :",
   'sync.problem.permission': "{stream} : la permission n'est pas accordée dans Whop.",
   'sync.problem.other': "{stream} : Whop n'a pas répondu. StayPut réessaiera.",
+  'sync.permissionHint':
+    'Dans Whop, ouvrez Settings → Authorized apps, approuvez les permissions de StayPut, puis revenez ici.',
   'sync.stream.plans': 'Prix',
   'sync.stream.members': 'Membres',
   'sync.stream.memberships': 'Adhésions',

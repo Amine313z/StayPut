@@ -20,15 +20,18 @@ const STREAM_LABELS: Record<string, MessageKey> = {
 export function SyncPanel({ sync }: { sync: SyncState }) {
   const { t, dateTime } = useI18n();
   const { status, running, notice } = sync;
-  // One line per kind of data (all chat channels together), the latest failure first.
+  // One line per kind of data (all chat channels together).
   const problems = new Map<string, string>();
+  let permissionMissing = false;
   for (const stream of status?.streams ?? []) {
     const kind = stream.stream.split(':')[0] ?? stream.stream;
     if (!stream.error || problems.has(kind)) continue;
     const label = STREAM_LABELS[kind];
+    const refused = /^403\b/.test(stream.error);
+    permissionMissing ||= refused;
     problems.set(
       kind,
-      t(/^403\b/.test(stream.error) ? 'sync.problem.permission' : 'sync.problem.other', {
+      t(refused ? 'sync.problem.permission' : 'sync.problem.other', {
         stream: label ? t(label) : kind,
       }),
     );
@@ -78,6 +81,7 @@ export function SyncPanel({ sync }: { sync: SyncState }) {
               <li key={kind}>{text}</li>
             ))}
           </ul>
+          {permissionMissing ? <p className="mt-2">{t('sync.permissionHint')}</p> : null}
         </div>
       ) : null}
     </section>
