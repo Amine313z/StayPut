@@ -43,6 +43,13 @@ export const refreshStats: CronJob = {
   name: 'stats',
   async run({ db, now }) {
     if (!db) return;
+    // Accounts no member has, tied by name where one member surely matches (a member who joined,
+    // a Whop username read since): before the stats, which then count their messages.
+    await db.query(
+      `select stayput.link_accounts_by_name(c.company_id)
+         from (select distinct company_id from stayput.platform_accounts
+                where decided_at is null and dismissed_at is null) c`,
+    );
     await db.query('select stayput.refresh_stats($1::timestamptz)', [now.toISOString()]);
     await db.query('select stayput.purge_pending_activity($1::timestamptz)', [now.toISOString()]);
   },

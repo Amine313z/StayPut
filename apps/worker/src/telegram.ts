@@ -56,6 +56,11 @@ export interface TelegramClient {
   setWebhook(url: string, secret: string): Promise<void>;
   /** A short message from the bot (a group was linked, an account was linked). */
   sendMessage(chatId: string, text: string): Promise<void>;
+  /** The names of someone in a group the bot is in (getChatMember). */
+  chatMember(
+    chatId: string,
+    userId: string,
+  ): Promise<{ name: string | null; username: string | null }>;
 }
 
 export function createTelegramClient(options: { botToken: string; fetch?: Fetch }): TelegramClient {
@@ -116,6 +121,19 @@ export function createTelegramClient(options: { botToken: string; fetch?: Fetch 
         text,
         link_preview_options: { is_disabled: true },
       });
+    },
+    async chatMember(chatId, userId) {
+      const result = (await call('getChatMember', {
+        chat_id: chatId,
+        user_id: Number(userId),
+      })) as {
+        user?: { first_name?: unknown; last_name?: unknown; username?: unknown };
+      } | null;
+      const text = (value: unknown) =>
+        typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+      const user = result?.user;
+      const name = [text(user?.first_name), text(user?.last_name)].filter(Boolean).join(' ');
+      return { name: name || null, username: text(user?.username) };
     },
   };
 }
@@ -276,7 +294,16 @@ export function telegramMemberLink(botUsername: string, token: string): string {
 /** What an update asks of StayPut. */
 export type TelegramAction =
   | { kind: 'link'; chatId: string; title: string | null; token: string; language: string | null }
-  | { kind: 'message'; chatId: string; fromId: string; messageId: string; at: Date }
+  | {
+      kind: 'message';
+      chatId: string;
+      fromId: string;
+      messageId: string;
+      at: Date;
+      /** The author's first and last names, and username: for the creator to recognize them. */
+      name: string | null;
+      username: string | null;
+    }
   | { kind: 'membership'; chatId: string; present: boolean }
   | { kind: 'migrate'; fromChatId: string; toChatId: string }
   /** `/start` in a private chat: with the parameter of a member link, or without one. */
@@ -369,7 +396,18 @@ export function telegramAction(update: unknown): TelegramAction {
     return { kind: 'ignore' };
   }
   if (!CONTENT_FIELDS.some((field) => field in message)) return { kind: 'ignore' };
-  return { kind: 'message', chatId, fromId, messageId, at: new Date(date * 1000) };
+  const nonEmpty = (value: unknown) =>
+    typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+  const name = [nonEmpty(from?.first_name), nonEmpty(from?.last_name)].filter(Boolean).join(' ');
+  return {
+    kind: 'message',
+    chatId,
+    fromId,
+    messageId,
+    at: new Date(date * 1000),
+    name: name || null,
+    username: nonEmpty(from?.username),
+  };
 }
 
 function isGroup(type: unknown): boolean {

@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type {
+  AccountsView,
   ActionRow,
   ActionSettingsView,
   ActionsPage,
@@ -684,6 +685,95 @@ describe('activity sources', () => {
     },
   };
 
+  const NO_ACCOUNTS: AccountsView = { unlinked: [], linked: [] };
+
+  it('ties an account to a member in one click, from what StayPut suggests', async () => {
+    const alice = {
+      platform: 'discord',
+      accountId: '940000000000000001',
+      name: 'Alice',
+      username: 'alice.m',
+      member: { id: 'mber_1', name: 'Alice Martin' },
+      via: 'name',
+    } satisfies AccountsView['linked'][number];
+    const calls = mockApi({
+      ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/accounts': [
+        {
+          status: 200,
+          body: {
+            unlinked: [
+              {
+                platform: 'telegram',
+                accountId: '5550001',
+                name: 'Bruno',
+                username: 'bruno_p',
+                messages: 2,
+                lastAt: '2026-10-01T09:00:00.000Z',
+                suggestions: [{ memberId: 'mber_3', name: 'Bruno Petit', strong: false }],
+              },
+            ],
+            linked: [alice],
+          } satisfies AccountsView,
+        },
+      ],
+      'POST /api/creator/biz_A1/accounts/link': [
+        {
+          status: 200,
+          body: {
+            unlinked: [],
+            linked: [
+              alice,
+              {
+                platform: 'telegram',
+                accountId: '5550001',
+                name: 'Bruno',
+                username: 'bruno_p',
+                member: { id: 'mber_3', name: 'Bruno Petit' },
+                via: 'creator',
+              },
+            ],
+          } satisfies AccountsView,
+        },
+      ],
+      '/api/creator/biz_A1/integrations?lang=en': [
+        { status: 200, body: connected },
+        { status: 200, body: connected },
+      ],
+      '/api/creator/biz_A1/members': [
+        { status: 200, body: MEMBERS },
+        { status: 200, body: MEMBERS },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/sources');
+    expect(await screen.findByText('To tie (1)')).toBeTruthy();
+    expect(screen.getByText('@bruno_p')).toBeTruthy();
+    expect(screen.getByText(/2 messages waiting/)).toBeTruthy();
+    expect(screen.getByText('Tied (1)')).toBeTruthy();
+    // Alice was recognized by her name; any member can be picked from the list.
+    expect(screen.getByText('same name')).toBeTruthy();
+    expect(
+      within(screen.getByRole('combobox', { name: 'Another member:' })).getByRole('option', {
+        name: 'Chloé Dubois',
+      }),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tie to Bruno Petit' }));
+    expect(await screen.findByText('Every account that wrote is tied to a member.')).toBeTruthy();
+    const post = 'POST /api/creator/biz_A1/accounts/link';
+    expect(bodies.get(post)).toEqual({
+      platform: 'telegram',
+      accountId: '5550001',
+      memberId: 'mber_3',
+    });
+    expect(headersOf.get(post)?.get('x-stayput-csrf')).toBe('1');
+    expect(screen.getByText('by you')).toBeTruthy();
+    // The counts of the sources and the members' activity are read again.
+    await vi.waitFor(() =>
+      expect(calls.filter((c) => c === '/api/creator/biz_A1/integrations?lang=en')).toHaveLength(2),
+    );
+  });
+
   it('offers to connect Discord and Telegram, with the steps', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1/sources');
@@ -751,6 +841,7 @@ describe('activity sources', () => {
         },
       ],
       'PUT /api/creator/biz_A1/discord/910000000000000001/channels': [{ status: 200, body: [] }],
+      '/api/creator/biz_A1/accounts': [{ status: 200, body: NO_ACCOUNTS }],
       '/api/creator/biz_A1/integrations?lang=en': [
         { status: 200, body: connected },
         { status: 200, body: connected },
@@ -786,6 +877,7 @@ describe('activity sources', () => {
       'DELETE /api/creator/biz_A1/telegram/-1009000000001': [
         { status: 200, body: { removed: true } },
       ],
+      '/api/creator/biz_A1/accounts': [{ status: 200, body: NO_ACCOUNTS }],
       '/api/creator/biz_A1/integrations?lang=en': [
         { status: 200, body: connected },
         { status: 200, body: INTEGRATIONS },

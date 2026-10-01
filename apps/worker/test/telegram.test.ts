@@ -179,15 +179,29 @@ describe('telegramAction', () => {
     message: { message_id: 7, date: 1_790_000_000, chat: group, from: person, ...over },
   });
 
-  it("counts a person's message in a group, never its text", () => {
+  it("counts a person's message in a group, with their names, never its text", () => {
     expect(telegramAction(message({ text: 'bonjour' }))).toEqual({
       kind: 'message',
       chatId: '-1001234567890',
       fromId: '42',
       messageId: '7',
       at: new Date(1_790_000_000_000),
+      name: 'Ana',
+      username: null,
     });
     expect(telegramAction(message({ photo: [{}] }))).toMatchObject({ kind: 'message' });
+    // First and last names together; nothing when Telegram gives none.
+    expect(
+      telegramAction(
+        message({
+          text: 'x',
+          from: { id: 43, is_bot: false, first_name: ' Zoé ', last_name: 'Lambert' },
+        }),
+      ),
+    ).toMatchObject({ name: 'Zoé Lambert', username: null });
+    expect(
+      telegramAction(message({ text: 'x', from: { id: 44, is_bot: false, first_name: '' } })),
+    ).toMatchObject({ name: null, username: null });
   });
 
   it('skips what a chat sends instead of a person: channel posts copied into its group', () => {

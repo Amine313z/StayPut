@@ -36,6 +36,7 @@ import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
+import { accountOf, accountsView, readAccounts } from './accounts';
 import { isActionView, readActionSettings, readActions, validActionSettings } from './action-views';
 import { executeDueActions, prepareActions } from './actions';
 import { createPostgresDb, type ClosableDb, type Db } from './db';
@@ -946,6 +947,69 @@ export function createApp(deps: AppDeps) {
         c.req.param('chatId'),
       );
       return removed ? c.json({ removed }) : apiError('not_found', 'no such group here');
+    },
+  );
+
+  /**
+   * The Discord and Telegram accounts seen writing: the ones no member has (with the members they
+   * may be), and the ones tied to a member.
+   */
+  app.get('/api/creator/:companyId/accounts', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const config = c.get('config');
+    const view = await readAccounts(db, c.get('userId'), c.get('companyId'), {
+      discord: deps.discord(config),
+      telegram: deps.telegram(config),
+    });
+    return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+  });
+
+  /** The creator ties an account to a member, unties it, or sets it aside (no member). */
+  app.post(
+    '/api/creator/:companyId/accounts/:change{link|unlink|dismiss|restore}',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ memberId?: unknown }>().catch(() => null);
+      const account = accountOf(body);
+      if (!account) return apiError('invalid_request', 'expected { platform, accountId }');
+      const companyId = c.get('companyId');
+      const at = deps.now().toISOString();
+      const args = [companyId, account.platform, account.accountId];
+      const done = async (sql: string, params: unknown[]) =>
+        (await db.query<{ done: boolean }>(sql, params))[0]?.done === true;
+      let changed: boolean;
+      switch (c.req.param('change')) {
+        case 'link': {
+          const memberId = body?.memberId;
+          if (typeof memberId !== 'string' || !/^mber_[A-Za-z0-9]+$/.test(memberId)) {
+            return apiError('invalid_request', 'expected { platform, accountId, memberId }');
+          }
+          changed = await done(
+            'select stayput.link_account($1, $2, $3, $4, $5::timestamptz) as done',
+            [...args, memberId, at],
+          );
+          break;
+        }
+        case 'unlink':
+          changed = await done(
+            'select stayput.unlink_account($1, $2, $3, $4::timestamptz) as done',
+            [...args, at],
+          );
+          break;
+        default:
+          changed = await done(
+            'select stayput.dismiss_account($1, $2, $3, $4, $5::timestamptz) as done',
+            [...args, c.req.param('change') === 'dismiss', at],
+          );
+      }
+      if (!changed) return apiError('not_found', 'no such account or member here');
+      const view = await accountsView(db, c.get('userId'), companyId);
+      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
     },
   );
 

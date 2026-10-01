@@ -372,12 +372,17 @@ export async function fileTelegramUpdate(
   const nowSeconds = Math.floor(now.getTime() / 1000);
   switch (action.kind) {
     case 'message':
-      await db.query('select stayput.record_telegram_message($1, $2, $3, $4::timestamptz)', [
-        action.chatId,
-        action.fromId,
-        action.messageId,
-        action.at.toISOString(),
-      ]);
+      await db.query(
+        'select stayput.record_telegram_message($1, $2, $3, $4::timestamptz, $5, $6)',
+        [
+          action.chatId,
+          action.fromId,
+          action.messageId,
+          action.at.toISOString(),
+          action.name,
+          action.username,
+        ],
+      );
       return {};
     case 'link': {
       const link = await readTelegramStartToken(action.token, nowSeconds, botToken);

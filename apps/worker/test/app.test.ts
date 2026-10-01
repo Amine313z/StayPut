@@ -1,4 +1,5 @@
 import type {
+  AccountsView,
   ActionsPage,
   AccessLevel,
   DiscordChannelChoice,
@@ -714,6 +715,12 @@ describe('Discord and Telegram', () => {
         left.push(guildId);
         return Promise.resolve();
       },
+      user: (userId) =>
+        Promise.resolve(
+          userId === '940000000000000001'
+            ? { name: 'Alice Martin', username: 'alice.m' }
+            : { name: null, username: null },
+        ),
       exchangeCode: (code, redirectUri) => {
         exchanged.push({ code, redirectUri });
         return code === 'bad'
@@ -742,6 +749,12 @@ describe('Discord and Telegram', () => {
         left.push(chatId);
         return Promise.resolve();
       },
+      chatMember: (_chatId, userId) =>
+        Promise.resolve(
+          userId === '5550001'
+            ? { name: 'Bruno', username: 'bruno_p' }
+            : { name: null, username: null },
+        ),
     };
     return { client, sent, webhooks, left };
   }
@@ -1027,6 +1040,96 @@ describe('Discord and Telegram', () => {
     });
     const after = await integrations(request, 'biz_Int6', init);
     expect(after.telegram.unlinkedAuthors).toBe(1);
+  });
+
+  it('lets the creator tie an account to a member, StayPut asking Telegram its names', async () => {
+    const { request } = modules({
+      'user_ola:biz_Int9': 'admin',
+      'user_eve:biz_Int9': 'customer',
+    });
+    const init = await asUser('user_ola');
+    await request('/api/creator/biz_Int9/session', init);
+    await settle();
+    await t.db.query(
+      `insert into stayput.members (id, company_id, user_id, display_name)
+       values ('mber_Int9A', 'biz_Int9', 'user_Int9A', 'Bruno Petit'),
+              ('mber_Int9B', 'biz_Int9', 'user_Int9B', 'Bruno Lefèvre')`,
+    );
+    await t.db.query('select stayput.connect_telegram_chat($1, $2, $3, $4::timestamptz)', [
+      'biz_Int9',
+      '-1009000000009',
+      'VIP',
+      NOW.toISOString(),
+    ]);
+    // A message of before 0012, without the author's names.
+    await t.db.query('select stayput.record_telegram_message($1, $2, $3, $4::timestamptz)', [
+      '-1009000000009',
+      '5550001',
+      '1',
+      NOW.toISOString(),
+    ]);
+    const accounts = async () =>
+      (await (await request('/api/creator/biz_Int9/accounts', init)).json()) as AccountsView;
+    // StayPut asked Telegram the names (getChatMember): Bruno, @bruno_p; two members may be him.
+    expect(await accounts()).toEqual({
+      unlinked: [
+        {
+          platform: 'telegram',
+          accountId: '5550001',
+          name: 'Bruno',
+          username: 'bruno_p',
+          messages: 1,
+          lastAt: expect.any(String) as string,
+          suggestions: [
+            { memberId: 'mber_Int9B', name: 'Bruno Lefèvre', strong: false },
+            { memberId: 'mber_Int9A', name: 'Bruno Petit', strong: false },
+          ],
+        },
+      ],
+      linked: [],
+    });
+
+    const change = (what: string, body: unknown) =>
+      request(`/api/creator/biz_Int9/accounts/${what}`, {
+        ...init,
+        method: 'POST',
+        headers: { ...init.headers, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    const account = { platform: 'telegram', accountId: '5550001' };
+    const linked = (await (
+      await change('link', { ...account, memberId: 'mber_Int9A' })
+    ).json()) as AccountsView;
+    expect(linked).toEqual({
+      unlinked: [],
+      linked: [
+        {
+          ...account,
+          name: 'Bruno',
+          username: 'bruno_p',
+          member: { id: 'mber_Int9A', name: 'Bruno Petit' },
+          via: 'creator',
+        },
+      ],
+    });
+    expect((await integrations(request, 'biz_Int9', init)).telegram).toMatchObject({
+      linkedMembers: 1,
+      unlinkedAuthors: 0,
+    });
+    const unlinked = async (what: string) =>
+      ((await (await change(what, account)).json()) as AccountsView).unlinked.length;
+    expect(await unlinked('unlink')).toBe(1);
+    expect(await unlinked('dismiss')).toBe(0);
+    expect(await unlinked('restore')).toBe(1);
+
+    expect((await change('link', { ...account, memberId: 'nope' })).status).toBe(400);
+    expect((await change('link', { platform: 'irc', accountId: '1' })).status).toBe(400);
+    expect(
+      (await change('unlink', { platform: 'discord', accountId: '940000000000000009' })).status,
+    ).toBe(404);
+    expect((await request('/api/creator/biz_Int9/accounts', await asUser('user_eve'))).status).toBe(
+      403,
+    );
   });
 
   it('lets a member link their Telegram account, once the community has a group', async () => {

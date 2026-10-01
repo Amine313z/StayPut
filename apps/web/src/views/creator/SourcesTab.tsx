@@ -1,4 +1,5 @@
 import { ShieldCheck } from 'lucide-react';
+import { AccountsCard } from '../../components/AccountsCard';
 import { DiscordCard } from '../../components/DiscordCard';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { SyncPanel } from '../../components/SyncPanel';
@@ -12,7 +13,11 @@ import { useCreatorData } from '../CreatorView';
  */
 export function SourcesTab() {
   const { t } = useI18n();
-  const { sync, integrations, api } = useCreatorData();
+  const { sync, integrations, api, members } = useCreatorData();
+  const connected =
+    integrations.state.status === 'ready' &&
+    (integrations.state.data.discord.servers.length > 0 ||
+      integrations.state.data.telegram.groups.length > 0);
   return (
     <div className="space-y-6">
       <SyncPanel sync={sync} />
@@ -40,6 +45,16 @@ export function SourcesTab() {
           />
         </div>
       )}
+      {connected ? (
+        <AccountsCard
+          api={api}
+          members={members.state.status === 'ready' ? members.state.data.members : []}
+          onChange={() => {
+            integrations.reload();
+            members.reload();
+          }}
+        />
+      ) : null}
       <p className="flex items-start gap-2 text-sm text-muted">
         <ShieldCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent" />
         {t('sources.privacy')}

@@ -64,6 +64,31 @@ export const en = {
   'members.status.left': 'Left',
   'members.team': 'Team',
   'members.unnamed': 'Member without a name',
+  'accounts.title': 'Discord and Telegram accounts',
+  'accounts.description':
+    'Who writes on your Discord and Telegram, and which member it is. StayPut ties an account on its own when exactly one member has its name or username; tie the others here.',
+  'accounts.toLink': 'To tie ({count})',
+  'accounts.linked': 'Tied ({count})',
+  'accounts.empty': 'No one has written yet: the first messages will show up here.',
+  'accounts.allLinked': 'Every account that wrote is tied to a member.',
+  'accounts.unnamed': 'Account without a name',
+  'accounts.messages.one': '{count} message waiting',
+  'accounts.messages.other': '{count} messages waiting',
+  'accounts.lastSeen': 'last seen {when}',
+  'accounts.suggested': 'Probably:',
+  'accounts.sameName': 'same name',
+  'accounts.linkTo': 'Tie to {name}',
+  'accounts.other': 'Another member:',
+  'accounts.choose': 'Choose a member…',
+  'accounts.link': 'Tie',
+  'accounts.dismiss': 'Not a member',
+  'accounts.unlink': 'Untie',
+  'accounts.unlinkConfirm': 'Yes, untie',
+  'accounts.via.whop': 'Whop profile',
+  'accounts.via.member': 'by the member',
+  'accounts.via.name': 'same name',
+  'accounts.via.creator': 'by you',
+  'accounts.failed': 'Not saved. Try again.',
   'members.joined': 'Member since {date}',
   'members.noMembership': 'No membership',
   'members.price.once': '{price}, paid once',
@@ -143,7 +168,7 @@ export const en = {
   'sources.unlinkedAuthors.one': '{count} recent author not linked to a member',
   'sources.unlinkedAuthors.other': '{count} recent authors not linked to a member',
   'sources.privacy':
-    'StayPut never reads what is written: only who wrote, and when. Disconnecting a source makes its bot leave.',
+    'StayPut never reads what is written: only who wrote (their name, to recognize the member) and when. Disconnecting a source makes its bot leave.',
   'sync.badge.never': 'Waiting',
   'members.description':
     'Everyone StayPut read from Whop, the most likely to leave first, with the reasons, their membership, payments and activity.',
@@ -164,7 +189,7 @@ export const en = {
   'discord.step.members':
     'A member counts once they have linked their Discord to their Whop profile.',
   'discord.linkHow':
-    'A message counts for a member who linked their Discord to their Whop profile; the others wait 7 days in case they do.',
+    'A message counts for the member who linked this Discord on their Whop profile, or whom StayPut recognizes by name; tie the others below. Their messages wait 30 days.',
   'discord.unnamed': 'Discord server',
   'discord.channelsFollowed.one': '{count} channel followed',
   'discord.channelsFollowed.other': '{count} channels followed',
@@ -197,7 +222,7 @@ export const en = {
   'telegram.step.members':
     'Members link their Telegram from StayPut, in your Whop community ("Link my Telegram").',
   'telegram.linkHow':
-    'Whop does not share members’ Telegram accounts: each member links theirs from StayPut, in the community. Messages of unlinked accounts wait 7 days. A message sent anonymously (an anonymous admin) or in a channel’s name does not count: Telegram does not say who wrote it.',
+    'Whop does not share members’ Telegram accounts: StayPut recognizes a member by name, you tie the others below, or the member links theirs from StayPut. Messages of accounts not tied yet wait 30 days. A message sent anonymously (an anonymous admin) or in a channel’s name does not count: Telegram does not say who wrote it.',
   'telegram.unnamed': 'Telegram group',
   'telegram.lastMessage': 'Last message {when}',
   'telegram.listening': 'Listening',

@@ -19,7 +19,7 @@ export function Steps({ steps }: { steps: readonly string[] }) {
 
 /**
  * How many members StayPut recognizes on the platform, how many recent authors it does not
- * (their activity waits 7 days for a member to link the account), and how members link it.
+ * (their activity waits 30 days for the account to be tied to a member), and how it is tied.
  */
 export function LinkedMembers({
   linked,

@@ -150,6 +150,30 @@ async function main() {
            where company_id = ${id as string} and user_id like '%:%'
            group by 1 order by 1`,
       );
+      // The accounts seen writing (migration 0012): how each got its member, without a name.
+      const [accounts] = await sql`
+        select to_regclass('stayput.platform_accounts') is not null as present`;
+      if (accounts?.present) {
+        out();
+        table(
+          await sql`
+            select pa.platform,
+                   coalesce(case pa.platform when 'discord' then m.discord_link
+                                             else m.telegram_link end,
+                            case when pa.dismissed_at is not null then 'dismissed'
+                                 else 'not tied' end) as member,
+                   count(*) as accounts,
+                   count(*) filter (where pa.display_name is null and pa.username is null)
+                     as without_names
+              from stayput.platform_accounts pa
+              left join stayput.members m
+                on m.company_id = pa.company_id
+               and case pa.platform when 'discord' then m.discord_user_id
+                                    else m.telegram_user_id end = pa.account_id
+             where pa.company_id = ${id as string}
+             group by 1, 2 order by 1, 2`,
+        );
+      }
     }
     // The actions (migration 0009): how many of each type are at each step of their cycle,
     // with the reasons the guardrails gave. Counts only.

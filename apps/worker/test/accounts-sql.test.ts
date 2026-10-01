@@ -1,0 +1,365 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { withUser } from '../src/db';
+import { member, page } from './fixtures/whop';
+import { createTestDb, type TestDb } from './helpers/db';
+
+/**
+ * Migration 0012: the Discord and Telegram accounts StayPut saw writing join their member by
+ * name when one member surely matches, or by the creator's choice; their activity waits 30 days;
+ * the weekly reading of Whop profiles never undoes a link it did not make.
+ */
+
+const NOW = '2026-10-01T12:00:00Z';
+let t: TestDb;
+let companies = 0;
+
+beforeAll(async () => {
+  t = await createTestDb();
+});
+afterAll(() => t.close());
+
+const rows = <T>(sql: string, params: unknown[] = []) => t.db.query<T>(sql, params);
+
+/** A company with a Telegram group, its members named as given (Whop name and username). */
+async function community(people: { name: string; username?: string }[]) {
+  companies += 1;
+  const c = `biz_Acc${companies}`;
+  const chat = `-100${companies}0077`;
+  await t.db.query('select stayput.ensure_company($1, $2::timestamptz)', [c, NOW]);
+  const ids = people.map((_, i) => `mber_Acc${companies}x${i}`);
+  await rows('select stayput.ingest_page($1, $2, null, $3::text::jsonb)', [
+    c,
+    'members',
+    JSON.stringify(
+      page(
+        people.map((p, i) =>
+          member(ids[i]!, `user_Acc${companies}x${i}`, {
+            user: { id: `user_Acc${companies}x${i}`, name: p.name, username: p.username ?? null },
+          }),
+        ),
+      ),
+    ),
+  ]);
+  await t.db.query('select stayput.connect_telegram_chat($1, $2, $3, $4::timestamptz)', [
+    c,
+    chat,
+    'Group',
+    NOW,
+  ]);
+  let messages = 0;
+  /** A message in the group, by a Telegram account with these names. */
+  const say = async (from: string, name: string | null, username: string | null = null) => {
+    messages += 1;
+    await rows('select stayput.record_telegram_message($1, $2, $3, $4::timestamptz, $5, $6)', [
+      chat,
+      from,
+      String(messages),
+      '2026-09-30T20:00:00Z',
+      name,
+      username,
+    ]);
+  };
+  const telegramOf = async () =>
+    Object.fromEntries(
+      (
+        await rows<{ id: string; telegram_user_id: string | null; telegram_link: string | null }>(
+          `select id, telegram_user_id, telegram_link from stayput.members
+            where company_id = $1 order by id`,
+          [c],
+        )
+      ).map((m) => [m.id, m.telegram_user_id ? `${m.telegram_user_id}/${m.telegram_link}` : null]),
+    );
+  const waiting = async () =>
+    (
+      await rows<{ user_id: string }>(
+        `select distinct user_id from stayput.pending_activity where company_id = $1
+          order by user_id`,
+        [c],
+      )
+    ).map((r) => r.user_id);
+  return { c, chat, ids, say, telegramOf, waiting };
+}
+
+async function admin(c: string, user: string) {
+  await rows(
+    `insert into stayput.company_admins (company_id, user_id, verified_at) values ($1, $2, now())`,
+    [c, user],
+  );
+}
+
+const change = (fn: string, args: unknown[]) =>
+  rows<{ done: boolean }>(`select stayput.${fn} as done`, args).then((r) => r[0]?.done);
+
+describe('tying an account by name', () => {
+  it('ties it when one member surely matches: same username, or same full name', async () => {
+    const { ids, say, telegramOf, waiting } = await community([
+      { name: 'Alice Martin', username: 'alicem' },
+      { name: 'Bruno Petit', username: 'brunop' },
+      { name: 'Thomas Durand' },
+      { name: 'Thomas Durand' },
+      { name: 'Zoé' },
+    ]);
+    await say('1001', 'alice MARTIN'); // the full name, written otherwise
+    await say('1002', 'B', 'BrunoP'); // the username
+    await say('1003', 'Thomas Durand'); // two members: not sure
+    await say('1004', 'Zoé'); // a first name alone: not sure
+    expect(await telegramOf()).toEqual({
+      [ids[0]!]: '1001/name',
+      [ids[1]!]: '1002/name',
+      [ids[2]!]: null,
+      [ids[3]!]: null,
+      [ids[4]!]: null,
+    });
+    // The messages of the tied accounts count for their members; the others wait.
+    expect(await waiting()).toEqual(['telegram:1003', 'telegram:1004']);
+  });
+
+  it('ties a Discord author from the names of its messages', async () => {
+    const { c, ids } = await community([{ name: 'Chloé Dubois', username: 'chloe' }]);
+    await rows('select stayput.ingest_page($1, $2, $3, $4::text::jsonb)', [
+      c,
+      'discord_messages',
+      '920000000000000001',
+      JSON.stringify([
+        {
+          id: '930000000000000001',
+          type: 0,
+          timestamp: '2026-09-30T10:00:00Z',
+          content: 'never stored',
+          author: { id: '940000000000000001', username: 'chloe.d', global_name: 'chloe dubois' },
+        },
+      ]),
+    ]);
+    expect(
+      await rows('select discord_user_id, discord_link from stayput.members where id = $1', [
+        ids[0],
+      ]),
+    ).toEqual([{ discord_user_id: '940000000000000001', discord_link: 'name' }]);
+    expect(
+      await rows(
+        `select display_name, username from stayput.platform_accounts
+          where company_id = $1 and platform = 'discord'`,
+        [c],
+      ),
+    ).toEqual([{ display_name: 'chloe dubois', username: 'chloe.d' }]);
+  });
+
+  it('ties it later, when the member arrives (the pass every 10 minutes)', async () => {
+    const { c, say, telegramOf, waiting } = await community([{ name: 'Alice Martin' }]);
+    await say('2001', 'Nora Ben Ali');
+    expect(await waiting()).toEqual(['telegram:2001']);
+    await rows('select stayput.ingest_page($1, $2, null, $3::text::jsonb)', [
+      c,
+      'members',
+      JSON.stringify(
+        page([
+          member('mber_AccNora', 'user_AccNora', {
+            user: { id: 'user_AccNora', name: 'Nora Ben Ali' },
+          }),
+        ]),
+      ),
+    ]);
+    expect(await change('link_accounts_by_name($1)', [c])).toBe(1);
+    expect((await telegramOf()).mber_AccNora).toBe('2001/name');
+    expect(await waiting()).toEqual([]);
+  });
+});
+
+describe('the creator ties and unties', () => {
+  it('ties any account to any member, and StayPut then leaves it alone', async () => {
+    const { c, ids, say, telegramOf, waiting } = await community([
+      { name: 'Thomas Durand' },
+      { name: 'Thomas Durand' },
+    ]);
+    await say('3001', 'Thomas Durand');
+    const link = (account: string, memberId: string) =>
+      change('link_account($1, $2, $3, $4, $5::timestamptz)', [
+        c,
+        'telegram',
+        account,
+        memberId,
+        NOW,
+      ]);
+    expect(await link('3001', ids[1]!)).toBe(true);
+    expect(await telegramOf()).toEqual({ [ids[0]!]: null, [ids[1]!]: '3001/creator' });
+    expect(await waiting()).toEqual([]);
+    expect(await link('9999', ids[0]!)).toBe(false); // never seen here
+    expect(await link('3001', 'mber_Elsewhere')).toBe(false);
+
+    // Untied: what it brought stays, and its next messages wait, even with a name that matches.
+    expect(
+      await change('unlink_account($1, $2, $3, $4::timestamptz)', [c, 'telegram', '3001', NOW]),
+    ).toBe(true);
+    await rows(`update stayput.members set display_name = 'Lou Bernard' where id = $1`, [ids[0]]);
+    await say('3001', 'Lou Bernard');
+    expect(await telegramOf()).toEqual({ [ids[0]!]: null, [ids[1]!]: null });
+    expect(await waiting()).toEqual(['telegram:3001']);
+    expect(
+      await rows('select member_id from stayput.activity_events where company_id = $1', [c]),
+    ).toEqual([{ member_id: ids[1] }]);
+  });
+
+  it('keeps the creator’s Discord link when the Whop profile shows none', async () => {
+    const { c, ids } = await community([{ name: 'Alice Martin' }, { name: 'Bruno Petit' }]);
+    const account = '950000000000000001';
+    await rows('select stayput.note_account($1, $2, $3, $4, $5, $6::timestamptz)', [
+      c,
+      'discord',
+      account,
+      'someone',
+      'someone',
+      NOW,
+    ]);
+    await change('link_account($1, $2, $3, $4, $5::timestamptz)', [
+      c,
+      'discord',
+      account,
+      ids[0],
+      NOW,
+    ]);
+    const profile = (user: string, discord: string | null) =>
+      rows('select stayput.link_member_discord($1, $2::text::jsonb, $3::timestamptz)', [
+        c,
+        JSON.stringify({
+          id: user,
+          social_accounts: discord ? [{ platform: 'discord', external_id: discord }] : [],
+        }),
+        NOW,
+      ]);
+    await profile(`user_Acc${companies}x0`, null);
+    const discordOf = () =>
+      rows<{ id: string; discord_user_id: string | null; discord_link: string | null }>(
+        'select id, discord_user_id, discord_link from stayput.members where company_id = $1 order by id',
+        [c],
+      );
+    expect(await discordOf()).toEqual([
+      { id: ids[0], discord_user_id: account, discord_link: 'creator' },
+      { id: ids[1], discord_user_id: null, discord_link: null },
+    ]);
+    // The account's owner says it is theirs on Whop: Whop is right.
+    await profile(`user_Acc${companies}x1`, account);
+    expect(await discordOf()).toEqual([
+      { id: ids[0], discord_user_id: null, discord_link: null },
+      { id: ids[1], discord_user_id: account, discord_link: 'whop' },
+    ]);
+  });
+});
+
+describe('what the creator sees', () => {
+  it('lists the accounts to tie with suggestions, and the tied ones, to the team only', async () => {
+    const { c, ids, say } = await community([
+      { name: 'Alice Martin', username: 'alicem' },
+      { name: 'Thomas Durand' },
+      { name: 'Thomas Durand' },
+      { name: 'Zoé Lambert' },
+    ]);
+    await say('4001', 'Alice Martin');
+    await say('4002', 'Thomas Durand');
+    await say('4002', 'Thomas Durand');
+    await say('4003', 'Zoé', 'zoe_l');
+    await say('4004', null);
+    await admin(c, 'user_AccOwner');
+    const view = async (user: string) =>
+      (
+        await withUser(t.db, user, (tx) =>
+          tx.query<{ view: unknown }>('select stayput.platform_accounts_view($1) as view', [c]),
+        )
+      )[0]?.view;
+
+    expect(await view('user_AccStranger')).toBeNull();
+    const seen = (await view('user_AccOwner')) as {
+      unlinked: { accountId: string; messages: number; suggestions: unknown[] }[];
+      linked: unknown[];
+    };
+    const thomas = [
+      { memberId: ids[1], name: 'Thomas Durand', strong: true },
+      { memberId: ids[2], name: 'Thomas Durand', strong: true },
+    ].sort((a, b) => a.memberId!.localeCompare(b.memberId!));
+    expect(
+      seen.unlinked.map((a) => ({
+        accountId: a.accountId,
+        messages: a.messages,
+        suggestions: a.suggestions,
+      })),
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          accountId: '4002',
+          messages: 2,
+          suggestions: expect.arrayContaining(thomas) as unknown[],
+        },
+        {
+          accountId: '4003',
+          messages: 1,
+          suggestions: [{ memberId: ids[3], name: 'Zoé Lambert', strong: false }],
+        },
+        { accountId: '4004', messages: 1, suggestions: [] },
+      ]),
+    );
+    expect(seen.unlinked).toHaveLength(3);
+    expect(seen.linked).toEqual([
+      {
+        platform: 'telegram',
+        accountId: '4001',
+        name: 'Alice Martin',
+        username: null,
+        member: { id: ids[0], name: 'Alice Martin' },
+        via: 'name',
+      },
+    ]);
+  });
+
+  it('sets an account aside, and brings it back', async () => {
+    const { c, say } = await community([{ name: 'Alice Martin' }]);
+    await say('5001', 'A friend');
+    await admin(c, 'user_AccOwner2');
+    const counted = async () =>
+      (
+        await withUser(t.db, 'user_AccOwner2', (tx) =>
+          tx.query<{ accounts: number }>('select accounts from stayput.unlinked_authors($1)', [c]),
+        )
+      )[0]?.accounts ?? 0;
+    expect(await counted()).toBe(1);
+    const dismiss = (dismissed: boolean) =>
+      change('dismiss_account($1, $2, $3, $4, $5::timestamptz)', [
+        c,
+        'telegram',
+        '5001',
+        dismissed,
+        NOW,
+      ]);
+    expect(await dismiss(true)).toBe(true);
+    expect(await counted()).toBe(0);
+    expect(await dismiss(false)).toBe(true);
+    expect(await counted()).toBe(1);
+  });
+});
+
+describe('waiting activity', () => {
+  it('waits 30 days under a Discord or Telegram account, 7 under a Whop user', async () => {
+    const { c, say, waiting } = await community([{ name: 'Alice Martin' }]);
+    await say('6001', 'Someone');
+    await rows(
+      `insert into stayput.pending_activity (company_id, user_id, type, occurred_at, external_id,
+                                             received_at)
+       values ($1, 'user_AccLater', 'message', $2::timestamptz, 'x1', $2::timestamptz)`,
+      [c, '2026-09-30T20:00:00Z'],
+    );
+    await rows(
+      `update stayput.pending_activity set received_at = $2::timestamptz
+                 where company_id = $1`,
+      [c, '2026-09-20T12:00:00Z'],
+    );
+    await rows('select stayput.purge_pending_activity($1::timestamptz)', [NOW]);
+    // 11 days: the Whop user's activity is gone, the Telegram account's waits.
+    expect(await waiting()).toEqual(['telegram:6001']);
+    await rows('select stayput.purge_pending_activity($1::timestamptz)', ['2026-10-21T12:00:00Z']);
+    expect(await waiting()).toEqual([]);
+    // Its names go once it is quiet for 30 days, nobody having the account.
+    const named = () =>
+      rows('select display_name from stayput.platform_accounts where company_id = $1', [c]);
+    expect(await named()).toEqual([{ display_name: 'Someone' }]);
+    await rows('select stayput.purge_pending_activity($1::timestamptz)', ['2026-11-01T12:00:00Z']);
+    expect(await named()).toEqual([]);
+  });
+});

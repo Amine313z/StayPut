@@ -49,6 +49,8 @@ export interface DiscordClient {
   guildChannels(guildId: string): Promise<DiscordChannel[]>;
   /** The bot leaves a server (the creator disconnected it). */
   leaveGuild(guildId: string): Promise<void>;
+  /** A Discord account's display name and username (GET /users/{id}). */
+  user(userId: string): Promise<{ name: string | null; username: string | null }>;
   /** The application's id and its bot's user id, read once per isolate. */
   application(): Promise<{ id: string; botId: string }>;
   /**
@@ -129,6 +131,14 @@ export function createDiscordClient(options: {
     },
     async leaveGuild(guildId) {
       await call('DELETE', `/users/@me/guilds/${snowflake(guildId)}`);
+    },
+    async user(userId) {
+      const user = await json<{ global_name?: unknown; username?: unknown }>(
+        `/users/${snowflake(userId)}`,
+      );
+      const text = (value: unknown) =>
+        typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+      return { name: text(user.global_name), username: text(user.username) };
     },
     application() {
       application ??= json<{ id?: unknown; bot?: { id?: unknown } }>('/applications/@me').then(

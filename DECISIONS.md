@@ -434,6 +434,41 @@ second, silencieux : la fenêtre « Choisir les salons » aurait montré tous le
   (`test/helpers/db.ts`) : tout code qui lirait encore une colonne tableau échoue dans les
   tests. Les deux bugs y échouent sans le correctif et passent avec.
 
+### Relier les comptes sans passer par Whop (même jour, demande du fondateur)
+
+« On ne voit pas les membres si leur compte Whop n'est pas connecté à Discord ou Telegram. »
+Jusqu'ici, un message ne comptait que pour le membre qui avait relié son Discord à son profil
+Whop, ou son Telegram depuis StayPut. Les autres attendaient 7 jours, puis disparaissaient.
+Désormais, un compte rejoint son membre de quatre façons (migration 0012) :
+
+- **Par son nom, tout seul** : quand son pseudo est le pseudo Whop d'un membre, ou que son nom
+  complet (deux mots au moins) est le nom Whop d'un membre, et qu'**un seul** membre correspond
+  (« Chloé Dubois », « chloe dubois » et « CHLOE-DUBOIS » sont un seul nom). Deux « Thomas
+  Durand », ou un prénom seul : StayPut ne choisit pas, il propose. Essayé à chaque nouveau nom,
+  puis toutes les 10 minutes (un membre arrivé entre-temps, un pseudo Whop lu depuis).
+- **Par le créateur, en un clic**, dans Sources → « Comptes Discord et Telegram » : chaque compte
+  qui a écrit, avec ses messages en attente et jusqu'à 3 membres suggérés (même pseudo, même nom,
+  même prénom), ou n'importe quel membre de la liste. « Pas un membre » le met de côté (un invité,
+  un ami). Une erreur se corrige d'un clic (« Délier »).
+- Par le profil Whop (Discord) et par le membre lui-même (Telegram), comme avant.
+- Dès qu'une personne a décidé (le créateur a relié ou délié le compte, son propriétaire l'a
+  délié), StayPut ne le relie plus par son nom.
+
+Qui a relié quoi est gardé (`discord_link`, `telegram_link`). La lecture hebdomadaire des
+profils Whop ne défait plus que ses propres liens, jamais ceux du créateur ou d'un nom. Si le
+propriétaire d'un compte le déclare sur son profil Whop, Whop a raison et le compte le suit.
+
+- **Rien n'est perdu** : l'activité d'un compte pas encore relié attend **30 jours** (7 pour un
+  utilisateur Whop qui n'est pas encore membre). Le relier ramène tout son mois.
+- **Ce que StayPut garde** : en plus de l'auteur et de la date, le nom affiché et le pseudo du
+  compte (`platform_accounts`), pour que le créateur le reconnaisse. Jamais le contenu. Les noms
+  d'un compte sans membre s'effacent après 30 jours sans message. Les comptes vus avant 0012
+  n'ont pas de nom : StayPut le demande à Discord (`GET /users/{id}`) ou à Telegram
+  (`getChatMember`, dans le groupe où il a écrit), 10 par affichage de la liste.
+- Le pseudo Whop des membres est maintenant lu (`members.username`), pour comparer les pseudos.
+- **Limite** : un membre n'a qu'un compte par plateforme. Pour une très grande communauté, la
+  liste des membres à choisir est celle déjà chargée par le tableau de bord.
+
 ### Interface : un vrai tableau de bord
 
 - Trois sections à onglets dans la vue créateur : vue d'ensemble (chiffres, « À surveiller »,

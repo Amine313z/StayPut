@@ -401,6 +401,40 @@ export interface TimezoneAnswer {
   timezone: string;
 }
 
+/** Discord or Telegram: where StayPut sees members write beside Whop. */
+export type AccountPlatform = 'discord' | 'telegram';
+
+/** A Discord or Telegram account no member has yet: its messages wait 30 days for one. */
+export interface UnlinkedAccount {
+  platform: AccountPlatform;
+  accountId: string;
+  /** Discord's display name, Telegram's first and last names; null while StayPut lacks them. */
+  name: string | null;
+  username: string | null;
+  /** Its messages waiting for a member. */
+  messages: number;
+  lastAt: string;
+  /** Up to 3 members it may be; `strong`: same username, or same full name. */
+  suggestions: { memberId: string; name: string | null; strong: boolean }[];
+}
+
+/** An account tied to a member, and who tied it. */
+export interface LinkedAccount {
+  platform: AccountPlatform;
+  accountId: string;
+  name: string | null;
+  username: string | null;
+  member: { id: string; name: string | null };
+  /** whop: on the member's Whop profile; member: linked from StayPut; name: StayPut, by name. */
+  via: 'whop' | 'member' | 'name' | 'creator' | null;
+}
+
+/** GET /api/creator/:companyId/accounts, and the answer of each change. */
+export interface AccountsView {
+  unlinked: UnlinkedAccount[];
+  linked: LinkedAccount[];
+}
+
 /** GET /health */
 export interface HealthReport {
   status: 'ok' | 'degraded';
