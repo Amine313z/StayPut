@@ -1349,6 +1349,18 @@ describe('the actions (SPEC Phase 4)', () => {
     renderAt('/dashboard/biz_A1/settings');
     const zone = await screen.findByRole<HTMLSelectElement>('combobox', { name: 'Time zone' });
     expect(zone.value).toBe('Europe/Paris');
+    // The United States, the United Kingdom and France first; the zone in effect shows as such.
+    const suggested = zone.querySelector('optgroup');
+    expect(suggested?.getAttribute('label')).toBe('Suggested');
+    expect([...(suggested?.querySelectorAll('option') ?? [])].map((o) => o.textContent)).toEqual([
+      'United States · New York (Eastern)',
+      'United States · Chicago (Central)',
+      'United States · Denver (Mountain)',
+      'United States · Los Angeles (Pacific)',
+      'United Kingdom · London',
+      'France · Paris',
+    ]);
+    expect(zone.selectedOptions[0]?.textContent).toBe('France · Paris');
     expect(within(zone).getByRole('option', { name: 'America/New York' })).toBeTruthy();
     const save = () => screen.getByRole('button', { name: 'Save the action settings' });
     fireEvent.change(zone, { target: { value: 'Asia/Tokyo' } });

@@ -16,7 +16,7 @@ import { putJson, useApi } from '../../api';
 import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { useI18n } from '../../i18n';
-import { browserTimeZone, timeZoneGroups, zoneLabel } from '../../timezone';
+import { SUGGESTED_TIME_ZONES, browserTimeZone, timeZoneGroups, zoneLabel } from '../../timezone';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { useCreatorData } from '../CreatorView';
@@ -122,6 +122,11 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
     () => timeZoneGroups(initial.timezone, browserZone),
     [initial.timezone, browserZone],
   );
+  /** « France · Paris » for a suggested zone, « America/New York » for the others. */
+  const zoneName = (zone: string) => {
+    const suggested = SUGGESTED_TIME_ZONES.find((s) => s.zone === zone);
+    return suggested ? t(suggested.label) : zoneLabel(zone);
+  };
 
   const view = toView(draft);
   const changed = view !== null && JSON.stringify(view) !== saved;
@@ -303,6 +308,14 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
                   }}
                   className={`${FIELD} w-full sm:w-72`}
                 >
+                  {/* The suggestions come first; the select shows the first option it matches. */}
+                  <optgroup label={t('actionSettings.timezone.suggested')}>
+                    {SUGGESTED_TIME_ZONES.map(({ zone, label }) => (
+                      <option key={zone} value={zone}>
+                        {t(label)}
+                      </option>
+                    ))}
+                  </optgroup>
                   {zoneGroups.map(({ region, zones }) => (
                     <optgroup
                       key={region ?? ''}
@@ -329,7 +342,7 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
                   icon={<Globe aria-hidden="true" className="size-4" />}
                   onClick={() => edit((current) => ({ ...current, timezone: browserZone }))}
                 >
-                  {t('actionSettings.timezone.useBrowser', { zone: zoneLabel(browserZone) })}
+                  {t('actionSettings.timezone.useBrowser', { zone: zoneName(browserZone) })}
                 </Button>
               ) : null}
             </div>

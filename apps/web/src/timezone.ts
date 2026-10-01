@@ -1,5 +1,19 @@
 import { timeZoneName, type TimezoneAnswer } from '@stayput/core';
+import type { MessageKey } from '@stayput/i18n';
 import { postJson } from './api';
+
+/**
+ * The zones offered first, before the full list (the founder's choice): the United States, the
+ * United Kingdom, France.
+ */
+export const SUGGESTED_TIME_ZONES: readonly { zone: string; label: MessageKey }[] = [
+  { zone: 'America/New_York', label: 'actionSettings.timezone.newYork' },
+  { zone: 'America/Chicago', label: 'actionSettings.timezone.chicago' },
+  { zone: 'America/Denver', label: 'actionSettings.timezone.denver' },
+  { zone: 'America/Los_Angeles', label: 'actionSettings.timezone.losAngeles' },
+  { zone: 'Europe/London', label: 'actionSettings.timezone.london' },
+  { zone: 'Europe/Paris', label: 'actionSettings.timezone.paris' },
+];
 
 /** The browser's time zone (an IANA name such as Europe/Paris), or null when it tells none. */
 export function browserTimeZone(): string | null {

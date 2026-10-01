@@ -684,7 +684,9 @@ le fondateur, l'heure par défaut 19 h devenait 21 h à Paris.
   dit si l'entreprise a déjà son fuseau (`timezoneSet`), et sinon la page envoie celui du
   navigateur (`POST /timezone`). Le premier entendu reste ; un autre navigateur, ailleurs, ne
   le change pas. Ensuite, seul le créateur le change, dans Réglages → Actions et garde-fous,
-  avec un bouton « Utiliser celui de ce navigateur ».
+  avec un bouton « Utiliser celui de ce navigateur ». La liste propose d'abord, à la demande du
+  fondateur, les États-Unis (New York, Chicago, Denver, Los Angeles), le Royaume-Uni et la
+  France, puis tous les fuseaux par région.
 - Le formulaire n'envoie le fuseau **que si le créateur l'a modifié** : celui du navigateur a
   pu arriver après la lecture du formulaire, il ne faut pas l'écraser par l'ancien.
 - **Validé deux fois** : le Worker n'accepte qu'un nom IANA que son moteur connaît
