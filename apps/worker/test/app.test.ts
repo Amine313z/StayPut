@@ -986,6 +986,46 @@ describe('Discord and Telegram', () => {
     expect(telegram.left).toEqual(['-1009000000002', '-1009000000001']);
   });
 
+  it("answers in the creator's StayPut language, and skips the channel posts Telegram copies", async () => {
+    const { request, telegram } = modules({ 'user_noe:biz_Int6': 'admin' });
+    const init = await asUser('user_noe');
+    await request('/api/creator/biz_Int6/session', init);
+    await settle();
+    const status = (await (
+      await request('/api/creator/biz_Int6/integrations?lang=fr', init)
+    ).json()) as IntegrationsStatus;
+    const start = new URL(status.telegram.addToGroup!.url).searchParams.get('startgroup')!;
+    expect(start).toMatch(/_fr_/);
+    // A channel's discussion group; Telegram says nothing of the creator's language.
+    const group = { id: -1009000000006, type: 'supergroup', title: 'Mon canal Chat' };
+    const update = (id: number, message: Record<string, unknown>) =>
+      telegramUpdate(request, {
+        update_id: id,
+        message: { message_id: id, date: NOW_S, chat: group, ...message },
+      });
+    await update(20, { from: { id: 4343, is_bot: false }, text: `/start@StayPutBot ${start}` });
+    await settle();
+    expect(telegram.sent.at(-1)).toEqual({
+      chatId: '-1009000000006',
+      text: expect.stringContaining('relié à StayPut') as string,
+    });
+    // A channel post, copied by Telegram into the group, is nobody's activity…
+    await update(21, {
+      from: { id: 777000, is_bot: false, first_name: 'Telegram' },
+      sender_chat: { id: -1009000000099, type: 'channel', title: 'Mon canal' },
+      is_automatic_forward: true,
+      text: 'Nouvelle vidéo',
+    });
+    // …a member's comment under it is theirs.
+    await update(22, {
+      from: { id: 5555, is_bot: false },
+      reply_to_message: { message_id: 21 },
+      text: 'Top !',
+    });
+    const after = await integrations(request, 'biz_Int6', init);
+    expect(after.telegram.unlinkedAuthors).toBe(1);
+  });
+
   it('lets a member link their Telegram account, once the community has a group', async () => {
     const { request, telegram } = modules(
       { 'user_mo:exp_Int5': 'customer', 'user_owner5:biz_Int5': 'admin' },
@@ -1000,8 +1040,10 @@ describe('Discord and Telegram', () => {
       JSON.stringify(page([member('mber_Int5', 'user_mo')])),
     ]);
     const mo = await asUser('user_mo');
-    const read = async () =>
-      (await (await request('/api/member/exp_Int5/telegram', mo)).json()) as MemberTelegramStatus;
+    const read = async (query = '') =>
+      (await (
+        await request(`/api/member/exp_Int5/telegram${query}`, mo)
+      ).json()) as MemberTelegramStatus;
     expect(await read()).toMatchObject({ available: false, linked: false, link: null });
 
     await t.db.query('select stayput.connect_telegram_chat($1, $2, $3, $4::timestamptz)', [
@@ -1010,7 +1052,7 @@ describe('Discord and Telegram', () => {
       'VIP',
       NOW.toISOString(),
     ]);
-    const offer = await read();
+    const offer = await read('?lang=fr');
     expect(offer).toMatchObject({ available: true, linked: false, whopAppId: APP_ID });
     const token = new URL(offer.link!.url).searchParams.get('start')!;
 
@@ -1026,9 +1068,10 @@ describe('Discord and Telegram', () => {
       },
     });
     await settle();
+    // In the language of the member's StayPut, whatever Telegram says.
     expect(telegram.sent.at(-1)).toEqual({
       chatId: '5151',
-      text: expect.stringContaining('Done') as string,
+      text: expect.stringContaining('vos messages dans les groupes Telegram') as string,
     });
     expect(await read()).toMatchObject({ linked: true });
 

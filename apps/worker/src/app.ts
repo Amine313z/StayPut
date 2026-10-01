@@ -70,6 +70,7 @@ import {
 } from './session';
 import { SYNC_REQUEST_BUDGET, summarize, syncIfFree } from './sync';
 import {
+  botLanguage,
   createTelegramClient,
   telegramWebhookSecret,
   timingSafeEqual,
@@ -588,6 +589,7 @@ export function createApp(deps: AppDeps) {
       discord: deps.discord(config),
       telegram: deps.telegram(config),
       signingKey: config.apiKey ? await signingKey(config.apiKey) : null,
+      language: botLanguage(c.req.query('lang')),
     };
   }
 
@@ -910,6 +912,7 @@ export function createApp(deps: AppDeps) {
         config,
         telegram: deps.telegram(config),
         origin: new URL(c.req.url).origin,
+        language: botLanguage(c.req.query('lang')),
       }),
     );
   });

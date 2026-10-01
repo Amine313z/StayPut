@@ -49,8 +49,9 @@ export function MemberView() {
  * tell apps a member's Telegram, the member says it by opening the bot with a signed link.
  */
 function TelegramLink({ api }: { api: string }) {
-  const { t } = useI18n();
-  const { state, reload } = useApi<MemberTelegramStatus>(`${api}/telegram`);
+  const { t, locale } = useI18n();
+  // The language goes along: the bot answers the member in it.
+  const { state, reload } = useApi<MemberTelegramStatus>(`${api}/telegram?lang=${locale}`);
   useReloadOnReturn(reload);
   if (state.status !== 'ready') return null;
   const status = state.data;

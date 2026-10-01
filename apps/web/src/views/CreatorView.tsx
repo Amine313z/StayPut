@@ -48,13 +48,14 @@ export function CreatorView() {
  * page (after connecting one in another tab).
  */
 function Dashboard({ session }: { session: CreatorSession }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const companyId = session.companyId;
   const api = `/api/creator/${encodeURIComponent(companyId)}`;
   const root = `/dashboard/${encodeURIComponent(companyId)}`;
   const members = useApi<MembersPage>(`${api}/members`);
   const sync = useSync(companyId, members.reload);
-  const integrations = useApi<IntegrationsStatus>(`${api}/integrations`);
+  // The language goes along: the bot answers the creator's Telegram groups in it.
+  const integrations = useApi<IntegrationsStatus>(`${api}/integrations?lang=${locale}`);
   useReloadOnReturn(integrations.reload);
   const data: CreatorData = { companyId, root, api, members, sync, integrations };
 

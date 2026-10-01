@@ -186,7 +186,9 @@ export const en = {
   'telegram.privacyMode':
     "The bot's privacy mode is on: it only sees the commands meant for it, so nothing counts. In Telegram, @BotFather → /setprivacy → Disable, then add the bot to the group again.",
   'telegram.step.add':
-    'Open the link and choose your group (you need to be an admin of it). The link is valid for an hour.',
+    'Open the link and choose your group, or your channel’s discussion group (you need to be an admin of it). The link is valid for an hour.',
+  'telegram.channel':
+    'A channel? Only its admins post there and its reactions are anonymous, so StayPut counts the members’ comments: turn the channel’s comments on (Manage → Discussion → create a group), then add the bot to that discussion group.',
   'telegram.step.confirm': 'The bot confirms in the group that it is linked to StayPut.',
   'telegram.step.members':
     'Members link their Telegram from StayPut, in your Whop community ("Link my Telegram").',

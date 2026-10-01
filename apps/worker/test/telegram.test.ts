@@ -80,14 +80,44 @@ describe('signed links', () => {
   it('signs the company of a group link, until it expires', async () => {
     const token = await telegramStartToken('biz_2whAzkbCRpcGqQ', NOW_S + 3600, TOKEN);
     expect(token).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
-    expect(await readTelegramStartToken(token, NOW_S, TOKEN)).toBe('biz_2whAzkbCRpcGqQ');
-    expect(await readTelegramStartToken(token, NOW_S + 3600, TOKEN)).toBeNull();
-    expect(await readTelegramStartToken(token, NOW_S, '999:another-bot')).toBeNull();
+    const company = async (t: string, now = NOW_S, bot = TOKEN) =>
+      (await readTelegramStartToken(t, now, bot)).companyId;
+    expect(await company(token)).toBe('biz_2whAzkbCRpcGqQ');
+    expect(await company(token, NOW_S + 3600)).toBeNull();
+    expect(await company(token, NOW_S, '999:another-bot')).toBeNull();
     const forged = token.replace(/^[A-Za-z0-9]+/, 'OtherCompany');
-    expect(await readTelegramStartToken(forged, NOW_S, TOKEN)).toBeNull();
+    expect(await company(forged)).toBeNull();
+    expect(await readTelegramStartToken('nonsense', NOW_S, TOKEN)).toEqual({
+      companyId: null,
+      language: null,
+    });
     expect(telegramStartLink('StayPutBot', token)).toBe(
       `https://t.me/StayPutBot?startgroup=${token}`,
     );
+  });
+
+  it("carries the creator's StayPut language in a group link, signed with it", async () => {
+    const token = await telegramStartToken('biz_2whAzkbCRpcGqQ', NOW_S + 3600, TOKEN, 'fr');
+    expect(token).toMatch(/^2whAzkbCRpcGqQ_[0-9a-z]+_fr_[A-Za-z0-9_-]{22}$/);
+    expect(await readTelegramStartToken(token, NOW_S, TOKEN)).toEqual({
+      companyId: 'biz_2whAzkbCRpcGqQ',
+      language: 'fr',
+    });
+    // Expired, the link still says in which language to answer.
+    expect(await readTelegramStartToken(token, NOW_S + 3600, TOKEN)).toEqual({
+      companyId: null,
+      language: 'fr',
+    });
+    // The language is signed: changing it breaks the link.
+    expect(
+      (await readTelegramStartToken(token.replace('_fr_', '_en_'), NOW_S, TOKEN)).companyId,
+    ).toBeNull();
+    // A link made before languages existed still works.
+    const before = await telegramStartToken('biz_2whAzkbCRpcGqQ', NOW_S + 3600, TOKEN);
+    expect(await readTelegramStartToken(before, NOW_S, TOKEN)).toEqual({
+      companyId: 'biz_2whAzkbCRpcGqQ',
+      language: null,
+    });
   });
 
   it('signs the member and the company of a member link, distinct from a group link', async () => {
@@ -98,19 +128,40 @@ describe('signed links', () => {
       TOKEN,
     );
     expect(token.length).toBeLessThanOrEqual(64);
-    expect(await readTelegramMemberToken(token, NOW_S, TOKEN)).toEqual({
+    const member = async (t: string, now = NOW_S) =>
+      (await readTelegramMemberToken(t, now, TOKEN)).member;
+    expect(await member(token)).toEqual({
       companyId: 'biz_2whAzkbCRpcGqQ',
       userId: 'user_v9KUoZvTGp6ID',
     });
-    expect(await readTelegramMemberToken(token, NOW_S + 3601, TOKEN)).toBeNull();
+    expect(await member(token, NOW_S + 3601)).toBeNull();
     // A group link is no member link, and the other way round.
-    const group = await telegramStartToken('biz_2whAzkbCRpcGqQ', NOW_S + 3600, TOKEN);
-    expect(await readTelegramMemberToken(group, NOW_S, TOKEN)).toBeNull();
-    expect(await readTelegramStartToken(token, NOW_S, TOKEN)).toBeNull();
+    const group = await telegramStartToken('biz_2whAzkbCRpcGqQ', NOW_S + 3600, TOKEN, 'fr');
+    expect(await member(group)).toBeNull();
+    expect((await readTelegramStartToken(token, NOW_S, TOKEN)).companyId).toBeNull();
     // Another member's id in a link signed for someone else.
     const swapped = token.replace('v9KUoZvTGp6ID', 'mallory000000');
-    expect(await readTelegramMemberToken(swapped, NOW_S, TOKEN)).toBeNull();
+    expect(await member(swapped)).toBeNull();
     expect(telegramMemberLink('StayPutBot', token)).toBe(`https://t.me/StayPutBot?start=${token}`);
+
+    // In the member's StayPut language, signed with it.
+    const french = await telegramMemberToken(
+      'biz_2whAzkbCRpcGqQ',
+      'user_v9KUoZvTGp6ID',
+      NOW_S + 3600,
+      TOKEN,
+      'fr',
+    );
+    expect(french.length).toBeLessThanOrEqual(64);
+    expect(await readTelegramMemberToken(french, NOW_S, TOKEN)).toEqual({
+      member: { companyId: 'biz_2whAzkbCRpcGqQ', userId: 'user_v9KUoZvTGp6ID' },
+      language: 'fr',
+    });
+    expect(await member(french.replace('_fr_', '_en_'))).toBeNull();
+    expect(await readTelegramMemberToken(french, NOW_S + 3601, TOKEN)).toEqual({
+      member: null,
+      language: 'fr',
+    });
   });
 
   it('refuses to make a link Telegram would cut', async () => {
@@ -137,6 +188,28 @@ describe('telegramAction', () => {
       at: new Date(1_790_000_000_000),
     });
     expect(telegramAction(message({ photo: [{}] }))).toMatchObject({ kind: 'message' });
+  });
+
+  it('skips what a chat sends instead of a person: channel posts copied into its group', () => {
+    const channel = { id: -1009876543210, type: 'channel', title: 'Mon canal' };
+    // Telegram copies each channel post into the channel's discussion group, as a stand-in user.
+    const copied = message({
+      text: 'Nouvelle vidéo',
+      from: { id: 777000, is_bot: false, first_name: 'Telegram' },
+      sender_chat: channel,
+      is_automatic_forward: true,
+    });
+    expect(telegramAction(copied)).toEqual({ kind: 'ignore' });
+    // An anonymous administrator, or someone commenting as their own channel.
+    expect(
+      telegramAction(
+        message({ text: 'x', from: { id: 136817688, is_bot: false }, sender_chat: channel }),
+      ),
+    ).toEqual({ kind: 'ignore' });
+    // A member's comment under a post is theirs: it counts.
+    expect(
+      telegramAction(message({ text: 'Merci !', reply_to_message: { message_id: 3 } })),
+    ).toMatchObject({ kind: 'message', fromId: '42' });
   });
 
   it("skips bots, service messages and what is not a group's", () => {

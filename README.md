@@ -139,7 +139,9 @@ sinon. Réglages une fois pour toutes (détails et raisons : `DECISIONS.md`, 202
   Aucun intent privilégié n'est nécessaire.
 - **Telegram** : un bot créé avec @BotFather (jeton → `TELEGRAM_BOT_TOKEN`), **mode
   confidentialité désactivé** (@BotFather → `/setprivacy` → Disable) avant de l'ajouter à un
-  groupe. Le webhook se déclare tout seul à la première demande de lien.
+  groupe. Le webhook se déclare tout seul à la première demande de lien. Un **canal** compte
+  par son groupe de discussion (les commentaires des membres) : activer les commentaires du
+  canal (Gérer → Discussion), puis y ajouter le bot.
 
 Le créateur connecte ensuite son serveur ou ses groupes depuis **Sources d'activité** dans le
 tableau de bord ; chaque membre relie son Telegram depuis la vue membre.

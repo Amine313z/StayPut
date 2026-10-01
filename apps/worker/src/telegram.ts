@@ -14,6 +14,14 @@ export const TELEGRAM_API_BASE_URL = 'https://api.telegram.org';
 /** A link to add the bot to a group, or to link one's account, is valid for an hour. */
 export const TELEGRAM_LINK_TTL_SECONDS = 60 * 60;
 
+/** The languages the bot speaks. */
+export type BotLanguage = 'fr' | 'en';
+
+/** The language StayPut's interface sent (`?lang=`), when the bot speaks it. */
+export function botLanguage(value: unknown): BotLanguage | null {
+  return value === 'fr' || value === 'en' ? value : null;
+}
+
 /** Telegram's limit on the parameter of a `?start=` or `?startgroup=` link. */
 const START_PARAMETER_MAX = 64;
 
@@ -136,73 +144,109 @@ export async function telegramWebhookSecret(botToken: string): Promise<string> {
 
 /**
  * The parameter of the link that adds the bot to a group for a company (`?startgroup=`):
- * Telegram allows 64 characters among A-Z, a-z, 0-9, _ and -. It carries the company, an expiry
- * and a signature: `<company id without biz_>_<expiry, base 36>_<signature>`.
+ * Telegram allows 64 characters among A-Z, a-z, 0-9, _ and -. It carries the company, an expiry,
+ * the language of the creator's StayPut (the bot answers the group in it: Telegram does not
+ * always say the creator's) and a signature:
+ * `<company id without biz_>_<expiry, base 36>[_<fr|en>]_<signature>`.
  */
 export async function telegramStartToken(
   companyId: string,
   expiresAt: number,
   botToken: string,
+  language: BotLanguage | null = null,
 ): Promise<string> {
   const tail = companyId.replace(/^biz_/, '');
   const expiry = expiresAt.toString(36);
-  const mac = await hmac(botToken, 'telegram-start-v1', `${companyId}:${expiry}`);
-  return fitting(`${tail}_${expiry}_${base64Url(mac).slice(0, 22)}`);
+  const mac = await hmac(botToken, 'telegram-start-v1', signedPart([companyId, expiry], language));
+  return fitting(`${tail}_${expiry}${languagePart(language)}_${base64Url(mac).slice(0, 22)}`);
 }
 
-/** The company of a start parameter this bot signed, unexpired; null otherwise. */
+/**
+ * What a start parameter says: the company when this bot signed it and it has not expired, null
+ * otherwise; and the language it was made in, read even then (it only picks the bot's words).
+ */
 export async function readTelegramStartToken(
   token: string,
   nowSeconds: number,
   botToken: string,
-): Promise<string | null> {
-  const match = /^([A-Za-z0-9]{1,40})_([0-9a-z]{1,10})_([A-Za-z0-9_-]{22})$/.exec(token);
-  if (!match) return null;
-  const [, tail = '', expiry = '', signature = ''] = match;
+): Promise<{ companyId: string | null; language: BotLanguage | null }> {
+  const match = /^([A-Za-z0-9]{1,40})_([0-9a-z]{1,10})(?:_(fr|en))?_([A-Za-z0-9_-]{22})$/.exec(
+    token,
+  );
+  if (!match) return { companyId: null, language: null };
+  const [, tail = '', expiry = '', lang, signature = ''] = match;
+  const language = botLanguage(lang);
   const companyId = `biz_${tail}`;
   const expected = base64Url(
-    await hmac(botToken, 'telegram-start-v1', `${companyId}:${expiry}`),
+    await hmac(botToken, 'telegram-start-v1', signedPart([companyId, expiry], language)),
   ).slice(0, 22);
-  if (!timingSafeEqual(expected, signature)) return null;
-  if (parseInt(expiry, 36) <= nowSeconds) return null;
-  return companyId;
+  const valid = timingSafeEqual(expected, signature) && parseInt(expiry, 36) > nowSeconds;
+  return { companyId: valid ? companyId : null, language };
 }
 
 /**
  * The parameter of the link a member opens to link their Telegram account (`?start=`), for a
- * company: `<user id without user_>_<company id without biz_>_<expiry>_<signature>`.
+ * company, in the language of the member's StayPut:
+ * `<user id without user_>_<company id without biz_>_<expiry>[_<fr|en>]_<signature>`.
  */
 export async function telegramMemberToken(
   companyId: string,
   userId: string,
   expiresAt: number,
   botToken: string,
+  language: BotLanguage | null = null,
 ): Promise<string> {
   const user = userId.replace(/^user_/, '');
   const company = companyId.replace(/^biz_/, '');
   const expiry = expiresAt.toString(36);
-  const mac = await hmac(botToken, 'telegram-member-v1', `${userId}:${companyId}:${expiry}`);
-  return fitting(`${user}_${company}_${expiry}_${base64Url(mac).slice(0, 16)}`);
+  const mac = await hmac(
+    botToken,
+    'telegram-member-v1',
+    signedPart([userId, companyId, expiry], language),
+  );
+  return fitting(
+    `${user}_${company}_${expiry}${languagePart(language)}_${base64Url(mac).slice(0, 16)}`,
+  );
 }
 
-/** The member and company of a member link this bot signed, unexpired; null otherwise. */
+/**
+ * What a member link says: the member and company when this bot signed it and it has not
+ * expired, null otherwise; and the language it was made in, read even then.
+ */
 export async function readTelegramMemberToken(
   token: string,
   nowSeconds: number,
   botToken: string,
-): Promise<{ companyId: string; userId: string } | null> {
+): Promise<{
+  member: { companyId: string; userId: string } | null;
+  language: BotLanguage | null;
+}> {
   const match =
-    /^([A-Za-z0-9]{1,30})_([A-Za-z0-9]{1,30})_([0-9a-z]{1,10})_([A-Za-z0-9_-]{16})$/.exec(token);
-  if (!match) return null;
-  const [, user = '', company = '', expiry = '', signature = ''] = match;
+    /^([A-Za-z0-9]{1,30})_([A-Za-z0-9]{1,30})_([0-9a-z]{1,10})(?:_(fr|en))?_([A-Za-z0-9_-]{16})$/.exec(
+      token,
+    );
+  if (!match) return { member: null, language: null };
+  const [, user = '', company = '', expiry = '', lang, signature = ''] = match;
+  const language = botLanguage(lang);
   const userId = `user_${user}`;
   const companyId = `biz_${company}`;
   const expected = base64Url(
-    await hmac(botToken, 'telegram-member-v1', `${userId}:${companyId}:${expiry}`),
+    await hmac(botToken, 'telegram-member-v1', signedPart([userId, companyId, expiry], language)),
   ).slice(0, 16);
-  if (!timingSafeEqual(expected, signature)) return null;
-  if (parseInt(expiry, 36) <= nowSeconds) return null;
-  return { companyId, userId };
+  const valid = timingSafeEqual(expected, signature) && parseInt(expiry, 36) > nowSeconds;
+  return { member: valid ? { companyId, userId } : null, language };
+}
+
+/**
+ * What a link's signature covers. A link without a language signs what links signed before
+ * languages existed, so those stay valid for their hour.
+ */
+function signedPart(parts: readonly string[], language: BotLanguage | null): string {
+  return (language ? [...parts, language] : parts).join(':');
+}
+
+function languagePart(language: BotLanguage | null): string {
+  return language ? `_${language}` : '';
 }
 
 function fitting(token: string): string {
@@ -318,6 +362,12 @@ export function telegramAction(update: unknown): TelegramAction {
   const messageId = id(message.message_id);
   const date = typeof message.date === 'number' ? message.date : null;
   if (!fromId || from?.is_bot === true || !messageId || date === null) return { kind: 'ignore' };
+  // Sent on behalf of a chat, not by a person: a channel's post that Telegram copies into the
+  // channel's discussion group, an anonymous administrator, someone writing as their channel.
+  // `from` then holds a stand-in account that must not count as a member.
+  if ('sender_chat' in message || message.is_automatic_forward === true) {
+    return { kind: 'ignore' };
+  }
   if (!CONTENT_FIELDS.some((field) => field in message)) return { kind: 'ignore' };
   return { kind: 'message', chatId, fromId, messageId, at: new Date(date * 1000) };
 }

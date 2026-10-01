@@ -248,7 +248,7 @@ const dashboard = (members: MembersPage = MEMBERS, integrations = INTEGRATIONS) 
   '/api/creator/biz_A1/session': [creatorSession],
   '/api/creator/biz_A1/members': [{ status: 200, body: members }],
   '/api/creator/biz_A1/sync': [syncStatus()],
-  '/api/creator/biz_A1/integrations': [{ status: 200, body: integrations }],
+  '/api/creator/biz_A1/integrations?lang=en': [{ status: 200, body: integrations }],
 });
 
 const NOBODY: MembersPage = {
@@ -289,7 +289,7 @@ describe('creator view', () => {
       'page',
     );
     expect(calls.slice().sort()).toEqual([
-      '/api/creator/biz_A1/integrations',
+      '/api/creator/biz_A1/integrations?lang=en',
       '/api/creator/biz_A1/members',
       '/api/creator/biz_A1/session',
       '/api/creator/biz_A1/sync',
@@ -648,6 +648,17 @@ describe('activity sources', () => {
     expect(await screen.findByText(/privacy mode is on/)).toBeTruthy();
   });
 
+  it('asks for the links in the interface language, and says how a channel counts', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/integrations?lang=fr': [{ status: 200, body: INTEGRATIONS }],
+    });
+    renderAt('/dashboard/biz_A1/sources', 'fr');
+    expect(await screen.findByText(/Un canal \? Seuls ses administrateurs/)).toBeTruthy();
+    expect(calls).toContain('/api/creator/biz_A1/integrations?lang=fr');
+    expect(calls).not.toContain('/api/creator/biz_A1/integrations?lang=en');
+  });
+
   it('chooses the channels of a connected server, then saves them', async () => {
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
@@ -680,7 +691,7 @@ describe('activity sources', () => {
         },
       ],
       'PUT /api/creator/biz_A1/discord/910000000000000001/channels': [{ status: 200, body: [] }],
-      '/api/creator/biz_A1/integrations': [
+      '/api/creator/biz_A1/integrations?lang=en': [
         { status: 200, body: connected },
         { status: 200, body: connected },
       ],
@@ -715,7 +726,7 @@ describe('activity sources', () => {
       'DELETE /api/creator/biz_A1/telegram/-1009000000001': [
         { status: 200, body: { removed: true } },
       ],
-      '/api/creator/biz_A1/integrations': [
+      '/api/creator/biz_A1/integrations?lang=en': [
         { status: 200, body: connected },
         { status: 200, body: INTEGRATIONS },
       ],
@@ -1011,7 +1022,7 @@ describe('member view', () => {
   it('opens the progress space of the experience', async () => {
     mockApi({
       '/api/member/exp_E1/session': [memberSession],
-      '/api/member/exp_E1/telegram': [telegram({ available: false, link: null })],
+      '/api/member/exp_E1/telegram?lang=en': [telegram({ available: false, link: null })],
     });
     renderAt('/experiences/exp_E1');
     expect(await screen.findByRole('heading', { name: 'Your progress space' })).toBeTruthy();
@@ -1022,7 +1033,7 @@ describe('member view', () => {
   it('offers to link Telegram when the community counts a group, then to unlink it', async () => {
     const calls = mockApi({
       '/api/member/exp_E1/session': [memberSession],
-      '/api/member/exp_E1/telegram': [telegram({}), telegram({ linked: true, link: null })],
+      '/api/member/exp_E1/telegram?lang=en': [telegram({}), telegram({ linked: true, link: null })],
       'DELETE /api/member/exp_E1/telegram': [{ status: 200, body: { removed: true } }],
     });
     renderAt('/experiences/exp_E1');

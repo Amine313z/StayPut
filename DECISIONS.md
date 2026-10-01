@@ -375,6 +375,33 @@ un échec : les modules sont optionnels et un déploiement qui corrige autre cho
 attendre Discord ou Telegram. Le résultat s'affiche dans le résumé de l'exécution. Aucun
 secret n'est affiché : les adresses de Telegram contiennent le jeton, aucune n'est répétée.
 
+### Telegram : les canaux, et la langue du bot (même jour)
+
+Le fondateur avait créé un **canal** pour son test, et demande que StayPut marche aussi avec un
+canal. Ce que Telegram permet, vérifié dans l'API des bots :
+
+- Dans un canal, seuls les administrateurs publient ; les réactions et les vues y sont
+  **anonymes**. Aucun bot ne peut savoir quel membre a lu ou réagi.
+- Les **commentaires** d'un canal vivent dans son **groupe de discussion** (Gérer → Discussion),
+  écrits par des membres identifiés. Un canal compte donc **par ce groupe** : le créateur y
+  ajoute le bot avec le même lien signé qu'un groupe ordinaire. Rien de plus à stocker ; la
+  carte Telegram l'explique.
+- Telegram **recopie chaque publication du canal** dans ce groupe (`is_automatic_forward`,
+  `sender_chat` = le canal, `from` = un compte de remplacement). Elle n'est l'activité de
+  personne : ignorée, comme tout message envoyé au nom d'un chat (administrateur anonyme,
+  quelqu'un qui écrit en tant que sa propre chaîne), attribuable à aucun membre.
+- Pas fait, pour plus tard si c'est utile : relier le canal lui-même (le bot administrateur
+  reçoit les abonnements et désabonnements, `chat_member`), un signal de départ. Il faudrait
+  relier le canal à la communauté et garder ces événements.
+
+**Langue du bot.** Il répondait selon la langue que Telegram dit de l'utilisateur
+(`language_code`) : chez le fondateur, Telegram en français, le bot a répondu en anglais. Le
+lien signé porte maintenant la **langue de l'interface StayPut** (`?lang=` envoyé par la page,
+`_fr_` dans le paramètre du lien, couvert par la signature) ; la langue de Telegram ne sert
+plus que de repli. Les liens faits avant restent valables leur heure. Même chose pour le lien
+d'un membre. Et la page déclare sa langue avant d'être dessinée : Chrome proposait de
+« traduire depuis l'anglais » la page en français.
+
 ### Correctif : les listes Postgres arrivent en texte en production (même jour)
 
 Premier serveur Discord relié en production : « Sources d'activité » tombait en erreur. Le

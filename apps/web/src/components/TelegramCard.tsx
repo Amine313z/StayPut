@@ -1,5 +1,5 @@
 import type { TelegramGroupStatus, TelegramStatus } from '@stayput/core';
-import { CircleCheck, TriangleAlert, Unplug } from 'lucide-react';
+import { CircleCheck, Megaphone, TriangleAlert, Unplug } from 'lucide-react';
 import { deleteJson } from '../api';
 import { useI18n } from '../i18n';
 import { Badge, Notice } from '../ui/Badge';
@@ -11,7 +11,8 @@ import { LinkedMembers, Steps } from './SourceParts';
 
 /**
  * Telegram (decision of 2026-10-01): add StayPut's bot to a group with a link made for this
- * community, see the groups it counts, disconnect.
+ * community, see the groups it counts, disconnect. A channel counts through its discussion group:
+ * its members' comments (nobody else writes in a channel, and its reactions are anonymous).
  */
 export function TelegramCard({
   status,
@@ -61,6 +62,12 @@ export function TelegramCard({
               <Group key={group.chatId} group={group} api={api} onChange={onChange} />
             ))}
           </ul>
+        ) : null}
+        {status.available ? (
+          <p className="flex items-start gap-2 text-sm text-muted">
+            <Megaphone aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <span>{t('telegram.channel')}</span>
+          </p>
         ) : null}
       </div>
       {status.available && status.groups.length > 0 ? (

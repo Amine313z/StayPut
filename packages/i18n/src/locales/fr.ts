@@ -187,7 +187,9 @@ export const fr: Messages = {
   'telegram.privacyMode':
     'Le mode confidentialité du bot est activé : il ne voit que les commandes qui lui sont adressées, donc rien ne compte. Dans Telegram, @BotFather → /setprivacy → Disable, puis ajoutez de nouveau le bot au groupe.',
   'telegram.step.add':
-    'Ouvrez le lien et choisissez votre groupe (il faut en être administrateur). Le lien est valable une heure.',
+    'Ouvrez le lien et choisissez votre groupe, ou le groupe de discussion de votre canal (il faut en être administrateur). Le lien est valable une heure.',
+  'telegram.channel':
+    'Un canal ? Seuls ses administrateurs y publient et ses réactions sont anonymes : StayPut compte donc les commentaires des membres. Activez les commentaires du canal (Gérer → Discussion → créer un groupe), puis ajoutez le bot à ce groupe de discussion.',
   'telegram.step.confirm': "Le bot confirme dans le groupe qu'il est relié à StayPut.",
   'telegram.step.members':
     'Les membres relient leur Telegram depuis StayPut, dans votre communauté Whop (« Relier mon Telegram »).',

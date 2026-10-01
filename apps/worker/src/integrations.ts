@@ -15,6 +15,7 @@ import { DISCORD_INSTALL_TTL_SECONDS, sign } from './session';
 import {
   TELEGRAM_LINK_TTL_SECONDS,
   botText,
+  type BotLanguage,
   readTelegramMemberToken,
   readTelegramStartToken,
   telegramAction,
@@ -46,6 +47,8 @@ export interface LinkContext {
   telegram: TelegramClient | null;
   /** Signs the `state` of Discord's page; null without the Whop API key. */
   signingKey: CryptoKey | null;
+  /** The language of the creator's StayPut: the bot answers the group in it. */
+  language: BotLanguage | null;
 }
 
 /** Everything the creator view shows of Discord and Telegram, with the links to connect them. */
@@ -201,7 +204,10 @@ async function telegramGroupLink(
     const exp = Math.floor(links.now.getTime() / 1000) + TELEGRAM_LINK_TTL_SECONDS;
     return {
       link: {
-        url: telegramStartLink(bot.username, await telegramStartToken(companyId, exp, token)),
+        url: telegramStartLink(
+          bot.username,
+          await telegramStartToken(companyId, exp, token, links.language),
+        ),
         expiresAt: new Date(exp * 1000).toISOString(),
       },
       readsAllMessages: bot.readsAllMessages,
@@ -374,20 +380,22 @@ export async function fileTelegramUpdate(
       ]);
       return {};
     case 'link': {
-      const companyId = await readTelegramStartToken(action.token, nowSeconds, botToken);
-      if (!companyId) {
+      const link = await readTelegramStartToken(action.token, nowSeconds, botToken);
+      // The creator's StayPut language first: Telegram does not always say theirs.
+      const language = link.language ?? action.language;
+      if (!link.companyId) {
         return {
-          reply: { chatId: action.chatId, text: botText('groupLinkExpired', action.language) },
+          reply: { chatId: action.chatId, text: botText('groupLinkExpired', language) },
           leave: action.chatId,
         };
       }
       await db.query('select stayput.connect_telegram_chat($1, $2, $3, $4::timestamptz)', [
-        companyId,
+        link.companyId,
         action.chatId,
         action.title,
         now.toISOString(),
       ]);
-      return { reply: { chatId: action.chatId, text: botText('groupLinked', action.language) } };
+      return { reply: { chatId: action.chatId, text: botText('groupLinked', language) } };
     }
     case 'membership':
       await db.query('select stayput.telegram_chat_membership($1, $2, $3::timestamptz)', [
@@ -403,21 +411,20 @@ export async function fileTelegramUpdate(
       ]);
       return {};
     case 'private_start': {
-      const member = action.token
+      const read = action.token
         ? await readTelegramMemberToken(action.token, nowSeconds, botToken)
         : null;
+      const language = read?.language ?? action.language;
+      const member = read?.member ?? null;
       if (!member) {
-        const text = botText(action.token ? 'memberLinkInvalid' : 'help', action.language);
+        const text = botText(action.token ? 'memberLinkInvalid' : 'help', language);
         return { reply: { chatId: action.chatId, text } };
       }
       const [row] = await db.query<{ status: string }>(
         'select stayput.link_telegram_member($1, $2, $3, $4::timestamptz) as status',
         [member.companyId, member.userId, action.fromId, now.toISOString()],
       );
-      const text = botText(
-        row?.status === 'linked' ? 'memberLinked' : 'memberUnknown',
-        action.language,
-      );
+      const text = botText(row?.status === 'linked' ? 'memberLinked' : 'memberUnknown', language);
       return { reply: { chatId: action.chatId, text } };
     }
     case 'ignore':
@@ -455,6 +462,8 @@ export async function readMemberTelegram(
     config: Config;
     telegram: TelegramClient | null;
     origin: string;
+    /** The language of the member's StayPut: the bot answers them in it. */
+    language?: BotLanguage | null;
   },
 ): Promise<MemberTelegramStatus> {
   const [row] = await db.query<{ groups: boolean; linked: boolean }>(
@@ -476,7 +485,13 @@ export async function readMemberTelegram(
       link = {
         url: telegramMemberLink(
           bot.username,
-          await telegramMemberToken(input.companyId, input.userId, exp, token),
+          await telegramMemberToken(
+            input.companyId,
+            input.userId,
+            exp,
+            token,
+            input.language ?? null,
+          ),
         ),
         expiresAt: new Date(exp * 1000).toISOString(),
       };
