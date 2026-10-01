@@ -260,3 +260,24 @@ oubliée).
   commentaires ; à vérifier sur un vrai forum (celui du sandbox est vide).
 - Le module Discord (optionnel, désactivé par défaut) n'est pas fait : il attend que le
   fondateur décide de l'activer.
+
+### Membres fictifs du sandbox (script `seed-sandbox`)
+
+Le cahier des charges demande de « générer dans le sandbox des membres fictifs ». L'API de Whop
+ne crée pas d'utilisateurs (aucun point d'accès ; l'invitation répond 403, Phase 0), et un vrai
+compte de test demande une inscription à la main, sans historique (impossible de fabriquer 60
+jours d'activité passée chez Whop). Les 25 membres fictifs vivent donc **dans la base de
+StayPut**, rattachés au compte « StayPut Test », écrits comme des pages de Whop par les mêmes
+fonctions SQL (ils passent par les mêmes contrôles). Leurs identifiants commencent par `seed`
+(jamais ceux de Whop) ; `remove` les retire avec leur activité. Limite : une action de la
+Phase 4 sur l'un d'eux échouera chez Whop (il n'y existe pas) ; les actions se testeront sur de
+vrais comptes de test, à créer à ce moment-là.
+
+### Après le premier déploiement (migration 0006)
+
+- Le webhook d'essai de Whop envoie des données inventées, dont l'entreprise
+  `biz_xxxxxxxxxxxxxx` : rangé comme une vraie livraison, il l'avait créée. Ces entreprises
+  fictives sont maintenant ignorées, et celle-ci supprimée.
+- La synchronisation ne lit les listes de Whop que pour les entreprises dont l'équipe a ouvert
+  StayPut au moins une fois (le backfill commence à la première visite, cahier des charges,
+  Phase 2, point 2). Les webhooks d'une entreprise qui a installé l'app sont rangés avant cela.

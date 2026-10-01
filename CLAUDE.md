@@ -51,8 +51,15 @@ Guidance for Claude Code in this repository.
   (checked through `GET /apps/{id}`); migration 0005 files Whop's pages and webhook deliveries
   in SQL; `src/sync.ts` reads each company's lists by passes (cron every 10 minutes, 40 Whop
   calls per run, background sync when the dashboard opens, « Sync now »); the app webhook also
-  receives `chat.message.created` and `chat.reaction.created` (set through the API). Still to
-  do: the members screen, the seed of test members, deployment and the stop report.
+  receives `chat.message.created` and `chat.reaction.created` (set through the API). The creator
+  view shows the sync status and the members. Deployed on 2026-10-01 (migrations 0005 and 0006;
+  0006 ignores Whop's test deliveries, `biz_xxxxxxxxxxxxxx`, and syncs only companies whose team
+  opened StayPut). 25 fake members (`seed…` ids) come from `scripts/seed-sandbox.ts` (workflow
+  « Seed sandbox »); « Inspect » reports the database as counts. Next: the Phase 2 stop report.
+- **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
+  run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;
+  Whop's side: `GET /webhooks/{id}/deliveries` and `POST /webhooks/{id}/test` with
+  `WHOP_SANDBOX_API_KEY` (a test delivery is answered `{"received":true}` when all is well).
 - **Deploying**: the `Deploy` workflow (`.github/workflows/deploy.yml`, `workflow_dispatch`),
   started from GitHub's Actions tab or through the GitHub API (`actions_run_trigger`, workflow
   `deploy.yml`, ref `main`). It migrates the database, creates Hyperdrive if needed, publishes

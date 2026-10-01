@@ -101,11 +101,12 @@ la clé de compte `WHOP_SANDBOX_API_KEY` :
   expérience `/experiences/[experienceId]` (`POST /apps` puis `PATCH /apps/{id}`) ;
 - webhook **`hook_M3uOKxSzLzx8u`** de l'app vers `/webhooks/whop`, version épinglée
   `2026-09-29`, avec les 10 événements de `docs/whop-api-verification.md` (section 5)
-  (`POST /webhooks`, `resource_id` = l'app) ;
+  (`POST /webhooks`, `resource_id` = l'app), plus `chat.message.created` et
+  `chat.reaction.created` depuis le 01/10/2026 (`PATCH /webhooks/{id}`, Phase 2) ;
 - faits au tableau de bord (`https://sandbox.whop.com/dashboard/developer` → StayPut) : la clé
   API de l'app et le secret du webhook, rangés dans les secrets GitHub ; l'installation dans
-  « StayPut Test » (`https://sandbox.whop.com/apps/app_rjFkp2xKgjfPxY/install`). Restent les
-  **permissions** (l'API les refuse aux clés : il faut une session), au début de la Phase 2.
+  « StayPut Test » (`https://sandbox.whop.com/apps/app_rjFkp2xKgjfPxY/install`) ; les 19
+  **permissions** de lecture de la Phase 2 (l'API les refuse aux clés : il faut une session).
 
 Le guide sandbox de Whop déconseille les apps et la messagerie dans le sandbox (« Known
 limitations »). Constaté le 30/09/2026 : l'app s'installe, mais Whop affiche « App Base URL not set »
@@ -122,6 +123,21 @@ StayPut s'ouvre dans un onglet normal, avec « Se connecter avec Whop » (sandbo
 
 Les accès sont vérifiés chez Whop comme dans l'iframe. Réglage de l'app (fait par l'API) :
 adresse de retour `https://stayput.chezbenz18.workers.dev/auth/callback`, client OAuth public.
+
+### Données du sandbox : synchronisation, inspection, membres fictifs
+
+- **Synchronisation** : automatique toutes les 10 minutes, et en arrière-plan à l'ouverture du
+  tableau de bord ; le bouton **Synchroniser maintenant** du tableau de bord lit tout de suite ce
+  qui est dû (au plus une fois par minute). Détails : `DECISIONS.md`, « Phase 2 ».
+- **Inspect** (**Actions → Inspect → Run workflow**) : l'état de la base en chiffres seulement
+  (version du schéma, flux de synchronisation et leurs erreurs, nombre de lignes par table,
+  webhooks reçus par type). Aucun nom, aucune adresse, aucun contenu. Le rapport s'affiche dans
+  le résumé de l'exécution.
+- **Seed sandbox** (**Actions → Seed sandbox → Run workflow**, `seed` ou `remove`) : 25 membres
+  fictifs avec 60 jours d'historique dans « StayPut Test » (8 actifs, 5 en déclin, 4 inactifs,
+  3 paiements échoués, 3 annulations programmées, 2 nouveaux). L'API de Whop ne sait pas créer
+  d'utilisateurs : ils vivent dans la base de StayPut, identifiants commençant par `seed`, et
+  `remove` les retire tous. Refusé en production.
 
 ## Outils de la Phase 0
 
