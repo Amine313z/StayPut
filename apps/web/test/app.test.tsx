@@ -8,6 +8,7 @@ import type {
   DiscordChannelChoice,
   InsightsReport,
   IntegrationsStatus,
+  MemberRetentionView,
   MemberRisk,
   MemberRow,
   MemberTelegramStatus,
@@ -271,6 +272,7 @@ const ACTION_SETTINGS: ActionSettingsView = {
   monthlyPromoCap: 10,
   maxFreeDaysPerQuarter: 14,
   templates: {},
+  offers: { pauseDays: 30, promoPercent: 20, promoMonths: 3, extendDays: 7, coachingMessage: null },
 };
 
 const dashboard = (members: MembersPage = MEMBERS, integrations = INTEGRATIONS) => ({
@@ -1346,6 +1348,28 @@ describe('member view', () => {
     status: 200,
     body: { experienceId: 'exp_E1', userId: 'user_m', accessLevel: 'customer', via: 'login' },
   };
+  const retention = (over: Partial<MemberRetentionView> = {}) => ({
+    status: 200,
+    body: {
+      creatorName: 'Le Club',
+      whopAppId: 'app_stayput',
+      preview: null,
+      payment: null,
+      departure: null,
+      ...over,
+    } satisfies MemberRetentionView,
+  });
+  const leaving = (over: Partial<NonNullable<MemberRetentionView['departure']>> = {}) =>
+    retention({
+      departure: {
+        endsAt: '2026-10-20T12:00:00.000Z',
+        reason: null,
+        offer: null,
+        outcome: 'pending',
+        result: null,
+        ...over,
+      },
+    });
   const telegram = (over: Partial<MemberTelegramStatus>) => ({
     status: 200,
     body: {
@@ -1360,6 +1384,7 @@ describe('member view', () => {
   it('opens the progress space of the experience', async () => {
     mockApi({
       '/api/member/exp_E1/session': [memberSession],
+      '/api/member/exp_E1/retention': [retention()],
       '/api/member/exp_E1/telegram?lang=en': [telegram({ available: false, link: null })],
     });
     renderAt('/experiences/exp_E1');
@@ -1371,6 +1396,7 @@ describe('member view', () => {
   it('offers to link Telegram when the community counts a group, then to unlink it', async () => {
     const calls = mockApi({
       '/api/member/exp_E1/session': [memberSession],
+      '/api/member/exp_E1/retention': [retention(), retention()],
       '/api/member/exp_E1/telegram?lang=en': [telegram({}), telegram({ linked: true, link: null })],
       'DELETE /api/member/exp_E1/telegram': [{ status: 200, body: { removed: true } }],
     });
@@ -1384,6 +1410,186 @@ describe('member view', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Unlink' }));
     fireEvent.click(screen.getByRole('button', { name: 'Yes, unlink' }));
     await vi.waitFor(() => expect(calls).toContain('DELETE /api/member/exp_E1/telegram'));
+  });
+
+  it('asks a leaving member why, and makes the offer for their reason', async () => {
+    const calls = mockApi({
+      '/api/member/exp_E1/session': [memberSession],
+      '/api/member/exp_E1/retention': [leaving()],
+      '/api/member/exp_E1/telegram?lang=en': [telegram({ available: false, link: null })],
+      'POST /api/member/exp_E1/retention/survey': [
+        leaving({ reason: 'no_time', offer: { type: 'pause_offer', days: 30, keep: 'required' } }),
+        leaving({
+          reason: 'too_expensive',
+          offer: { type: 'promo_offer', percentOff: 20, months: 3, validDays: 7, keep: 'never' },
+        }),
+      ],
+      'POST /api/member/exp_E1/retention/offer': [
+        leaving({
+          reason: 'too_expensive',
+          offer: { type: 'promo_offer', percentOff: 20, months: 3, validDays: 7, keep: 'never' },
+          outcome: 'accepted',
+          result: {
+            status: 'applied',
+            promoCode: 'STAY-ABCD2345',
+            expiresAt: '2026-10-08T12:00:00.000Z',
+          },
+        }),
+      ],
+    });
+    renderAt('/experiences/exp_E1');
+    expect(await screen.findByText('Your membership is ending')).toBeTruthy();
+    expect(screen.getByText('Your access stays open until Oct 20, 2026.')).toBeTruthy();
+    const reasons = screen.getByRole('group', { name: 'Why are you leaving?' });
+    expect(
+      within(reasons)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual([
+      'It’s too expensive',
+      'I don’t have the time',
+      'I’m not getting the results I expected',
+      'I reached my goal',
+      'Another reason',
+    ]);
+    fireEvent.click(within(reasons).getByRole('button', { name: 'I don’t have the time' }));
+    expect(await screen.findByText('Take a 30-day break instead')).toBeTruthy();
+    expect(bodies.get('POST /api/member/exp_E1/retention/survey')).toEqual({ reason: 'no_time' });
+    expect(headersOf.get('POST /api/member/exp_E1/retention/survey')?.get('x-stayput-csrf')).toBe(
+      '1',
+    );
+    // A pause only with the member's consent to keep their membership.
+    const pause = screen.getByRole('button', { name: 'Pause my membership' });
+    expect(pause.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'I keep my membership: my cancellation is withdrawn.' }),
+    );
+    expect(pause.hasAttribute('disabled')).toBe(false);
+
+    // The member changes their answer: too expensive, a code, nothing to consent to.
+    fireEvent.click(screen.getByRole('button', { name: 'Change my answer' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'It’s too expensive' }));
+    expect(await screen.findByText('20% off for 3 months')).toBeTruthy();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Get my code' }));
+    expect(await screen.findByText('STAY-ABCD2345')).toBeTruthy();
+    expect(bodies.get('POST /api/member/exp_E1/retention/offer')).toEqual({
+      accept: true,
+      keep: false,
+    });
+    expect(screen.getByText('Valid once, until Oct 8, 2026.')).toBeTruthy();
+    expect(calls.filter((call) => call.startsWith('POST'))).toHaveLength(3);
+  });
+
+  it('tells a member what came of their answer, and where to settle a payment', async () => {
+    mockApi({
+      '/api/member/exp_E1/session': [memberSession],
+      '/api/member/exp_E1/retention': [
+        retention({
+          payment: {
+            kind: 'failed',
+            amount: 49,
+            currency: 'eur',
+            url: 'https://whop.com/manage/mem_1',
+          },
+          departure: {
+            endsAt: null,
+            reason: 'other',
+            offer: { type: 'extend_offer', days: 7, keep: 'optional' },
+            outcome: 'accepted',
+            result: { status: 'waiting' },
+          },
+        }),
+      ],
+      '/api/member/exp_E1/telegram?lang=en': [telegram({ available: false, link: null })],
+    });
+    renderAt('/experiences/exp_E1');
+    const update = await screen.findByRole('link', { name: /Update my payment method/ });
+    expect(update.getAttribute('href')).toBe('https://whop.com/manage/mem_1');
+    expect(
+      screen.getByText(
+        'Your last payment of €49.00 did not go through. Update your payment method to keep your access.',
+      ),
+    ).toBeTruthy();
+    // Manual mode: the creator approves the offer first.
+    expect(
+      screen.getByText(
+        'Noted! Your offer is being prepared: it will show here once it is applied.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Why are you leaving?' })).toBeNull();
+  });
+
+  it('shows the team what members see, with the creator’s offers, recording nothing', async () => {
+    const calls = mockApi({
+      '/api/member/exp_E1/session': [
+        { status: 200, body: { ...memberSession.body, accessLevel: 'admin' } },
+      ],
+      '/api/member/exp_E1/retention': [
+        retention({
+          preview: {
+            offers: {
+              pauseDays: 45,
+              promoPercent: 20,
+              promoMonths: 1,
+              extendDays: 1,
+              coachingMessage: 'Écris-moi, je te réponds.',
+            },
+            testMode: true,
+          },
+        }),
+      ],
+      '/api/member/exp_E1/telegram?lang=en': [telegram({ available: false, link: null })],
+    });
+    renderAt('/experiences/exp_E1');
+    expect(await screen.findByText('What your members see')).toBeTruthy();
+    expect(
+      screen.getByText('Test mode is on: your members do not see the survey yet.'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'I don’t have the time' }));
+    expect(screen.getByText('Take a 45-day break instead')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Change my answer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'I’m not getting the results I expected' }));
+    expect(screen.getByText('Écris-moi, je te réponds.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Change my answer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Another reason' }));
+    expect(screen.getByText('1 day on us')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Take the free days' }));
+    expect(
+      screen.getByText('Preview: nothing was applied. A member would see the result here.'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Try another answer' }));
+    expect(screen.getByRole('group', { name: 'Why are you leaving?' })).toBeTruthy();
+    expect(calls.filter((call) => call.startsWith('POST'))).toEqual([]);
+  });
+
+  it('speaks to a French member in their language', async () => {
+    mockApi({
+      '/api/member/exp_E1/session': [memberSession],
+      '/api/member/exp_E1/retention': [
+        retention({
+          payment: {
+            kind: 'action_required',
+            amount: 49,
+            currency: 'eur',
+            url: 'https://whop.com/checkout/3ds',
+          },
+          departure: {
+            endsAt: '2026-10-20T12:00:00.000Z',
+            reason: 'too_expensive',
+            offer: { type: 'promo_offer', percentOff: 20, months: 3, validDays: 7, keep: 'never' },
+            outcome: 'pending',
+            result: null,
+          },
+        }),
+      ],
+      '/api/member/exp_E1/telegram?lang=fr': [telegram({ available: false, link: null })],
+    });
+    renderAt('/experiences/exp_E1', 'fr');
+    expect(await screen.findByRole('link', { name: /Valider mon paiement/ })).toBeTruthy();
+    expect(screen.getByText('Votre réponse : C’est trop cher')).toBeTruthy();
+    expect(screen.getByText('20 % de réduction pendant 3 mois')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Non merci' })).toBeTruthy();
   });
 
   it('explains a refused access in member words', async () => {
@@ -1447,6 +1653,7 @@ describe('the actions (SPEC Phase 4)', () => {
     blockedReason: null,
     message: { title: 'Welcome, Ana', body: 'Glad to have you in Le Club.' },
     note: null,
+    offer: null,
     ...over,
   });
   const page = (
@@ -1535,6 +1742,114 @@ describe('the actions (SPEC Phase 4)', () => {
     // Done: nothing to approve or cancel any more.
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+  });
+
+  it('shows an offer a member accepted: their reason, the offer, the code and consent', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/actions?view=queue': [page('queue', [])],
+      '/api/creator/biz_A1/actions?view=history': [
+        page('history', [
+          row({
+            id: 'p',
+            type: 'promo_offer',
+            trigger: 'exit_survey',
+            status: 'sent',
+            sentAt: '2026-10-01T11:00:00.000Z',
+            message: null,
+            offer: {
+              reason: 'too_expensive',
+              percentOff: 20,
+              months: 3,
+              keep: false,
+              promoCode: 'STAY-ABCD2345',
+              expiresAt: '2026-10-08T12:00:00.000Z',
+            },
+          }),
+          row({
+            id: 'q',
+            type: 'coaching_offer',
+            trigger: 'exit_survey',
+            status: 'sent',
+            sentAt: '2026-10-01T11:00:00.000Z',
+            message: null,
+            offer: { reason: 'no_results', keep: true },
+          }),
+        ]),
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions?view=history');
+    expect(await screen.findByText('Code STAY-ABCD2345, valid until Oct 8, 2026')).toBeTruthy();
+    expect(screen.getByText('Reason: “It’s too expensive”')).toBeTruthy();
+    expect(screen.getByText('20% off for 3 months')).toBeTruthy();
+    expect(screen.getAllByText('· Answer to the departure survey')).toHaveLength(2);
+    expect(screen.getByText('Reason: “I’m not getting the results I expected”')).toBeTruthy();
+    expect(screen.getByText('Membership kept, with the member’s consent')).toBeTruthy();
+    expect(screen.getByText('Your turn: write to the member on Whop.')).toBeTruthy();
+    // Applied to the membership, not sent.
+    expect(screen.getAllByText('Applied')).toHaveLength(2);
+    expect(screen.queryByText('Sent')).toBeNull();
+  });
+
+  it('sets the departure offers, within their limits', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/settings/risk': [
+        {
+          status: 200,
+          body: {
+            niche: 'other',
+            weights: { recency: 0.3, frequency: 0.25, progress: 0.2, payment: 0.15, friction: 0.1 },
+            recencyThresholdDays: 14,
+            mediumFrom: 40,
+            highFrom: 70,
+          },
+        },
+      ],
+      '/api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
+      'PUT /api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    const pause = await screen.findByRole('spinbutton', {
+      name: 'Break, in days (“I don’t have the time”)',
+    });
+    const save = () => screen.getByRole('button', { name: 'Save the action settings' });
+    expect(save().hasAttribute('disabled')).toBe(true);
+    fireEvent.change(pause, { target: { value: '120' } });
+    expect(save().hasAttribute('disabled')).toBe(true);
+    fireEvent.change(pause, { target: { value: '45' } });
+    // More free days than the limit: said, since members would never get them.
+    const free = screen.getByRole('spinbutton', { name: 'Free days (“Another reason”)' });
+    fireEvent.change(
+      screen.getByRole('spinbutton', { name: 'Free days per member, over 90 days' }),
+      {
+        target: { value: '5' },
+      },
+    );
+    fireEvent.change(free, { target: { value: '7' } });
+    expect(
+      screen.getByText('More than your limit of free days (5): members will not get this offer.'),
+    ).toBeTruthy();
+    fireEvent.change(free, { target: { value: '5' } });
+    expect(screen.queryByText(/More than your limit of free days/)).toBeNull();
+    fireEvent.change(
+      screen.getByRole('textbox', {
+        name: 'Your words to a member without results (“I’m not getting the results I expected”)',
+      }),
+      { target: { value: '  Write to me, I answer in person.  ' } },
+    );
+    fireEvent.click(save());
+    await vi.waitFor(() => expect(calls).toContain('PUT /api/creator/biz_A1/settings/actions'));
+    expect(bodies.get('PUT /api/creator/biz_A1/settings/actions')).toMatchObject({
+      maxFreeDaysPerQuarter: 5,
+      offers: {
+        pauseDays: 45,
+        promoPercent: 20,
+        promoMonths: 3,
+        extendDays: 5,
+        coachingMessage: 'Write to me, I answer in person.',
+      },
+    });
   });
 
   it('saves the action settings, within the limits, with the creator’s words', async () => {

@@ -6,6 +6,7 @@ import {
   canOpenMemberView,
   isCompanyId,
   isExperienceId,
+  isExitReason,
   isNiche,
   normalizeWeights,
   timeZoneName,
@@ -13,6 +14,7 @@ import {
   type CreatorSession,
   type DiscordChannelsUpdate,
   type HealthReport,
+  type MemberRetentionView,
   type MemberSession,
   type RiskSettingsView,
   type SignInMethod,
@@ -38,7 +40,7 @@ import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
 import { accountOf, accountsView, readAccounts, readPlatformActivity } from './accounts';
 import { isActionView, readActionSettings, readActions, validActionSettings } from './action-views';
-import { executeDueActions, prepareActions } from './actions';
+import { executeAction, executeDueActions, prepareActions } from './actions';
 import { createPostgresDb, type ClosableDb, type Db } from './db';
 import { createDiscordClient, type DiscordClient } from './discord';
 import { readConfig, type Config, type Env } from './env';
@@ -59,6 +61,7 @@ import {
   type LinkContext,
 } from './integrations';
 import { readInsights, readMembers, readRiskSettings, readSyncStatus } from './members';
+import { answerSurvey, decideOffer, readRetention, retentionView } from './retention';
 import { REQUEST_RISK_BATCH, refreshDetection } from './risk';
 import { LATEST_MIGRATION } from './schema-version';
 import {
@@ -770,6 +773,12 @@ export function createApp(deps: AppDeps) {
         companyId,
         JSON.stringify(settings),
       ]);
+      if (settings.offers) {
+        await db.query('select stayput.save_offer_settings($1, $2::text::jsonb)', [
+          companyId,
+          JSON.stringify(settings.offers),
+        ]);
+      }
       // In automatic mode, what waits for the guardrails goes through them now.
       if (settings.mode === 'auto') runActionsInBackground(c, companyId, deps.now());
       return c.json((await readActionSettings(db, c.get('userId'), companyId)) ?? settings);
@@ -1209,6 +1218,119 @@ export function createApp(deps: AppDeps) {
     } catch (error) {
       console.error('Experience not read:', describe(error));
       return apiError('whop_unavailable', 'could not read the experience with Whop');
+    }
+  }
+
+  /**
+   * The member's own subscription (SPEC Phase 4): a payment that needs them, with the link to
+   * settle it, and the cancellation they scheduled, with its survey and offer. The team sees a
+   * preview of it, with the creator's offers.
+   */
+  app.get('/api/member/:experienceId/retention', authenticate, withDb, requireMember, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const companyId = await memberCompany(c);
+    if (companyId instanceof Response) return companyId;
+    return c.json(await retentionFor(c, db, companyId, deps.now()));
+  });
+
+  /** The member's answer to the departure survey: their reason, and the offer it brings. */
+  app.post(
+    '/api/member/:experienceId/retention/survey',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ reason?: unknown }>().catch(() => null);
+      const reason = body?.reason;
+      if (!isExitReason(reason)) return apiError('invalid_request', 'expected { reason }');
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const now = deps.now();
+      const userId = c.get('userId');
+      const row = await readRetention(db, companyId, userId, now);
+      if (!(await answerSurvey(db, companyId, row, reason, now))) {
+        return apiError('not_found', 'no cancellation to answer for');
+      }
+      return c.json(await retentionFor(c, db, companyId, now));
+    },
+  );
+
+  /**
+   * The member accepts the offer, or declines it. Accepted, it is an action like the others: in
+   * automatic mode it goes through the guardrails and runs now, so the member sees what came of
+   * it; in manual mode the creator approves it first.
+   */
+  app.post(
+    '/api/member/:experienceId/retention/offer',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ accept?: unknown; keep?: unknown }>().catch(() => null);
+      if (typeof body?.accept !== 'boolean') {
+        return apiError('invalid_request', 'expected { accept, keep? }');
+      }
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const now = deps.now();
+      const userId = c.get('userId');
+      const row = await readRetention(db, companyId, userId, now);
+      const decided = await decideOffer(
+        db,
+        companyId,
+        row,
+        { accept: body.accept, keep: body.keep === true },
+        now,
+      );
+      if (decided === 'invalid') {
+        return apiError('invalid_request', 'this offer needs the consent to keep the membership');
+      }
+      if (!decided) return apiError('not_found', 'no offer waiting for an answer');
+      if (decided.actionId) {
+        await prepareActions(db, companyId, now);
+        await executeAction(db, deps.whopClient(c.get('config')), decided.actionId, now);
+      }
+      return c.json(await retentionFor(c, db, companyId, now));
+    },
+  );
+
+  /** What the member view shows the user: their payment and departure, or the team's preview. */
+  async function retentionFor(
+    c: Context<AppEnv>,
+    db: Db,
+    companyId: string,
+    now: Date,
+  ): Promise<MemberRetentionView> {
+    const row = await readRetention(db, companyId, c.get('userId'), now);
+    const view = retentionView(row, {
+      preview: c.get('accessLevel') === 'admin',
+      whopAppId: c.get('config').appId,
+    });
+    if (view.payment?.kind === 'failed' && !view.payment.url && row.payment?.membershipId) {
+      // Where the member updates their payment method: Whop's page for their membership.
+      view.payment.url = await manageUrlOf(c, row.payment.membershipId);
+    }
+    return view;
+  }
+
+  /** Whop's page where a member manages their membership (and their payment method). */
+  async function manageUrlOf(c: Context<AppEnv>, membershipId: string): Promise<string | null> {
+    const whop = deps.whopClient(c.get('config'), { maxRetries: 0 });
+    if (!whop) return null;
+    try {
+      const membership = await whop.request<{ manage_url?: unknown }>(
+        'GET',
+        `/memberships/${encodeURIComponent(membershipId)}`,
+      );
+      return typeof membership.manage_url === 'string' ? membership.manage_url : null;
+    } catch (error) {
+      console.error('Membership not read:', describe(error));
+      return null;
     }
   }
 

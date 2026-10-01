@@ -1,22 +1,28 @@
 import {
+  COACHING_MESSAGE_MAX,
   DEFAULT_TEMPLATES,
   MESSAGE_ACTIONS,
+  OFFER_LIMITS,
   TEMPLATE_VARIABLES,
   templateProblems,
   type ActionSettingsUpdate,
   type ActionSettingsView,
+  type ExitReason,
   type MessageAction,
   type MessageTemplate,
+  type OfferSettings,
   type TemplateLocale,
 } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
-import { CircleAlert, CircleCheck, Globe, Save, ShieldCheck } from 'lucide-react';
+import { CircleAlert, CircleCheck, Globe, OctagonX, Save, ShieldCheck } from 'lucide-react';
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { putJson, useApi } from '../../api';
 import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { ErrorPanel, Loading } from '../../components/Status';
+import { REASON_LABELS } from '../../exit-reasons';
 import { useI18n } from '../../i18n';
 import { SUGGESTED_TIME_ZONES, browserTimeZone, timeZoneGroups, zoneLabel } from '../../timezone';
+import { Notice } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { useCreatorData } from '../CreatorView';
@@ -46,27 +52,77 @@ const MESSAGE_LABELS: Readonly<Record<MessageAction, MessageKey>> = {
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
-interface Draft extends Omit<ActionSettingsView, Cap> {
+/** The departure offers' numbers (OFFER_LIMITS), each with the reason it answers. */
+type OfferNumber = keyof typeof OFFER_LIMITS;
+const OFFER_FIELDS: readonly { key: OfferNumber; label: MessageKey; reason?: ExitReason }[] = [
+  { key: 'pauseDays', label: 'actionSettings.offers.pauseDays', reason: 'no_time' },
+  { key: 'promoPercent', label: 'actionSettings.offers.promoPercent', reason: 'too_expensive' },
+  { key: 'promoMonths', label: 'actionSettings.offers.promoMonths' },
+  { key: 'extendDays', label: 'actionSettings.offers.extendDays', reason: 'other' },
+];
+
+interface Draft extends Omit<ActionSettingsView, Cap | 'offers'> {
   caps: Record<Cap, string>;
+  offers: Record<OfferNumber, string> & { coachingMessage: string };
 }
 
 function toDraft(view: ActionSettingsView): Draft {
-  const { templates, ...rest } = view;
+  const { offers, ...rest } = view;
   return {
     ...rest,
-    templates,
     caps: Object.fromEntries(CAP_NAMES.map((cap) => [cap, String(view[cap])])) as Record<
       Cap,
       string
     >,
+    offers: {
+      pauseDays: String(offers.pauseDays),
+      promoPercent: String(offers.promoPercent),
+      promoMonths: String(offers.promoMonths),
+      extendDays: String(offers.extendDays),
+      coachingMessage: offers.coachingMessage ?? '',
+    },
   };
 }
 
-function capValue(cap: Cap, text: string): number | null {
+function inRange(text: string, [min, max]: readonly [number, number]): number | null {
   if (!/^\d{1,3}$/.test(text.trim())) return null;
   const value = Number(text);
-  const [min, max] = CAPS[cap];
   return value >= min && value <= max ? value : null;
+}
+
+function capValue(cap: Cap, text: string): number | null {
+  return inRange(text, CAPS[cap]);
+}
+
+function offerValue(key: OfferNumber, text: string): number | null {
+  return inRange(text, OFFER_LIMITS[key]);
+}
+
+/** The offers as the Worker takes them, or null while one is out of bounds. */
+function toOffers(draft: Draft['offers']): OfferSettings | null {
+  const [pauseDays, promoPercent, promoMonths, extendDays] = (
+    ['pauseDays', 'promoPercent', 'promoMonths', 'extendDays'] as const
+  ).map((key) => offerValue(key, draft[key]));
+  const message = draft.coachingMessage.trim();
+  if (
+    pauseDays == null ||
+    promoPercent == null ||
+    promoMonths == null ||
+    extendDays == null ||
+    message.length > COACHING_MESSAGE_MAX
+  ) {
+    return null;
+  }
+  return { pauseDays, promoPercent, promoMonths, extendDays, coachingMessage: message || null };
+}
+
+/** JSON with its keys sorted: two settings compare equal whatever the order of their keys. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, inner: unknown) =>
+    inner && typeof inner === 'object' && !Array.isArray(inner)
+      ? Object.fromEntries(Object.entries(inner).sort(([a], [b]) => (a < b ? -1 : 1)))
+      : inner,
+  );
 }
 
 function problemsOf(template: MessageTemplate | undefined): string[] {
@@ -78,6 +134,8 @@ function problemsOf(template: MessageTemplate | undefined): string[] {
 function toView(draft: Draft): ActionSettingsView | null {
   const caps = Object.fromEntries(CAP_NAMES.map((cap) => [cap, capValue(cap, draft.caps[cap])]));
   if (CAP_NAMES.some((cap) => caps[cap] === null)) return null;
+  const offers = toOffers(draft.offers);
+  if (!offers) return null;
   for (const locale of ['en', 'fr'] as const) {
     for (const action of MESSAGE_ACTIONS) {
       const template = draft.templates[locale]?.[action];
@@ -87,8 +145,8 @@ function toView(draft: Draft): ActionSettingsView | null {
       }
     }
   }
-  const { caps: _caps, ...rest } = draft;
-  return { ...rest, ...(caps as Record<Cap, number>) };
+  const { caps: _caps, offers: _offers, ...rest } = draft;
+  return { ...rest, ...(caps as Record<Cap, number>), offers };
 }
 
 /**
@@ -111,7 +169,7 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
   const { t } = useI18n();
   const { api } = useCreatorData();
   const [draft, setDraft] = useState(() => toDraft(initial));
-  const [saved, setSaved] = useState(() => JSON.stringify(initial));
+  const [saved, setSaved] = useState(() => canonical(initial));
   // The zone goes along only when the creator changed it: the one their browser told may have
   // arrived since this form was read.
   const [savedZone, setSavedZone] = useState(initial.timezone);
@@ -129,7 +187,7 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
   };
 
   const view = toView(draft);
-  const changed = view !== null && JSON.stringify(view) !== saved;
+  const changed = view !== null && canonical(view) !== saved;
   const edit = (update: (current: Draft) => Draft) => {
     setDraft(update);
     if (status !== 'saving') setStatus('idle');
@@ -159,7 +217,7 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
     const body: ActionSettingsUpdate = timezone === savedZone ? rest : view;
     try {
       const next = await putJson<ActionSettingsView>(`${api}/settings/actions`, body);
-      setSaved(JSON.stringify(next));
+      setSaved(canonical(next));
       setSavedZone(next.timezone);
       setDraft(toDraft(next));
       setStatus('saved');
@@ -446,6 +504,67 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
                 </fieldset>
               );
             })}
+          </div>
+        </Row>
+
+        <Row label={t('actionSettings.offers')} labelId={`${ids}-offers`}>
+          <div role="group" aria-labelledby={`${ids}-offers`} className="space-y-4">
+            <p className="text-sm text-muted">{t('actionSettings.offers.hint')}</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {OFFER_FIELDS.map(({ key, label, reason }) => (
+                <NumberField
+                  key={key}
+                  id={`${ids}-offer-${key}`}
+                  label={t(label, reason ? { reason: t(REASON_LABELS[reason]) } : undefined)}
+                  value={draft.offers[key]}
+                  invalid={offerValue(key, draft.offers[key]) === null}
+                  min={OFFER_LIMITS[key][0]}
+                  max={OFFER_LIMITS[key][1]}
+                  onChange={(value) =>
+                    edit((current) => ({ ...current, offers: { ...current.offers, [key]: value } }))
+                  }
+                />
+              ))}
+            </div>
+            {capValue('monthlyPromoCap', draft.caps.monthlyPromoCap) === 0 ? (
+              <Notice tone="warning" icon={<OctagonX aria-hidden="true" className="size-4" />}>
+                {t('actionSettings.offers.promoBlocked')}
+              </Notice>
+            ) : null}
+            {(offerValue('extendDays', draft.offers.extendDays) ?? 0) >
+            (capValue('maxFreeDaysPerQuarter', draft.caps.maxFreeDaysPerQuarter) ?? Infinity) ? (
+              <Notice tone="warning" icon={<OctagonX aria-hidden="true" className="size-4" />}>
+                {t('actionSettings.offers.extendBlocked', {
+                  cap: draft.caps.maxFreeDaysPerQuarter,
+                })}
+              </Notice>
+            ) : null}
+            <div>
+              <label htmlFor={`${ids}-coaching`} className="text-sm">
+                {t('actionSettings.offers.coachingMessage', {
+                  reason: t(REASON_LABELS.no_results),
+                })}
+              </label>
+              <textarea
+                id={`${ids}-coaching`}
+                rows={3}
+                maxLength={COACHING_MESSAGE_MAX}
+                value={draft.offers.coachingMessage}
+                placeholder={t('member.offer.coaching.body')}
+                aria-describedby={`${ids}-coaching-hint`}
+                onChange={(event) => {
+                  const coachingMessage = event.target.value;
+                  edit((current) => ({
+                    ...current,
+                    offers: { ...current.offers, coachingMessage },
+                  }));
+                }}
+                className={`${FIELD} mt-1 w-full`}
+              />
+              <p id={`${ids}-coaching-hint`} className="mt-1.5 text-sm text-muted">
+                {t('actionSettings.offers.coachingHint')}
+              </p>
+            </div>
           </div>
         </Row>
 

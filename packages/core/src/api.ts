@@ -1,6 +1,7 @@
 import type { AccessLevel } from './access';
 import type { ActionType, BlockReason } from './actions';
 import type { CohortHorizon } from './analyses';
+import type { ExitOffer, ExitReason, OfferSettings } from './offers';
 import type { Niche, RiskLevel, RiskReason, RiskWeights } from './risk';
 import type { MessageAction, MessageTemplate, TemplateLocale } from './templates';
 
@@ -357,6 +358,23 @@ export interface ActionRow {
   message: MessageTemplate | null;
   /** Why it was cancelled, or its last error. */
   note: string | null;
+  /** An offer a member accepted in the departure survey: what, why, and what came of it. */
+  offer: ActionOffer | null;
+}
+
+/** An accepted offer, as the creator reviews it. */
+export interface ActionOffer {
+  reason: ExitReason | null;
+  /** Pause length, or free days. */
+  days?: number;
+  percentOff?: number;
+  months?: number;
+  /** The member ticked it: their cancellation is withdrawn. */
+  keep: boolean;
+  /** Once applied: the promo code and its end, or when the pause ends. */
+  promoCode?: string;
+  expiresAt?: string;
+  resumesAt?: string;
 }
 
 /** GET /api/creator/:companyId/actions?view=…: one list, and how many each list holds. */
@@ -388,17 +406,77 @@ export interface ActionSettingsView {
   maxFreeDaysPerQuarter: number;
   /** The creator's own wording; StayPut's default for what is left out. */
   templates: Partial<Record<TemplateLocale, Partial<Record<MessageAction, MessageTemplate>>>>;
+  /** What the departure survey offers members, reason by reason. */
+  offers: OfferSettings;
 }
 
 /**
  * The PUT body: the settings, with the time zone only when the creator changed it (the zone
- * their browser reported may have arrived since the form was read).
+ * their browser reported may have arrived since the form was read), and the offers when sent.
  */
-export type ActionSettingsUpdate = Omit<ActionSettingsView, 'timezone'> & { timezone?: string };
+export type ActionSettingsUpdate = Omit<ActionSettingsView, 'timezone' | 'offers'> & {
+  timezone?: string;
+  offers?: OfferSettings;
+};
 
 /** POST /api/creator/:companyId/timezone: the zone in effect for the company. */
 export interface TimezoneAnswer {
   timezone: string;
+}
+
+/**
+ * GET /api/member/:experienceId/retention: what the member view shows of the member's own
+ * subscription (SPEC Phase 4): a payment that needs them, and the cancellation they scheduled,
+ * with its survey and offer. Never a score (SPEC 5.3).
+ */
+export interface MemberRetentionView {
+  creatorName: string | null;
+  /** To open the payment page through Whop inside its iframe. */
+  whopAppId: string | null;
+  /**
+   * For the team, who preview what a member sees: the creator's offers, to try each reason with,
+   * and whether test mode keeps the survey from members for now. Nothing is recorded or applied.
+   * Null for a member.
+   */
+  preview: { offers: OfferSettings; testMode: boolean } | null;
+  payment: {
+    /** A 3D Secure check to pass, or a payment that failed. */
+    kind: 'action_required' | 'failed';
+    amount: number;
+    currency: string;
+    /** Where the member validates the payment or updates their payment method. */
+    url: string | null;
+  } | null;
+  departure: {
+    endsAt: string | null;
+    reason: ExitReason | null;
+    /** The offer for the reason given; null when none can be made (a guardrail). */
+    offer: ExitOffer | null;
+    outcome: 'pending' | 'accepted' | 'declined';
+    result: OfferResult | null;
+  } | null;
+}
+
+/** What came of an accepted offer. */
+export interface OfferResult {
+  /** waiting: the creator approves it first (manual mode), or it runs within the minute. */
+  status: 'waiting' | 'applied' | 'failed' | 'cancelled';
+  /** The membership was kept: the cancellation is withdrawn. */
+  kept?: boolean;
+  promoCode?: string;
+  expiresAt?: string;
+  resumesAt?: string;
+}
+
+/** POST …/retention/survey */
+export interface ExitSurveyAnswer {
+  reason: ExitReason;
+}
+
+/** POST …/retention/offer: `keep` is the member's consent to keep their membership. */
+export interface ExitOfferDecision {
+  accept: boolean;
+  keep?: boolean;
 }
 
 /** Discord or Telegram: where StayPut sees members write beside Whop. */

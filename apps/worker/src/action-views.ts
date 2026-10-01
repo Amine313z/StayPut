@@ -1,10 +1,14 @@
 import {
   ACTION_VIEWS,
   BLOCK_REASONS,
+  COACHING_MESSAGE_MAX,
   MESSAGE_ACTIONS,
+  OFFER_LIMITS,
   isActionType,
+  isExitReason,
   templateProblems,
   timeZoneName,
+  type ActionOffer,
   type ActionRow,
   type ActionSettingsUpdate,
   type ActionSettingsView,
@@ -14,6 +18,7 @@ import {
   type BlockReason,
   type MessageAction,
   type MessageTemplate,
+  type OfferSettings,
   type TemplateLocale,
   type TemplateValues,
 } from '@stayput/core';
@@ -91,12 +96,14 @@ export async function readActions(
       sent_at: Date | string | null;
       created_at: Date | string;
       blocked_reason: string | null;
-      result: { message?: MessageTemplate; reason?: string } | null;
+      result: Record<string, unknown> | null;
+      content: Record<string, unknown> | null;
       last_error: string | null;
       message_values: TemplateValues | null;
     }>(
       `select a.id, a.type, a.status, a.trigger, a.member_id, m.display_name, a.send_at,
               a.sent_at, a.created_at, a.blocked_reason, a.result,
+              case when a.trigger = 'exit_survey' then a.content end as content,
               a.error_log -> -1 ->> 'error' as last_error,
               case when $3 <> 'history' and a.message_kind <> 'none'
                    then stayput.message_values(a.company_id, a.member_id, $4::timestamptz)
@@ -130,13 +137,14 @@ export async function readActions(
           sentAt: iso(row.sent_at),
           createdAt: iso(row.created_at) ?? '',
           blockedReason: isBlockReason(row.blocked_reason) ? row.blocked_reason : null,
-          message: preview ?? row.result?.message ?? null,
+          message: preview ?? storedMessage(row.result) ?? null,
           note:
             row.status === 'failed'
               ? row.last_error
               : row.status === 'cancelled'
-                ? (row.result?.reason ?? null)
+                ? text(row.result?.reason)
                 : null,
+          offer: row.content ? offerOf(row.content, row.result) : null,
         },
       ];
     });
@@ -172,11 +180,17 @@ export async function readActionSettings(
       monthly_promo_cap: number;
       max_free_days_per_quarter: number;
       templates: Templates;
+      pause_days: number;
+      promo_percent: number;
+      promo_months: number;
+      extend_days: number;
+      coaching_message: string | null;
     }>(
       `select c.mode, c.locale, s.dry_run, s.kill_switch, c.timezone, s.quiet_hours_start,
               s.quiet_hours_end, s.default_send_hour, s.max_messages_per_5_days,
               s.max_messages_per_month, s.max_payment_retries, s.monthly_promo_cap,
-              s.max_free_days_per_quarter, s.active_templates as templates
+              s.max_free_days_per_quarter, s.active_templates as templates, s.pause_days,
+              s.promo_percent, s.promo_months, s.extend_days, s.coaching_message
          from stayput.companies c
          join stayput.company_settings s on s.company_id = c.id
         where c.id = $1`,
@@ -199,6 +213,13 @@ export async function readActionSettings(
     monthlyPromoCap: row.monthly_promo_cap,
     maxFreeDaysPerQuarter: row.max_free_days_per_quarter,
     templates: cleanTemplates(row.templates) ?? {},
+    offers: {
+      pauseDays: row.pause_days,
+      promoPercent: row.promo_percent,
+      promoMonths: row.promo_months,
+      extendDays: row.extend_days,
+      coachingMessage: row.coaching_message,
+    },
   };
 }
 
@@ -238,6 +259,8 @@ export function validActionSettings(body: unknown): ActionSettingsUpdate | null 
   }
   const templates = cleanTemplates(b.templates ?? {});
   if (!templates) return null;
+  const offers = b.offers === undefined ? undefined : validOffers(b.offers);
+  if (offers === null) return null;
   return {
     mode: b.mode,
     locale: b.locale,
@@ -253,6 +276,28 @@ export function validActionSettings(body: unknown): ActionSettingsUpdate | null 
     monthlyPromoCap: b.monthlyPromoCap as number,
     maxFreeDaysPerQuarter: b.maxFreeDaysPerQuarter as number,
     templates,
+    ...(offers ? { offers } : {}),
+  };
+}
+
+/** The departure survey's offers, within OFFER_LIMITS, or null; an empty message is StayPut's. */
+function validOffers(value: unknown): OfferSettings | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const o = value as Record<string, unknown>;
+  for (const [key, [min, max]] of Object.entries(OFFER_LIMITS)) {
+    const n = o[key];
+    if (!Number.isInteger(n) || (n as number) < min || (n as number) > max) return null;
+  }
+  const message = o.coachingMessage ?? null;
+  if (message !== null && typeof message !== 'string') return null;
+  const words = message?.trim() ?? '';
+  if (words.length > COACHING_MESSAGE_MAX) return null;
+  return {
+    pauseDays: o.pauseDays as number,
+    promoPercent: o.promoPercent as number,
+    promoMonths: o.promoMonths as number,
+    extendDays: o.extendDays as number,
+    coachingMessage: words === '' ? null : words,
   };
 }
 
@@ -290,4 +335,40 @@ function isBlockReason(value: unknown): value is BlockReason {
 function iso(value: Date | string | null): string | null {
   if (value === null) return null;
   return new Date(value).toISOString();
+}
+
+function text(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function count(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+/** The message an action sent (or would have sent, in test mode), as kept in its result. */
+function storedMessage(result: Record<string, unknown> | null): MessageTemplate | null {
+  const message = result?.message as Record<string, unknown> | undefined;
+  const [title, body] = [text(message?.title), text(message?.body)];
+  return title !== null && body !== null ? { title, body } : null;
+}
+
+/** An offer a member accepted: its content (the offer, their consent, their reason) and result. */
+function offerOf(
+  content: Record<string, unknown>,
+  result: Record<string, unknown> | null,
+): ActionOffer {
+  const reason = content.reason;
+  const optional = {
+    days: count(content.days),
+    percentOff: count(content.percentOff),
+    months: count(content.months),
+    promoCode: text(result?.code) ?? undefined,
+    expiresAt: text(result?.expires_at) ?? undefined,
+    resumesAt: text(result?.resumes_at) ?? undefined,
+  };
+  return {
+    reason: isExitReason(reason) ? reason : null,
+    keep: content.keep === true,
+    ...Object.fromEntries(Object.entries(optional).filter(([, value]) => value !== undefined)),
+  };
 }

@@ -473,39 +473,143 @@ describe('running the actions', () => {
     expect(welcome).toMatchObject({ status: 'scheduled', attempts: 1, errors: 1 });
   });
 
-  it('leaves the offers to the member view', async () => {
-    const action = {
-      id: 'x',
-      companyId: 'biz_X',
-      type: 'pause_offer',
-      attempts: 0,
-      content: {},
-      globalKillSwitch: false,
-      killSwitch: false,
-      dryRun: false,
-      locale: 'en',
-      timezone: 'Europe/Paris',
-      quietHoursStart: 22,
-      quietHoursEnd: 8,
-      experienceId: 'exp_X',
-      templates: {},
-      member: { userId: 'user_X', doNotContact: false, joined: true },
-      payment: null,
-      membership: null,
-      values: {},
-    } satisfies DueAction;
+  /** An offer a member accepted, as due_actions gives it. */
+  const offer = (over: Partial<DueAction> = {}): DueAction => ({
+    id: '7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6',
+    companyId: 'biz_X',
+    createdAt: '2026-10-01T08:00:00.000Z',
+    type: 'pause_offer',
+    attempts: 0,
+    content: { days: 30, keep: true },
+    globalKillSwitch: false,
+    killSwitch: false,
+    dryRun: false,
+    locale: 'en',
+    timezone: 'Europe/Paris',
+    quietHoursStart: 22,
+    quietHoursEnd: 8,
+    experienceId: 'exp_X',
+    templates: {},
+    member: { userId: 'user_X', doNotContact: false, joined: true },
+    payment: null,
+    membership: {
+      id: 'mem_X1',
+      canceling: true,
+      ended: false,
+      productId: 'prod_X1',
+      currency: 'EUR',
+      periodEnd: '2026-10-20T00:00:00.000Z',
+    },
+    values: {},
+    ...over,
+  });
+
+  it('applies an accepted offer: the membership kept with consent, then the pause', async () => {
     const at = NOW.getTime();
-    expect(await runAction(action, fakeWhop().whop, at)).toMatchObject({
-      status: 'failed',
-      retry: false,
+    const { whop, calls } = fakeWhop();
+    expect(await runAction(offer(), whop, at)).toEqual({
+      status: 'sent',
+      result: { kept: true, resumes_at: '2026-10-31T08:00:00.000Z' },
+    });
+    expect(calls).toEqual([
+      {
+        method: 'PATCH',
+        path: '/memberships/mem_X1',
+        body: { cancel_at_period_end: false },
+        key: 'stayput-action-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6-keep',
+      },
+      {
+        method: 'POST',
+        path: '/memberships/mem_X1/pause',
+        body: { until: '2026-10-31T08:00:00.000Z' },
+        key: 'stayput-action-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6-pause',
+      },
+    ]);
+
+    // Free days without consent to stay: the cancellation stands, the days are added.
+    const extend = fakeWhop();
+    await runAction(
+      offer({ type: 'extend_offer', content: { days: 7, keep: false } }),
+      extend.whop,
+      at,
+    );
+    expect(extend.calls.map((c) => [c.method, c.path, c.body])).toEqual([
+      ['POST', '/memberships/mem_X1/extend', { days: 7 }],
+    ]);
+    // Help and the affiliate invitation: the creator follows up, nothing to ask Whop.
+    const help = fakeWhop();
+    expect(
+      await runAction(offer({ type: 'coaching_offer', content: { keep: false } }), help.whop, at),
+    ).toEqual({ status: 'sent', result: {} });
+    expect(help.calls).toEqual([]);
+  });
+
+  it('creates a single-use promo code, the same on every attempt, simulated in test mode', async () => {
+    const at = NOW.getTime();
+    const promo = offer({ type: 'promo_offer', content: { percentOff: 20, months: 3 } });
+    const { whop, calls } = fakeWhop();
+    const sent = await runAction(promo, whop, at);
+    expect(sent).toMatchObject({
+      status: 'sent',
+      result: {
+        code: expect.stringMatching(/^STAY-[A-HJ-NP-Z2-9]{8}$/) as string,
+        expires_at: '2026-10-08T08:00:00.000Z',
+        percent_off: 20,
+        months: 3,
+      },
+    });
+    const code = (sent as unknown as { result: { code: string } }).result.code;
+    expect(calls).toEqual([
+      {
+        method: 'POST',
+        path: '/promo_codes',
+        body: {
+          account_id: 'biz_X',
+          code,
+          amount_off: 20,
+          promo_type: 'percentage',
+          promo_duration_months: 3,
+          base_currency: 'eur',
+          new_users_only: false,
+          one_per_customer: true,
+          stock: 1,
+          expires_at: '2026-10-08T08:00:00.000Z',
+          product_id: 'prod_X1',
+        },
+        key: 'stayput-action-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6-promo',
+      },
+    ]);
+    // Tried again an hour later, after an outage: the same code.
+    const again = await runAction(promo, fakeWhop().whop, at + 3_600_000);
+    expect((again as unknown as { result: { code: string } }).result.code).toBe(code);
+    // In test mode: computed, nothing asked of Whop.
+    const test = fakeWhop();
+    expect(await runAction({ ...promo, dryRun: true }, test.whop, at)).toMatchObject({
+      status: 'simulated',
+      result: { code },
+    });
+    expect(test.calls).toEqual([]);
+  });
+
+  it('drops an offer whose membership ended, and what no longer holds', async () => {
+    const at = NOW.getTime();
+    expect(
+      await runAction(offer({ membership: { ...offer().membership!, ended: true } }), null, at),
+    ).toEqual({ status: 'cancelled', result: { reason: 'membership_ended' } });
+    expect(await runAction(offer({ membership: null }), null, at)).toEqual({
+      status: 'cancelled',
+      result: { reason: 'membership_ended' },
     });
     expect(
-      await runAction({ ...action, member: { ...action.member, joined: false } }, null, at),
+      await runAction(offer({ member: { ...offer().member, joined: false } }), null, at),
     ).toEqual({ status: 'cancelled', result: { reason: 'member_left' } });
-    expect(await runAction({ ...action, type: 'exit_survey' }, null, at)).toEqual({
-      status: 'cancelled',
-      result: { reason: 'cancellation_withdrawn' },
-    });
+    expect(
+      await runAction(
+        offer({ type: 'exit_survey', membership: { ...offer().membership!, canceling: false } }),
+        null,
+        at,
+      ),
+    ).toEqual({ status: 'cancelled', result: { reason: 'cancellation_withdrawn' } });
   });
 
   it('keeps a message for the end of the quiet hours, in the zone the creator has now', async () => {

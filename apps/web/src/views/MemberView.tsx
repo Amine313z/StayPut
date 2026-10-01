@@ -3,6 +3,7 @@ import { CircleCheck, Sparkles, Unlink } from 'lucide-react';
 import { useParams } from 'react-router';
 import { deleteJson, useApi, useReloadOnReturn } from '../api';
 import { ConfirmButton } from '../components/ConfirmButton';
+import { MemberRetention } from '../components/MemberRetention';
 import { SignOut } from '../components/SignOut';
 import { ErrorPanel, Loading } from '../components/Status';
 import { useI18n } from '../i18n';
@@ -13,7 +14,8 @@ import { ExternalButton } from '../ui/ExternalLink';
 
 /**
  * The member view (Whop "experience view", /experiences/:experienceId): progress, never
- * surveillance, and never a risk score (SPEC 5.3).
+ * surveillance, and never a risk score (SPEC 5.3). A payment that needs the member, and the
+ * cancellation they scheduled, come first.
  */
 export function MemberView() {
   const { experienceId = '' } = useParams();
@@ -34,6 +36,7 @@ export function MemberView() {
         </div>
         <SignOut via={state.data.via} />
       </div>
+      <MemberRetention api={api} />
       <Card
         icon={<Sparkles aria-hidden="true" className="size-4" />}
         title={t('member.goal.title')}

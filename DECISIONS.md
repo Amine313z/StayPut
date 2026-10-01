@@ -776,8 +776,57 @@ le fondateur, l'heure par défaut 19 h devenait 21 h à Paris.
   passage du cron en retard, ne fait jamais partir un message la nuit. Le message attend la fin
   des heures silencieuses ; ce n'est pas une tentative.
 
+### La vue membre : questionnaire de départ, offres, paiements (migration 0016, même jour)
+
+Dans l'espace StayPut de la communauté (la vue membre de Whop), le membre voit ce qui concerne
+son propre abonnement, jamais un score (SPEC 5.3) :
+
+- **Un paiement qui l'attend** (30 derniers jours) : une validation 3D Secure → « Valider mon
+  paiement », vers le lien que Whop a donné ; un paiement échoué → « Mettre à jour mon moyen de
+  paiement », vers la page de son abonnement chez Whop (`manage_url`, lue au moment d'afficher).
+- **Son annulation programmée** : « Pourquoi nous quittez-vous ? », cinq réponses, un clic.
+  Chaque réponse amène l'offre de la SPEC : pas le temps → une pause ; trop cher → un code
+  promo à usage unique ; pas de résultats → l'aide du créateur ; objectif atteint → une
+  invitation à recommander la communauté ; autre raison → des jours offerts. Le membre peut
+  changer sa réponse tant qu'il n'a pas choisi. Un seul questionnaire par annulation ; une fois
+  répondu, la notification qui l'aurait demandé ne part plus (sa place est réservée).
+- **Son accord, jamais implicite** : accepter une offre ne retire son annulation que s'il coche
+  « Je garde mon abonnement ». La case est obligatoire pour une pause (un abonnement qui se
+  termine ne peut pas être suspendu), au choix pour les jours offerts et l'aide, absente pour le
+  code promo et l'invitation.
+- **L'offre acceptée est une action comme les autres** : elle passe par les garde-fous (un code
+  déjà actif, le plafond de codes du mois, les jours offerts du trimestre, les arrêts) et par le
+  mode du créateur. En automatique, elle s'applique dans la même requête et le membre voit le
+  résultat (la date de reprise, son code) ; en manuel, il lit « Votre offre est en préparation »
+  jusqu'à la validation. Une offre que les garde-fous bloqueraient n'est pas proposée : le
+  membre laisse seulement sa raison.
+- **Chez Whop** : l'accord → `PATCH /memberships/{id}` (`cancel_at_period_end: false`) ; la
+  pause → `POST /memberships/{id}/pause` ; les jours offerts → `POST /memberships/{id}/extend` ;
+  le code → `POST /promo_codes` (pourcentage et durée en mois du créateur, une utilisation, pour
+  le produit du membre, valable 7 jours). Chaque appel a sa clé d'idempotence : une nouvelle
+  tentative ne pause, ne prolonge et ne crée jamais deux fois. Le code (`STAY-` et 8 caractères
+  sans 0/O ni 1/I/L, environ 40 bits) dérive de l'identifiant aléatoire de l'action : le même à
+  chaque tentative. L'aide et l'invitation sont notées ; le créateur prend le relais (« À vous
+  de jouer » dans l'historique).
+- **En mode test, pas de questionnaire pour les membres** : promettre un code qui ne viendrait
+  jamais serait pire que rien. Le membre « ne jamais contacter » ne le voit pas non plus. Le
+  bouton de paiement reste : c'est la situation du membre lui-même, rien ne lui est envoyé.
+- **L'équipe voit un aperçu** à la place : le questionnaire avec les offres du créateur, chaque
+  réponse à essayer, rien d'enregistré ni d'appliqué ; un bandeau dit quand le mode test le
+  cache aux membres.
+- **Les réglages** (Réglages → Actions et garde-fous → « Offres de départ ») : la pause (7 à 90
+  jours), la réduction (5 à 50 %) et la durée (1 à 12 mois) du code, les jours offerts (1 à 14)
+  et le message du créateur au membre sans résultats (400 caractères ; vide, le texte de
+  StayPut). Un avertissement dit quand une limite rend une offre impossible (plafond de codes à
+  0, jours offerts au-delà de la limite du trimestre).
+- **L'historique** montre pour chaque offre la raison du membre, l'offre, le code et sa fin, la
+  reprise après une pause, son accord, avec le statut « Appliquée ».
+
 ### Reste à faire dans cette phase
 
-La vue membre (questionnaire de départ et offres, liens de paiement), l'offre Alumni, et la
-démonstration de chaque déclencheur. Les défis de sauvetage
-et les binômes dépendent de la Phase 5 (espace membre).
+L'offre Alumni, la démonstration de chaque déclencheur, et les permissions d'écriture à ajouter
+dans Whop (`member:manage`, `payment:manage`, `promo_code:create`, `promo_code:basic:read`,
+`notification:create`). À trancher au rapport de phase : un code promo valable 7 jours ne sert
+qu'à un nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en cours
+(`existing_memberships_only`). Les défis de sauvetage et les binômes dépendent de la Phase 5
+(espace membre).

@@ -1,5 +1,6 @@
 import {
   ACTION_VIEWS,
+  type ActionOffer,
   type ActionRow,
   type ActionStatus,
   type ActionType,
@@ -39,6 +40,7 @@ import { Link, useSearchParams } from 'react-router';
 import { postJson, useApi } from '../../api';
 import { ConfirmButton } from '../../components/ConfirmButton';
 import { ErrorPanel, Loading } from '../../components/Status';
+import { REASON_LABELS } from '../../exit-reasons';
 import { useI18n } from '../../i18n';
 import { Avatar } from '../../ui/Avatar';
 import { Badge, Notice, type Tone } from '../../ui/Badge';
@@ -83,6 +85,7 @@ const TRIGGERS: Readonly<Record<string, MessageKey>> = {
   cancel_at_period_end: 'actions.trigger.cancel_at_period_end',
   score_high: 'actions.trigger.score_high',
   activation_radar: 'actions.trigger.activation_radar',
+  exit_survey: 'actions.trigger.exit_survey',
 };
 
 const STATUSES: Readonly<Record<ActionStatus, { label: MessageKey; tone: Tone }>> = {
@@ -116,6 +119,8 @@ const NOTES: Readonly<Record<string, MessageKey>> = {
   cancellation_withdrawn: 'actions.note.cancellation_withdrawn',
   whop_retries: 'actions.note.whop_retries',
   not_retryable: 'actions.note.not_retryable',
+  membership_ended: 'actions.note.membership_ended',
+  survey_answered: 'actions.note.survey_answered',
 };
 
 /**
@@ -281,7 +286,11 @@ function ActionItem({
   const { t, relative, dateTime } = useI18n();
   const [step, setStep] = useState<'idle' | 'running' | 'failed'>('idle');
   const { label, Icon } = TYPES[action.type];
-  const status = STATUSES[action.status];
+  // An offer is not sent: it is applied to the membership.
+  const applied = action.offer !== null && action.status === 'sent';
+  const status = applied
+    ? { label: 'actions.status.applied' as const, tone: STATUSES.sent.tone }
+    : STATUSES[action.status];
   const trigger = TRIGGERS[action.trigger];
   const waiting = ['proposed', 'approved', 'scheduled'].includes(action.status);
 
@@ -289,7 +298,10 @@ function ActionItem({
     const at = (value: string) => ({ date: new Date(value), text: relative(new Date(value)) });
     if (action.status === 'sent' && action.sentAt) {
       const { date, text } = at(action.sentAt);
-      return { date, text: t('actions.when.sent', { when: text }) };
+      return {
+        date,
+        text: t(applied ? 'actions.when.applied' : 'actions.when.sent', { when: text }),
+      };
     }
     if (action.status === 'simulated' && action.sentAt) {
       const { date, text } = at(action.sentAt);
@@ -337,6 +349,7 @@ function ActionItem({
                 <p className="mt-0.5 text-muted">{action.message.body}</p>
               </div>
             ) : null}
+            {action.offer ? <OfferDetails type={action.type} offer={action.offer} /> : null}
             {action.blockedReason ? (
               <p className="flex items-center gap-1.5 text-sm text-warning">
                 <OctagonX aria-hidden="true" className="size-4 shrink-0" />
@@ -393,5 +406,46 @@ function ActionItem({
         ) : null}
       </div>
     </li>
+  );
+}
+
+/**
+ * An offer a member accepted in the departure survey: their reason in their words, the offer, and
+ * once applied, the code or the end of the pause. Help and the affiliate invitation are the
+ * creator's to follow up.
+ */
+function OfferDetails({ type, offer }: { type: ActionType; offer: ActionOffer }) {
+  const { t, plural, percent, date } = useI18n();
+  const day = (value: string | undefined) => (value ? date(new Date(value)) : '');
+  const what =
+    type === 'pause_offer' && offer.days
+      ? t('actions.offer.pause', { days: offer.days })
+      : type === 'promo_offer' && offer.percentOff && offer.months
+        ? plural('actions.offer.promo', offer.months, {
+            discount: percent(offer.percentOff / 100),
+          })
+        : type === 'extend_offer' && offer.days
+          ? plural('actions.offer.extend', offer.days)
+          : null;
+  const lines = [
+    offer.reason ? t('actions.offer.reason', { reason: t(REASON_LABELS[offer.reason]) }) : null,
+    what,
+    offer.promoCode
+      ? t('actions.offer.code', { code: offer.promoCode, date: day(offer.expiresAt) })
+      : null,
+    offer.resumesAt ? t('actions.offer.resumes', { date: day(offer.resumesAt) }) : null,
+    offer.keep ? t('actions.offer.kept') : null,
+  ].filter((line): line is string => line !== null);
+  return (
+    <div className="rounded-xl border border-line bg-surface-2 px-3 py-2.5 text-sm">
+      <ul className="space-y-0.5">
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+      {type === 'coaching_offer' || type === 'affiliate_invite' ? (
+        <p className="mt-1 text-muted">{t('actions.offer.followUp')}</p>
+      ) : null}
+    </div>
   );
 }

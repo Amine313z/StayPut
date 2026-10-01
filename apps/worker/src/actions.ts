@@ -1,17 +1,20 @@
 import {
   DEFAULT_TEMPLATES,
   MESSAGE_KINDS,
+  PROMO_VALID_DAYS,
   checkGuardrails,
   goldenHour,
   isActionType,
   nextLocalHour,
   outOfQuietHours,
+  promoCode,
   renderMessage,
   type ActionType,
   type BlockReason,
   type GuardrailSettings,
   type MessageAction,
   type MessageTemplate,
+  type OfferType,
   type TemplateLocale,
   type TemplateValues,
 } from '@stayput/core';
@@ -152,6 +155,7 @@ export async function prepareActions(
 export interface DueAction {
   id: string;
   companyId: string;
+  createdAt: string;
   type: string;
   attempts: number;
   content: Record<string, unknown>;
@@ -174,7 +178,14 @@ export interface DueAction {
     nextAttemptAt: string | null;
     recoveryUrl: string | null;
   } | null;
-  membership: { id: string; canceling: boolean } | null;
+  membership: {
+    id: string;
+    canceling: boolean;
+    ended: boolean;
+    productId: string | null;
+    currency: string | null;
+    periodEnd: string | null;
+  } | null;
   values: TemplateValues;
 }
 
@@ -287,12 +298,9 @@ export async function runAction(
     );
   }
 
+  if (OFFERS.has(type)) return runOffer(action, type as OfferType, whop);
   if (MESSAGE_KINDS[type] === 'none') {
-    return {
-      status: 'failed',
-      error: `${type} is applied when the member accepts it`,
-      retry: false,
-    };
+    return { status: 'failed', error: `${type} is not run by StayPut`, retry: false };
   }
   const message = actionMessage(action, type as MessageAction);
   if (action.dryRun) return { status: 'simulated', result: { message } };
@@ -321,6 +329,106 @@ export async function runAction(
   );
 }
 
+const OFFERS: ReadonlySet<ActionType> = new Set([
+  'pause_offer',
+  'promo_offer',
+  'coaching_offer',
+  'affiliate_invite',
+  'extend_offer',
+]);
+const DAY_MS = 86_400_000;
+
+/**
+ * An offer a member accepted in the departure survey (SPEC Phase 4): their membership kept when
+ * they ticked it, then the pause, the free days or the single-use promo code; help and the
+ * affiliate invitation are the creator's to follow up, StayPut records them. Every Whop call has
+ * its own idempotency key: a retry never pauses, extends or creates twice. The code and the dates
+ * come from the action itself, the same on every attempt.
+ */
+async function runOffer(
+  action: DueAction,
+  type: OfferType,
+  whop: WhopClient | null,
+): Promise<Outcome> {
+  const membership = action.membership;
+  if (!membership || membership.ended) {
+    return { status: 'cancelled', result: { reason: 'membership_ended' } };
+  }
+  const content = action.content;
+  const days = Number(content.days) || 0;
+  const accepted = Date.parse(action.createdAt);
+  const result: Record<string, unknown> = {};
+  if (content.keep === true) result.kept = true;
+  if (type === 'pause_offer') result.resumes_at = new Date(accepted + days * DAY_MS).toISOString();
+  if (type === 'extend_offer') result.days = days;
+  if (type === 'promo_offer') {
+    result.code = promoCode(bytesOf(action.id));
+    result.expires_at = new Date(accepted + PROMO_VALID_DAYS * DAY_MS).toISOString();
+    result.percent_off = Number(content.percentOff);
+    result.months = Number(content.months);
+  }
+  if (action.dryRun) return { status: 'simulated', result };
+  if (!whop) return { status: 'failed', error: 'the Whop API key is not set', retry: false };
+
+  const id = encodeURIComponent(membership.id);
+  const key = (step: string) => `stayput-action-${action.id}-${step}`;
+  const calls: (() => Promise<unknown>)[] = [];
+  if (content.keep === true) {
+    calls.push(() =>
+      whop.request('PATCH', `/memberships/${id}`, {
+        body: { cancel_at_period_end: false },
+        idempotencyKey: key('keep'),
+      }),
+    );
+  }
+  if (type === 'pause_offer') {
+    calls.push(() =>
+      whop.request('POST', `/memberships/${id}/pause`, {
+        body: { until: result.resumes_at },
+        idempotencyKey: key('pause'),
+      }),
+    );
+  } else if (type === 'extend_offer') {
+    calls.push(() =>
+      whop.request('POST', `/memberships/${id}/extend`, {
+        body: { days },
+        idempotencyKey: key('extend'),
+      }),
+    );
+  } else if (type === 'promo_offer') {
+    // Whop ties no code to a member: a random one, used once, for the creator's product.
+    calls.push(() =>
+      whop.request('POST', '/promo_codes', {
+        body: {
+          account_id: action.companyId,
+          code: result.code,
+          amount_off: result.percent_off,
+          promo_type: 'percentage',
+          promo_duration_months: result.months,
+          base_currency: (membership.currency ?? 'usd').toLowerCase(),
+          new_users_only: false,
+          one_per_customer: true,
+          stock: 1,
+          expires_at: result.expires_at,
+          ...(membership.productId ? { product_id: membership.productId } : {}),
+        },
+        idempotencyKey: key('promo'),
+      }),
+    );
+  }
+  for (const call of calls) {
+    const outcome = await callWhop(action, call);
+    if (outcome.status !== 'sent') return outcome;
+  }
+  return { status: 'sent', result };
+}
+
+/** 8 bytes of an action's id (a random UUID): its promo code, the same on every attempt. */
+function bytesOf(uuid: string): Uint8Array {
+  const hex = uuid.replace(/-/g, '');
+  return Uint8Array.from({ length: 8 }, (_, i) => parseInt(hex.slice(i * 2 + 16, i * 2 + 18), 16));
+}
+
 async function callWhop(action: DueAction, call: () => Promise<unknown>): Promise<Outcome> {
   try {
     await call();
@@ -344,6 +452,53 @@ async function callWhop(action: DueAction, call: () => Promise<unknown>): Promis
   }
 }
 
+/**
+ * Runs one action now when it is scheduled and due (a member's accepted offer, in automatic
+ * mode): the member sees what came of it in the same request. Returns its outcome's status.
+ */
+export async function executeAction(
+  db: Db,
+  whop: WhopClient | null,
+  actionId: string,
+  now: Date,
+): Promise<string | null> {
+  const [row] = await db.query<{ action: DueAction | null }>(
+    'select stayput.due_action($1::uuid, $2::timestamptz) as action',
+    [actionId, now.toISOString()],
+  );
+  if (!row?.action) return null;
+  return finish(db, row.action, await runAction(row.action, whop, now.getTime()), now);
+}
+
+/** Keeps what came of an action: its result, a retry an hour later, or its postponement. */
+async function finish(db: Db, action: DueAction, outcome: Outcome, now: Date): Promise<string> {
+  const at = now.toISOString();
+  if (outcome.status === 'postponed') {
+    await db.query('select stayput.postpone_action($1, $2::timestamptz)', [
+      action.id,
+      new Date(outcome.sendAt).toISOString(),
+    ]);
+    return 'postponed';
+  }
+  const retryAt =
+    outcome.status === 'failed' && outcome.retry
+      ? new Date(now.getTime() + RETRY_DELAY_MS).toISOString()
+      : null;
+  await db.query(
+    'select stayput.finish_action($1, $2, $3::text::jsonb, $4, $5, $6::timestamptz, $7::timestamptz)',
+    [
+      action.id,
+      outcome.status,
+      'result' in outcome ? JSON.stringify(outcome.result) : null,
+      outcome.status === 'failed' ? outcome.error : null,
+      outcome.status === 'blocked_by_guardrail' ? outcome.reason : null,
+      retryAt,
+      at,
+    ],
+  );
+  return retryAt ? 'retried' : outcome.status;
+}
+
 /** Runs the actions whose time has come, across companies, and keeps each result. */
 export async function executeDueActions(
   db: Db,
@@ -358,32 +513,7 @@ export async function executeDueActions(
   );
   const counts: Record<string, number> = {};
   for (const action of row?.actions ?? []) {
-    const outcome = await runAction(action, whop, now.getTime());
-    if (outcome.status === 'postponed') {
-      await db.query('select stayput.postpone_action($1, $2::timestamptz)', [
-        action.id,
-        new Date(outcome.sendAt).toISOString(),
-      ]);
-      counts.postponed = (counts.postponed ?? 0) + 1;
-      continue;
-    }
-    const retryAt =
-      outcome.status === 'failed' && outcome.retry
-        ? new Date(now.getTime() + RETRY_DELAY_MS).toISOString()
-        : null;
-    await db.query(
-      'select stayput.finish_action($1, $2, $3::text::jsonb, $4, $5, $6::timestamptz, $7::timestamptz)',
-      [
-        action.id,
-        outcome.status,
-        'result' in outcome ? JSON.stringify(outcome.result) : null,
-        outcome.status === 'failed' ? outcome.error : null,
-        outcome.status === 'blocked_by_guardrail' ? outcome.reason : null,
-        retryAt,
-        at,
-      ],
-    );
-    const key = retryAt ? 'retried' : outcome.status;
+    const key = await finish(db, action, await runAction(action, whop, now.getTime()), now);
     counts[key] = (counts[key] ?? 0) + 1;
   }
   return counts;

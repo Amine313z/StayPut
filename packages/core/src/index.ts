@@ -6,3 +6,4 @@ export * from './analyses';
 export * from './risk';
 export * from './actions';
 export * from './templates';
+export * from './offers';

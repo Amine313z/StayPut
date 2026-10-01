@@ -18,6 +18,7 @@ il a sauvé.
 | 1. Fondations                  | Validée le 01/10/2026                                     |
 | 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation |
 | 3. Détection (score de risque) | Faite, en attente de validation                           |
+| 4. Actions                     | En cours (reste l'offre Alumni)                           |
 
 ## Architecture
 
@@ -177,6 +178,15 @@ Chaque membre a un score de 0 à 100, recalculé chaque heure, avec ses deux rai
 **Analyses** montre les mois d'arrivée qui partent plus vite et les leçons bloquantes (une fois
 par semaine), **Réglages** choisit la niche, les poids et les seuils. Détails et raisons :
 `DECISIONS.md`, « Phase 3 ».
+
+### Actions (Phase 4)
+
+**Actions** liste ce que StayPut propose pour chaque membre (à valider en mode manuel), ce qui
+est programmé et ce qui s'est passé ; tout passe par les garde-fous, et le mode test calcule
+sans rien envoyer. Dans la **vue membre**, un membre qui a programmé son annulation dit pourquoi
+en un clic et reçoit l'offre qui répond à sa raison (pause, code promo, aide, jours offerts) ;
+un membre dont le paiement attend voit le bouton pour le régler. L'équipe y voit un aperçu, où
+rien n'est enregistré. Détails : `DECISIONS.md`, « Phase 4 ».
 
 ## Outils de la Phase 0
 

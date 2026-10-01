@@ -1,5 +1,6 @@
 import type {
   AccountsView,
+  MemberRetentionView,
   PlatformActivityView,
   ActionsPage,
   AccessLevel,
@@ -79,10 +80,23 @@ function fakeWhop(
 ) {
   const calls: string[] = [];
   const listed: string[] = [];
+  const writes: { method: string; path: string; body: unknown }[] = [];
   const client = {
     env: 'sandbox',
-    request(method: string, path: string) {
+    request(method: string, path: string, options?: { body?: unknown }) {
       calls.push(`${method} ${path}`);
+      if (method !== 'GET') writes.push({ method, path, body: options?.body });
+      // A member's membership, and what an accepted offer asks of Whop.
+      const membership = /^\/memberships\/(mem_[A-Za-z0-9]+)/.exec(path)?.[1];
+      if (method === 'GET' && membership) {
+        return Promise.resolve({
+          id: membership,
+          manage_url: `https://whop.com/manage/${membership}`,
+        });
+      }
+      if (method !== 'GET' && (membership || path === '/promo_codes')) {
+        return Promise.resolve({ id: 'promo_1' });
+      }
       const experience = /^\/experiences\/(exp_[A-Za-z0-9]+)$/.exec(path)?.[1];
       const company = experience ? experiences[experience] : undefined;
       if (!company)
@@ -108,7 +122,7 @@ function fakeWhop(
       return Promise.resolve(lists[path] ?? EMPTY_PAGE);
     },
   } as unknown as WhopClient;
-  return { client, calls, listed };
+  return { client, calls, listed, writes };
 }
 
 function setup(
@@ -1391,6 +1405,13 @@ describe('the actions (SPEC Phase 4)', () => {
     monthlyPromoCap: 10,
     maxFreeDaysPerQuarter: 14,
     templates: {},
+    offers: {
+      pauseDays: 30,
+      promoPercent: 20,
+      promoMonths: 3,
+      extendDays: 7,
+      coachingMessage: null,
+    },
   };
 
   /** A company with one new member who has not started: StayPut proposes to welcome them. */
@@ -1520,6 +1541,13 @@ describe('the actions (SPEC Phase 4)', () => {
     const path = '/api/creator/biz_ActQ4/settings/actions';
     expect(await (await request(path, init)).json()).toEqual({ ...DEFAULTS, locale: 'fr' });
     const welcome = { title: 'Bienvenue {first_name}', body: 'On est ravis[[, {first_name}]].' };
+    const offers = {
+      pauseDays: 45,
+      promoPercent: 30,
+      promoMonths: 2,
+      extendDays: 5,
+      coachingMessage: '  Écris-moi où tu bloques, je te réponds en personne.  ',
+    };
     const saved = await request(
       path,
       json(init, 'PUT', {
@@ -1527,6 +1555,7 @@ describe('the actions (SPEC Phase 4)', () => {
         mode: 'auto',
         maxMessagesPerMonth: 2,
         templates: { fr: { welcome_message: welcome, exit_survey: { title: ' ', body: '' } } },
+        offers,
       }),
     );
     expect(await saved.json()).toEqual({
@@ -1534,7 +1563,22 @@ describe('the actions (SPEC Phase 4)', () => {
       mode: 'auto',
       maxMessagesPerMonth: 2,
       templates: { fr: { welcome_message: welcome } },
+      offers: { ...offers, coachingMessage: 'Écris-moi où tu bloques, je te réponds en personne.' },
     });
+    // Sent without the offers (a page from before them), the offers stay; an empty message is
+    // StayPut's own.
+    const { offers: _kept, ...withoutOffers } = DEFAULTS;
+    expect(await (await request(path, json(init, 'PUT', withoutOffers))).json()).toMatchObject({
+      offers: { pauseDays: 45 },
+    });
+    expect(
+      await (
+        await request(
+          path,
+          json(init, 'PUT', { ...DEFAULTS, offers: { ...offers, coachingMessage: ' ' } }),
+        )
+      ).json(),
+    ).toMatchObject({ offers: { pauseDays: 45, coachingMessage: null } });
     for (const wrong of [
       { ...DEFAULTS, maxMessagesPerMonth: 5 },
       { ...DEFAULTS, maxFreeDaysPerQuarter: 30 },
@@ -1546,6 +1590,13 @@ describe('the actions (SPEC Phase 4)', () => {
       },
       { ...DEFAULTS, templates: { fr: { welcome_message: { title: 'x'.repeat(81), body: '' } } } },
       { ...DEFAULTS, timezone: 'Mars/Olympus' },
+      { ...DEFAULTS, offers: { ...DEFAULTS.offers, pauseDays: 120 } },
+      { ...DEFAULTS, offers: { ...DEFAULTS.offers, promoPercent: 80 } },
+      { ...DEFAULTS, offers: { ...DEFAULTS.offers, extendDays: 0 } },
+      { ...DEFAULTS, offers: { ...DEFAULTS.offers, promoMonths: 1.5 } },
+      { ...DEFAULTS, offers: { ...DEFAULTS.offers, coachingMessage: 'x'.repeat(401) } },
+      { ...DEFAULTS, offers: { ...DEFAULTS.offers, coachingMessage: 42 } },
+      { ...DEFAULTS, offers: 'generous' },
     ]) {
       expect((await request(path, json(init, 'PUT', wrong))).status, JSON.stringify(wrong)).toBe(
         400,
@@ -1576,5 +1627,198 @@ describe('the actions (SPEC Phase 4)', () => {
       json(init, 'PUT', { ...DEFAULTS, timezone: 'America/Montreal' }),
     );
     expect(await moved.json()).toMatchObject({ timezone: 'America/Montreal' });
+  });
+});
+
+describe("the member's departure survey and payments (SPEC Phase 4)", () => {
+  const json = (init: RequestInit, method: string, body: unknown) => ({
+    ...init,
+    method,
+    headers: { ...init.headers, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  /** A community whose member Ana scheduled her cancellation; `boss` is of the team. */
+  async function departing(n: number, over: { mode?: 'auto' | 'manual'; dryRun?: boolean } = {}) {
+    const [company, experience] = [`biz_Ret${n}`, `exp_Ret${n}`];
+    const env = setup(
+      {
+        [`user_ana${n}:${experience}`]: 'customer',
+        [`user_boss${n}:${experience}`]: 'admin',
+        [`user_boss${n}:${company}`]: 'admin',
+      },
+      { experiences: { [experience]: company } },
+    );
+    await env.request(`/api/creator/${company}/session`, await asUser(`user_boss${n}`));
+    await settle();
+    await t.db.query(`update stayput.companies set name = 'Le Club', mode = $2 where id = $1`, [
+      company,
+      over.mode ?? 'auto',
+    ]);
+    await t.db.query(`update stayput.company_settings set dry_run = $2 where company_id = $1`, [
+      company,
+      over.dryRun ?? false,
+    ]);
+    await t.db.query('select stayput.ingest_page($1, $2, null, $3::text::jsonb)', [
+      company,
+      'members',
+      JSON.stringify(page([member(`mber_Ret${n}`, `user_ana${n}`)])),
+    ]);
+    await t.db.query(
+      `insert into stayput.memberships (id, company_id, member_id, user_id, product_id, plan_id,
+                                        price, currency, billing_period_days, status,
+                                        cancel_at_period_end, current_period_end, canceled_at)
+       values ($1, $2, $3, $4, 'prod_Ret1', 'plan_Ret1', 49, 'eur', 30, 'active', true,
+               $5::timestamptz + interval '10 days', $5::timestamptz - interval '1 day')`,
+      [`mem_Ret${n}`, company, `mber_Ret${n}`, `user_ana${n}`, NOW.toISOString()],
+    );
+    const ana = await asUser(`user_ana${n}`);
+    const base = `/api/member/${experience}/retention`;
+    const read = async (as = ana) =>
+      (await (await env.request(base, as)).json()) as MemberRetentionView;
+    const answer = (reason: unknown) =>
+      env.request(`${base}/survey`, json(ana, 'POST', { reason }));
+    const decide = (body: unknown) => env.request(`${base}/offer`, json(ana, 'POST', body));
+    return { ...env, company, ana, read, answer, decide, boss: () => asUser(`user_boss${n}`) };
+  }
+
+  it('asks why, makes the offer for the reason, and keeps the membership only with consent', async () => {
+    const { read, answer, decide, whop, company, request, boss } = await departing(1);
+    expect(await read()).toMatchObject({
+      preview: null,
+      creatorName: 'Le Club',
+      whopAppId: APP_ID,
+      payment: null,
+      departure: { reason: null, offer: null, outcome: 'pending', result: null },
+    });
+
+    // Too expensive: a single-use code. Then the member changes their mind: no time, a pause.
+    const expensive = (await (await answer('too_expensive')).json()) as MemberRetentionView;
+    expect(expensive.departure?.offer).toEqual({
+      type: 'promo_offer',
+      percentOff: 20,
+      months: 3,
+      validDays: 7,
+      keep: 'never',
+    });
+    const busy = (await (await answer('no_time')).json()) as MemberRetentionView;
+    expect(busy.departure?.offer).toEqual({ type: 'pause_offer', days: 30, keep: 'required' });
+    expect((await answer('bored')).status).toBe(400);
+
+    // A pause needs the member's consent to keep their membership.
+    expect((await decide({ accept: true })).status).toBe(400);
+    const accepted = (await (
+      await decide({ accept: true, keep: true })
+    ).json()) as MemberRetentionView;
+    expect(accepted.departure).toMatchObject({
+      outcome: 'accepted',
+      result: { status: 'applied', resumesAt: expect.any(String) as string },
+    });
+    // Automatic mode: through the guardrails, then Whop at once.
+    expect(whop.writes.map((w) => `${w.method} ${w.path}`)).toEqual([
+      'PATCH /memberships/mem_Ret1',
+      'POST /memberships/mem_Ret1/pause',
+    ]);
+    expect(whop.writes[0]?.body).toEqual({ cancel_at_period_end: false });
+    expect((await decide({ accept: true, keep: true })).status).toBe(404);
+    // The offer ran; the notification asking for the survey, answered, no longer goes.
+    expect(
+      await t.db.query(
+        `select type, status, trigger from stayput.actions where company_id = $1 order by type`,
+        [company],
+      ),
+    ).toEqual([
+      { type: 'exit_survey', status: 'cancelled', trigger: 'cancel_at_period_end' },
+      { type: 'pause_offer', status: 'sent', trigger: 'exit_survey' },
+    ]);
+    // The creator finds it in the history: why, what, and the member's consent.
+    const history = (await (
+      await request(`/api/creator/${company}/actions?view=history`, await boss())
+    ).json()) as ActionsPage;
+    expect(history.actions.find((a) => a.type === 'pause_offer')).toMatchObject({
+      status: 'sent',
+      message: null,
+      offer: { reason: 'no_time', days: 30, keep: true, resumesAt: expect.any(String) as string },
+    });
+  });
+
+  it('waits for the creator in manual mode, and the team sees a preview', async () => {
+    const { read, answer, decide, boss, company } = await departing(2, { mode: 'manual' });
+    await answer('other');
+    const waiting = (await (await decide({ accept: true })).json()) as MemberRetentionView;
+    // Free days: the cancellation stands, nothing asked; the creator approves the action first.
+    expect(waiting.departure).toMatchObject({
+      offer: { type: 'extend_offer', days: 7, keep: 'optional' },
+      outcome: 'accepted',
+      result: { status: 'waiting' },
+    });
+    const [action] = await t.db.query<{ status: string; content: Record<string, unknown> }>(
+      `select status, content from stayput.actions where company_id = $1 and type = 'extend_offer'`,
+      [company],
+    );
+    expect(action).toMatchObject({ status: 'proposed', content: { days: 7, keep: false } });
+
+    // The team previews it, with the creator's offers; nothing of theirs is recorded.
+    const preview = await read(await boss());
+    expect(preview).toEqual({
+      creatorName: 'Le Club',
+      whopAppId: APP_ID,
+      preview: {
+        offers: {
+          pauseDays: 30,
+          promoPercent: 20,
+          promoMonths: 3,
+          extendDays: 7,
+          coachingMessage: null,
+        },
+        testMode: false,
+      },
+      payment: null,
+      departure: null,
+    });
+  });
+
+  it('shows the payment to settle, and no survey in test mode or for « never contact »', async () => {
+    const { read, answer, company } = await departing(3, { dryRun: true });
+    await t.db.query(
+      `insert into stayput.payments (id, company_id, member_id, amount, currency, status,
+                                     whop_created_at, whop_membership_id)
+       values ('pay_Ret3', $1, 'mber_Ret3', 49, 'eur', 'failed', $2::timestamptz, 'mem_Ret3')`,
+      [company, NOW.toISOString()],
+    );
+    // Test mode: nothing reaches members, the survey neither; the payment is theirs to see.
+    expect(await read()).toMatchObject({
+      payment: {
+        kind: 'failed',
+        amount: 49,
+        currency: 'eur',
+        url: 'https://whop.com/manage/mem_Ret3',
+      },
+      departure: null,
+    });
+    expect((await answer('no_time')).status).toBe(404);
+
+    // Out of test mode, the survey opens; its answer still carries the page to pay from.
+    await t.db.query(`update stayput.company_settings set dry_run = false where company_id = $1`, [
+      company,
+    ]);
+    const answered = (await (await answer('no_time')).json()) as MemberRetentionView;
+    expect(answered).toMatchObject({
+      payment: { kind: 'failed', url: 'https://whop.com/manage/mem_Ret3' },
+      departure: { reason: 'no_time', offer: { type: 'pause_offer' } },
+    });
+
+    // A 3D Secure check: the link Whop gave.
+    await t.db.query(
+      `update stayput.payments set status = 'requires_action',
+                                   recovery_url = 'https://whop.com/checkout/3ds'
+        where id = 'pay_Ret3'`,
+    );
+    expect(await read()).toMatchObject({
+      payment: { kind: 'action_required', url: 'https://whop.com/checkout/3ds' },
+      departure: { outcome: 'pending' },
+    });
+    await t.db.query(`update stayput.members set do_not_contact = true where id = 'mber_Ret3'`);
+    expect((await read()).departure).toBeNull();
   });
 });

@@ -285,6 +285,83 @@ export const fr: Messages = {
   'member.telegram.unlinkConfirm': 'Oui, délier',
   'member.telegram.privacy':
     "Le bot s'ouvre dans Telegram : touchez Démarrer. Seuls l’auteur et l’heure sont comptés, jamais ce que vous écrivez.",
+  'member.payment.title': 'Votre paiement',
+  'member.payment.actionRequired':
+    'Votre banque vous demande de confirmer votre paiement de {amount}. Cela ne prend qu’un instant.',
+  'member.payment.confirm': 'Valider mon paiement',
+  'member.payment.failed':
+    'Votre dernier paiement de {amount} n’est pas passé. Mettez à jour votre moyen de paiement pour garder votre accès.',
+  'member.payment.update': 'Mettre à jour mon moyen de paiement',
+  'member.payment.noLink': 'Ouvrez vos abonnements dans Whop pour le mettre à jour.',
+  'member.leaving.title': 'Votre abonnement se termine',
+  'member.leaving.endsAt': 'Votre accès reste ouvert jusqu’au {date}.',
+  'member.leaving.ask':
+    'Avant de partir, pourquoi nous quittez-vous ? Un clic suffit, et cela aide la communauté à s’améliorer.',
+  'member.leaving.reasons': 'Pourquoi partez-vous ?',
+  'member.leaving.yourReason': 'Votre réponse : {reason}',
+  'member.leaving.change': 'Changer ma réponse',
+  'member.leaving.thanks': 'Merci, votre réponse est bien enregistrée.',
+  'member.leaving.declined':
+    'Merci pour votre réponse. Votre accès reste ouvert jusqu’à la fin de votre période.',
+  'member.reason.too_expensive': 'C’est trop cher',
+  'member.reason.no_time': 'Je n’ai pas le temps',
+  'member.reason.no_results': 'Je n’ai pas les résultats attendus',
+  'member.reason.goal_reached': 'J’ai atteint mon objectif',
+  'member.reason.other': 'Une autre raison',
+  'member.offer.pause.title': 'Faites plutôt une pause de {days} jours',
+  'member.offer.pause.body':
+    'Votre abonnement est suspendu {days} jours, sans paiement, puis reprend tout seul. Votre place dans la communauté vous attend.',
+  'member.offer.pause.accept': 'Mettre en pause',
+  'member.offer.promo.title.one': '{discount} de réduction pendant {count} mois',
+  'member.offer.promo.title.other': '{discount} de réduction pendant {count} mois',
+  'member.offer.promo.body':
+    'Un code personnel à usage unique, valable {days} jours, pour votre prochain paiement sur Whop.',
+  'member.offer.promo.accept': 'Recevoir mon code',
+  'member.offer.extend.title.one': '{count} jour offert',
+  'member.offer.extend.title.other': '{count} jours offerts',
+  'member.offer.extend.body':
+    'Prenez un peu plus de temps pour profiter de la communauté : votre accès est prolongé, gratuitement.',
+  'member.offer.extend.accept': 'Profiter des jours offerts',
+  'member.offer.coaching.title': 'Un accompagnement pour y arriver',
+  'member.offer.coaching.body':
+    'Dites où vous bloquez : vous recevrez une réponse personnelle pour repartir du bon pied.',
+  'member.offer.coaching.accept': 'Oui, je veux de l’aide',
+  'member.offer.affiliate.title': 'Bravo, objectif atteint !',
+  'member.offer.affiliate.body':
+    'Faites découvrir la communauté à ceux qu’elle peut aider, et recevez une récompense : on vous explique comment.',
+  'member.offer.affiliate.accept': 'Ça m’intéresse',
+  'member.offer.keep.required': 'Je garde mon abonnement : mon annulation est retirée.',
+  'member.offer.keep.optional': 'Je garde aussi mon abonnement : mon annulation est retirée.',
+  'member.offer.keep.hint':
+    'Nécessaire pour une pause : un abonnement qui se termine ne peut pas être suspendu.',
+  'member.offer.decline': 'Non merci',
+  'member.result.waiting':
+    'C’est noté ! Votre offre est en préparation : elle apparaîtra ici dès qu’elle sera appliquée.',
+  'member.result.pause': 'Votre abonnement est en pause jusqu’au {date}.',
+  'member.result.code': 'Votre code',
+  'member.result.codeUntil': 'Valable une fois, jusqu’au {date}.',
+  'member.result.copy': 'Copier',
+  'member.result.copied': 'Copié',
+  'member.result.extend.one': '{count} jour offert a été ajouté à votre accès.',
+  'member.result.extend.other': '{count} jours offerts ont été ajoutés à votre accès.',
+  'member.result.coaching':
+    'Votre demande est envoyée : vous recevrez bientôt une réponse personnelle.',
+  'member.result.affiliate':
+    'Merci ! Vous recevrez bientôt les détails pour recommander la communauté.',
+  'member.result.kept': 'Votre abonnement continue : votre annulation est retirée.',
+  'member.result.failed':
+    'Votre offre n’a pas pu être appliquée pour l’instant. L’équipe de la communauté le voit et reviendra vers vous.',
+  'member.result.cancelled': 'Cette offre n’est plus disponible.',
+  'member.preview.badge': 'Aperçu',
+  'member.preview.title': 'Ce que voient vos membres',
+  'member.preview.body':
+    'Un membre qui programme son annulation voit ici ce questionnaire, avec l’offre qui répond à sa raison. Essayez chaque réponse : rien n’est enregistré.',
+  'member.preview.testMode':
+    'Le mode test est activé : vos membres ne voient pas encore ce questionnaire.',
+  'member.preview.payment':
+    'Un membre dont le paiement a échoué ou attend sa banque voit aussi ici un bouton pour le régler.',
+  'member.preview.done': 'Aperçu : rien n’a été appliqué. Un membre verrait ici le résultat.',
+  'member.preview.again': 'Essayer une autre réponse',
   'home.point.members': 'Chaque membre, son abonnement et ses paiements, lus dans Whop.',
   'home.point.payments':
     'Paiements échoués et annulations programmées, vus avant que le membre parte.',
@@ -455,6 +532,7 @@ export const fr: Messages = {
   'actions.when.at': 'Part {when}',
   'actions.when.goldenHour': 'Part à l’heure d’or du membre',
   'actions.when.sent': 'Envoyée {when}',
+  'actions.when.applied': 'Appliquée {when}',
   'actions.when.simulated': 'Simulée {when}',
   'actions.when.created': 'Proposée {when}',
   'actions.type.payment_retry': 'Relance du paiement',
@@ -474,10 +552,12 @@ export const fr: Messages = {
   'actions.trigger.cancel_at_period_end': 'Annulation programmée',
   'actions.trigger.score_high': 'Score passé en risque élevé',
   'actions.trigger.activation_radar': 'Nouveau membre qui n’a pas commencé',
+  'actions.trigger.exit_survey': 'Réponse au questionnaire de départ',
   'actions.status.proposed': 'À valider',
   'actions.status.approved': 'Validée',
   'actions.status.scheduled': 'Programmée',
   'actions.status.sent': 'Envoyée',
+  'actions.status.applied': 'Appliquée',
   'actions.status.simulated': 'Simulée',
   'actions.status.failed': 'Échouée',
   'actions.status.cancelled': 'Annulée',
@@ -498,6 +578,18 @@ export const fr: Messages = {
   'actions.note.cancellation_withdrawn': 'L’annulation a été retirée',
   'actions.note.whop_retries': 'Whop relance lui-même le paiement',
   'actions.note.not_retryable': 'Whop ne peut pas relancer ce paiement',
+  'actions.note.membership_ended': 'L’abonnement du membre était déjà terminé',
+  'actions.note.survey_answered': 'Le membre a d’abord répondu au questionnaire dans StayPut',
+  'actions.offer.reason': 'Raison : « {reason} »',
+  'actions.offer.pause': 'Pause de {days} jours',
+  'actions.offer.promo.one': '{discount} de réduction pendant {count} mois',
+  'actions.offer.promo.other': '{discount} de réduction pendant {count} mois',
+  'actions.offer.extend.one': '{count} jour offert',
+  'actions.offer.extend.other': '{count} jours offerts',
+  'actions.offer.code': 'Code {code}, valable jusqu’au {date}',
+  'actions.offer.resumes': 'Reprise le {date}',
+  'actions.offer.kept': 'Abonnement gardé, avec l’accord du membre',
+  'actions.offer.followUp': 'À vous de jouer : écrivez au membre sur Whop.',
   'actions.note.error': 'Erreur : {error}',
 
   'actionSettings.title': 'Actions et garde-fous',
@@ -548,6 +640,21 @@ export const fr: Messages = {
   'actionSettings.messageTitle': 'Titre',
   'actionSettings.messageBody': 'Texte',
   'actionSettings.messageProblem': 'Variable inconnue ou [[ ]] non fermé : {problems}',
+  'actionSettings.offers': 'Offres de départ',
+  'actionSettings.offers.hint':
+    'Un membre qui programme son annulation dit pourquoi en un clic dans l’espace StayPut de votre communauté, et reçoit l’offre qui répond à sa raison. Ce qu’il accepte suit votre mode et les limites ci-dessus.',
+  'actionSettings.offers.pauseDays': 'Pause, en jours (« {reason} »)',
+  'actionSettings.offers.promoPercent': 'Réduction du code promo, en % (« {reason} »)',
+  'actionSettings.offers.promoMonths': 'Durée du code promo, en mois',
+  'actionSettings.offers.extendDays': 'Jours offerts (« {reason} »)',
+  'actionSettings.offers.coachingMessage':
+    'Votre message à un membre sans résultats (« {reason} »)',
+  'actionSettings.offers.coachingHint':
+    'Laissez vide pour garder le texte de StayPut. Vous prenez ensuite le relais en personne, comme pour un membre qui a atteint son objectif et est invité à recommander la communauté.',
+  'actionSettings.offers.promoBlocked':
+    'Votre limite de codes promo par mois est à 0 : les membres n’auront pas cette offre.',
+  'actionSettings.offers.extendBlocked':
+    'Au-delà de votre limite de jours offerts ({cap}) : les membres n’auront pas cette offre.',
   'actionSettings.save': 'Enregistrer',
   'actionSettings.saveLabel': 'Enregistrer les réglages des actions',
   'actionSettings.saved': 'Enregistré.',
