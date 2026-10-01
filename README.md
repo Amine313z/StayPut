@@ -137,10 +137,15 @@ sinon. Réglages une fois pour toutes (détails et raisons : `DECISIONS.md`, 202
 - **Discord** : une application sur https://discord.com/developers/applications, son bot (jeton
   → `DISCORD_BOT_TOKEN`), son « Client Secret » (onglet OAuth2 → `DISCORD_CLIENT_SECRET`) et,
   dans OAuth2 → Redirects, l'adresse `https://stayput.chezbenz18.workers.dev/auth/discord/callback`.
-  Aucun intent privilégié n'est nécessaire.
+  Pour voir **tous** les membres d'un serveur (pas seulement ceux qui écrivent) : Bot →
+  Privileged Gateway Intents → **Server Members Intent** activé (gratuit, sans vérification
+  sous 100 serveurs).
 - **Telegram** : un bot créé avec @BotFather (jeton → `TELEGRAM_BOT_TOKEN`), **mode
   confidentialité désactivé** (@BotFather → `/setprivacy` → Disable) avant de l'ajouter à un
-  groupe. Le webhook se déclare tout seul à la première demande de lien. Un **canal** compte
+  groupe. Le webhook se déclare tout seul à la première demande de lien. Telegram ne donne aux
+  bots aucune liste des membres : StayPut connaît ceux qui écrivent, ceux qui arrivent après le
+  bot et les administrateurs (un bot **administrateur** voit en plus chaque arrivée et chaque
+  départ). Un **canal** compte
   par son groupe de discussion (les commentaires des membres) : activer les commentaires du
   canal (Gérer → Discussion), puis y ajouter le bot.
 
@@ -148,7 +153,8 @@ Le créateur connecte ensuite son serveur ou ses groupes depuis **Sources d'acti
 tableau de bord ; chaque membre relie son Telegram depuis la vue membre.
 
 À chaque déploiement, la dernière étape demande à Discord et à Telegram s'ils **acceptent** ces
-secrets, et vérifie l'adresse de retour, le bot public, le mode confidentialité et le webhook.
+secrets, et vérifie l'adresse de retour, le bot public, le Server Members Intent, le mode
+confidentialité et le webhook.
 Le résultat est dans le résumé de l'exécution (« Discord and Telegram ») ; un problème y est un
 avertissement avec la correction à faire, jamais un échec du déploiement.
 

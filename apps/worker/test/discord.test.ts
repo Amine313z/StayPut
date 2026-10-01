@@ -52,6 +52,35 @@ describe('the Discord client', () => {
     expect(discord.calls[0]!.headers.get('user-agent')).toMatch(/^DiscordBot \(/);
   });
 
+  it('reads a server member list by account, 1000 a page, and its head count', async () => {
+    const page = '[{"user":{"id":"55555","username":"ana"},"joined_at":null}]';
+    const discord = fakeDiscord({
+      [`GET /api/v10/guilds/${GUILD}/members`]: () => new Response(page),
+      [`GET /api/v10/guilds/${GUILD}`]: () => json({ id: GUILD, approximate_member_count: 42 }),
+    });
+    const client = createDiscordClient({ botToken: 'bot-token', fetch: discord.fetch });
+    expect(await client.membersRaw(GUILD, null)).toBe(page);
+    expect(await client.membersRaw(GUILD, '55555')).toBe(page);
+    expect(await client.memberCount(GUILD)).toBe(42);
+    expect(discord.calls.map((c) => c.url)).toEqual([
+      `/api/v10/guilds/${GUILD}/members?limit=1000`,
+      `/api/v10/guilds/${GUILD}/members?limit=1000&after=55555`,
+      `/api/v10/guilds/${GUILD}?with_counts=true`,
+    ]);
+    // Without the Server Members Intent, Discord refuses the list.
+    const refused = createDiscordClient({
+      botToken: 't',
+      fetch: fakeDiscord({
+        [`GET /api/v10/guilds/${GUILD}/members`]: () =>
+          json({ message: 'Missing Access', code: 50001 }, 403),
+      }).fetch,
+    });
+    await expect(refused.membersRaw(GUILD, null)).rejects.toMatchObject({
+      status: 403,
+      message: expect.stringContaining('Missing Access') as string,
+    });
+  });
+
   it('never puts anything but a Discord id in a path', async () => {
     const discord = fakeDiscord({});
     const client = createDiscordClient({ botToken: 't', fetch: discord.fetch });

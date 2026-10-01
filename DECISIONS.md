@@ -517,6 +517,37 @@ suite quand on y revient (badge « En direct ») :
   et par salon. Un vrai temps réel (WebSocket, Durable Object) n'apporterait que quelques
   secondes, et Discord n'envoie de toute façon rien sans une connexion permanente à sa passerelle.
 
+### Voir tous les membres de Discord et Telegram (migration 0017, même soir)
+
+« Je veux qu'on puisse voir les membres » : jusqu'ici StayPut ne connaissait que les comptes qui
+écrivent. Une carte **« Membres sur Discord et Telegram »** (onglet Sources d'activité) liste
+maintenant toutes les personnes qu'il connaît sur le serveur et dans le groupe, avec ce que
+chacune est pour la communauté (membre relié, équipe, pas un membre, pas encore relié), ses
+messages sur 30 jours, depuis quand elle est là ou quand elle est partie ; recherche par nom
+(accents ignorés) et filtre par plateforme. Elle se relit seule toutes les 30 secondes.
+
+- **Discord** donne la liste complète d'un serveur, mais seulement à une application dont le
+  **Server Members Intent** est activé (Developer Portal → Bot → Privileged Gateway Intents ;
+  gratuit, sans vérification sous 100 serveurs). StayPut la lit comme un flux de
+  synchronisation de plus (`discord_members:<serveur>`, 1 000 personnes par page) : toutes les
+  6 heures, et chaque minute pendant que le créateur regarde Sources. Qui la lecture ne
+  rencontre plus a quitté le serveur. Sans l'intent, Discord répond 403 : la carte l'explique
+  avec le chemin exact, et chaque déploiement vérifie l'intent (résumé « Discord and
+  Telegram »). Le nombre de membres d'un serveur, lui, vient sans intent
+  (`approximate_member_count`).
+- **Telegram** ne donne aucune liste des membres à un bot. StayPut connaît : ceux qui écrivent,
+  ceux qui arrivent ou partent depuis que le bot est là (messages de service du groupe, et les
+  mises à jour `chat_member` qu'un bot administrateur reçoit), et les administrateurs ; plus le
+  nombre total de membres (`getChatMemberCount`), relu au plus toutes les 10 minutes. La carte
+  dit « Membres dans le groupe : 34 · StayPut en connaît 3 », et pourquoi.
+- **Où ils sont** : une table `platform_presence` (compte, serveur ou groupe, arrivée, départ).
+  Les noms viennent de `note_account`, qui relie au passage une personne au membre Whop qui
+  porte exactement son nom ou son pseudo. Rien de ce qui est écrit n'est lu ni gardé.
+- **Effacement** : les noms d'un compte sans membre restent tant qu'il est sur le serveur ou
+  dans le groupe, et partent 30 jours après son départ (avant : 30 jours sans message). Une
+  personne silencieuse reste donc visible tant qu'elle est là.
+- Déconnecter un serveur ou un groupe oublie qui StayPut y voyait.
+
 ### Interface : un vrai tableau de bord
 
 - Trois sections à onglets dans la vue créateur : vue d'ensemble (chiffres, « À surveiller »,

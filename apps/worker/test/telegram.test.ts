@@ -41,15 +41,39 @@ describe('the Telegram client', () => {
     expect(telegram.calls).toHaveLength(1);
   });
 
-  it('sets the webhook for messages and its own membership, with the secret', async () => {
+  it('sets the webhook for messages, memberships and joins, with the secret', async () => {
     const telegram = fakeTelegram({ setWebhook: () => ok(true) });
     const client = createTelegramClient({ botToken: TOKEN, fetch: telegram.fetch });
     await client.setWebhook('https://w.example/webhooks/telegram', 'abc');
     expect(telegram.calls[0]!.body).toEqual({
       url: 'https://w.example/webhooks/telegram',
       secret_token: 'abc',
-      allowed_updates: ['message', 'my_chat_member'],
+      allowed_updates: ['message', 'my_chat_member', 'chat_member'],
     });
+  });
+
+  it('counts a group and lists its administrators who are people', async () => {
+    const telegram = fakeTelegram({
+      getChatMemberCount: () => ok(34),
+      getChatAdministrators: () =>
+        ok([
+          {
+            status: 'creator',
+            user: { id: 7, is_bot: false, first_name: 'Amine', last_name: 'B' },
+          },
+          { status: 'administrator', user: { id: 8, is_bot: true, first_name: 'StayPutBot' } },
+          {
+            status: 'administrator',
+            user: { id: 9, is_bot: false, first_name: 'Léa', username: 'lea' },
+          },
+        ]),
+    });
+    const client = createTelegramClient({ botToken: TOKEN, fetch: telegram.fetch });
+    expect(await client.memberCount('-1001')).toBe(34);
+    expect(await client.administrators('-1001')).toEqual([
+      { id: '7', name: 'Amine B', username: null },
+      { id: '9', name: 'Léa', username: 'lea' },
+    ]);
   });
 
   it('never repeats its token in an error', async () => {
@@ -230,12 +254,60 @@ describe('telegramAction', () => {
     expect(telegramAction(message({ text: 'x', from: { id: 9, is_bot: true } }))).toEqual({
       kind: 'ignore',
     });
-    expect(telegramAction(message({ new_chat_members: [person] }))).toEqual({ kind: 'ignore' });
+    expect(telegramAction(message({ new_chat_title: 'Nouveau nom' }))).toEqual({
+      kind: 'ignore',
+    });
     expect(telegramAction(message({ text: 'x', chat: { id: -5, type: 'channel' } })).kind).toBe(
       'ignore',
     );
     expect(telegramAction({ update_id: 2, edited_message: {} })).toEqual({ kind: 'ignore' });
     expect(telegramAction(null)).toEqual({ kind: 'ignore' });
+  });
+
+  it('notes who joins and leaves a group: service messages, or the updates of an admin bot', () => {
+    expect(
+      telegramAction(
+        message({
+          new_chat_members: [person, { id: 8, is_bot: true, first_name: 'Bot' }],
+          date: 1_790_000_000,
+        }),
+      ),
+    ).toEqual({
+      kind: 'people',
+      chatId: '-1001234567890',
+      joined: [{ id: '42', name: 'Ana', username: null }],
+      left: [],
+      at: new Date(1_790_000_000_000),
+    });
+    expect(telegramAction(message({ left_chat_member: person }))).toMatchObject({
+      kind: 'people',
+      joined: [],
+      left: ['42'],
+    });
+    // The bot itself leaving is its own membership's business, not a member's.
+    expect(
+      telegramAction(message({ left_chat_member: { id: 8, is_bot: true, first_name: 'Bot' } })),
+    ).toEqual({ kind: 'ignore' });
+    const update = (from: string, to: string, extra: Record<string, unknown> = {}) => ({
+      update_id: 5,
+      chat_member: {
+        chat: group,
+        date: 1_790_000_000,
+        old_chat_member: { status: from, user: person },
+        new_chat_member: { status: to, user: person, ...extra },
+      },
+    });
+    expect(telegramAction(update('left', 'member'))).toMatchObject({
+      kind: 'people',
+      joined: [{ id: '42' }],
+      left: [],
+    });
+    expect(telegramAction(update('member', 'kicked'))).toMatchObject({ joined: [], left: ['42'] });
+    expect(telegramAction(update('left', 'restricted', { is_member: true }))).toMatchObject({
+      joined: [{ id: '42' }],
+    });
+    // Promoted: still there, nothing to note.
+    expect(telegramAction(update('member', 'administrator'))).toEqual({ kind: 'ignore' });
   });
 
   it('reads the link that added the bot to a group', () => {

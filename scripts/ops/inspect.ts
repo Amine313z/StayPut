@@ -174,6 +174,35 @@ async function main() {
              group by 1, 2 order by 1, 2`,
         );
       }
+      // Who is on each server and in each group (migration 0017): there or gone, against the
+      // head count Discord or Telegram gives, and how the server's member list reads. Counts.
+      const [presence] = await sql`
+        select to_regclass('stayput.platform_presence') is not null as present`;
+      if (presence?.present) {
+        out();
+        table(
+          await sql`
+            select x.platform, x.kind, x.member_count,
+                   (select count(*) from stayput.platform_presence p
+                     where p.company_id = ${id as string} and p.platform = x.platform
+                       and p.place_id = x.place_id and p.left_at is null) as here,
+                   (select count(*) from stayput.platform_presence p
+                     where p.company_id = ${id as string} and p.platform = x.platform
+                       and p.place_id = x.place_id and p.left_at is not null) as left_,
+                   x.list_error
+              from (select 'discord' as platform, 'server' as kind, g.guild_id as place_id,
+                           g.member_count,
+                           (select left(s.last_error, 60) from stayput.sync_state s
+                             where s.company_id = g.company_id
+                               and s.stream = 'discord_members:' || g.guild_id) as list_error
+                      from stayput.discord_guilds g where g.company_id = ${id as string}
+                    union all
+                    select 'telegram', 'group', t.chat_id, t.member_count, null
+                      from stayput.telegram_chats t
+                     where t.company_id = ${id as string} and t.left_at is null) x
+             order by 1`,
+        );
+      }
     }
     // The actions (migration 0009): how many of each type are at each step of their cycle,
     // with the reasons the guardrails gave. Counts only.

@@ -167,8 +167,32 @@ export async function checkDiscord(
         ' Installation Contexts: tick Guild Install, then Save Changes.',
     });
   }
+  // Everyone on a server, not only who writes (migration 0017): Discord gives a server's member
+  // list only to an application with the Server Members Intent on (GATEWAY_GUILD_MEMBERS, or
+  // its _LIMITED form under 100 servers).
+  const flags = app.body?.flags;
+  if (typeof flags === 'number') {
+    findings.push(
+      (flags & (SERVER_MEMBERS_INTENT | SERVER_MEMBERS_INTENT_LIMITED)) !== 0
+        ? {
+            level: 'ok',
+            text: 'The Server Members Intent is on: StayPut reads the member list of each server.',
+          }
+        : {
+            level: 'warning',
+            text:
+              'The Server Members Intent is off: StayPut only sees who writes on Discord, not' +
+              ' everyone on the server. Developer Portal → the application → Bot → Privileged' +
+              ' Gateway Intents → Server Members Intent: on, then Save Changes.',
+          },
+    );
+  }
   return findings;
 }
+
+/** The application flags of the Server Members Intent (Discord's ApplicationFlags). */
+const SERVER_MEMBERS_INTENT = 1 << 14;
+const SERVER_MEMBERS_INTENT_LIMITED = 1 << 15;
 
 export async function checkTelegram(
   input: { botToken: string; origin: string },

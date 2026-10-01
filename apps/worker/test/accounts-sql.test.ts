@@ -1,4 +1,4 @@
-import type { PlatformActivityView } from '@stayput/core';
+import type { PeopleView, PlatformActivityView } from '@stayput/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUser } from '../src/db';
 import { member, page } from './fixtures/whop';
@@ -381,11 +381,20 @@ describe('waiting activity', () => {
     expect(await waiting()).toEqual(['telegram:6001']);
     await rows('select stayput.purge_pending_activity($1::timestamptz)', ['2026-10-21T12:00:00Z']);
     expect(await waiting()).toEqual([]);
-    // Its names go once it is quiet for 30 days, nobody having the account.
+    // Its names stay while it is in the group (0017), however quiet; they go 30 days after it
+    // left, nobody having the account.
     const named = () =>
       rows('select display_name from stayput.platform_accounts where company_id = $1', [c]);
-    expect(await named()).toEqual([{ display_name: 'Someone' }]);
     await rows('select stayput.purge_pending_activity($1::timestamptz)', ['2026-11-01T12:00:00Z']);
+    expect(await named()).toEqual([{ display_name: 'Someone' }]);
+    await rows(
+      `select stayput.telegram_people(chat_id, '[]', '["6001"]', $2::timestamptz)
+         from stayput.telegram_chats where company_id = $1`,
+      [c, '2026-10-02T12:00:00Z'],
+    );
+    await rows('select stayput.purge_pending_activity($1::timestamptz)', ['2026-11-01T11:00:00Z']);
+    expect(await named()).toEqual([{ display_name: 'Someone' }]);
+    await rows('select stayput.purge_pending_activity($1::timestamptz)', ['2026-11-01T12:00:01Z']);
     expect(await named()).toEqual([]);
   });
 });
@@ -463,5 +472,178 @@ describe('the activity the creator sees', () => {
       },
     ]);
     expect(await read('user_AccNobody')).toBeNull();
+  });
+});
+
+describe('everyone on Discord and Telegram (0017)', () => {
+  it('lists who is on the server and in the group, who they are, and who left', async () => {
+    const { c, chat, ids, say } = await community([
+      { name: 'Alice Martin', username: 'alice.m' },
+      { name: 'Bruno Petit' },
+    ]);
+    const guild = `96600${companies}`;
+    await rows('select stayput.connect_discord_guild($1, $2, $3, $4, $5::timestamptz)', [
+      c,
+      guild,
+      'Le Club',
+      'user_AccOwner4',
+      NOW,
+    ]);
+    // The server's member list: Alice by her username (tied to her at once), someone not tied,
+    // the creator (set aside as the team), and a bot.
+    const listed = (people: unknown[]) =>
+      rows(
+        `select stayput.discord_roster_start($1, $2),
+                stayput.sync_page($1, 'discord_members:' || $2, 'discord_members', $2,
+                                  $3::text::jsonb, $4::timestamptz, true, null, true, 'end'),
+                stayput.discord_roster_end($1, $2, $4::timestamptz)`,
+        [c, guild, JSON.stringify(people), NOW],
+      );
+    const person = (id: string, name: string | null, username: string) => ({
+      user: { id, username, global_name: name, bot: false },
+      nick: null,
+      joined_at: '2026-09-01T10:00:00.000000+00:00',
+    });
+    await listed([
+      person('9660001', 'Alice', 'alice.m'),
+      person('9660002', 'Zed', 'zed'),
+      person('9660003', 'Le A', 'am.17zz'),
+      { user: { id: '9660009', username: 'bot', bot: true }, joined_at: null },
+    ]);
+    await change('dismiss_account($1, $2, $3, $4::text, $5::timestamptz)', [
+      c,
+      'discord',
+      '9660003',
+      'team',
+      NOW,
+    ]);
+    await rows('select stayput.discord_guild_count($1, $2, $3::timestamptz)', [guild, 12, NOW]);
+
+    // The group: Léa joined and Marc wrote; the administrators come with the head count; Paul
+    // joined, then left.
+    await rows(`select stayput.telegram_people($1, $2::text::jsonb, '[]', $3::timestamptz)`, [
+      chat,
+      JSON.stringify([
+        { id: '7101', name: 'Léa', username: null },
+        { id: '7104', name: 'Paul', username: 'paul' },
+      ]),
+      '2026-09-29T09:00:00Z',
+    ]);
+    await say('7102', 'Marc');
+    await rows(`select stayput.telegram_chat_people($1, 34, $2::text::jsonb, $3::timestamptz)`, [
+      chat,
+      JSON.stringify([{ id: '7103', name: 'Chef', username: 'chef' }]),
+      NOW,
+    ]);
+    await rows(`select stayput.telegram_people($1, '[]', '["7104"]', $2::timestamptz)`, [
+      chat,
+      '2026-09-30T09:00:00Z',
+    ]);
+    // Over 30 days, Alice wrote twice on Discord, as herself.
+    await rows(
+      `insert into stayput.activity_events (company_id, member_id, type, occurred_at, external_id)
+       values ($1, $2, 'discord_message', '2026-09-30T10:00:00Z', 'd:1'),
+              ($1, $2, 'discord_message', '2026-09-30T11:00:00Z', 'd:2')`,
+      [c, ids[0]],
+    );
+
+    await admin(c, 'user_AccOwner4');
+    const read = async (user: string) =>
+      (
+        await withUser(t.db, user, (tx) =>
+          tx.query<{ view: PeopleView | null }>(
+            'select stayput.platform_people($1, $2::timestamptz) as view',
+            [c, NOW],
+          ),
+        )
+      )[0]?.view;
+    const view = (await read('user_AccOwner4'))!;
+    expect(view.places).toEqual([
+      { platform: 'discord', id: guild, name: 'Le Club', total: 12, known: 3, list: 'listed' },
+      { platform: 'telegram', id: chat, name: 'Group', total: 34, known: 3, list: 'joins' },
+    ]);
+    expect(view.total).toBe(7);
+    const who = Object.fromEntries(view.people.map((p) => [p.accountId, p]));
+    expect(who['9660001']).toMatchObject({
+      platform: 'discord',
+      status: 'member',
+      member: { id: ids[0], name: 'Alice Martin' },
+      here: true,
+      joinedAt: expect.stringMatching(/^2026-09-01/) as string,
+      messages: 2,
+    });
+    expect(who['9660002']).toMatchObject({ status: 'unlinked', here: true, messages: 0 });
+    expect(who['9660003']).toMatchObject({ status: 'team', here: true });
+    expect(who['9660009']).toBeUndefined();
+    expect(who['7101']).toMatchObject({ name: 'Léa', status: 'unlinked', here: true });
+    expect(who['7102']).toMatchObject({ name: 'Marc', here: true, messages: 1 });
+    expect(who['7103']).toMatchObject({ name: 'Chef', username: 'chef', here: true });
+    expect(who['7104']).toMatchObject({
+      name: 'Paul',
+      here: false,
+      leftAt: expect.stringMatching(/^2026-09-30/) as string,
+    });
+    // The latest to write first, then who is there, the newest arrivals first.
+    expect(view.people.map((p) => p.accountId)).toEqual([
+      '7102',
+      '9660001',
+      '7101',
+      '9660003',
+      '9660002',
+      '7103',
+      '7104',
+    ]);
+    expect(await read('user_AccNobody')).toBeNull();
+
+    // The server disconnected: who StayPut saw there goes with it.
+    await rows('select stayput.disconnect_discord_guild($1, $2)', [c, guild]);
+    const after = (await read('user_AccOwner4'))!;
+    expect(after.places.map((p) => p.platform)).toEqual(['telegram']);
+    expect(after.people.find((p) => p.accountId === '9660002')).toMatchObject({ here: null });
+  });
+
+  it('marks who left a server when its list no longer has them, and keeps a guest out', async () => {
+    const { c } = await community([]);
+    const guild = `96700${companies}`;
+    await rows('select stayput.connect_discord_guild($1, $2, $3, $4, $5::timestamptz)', [
+      c,
+      guild,
+      'Server',
+      'user_AccOwner5',
+      NOW,
+    ]);
+    const read = (people: string[], at: string) =>
+      rows(
+        `select stayput.discord_roster_start($1, $2),
+                stayput.ingest_page($1, 'discord_members', $2, $3::text::jsonb),
+                stayput.discord_roster_end($1, $2, $4::timestamptz)`,
+        [
+          c,
+          guild,
+          JSON.stringify(
+            people.map((id) => ({ user: { id, username: `u${id}` }, joined_at: null })),
+          ),
+          at,
+        ],
+      );
+    await read(['9670001', '9670002'], NOW);
+    await read(['9670002'], '2026-10-01T13:00:00Z');
+    const presence = await rows<{ account_id: string; left_at: string | null }>(
+      `select account_id, left_at::text from stayput.platform_presence
+        where company_id = $1 order by account_id`,
+      [c],
+    );
+    expect(presence).toEqual([
+      { account_id: '9670001', left_at: expect.stringMatching(/^2026-10-01 13:00/) as string },
+      { account_id: '9670002', left_at: null },
+    ]);
+    // Back on the server: there again.
+    await read(['9670001', '9670002'], '2026-10-01T14:00:00Z');
+    expect(
+      await rows(
+        'select count(*)::int as n from stayput.platform_presence where company_id = $1 and left_at is null',
+        [c],
+      ),
+    ).toEqual([{ n: 2 }]);
   });
 });

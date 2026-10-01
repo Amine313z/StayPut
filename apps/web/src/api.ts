@@ -125,6 +125,20 @@ export function useApi<T>(path: string): {
   };
 }
 
+/** Runs `reload` every `everyMs` while the page is visible: a list kept current without a click. */
+export function usePolling(reload: () => void, everyMs: number): void {
+  const latest = useRef(reload);
+  useEffect(() => {
+    latest.current = reload;
+  }, [reload]);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'hidden') latest.current();
+    }, everyMs);
+    return () => window.clearInterval(timer);
+  }, [everyMs]);
+}
+
 /**
  * Runs `reload` when the user comes back to the page: after connecting Discord or Telegram in
  * another tab, the screen shows it without a click.

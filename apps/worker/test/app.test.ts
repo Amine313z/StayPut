@@ -8,6 +8,7 @@ import type {
   InsightsReport,
   IntegrationsStatus,
   MemberTelegramStatus,
+  PeopleView,
   MembersPage,
   SyncRun,
   SyncStatus,
@@ -715,6 +716,8 @@ describe('Discord and Telegram', () => {
     const exchanged: { code: string; redirectUri: string }[] = [];
     const client: DiscordClient = {
       messagesRaw: () => Promise.resolve('[]'),
+      membersRaw: () => Promise.resolve('[]'),
+      memberCount: (guildId) => Promise.resolve(guildId === GUILD ? 42 : null),
       application: () => Promise.resolve({ id: '700000000000000001', botId: '700000000000000001' }),
       guildChannels: (guildId) =>
         Promise.resolve(
@@ -770,6 +773,9 @@ describe('Discord and Telegram', () => {
             ? { name: 'Bruno', username: 'bruno_p' }
             : { name: null, username: null },
         ),
+      memberCount: () => Promise.resolve(34),
+      administrators: () =>
+        Promise.resolve([{ id: '5550009', name: 'Chef Telegram', username: 'chef_tg' }]),
     };
     return { client, sent, webhooks, left };
   }
@@ -1242,6 +1248,95 @@ describe('Discord and Telegram', () => {
     const unlinked = await request('/api/member/exp_Int5/telegram', { method: 'DELETE', ...mo });
     expect(await unlinked.json()).toEqual({ removed: true });
     expect(await read()).toMatchObject({ linked: false });
+  });
+});
+
+describe('everyone on Discord and Telegram (the people)', () => {
+  const MODULES: Env = {
+    ...ENV,
+    DISCORD_BOT_TOKEN: 'discord-bot-token',
+    TELEGRAM_BOT_TOKEN: '123456:telegram-token',
+  };
+  const GUILD = '910000000000000061';
+  const CHAT = '-1009000000061';
+
+  it('lists who is on the server and in the group, with how many people each has', async () => {
+    const counted: string[] = [];
+    const discord = {
+      memberCount: (guildId: string) => {
+        counted.push(guildId);
+        return Promise.resolve(42);
+      },
+    } as unknown as DiscordClient;
+    const telegram = {
+      memberCount: (chatId: string) => {
+        counted.push(chatId);
+        return Promise.resolve(34);
+      },
+      administrators: () =>
+        Promise.resolve([{ id: '5550009', name: 'Chef Telegram', username: 'chef_tg' }]),
+    } as unknown as TelegramClient;
+    const app = setup(
+      { 'user_owner61:biz_Ppl1': 'admin', 'user_eve:biz_Ppl1': 'customer' },
+      { discord, telegram },
+    );
+    const request = (path: string, init: RequestInit = {}) => app.request(path, init, MODULES);
+    const owner = await asUser('user_owner61');
+    await request('/api/creator/biz_Ppl1/session', owner);
+    await settle();
+    await t.db.query('select stayput.connect_discord_guild($1, $2, $3, $4, $5::timestamptz)', [
+      'biz_Ppl1',
+      GUILD,
+      'Le Club',
+      'user_owner61',
+      NOW.toISOString(),
+    ]);
+    await t.db.query('select stayput.connect_telegram_chat($1, $2, $3, $4::timestamptz)', [
+      'biz_Ppl1',
+      CHAT,
+      'VIP',
+      NOW.toISOString(),
+    ]);
+    // Nina joins the group: Telegram's service message is the only news of her.
+    const joined = await request('/webhooks/telegram', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-telegram-bot-api-secret-token': await telegramWebhookSecret('123456:telegram-token'),
+      },
+      body: JSON.stringify({
+        update_id: 61,
+        message: {
+          message_id: 7,
+          date: Math.floor(NOW.getTime() / 1000),
+          chat: { id: Number(CHAT), type: 'supergroup', title: 'VIP' },
+          from: { id: 5552, is_bot: false, first_name: 'Nina' },
+          new_chat_members: [{ id: 5552, is_bot: false, first_name: 'Nina' }],
+        },
+      }),
+    });
+    expect(joined.status).toBe(200);
+    await settle();
+
+    const read = async () =>
+      (await (await request('/api/creator/biz_Ppl1/people', owner)).json()) as PeopleView;
+    const people = await read();
+    expect(people.places).toEqual([
+      { platform: 'discord', id: GUILD, name: 'Le Club', total: 42, known: 0, list: 'pending' },
+      { platform: 'telegram', id: CHAT, name: 'VIP', total: 34, known: 2, list: 'joins' },
+    ]);
+    expect(people.people.map((p) => [p.name, p.status, p.here])).toEqual([
+      ['Nina', 'unlinked', true],
+      ['Chef Telegram', 'unlinked', true],
+    ]);
+    // The head counts are read again after 10 minutes, not at each reading.
+    expect(counted).toEqual([GUILD, CHAT]);
+    await read();
+    expect(counted).toEqual([GUILD, CHAT]);
+    // A member of the community sees nothing of it.
+    expect((await request('/api/creator/biz_Ppl1/people', await asUser('user_eve'))).status).toBe(
+      403,
+    );
   });
 });
 

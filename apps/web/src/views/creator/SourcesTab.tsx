@@ -2,6 +2,7 @@ import { ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { AccountsCard } from '../../components/AccountsCard';
 import { DiscordCard } from '../../components/DiscordCard';
+import { PeopleCard } from '../../components/PeopleCard';
 import { PlatformActivityCard } from '../../components/PlatformActivityCard';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { SyncPanel } from '../../components/SyncPanel';
@@ -25,6 +26,10 @@ export function SourcesTab() {
   // New messages may come from accounts to tie; tying one moves its messages.
   const [accountsKey, setAccountsKey] = useState(0);
   const [activityKey, setActivityKey] = useState(0);
+  // The people move with both: a new writer, an account tied.
+  const [peopleKey, setPeopleKey] = useState(0);
+  const whopAppId =
+    integrations.state.status === 'ready' ? integrations.state.data.whopAppId : null;
   return (
     <div className="space-y-6">
       <SyncPanel sync={sync} />
@@ -36,9 +41,11 @@ export function SourcesTab() {
           onNews={() => {
             integrations.reload();
             setAccountsKey((key) => key + 1);
+            setPeopleKey((key) => key + 1);
           }}
         />
       ) : null}
+      {connected ? <PeopleCard api={api} whopAppId={whopAppId} refreshKey={peopleKey} /> : null}
       {integrations.state.status === 'loading' ? (
         <Loading />
       ) : integrations.state.status === 'error' ? (
@@ -72,6 +79,7 @@ export function SourcesTab() {
             integrations.reload();
             members.reload();
             setActivityKey((key) => key + 1);
+            setPeopleKey((key) => key + 1);
           }}
         />
       ) : null}

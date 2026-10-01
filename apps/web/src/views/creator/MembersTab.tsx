@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router';
 import { MemberList } from '../../components/MemberRows';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { useI18n } from '../../i18n';
+import { fold } from '../../text';
 import { Card } from '../../ui/Card';
 import { EmptyState } from '../../ui/EmptyState';
 import { useCreatorData } from '../CreatorView';
@@ -37,14 +38,6 @@ function keep(filter: Filter, member: MemberRow): boolean {
     case 'all':
       return true;
   }
-}
-
-/** Search a name, accents and case aside: « Élodie » matches « elodie ». */
-function fold(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase();
 }
 
 /**

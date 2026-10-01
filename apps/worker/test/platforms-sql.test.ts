@@ -163,10 +163,20 @@ describe('Discord', () => {
         )
       ).map((r) => r.stream);
 
+    // The server's member list is a stream of its own (0017), the channels one each.
+    const members = `discord_members:${guild}`;
     expect(await choose(a, '111111,222222,not-an-id,111111')).toBe(2);
-    expect(await streams(a)).toEqual(['discord_messages:111111', 'discord_messages:222222']);
+    expect(await streams(a)).toEqual([
+      members,
+      'discord_messages:111111',
+      'discord_messages:222222',
+    ]);
     expect(await choose(a, '222222,333333')).toBe(2);
-    expect(await streams(a)).toEqual(['discord_messages:222222', 'discord_messages:333333']);
+    expect(await streams(a)).toEqual([
+      members,
+      'discord_messages:222222',
+      'discord_messages:333333',
+    ]);
     // Connecting it again (the bot was added back) keeps the choice.
     expect(await connect(a, 'user_owner')).toBe(2);
 
@@ -175,7 +185,7 @@ describe('Discord', () => {
       "select stayput.sync_error($1, 'discord_messages:333333', $2::timestamptz, 404, 'gone')",
       [a, NOW],
     );
-    expect(await streams(a)).toEqual(['discord_messages:222222']);
+    expect(await streams(a)).toEqual([members, 'discord_messages:222222']);
     expect(
       await rows('select channel_ids from stayput.discord_guilds where guild_id = $1', [guild]),
     ).toEqual([{ channel_ids: '{222222}' }]);

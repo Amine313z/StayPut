@@ -36,6 +36,8 @@ export interface Stream {
   backfillDays?: number;
   /** One stream per id a listing found (`chat_channels` → `messages:<channel id>`). */
   scoped?: boolean;
+  /** While the creator watches (refreshDiscordAfterSeconds), read again no sooner than this. */
+  liveSeconds?: number;
 }
 
 const account = (companyId: string) => ({ account_id: companyId });
@@ -155,6 +157,22 @@ export const STREAMS: readonly Stream[] = [
     backfillDays: 90,
     scoped: true,
   },
+  {
+    // Everyone on a connected Discord server (connect_discord_guild creates the stream, the
+    // founder asked to see them all on 2026-10-01): its member list read to the end, 1000 a
+    // page, every 6 hours and each minute while the creator watches; who the end did not meet
+    // has left. Discord gives the list only to an application with the Server Members Intent
+    // turned on: 403 otherwise, and the Sources tab says how to turn it on.
+    name: 'discord_members',
+    kind: 'discord_members',
+    source: 'discord',
+    path: '/guilds/{id}/members',
+    query: () => ({}),
+    stop: 'end',
+    everyHours: 6,
+    liveSeconds: 60,
+    scoped: true,
+  },
 ];
 
 /** Listings whose items open scoped streams. */
@@ -227,7 +245,10 @@ export function planPass(
     !since || now.getTime() - since.getTime() >= hours * 3_600_000 - DUE_MARGIN_MS;
   const failed = Boolean(state?.lastError);
   const retryNow = failed && options.retryFailed === true;
-  const refreshAfter = options.refreshDiscordAfterSeconds;
+  const refreshAfter =
+    options.refreshDiscordAfterSeconds === undefined
+      ? undefined
+      : Math.max(options.refreshDiscordAfterSeconds, stream.liveSeconds ?? 0);
   const refreshNow =
     stream.source === 'discord' &&
     refreshAfter !== undefined &&
@@ -394,6 +415,7 @@ async function readStream(
   if (!plan) return null;
   let { cursor, start } = plan;
   let calls = 0;
+  const roster = stream.kind === 'discord_members';
   for (;;) {
     if (ctx.budget.left <= 0) return { outcome: 'more', calls };
     ctx.budget.left -= 1;
@@ -402,7 +424,9 @@ async function readStream(
     try {
       page =
         stream.source === 'discord' && ctx.discord
-          ? await ctx.discord.messagesRaw(scope ?? '', cursor)
+          ? roster
+            ? await ctx.discord.membersRaw(scope ?? '', cursor)
+            : await ctx.discord.messagesRaw(scope ?? '', cursor)
           : await ctx.whop.listPageRaw(stream.path, stream.query(companyId, scope), {
               after: cursor,
             });
@@ -420,6 +444,10 @@ async function readStream(
     }
     let next: string | null;
     try {
+      // A new reading of a server's member list: who it meets is marked as it goes.
+      if (roster && start) {
+        await ctx.db.query('select stayput.discord_roster_start($1, $2)', [companyId, scope]);
+      }
       const [row] = await ctx.db.query<{ next: string | null }>(
         `select stayput.sync_page($1, $2, $3, $4, $5::text::jsonb, $6::timestamptz, $7,
                                   $8::timestamptz, $9, $10) as next`,
@@ -437,6 +465,14 @@ async function readStream(
         ],
       );
       next = row?.next ?? null;
+      // The end of the list: who the reading did not meet has left the server.
+      if (roster && next === null) {
+        await ctx.db.query('select stayput.discord_roster_end($1, $2, $3::timestamptz)', [
+          companyId,
+          scope,
+          ctx.now.toISOString(),
+        ]);
+      }
     } catch (error) {
       // The page could not be stored (Whop sent something unexpected): the next run retries it.
       await recordError(ctx, companyId, name, 0, `database: ${describe(error)}`);

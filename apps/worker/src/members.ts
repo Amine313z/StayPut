@@ -49,11 +49,12 @@ export async function readSyncStatus(
       last_run_at: Date | string | null;
       last_error: string | null;
     }>(
-      // Discord's channels have their own status (the integrations); this one is Whop's.
+      // Discord's channels and member lists have their own status (the integrations, the
+      // people); this one is Whop's.
       `select stream, backfill_done, cursor is not null as in_progress, last_pass_at,
               last_run_at, last_error
          from stayput.sync_state
-        where company_id = $1 and stream not like 'discord_messages:%'
+        where company_id = $1 and stream not like 'discord_%'
         order by stream`,
       [companyId],
     ),

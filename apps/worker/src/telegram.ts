@@ -47,6 +47,13 @@ export interface TelegramBot {
   readsAllMessages: boolean;
 }
 
+/** Someone on Telegram, as StayPut keeps them: an id and names, never a bot. */
+export interface TelegramPerson {
+  id: string;
+  name: string | null;
+  username: string | null;
+}
+
 export interface TelegramClient {
   /** The bot, read once per isolate (getMe). */
   bot(): Promise<TelegramBot>;
@@ -61,6 +68,10 @@ export interface TelegramClient {
     chatId: string,
     userId: string,
   ): Promise<{ name: string | null; username: string | null }>;
+  /** How many people a group has (getChatMemberCount). */
+  memberCount(chatId: string): Promise<number | null>;
+  /** A group's administrators who are people (getChatAdministrators): the only list it gives. */
+  administrators(chatId: string): Promise<TelegramPerson[]>;
 }
 
 export function createTelegramClient(options: { botToken: string; fetch?: Fetch }): TelegramClient {
@@ -112,7 +123,8 @@ export function createTelegramClient(options: { botToken: string; fetch?: Fetch 
       await call('setWebhook', {
         url,
         secret_token: secret,
-        allowed_updates: ['message', 'my_chat_member'],
+        // chat_member: who joins and leaves a group, sent to a bot that administers it.
+        allowed_updates: ['message', 'my_chat_member', 'chat_member'],
       });
     },
     async sendMessage(chatId, text) {
@@ -135,7 +147,32 @@ export function createTelegramClient(options: { botToken: string; fetch?: Fetch 
       const name = [text(user?.first_name), text(user?.last_name)].filter(Boolean).join(' ');
       return { name: name || null, username: text(user?.username) };
     },
+    async memberCount(chatId) {
+      const count = await call('getChatMemberCount', { chat_id: chatId });
+      return typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count : null;
+    },
+    async administrators(chatId) {
+      const result = await call('getChatAdministrators', { chat_id: chatId });
+      return Array.isArray(result)
+        ? result.flatMap((admin) => {
+            const who = telegramPerson((admin as { user?: unknown } | null)?.user);
+            return who ? [who] : [];
+          })
+        : [];
+    },
   };
+}
+
+/** A Telegram `User` as StayPut keeps it; null for a bot or something else. */
+export function telegramPerson(value: unknown): TelegramPerson | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const user = value as Record<string, unknown>;
+  if (user.is_bot === true) return null;
+  const id = typeof user.id === 'number' && Number.isSafeInteger(user.id) ? String(user.id) : null;
+  if (!id) return null;
+  const text = (v: unknown) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
+  const name = [text(user.first_name), text(user.last_name)].filter(Boolean).join(' ');
+  return { id, name: name || null, username: text(user.username) };
 }
 
 const encoder = new TextEncoder();
@@ -305,6 +342,8 @@ export type TelegramAction =
       username: string | null;
     }
   | { kind: 'membership'; chatId: string; present: boolean }
+  /** People joined or left a group: its service messages, or `chat_member` (bot is admin). */
+  | { kind: 'people'; chatId: string; joined: TelegramPerson[]; left: string[]; at: Date }
   | { kind: 'migrate'; fromChatId: string; toChatId: string }
   /** `/start` in a private chat: with the parameter of a member link, or without one. */
   | {
@@ -343,6 +382,27 @@ export function telegramAction(update: unknown): TelegramAction {
   const id = (value: unknown) =>
     typeof value === 'number' && Number.isSafeInteger(value) ? String(value) : null;
   const root = record(update);
+
+  const people = record(root?.chat_member);
+  if (people) {
+    const chat = record(people.chat);
+    const chatId = id(chat?.id);
+    const before = record(people.old_chat_member);
+    const after = record(people.new_chat_member);
+    const who = telegramPerson(after?.user);
+    const date = typeof people.date === 'number' ? people.date : null;
+    if (!chatId || !isGroup(chat?.type) || !who || date === null) return { kind: 'ignore' };
+    const [was, is] = [inGroup(before), inGroup(after)];
+    // A change of rights (promoted, restricted) says nothing of joining or leaving.
+    if (was === is) return { kind: 'ignore' };
+    return {
+      kind: 'people',
+      chatId,
+      joined: is ? [who] : [],
+      left: is ? [] : [who.id],
+      at: new Date(date * 1000),
+    };
+  }
 
   const change = record(root?.my_chat_member);
   if (change) {
@@ -388,6 +448,24 @@ export function telegramAction(update: unknown): TelegramAction {
 
   const messageId = id(message.message_id);
   const date = typeof message.date === 'number' ? message.date : null;
+  // Someone joined or left: Telegram's service message, the only news of a member who never
+  // writes (a bot sees no list of a group's members).
+  const joined = Array.isArray(message.new_chat_members)
+    ? message.new_chat_members.flatMap((user) => {
+        const who = telegramPerson(user);
+        return who ? [who] : [];
+      })
+    : [];
+  const leaving = telegramPerson(message.left_chat_member);
+  if ((joined.length > 0 || leaving) && date !== null) {
+    return {
+      kind: 'people',
+      chatId,
+      joined,
+      left: leaving ? [leaving.id] : [],
+      at: new Date(date * 1000),
+    };
+  }
   if (!fromId || from?.is_bot === true || !messageId || date === null) return { kind: 'ignore' };
   // Sent on behalf of a chat, not by a person: a channel's post that Telegram copies into the
   // channel's discussion group, an anonymous administrator, someone writing as their channel.
@@ -412,6 +490,17 @@ export function telegramAction(update: unknown): TelegramAction {
 
 function isGroup(type: unknown): boolean {
   return type === 'group' || type === 'supergroup';
+}
+
+/** A `ChatMember` that is in the group: its owner, an administrator, a member, or restricted. */
+function inGroup(member: Record<string, unknown> | null): boolean {
+  const status = member?.status;
+  return (
+    status === 'creator' ||
+    status === 'administrator' ||
+    status === 'member' ||
+    (status === 'restricted' && member?.is_member === true)
+  );
 }
 
 /** What the bot says, in French for a French-speaking Telegram user, in English otherwise. */

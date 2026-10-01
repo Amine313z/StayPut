@@ -420,6 +420,24 @@ describe('checkDiscord', () => {
     never(findings);
   });
 
+  it('says whether Discord gives StayPut the member list of each server', async () => {
+    const check = async (flags: number) => {
+      const { fetch } = discord(
+        { status: 200, body: { ...APP, flags } },
+        { status: 400, body: { error: 'invalid_grant' } },
+      );
+      return (
+        await checkDiscord({ botToken: BOT, clientSecret: SECRET, origin: ORIGIN }, { fetch })
+      ).at(-1);
+    };
+    // On, as GATEWAY_GUILD_MEMBERS_LIMITED (fewer than 100 servers) or in full.
+    expect(await check(1 << 15)).toMatchObject({ level: 'ok' });
+    expect(await check((1 << 14) | (1 << 23))).toMatchObject({ level: 'ok' });
+    const off = await check(1 << 23);
+    expect(off?.level).toBe('warning');
+    expect(off?.text).toContain('Server Members Intent: on, then Save Changes');
+  });
+
   it('only warns when Discord cannot be asked or says nothing it can be sure of', async () => {
     const offline = () => Promise.reject(new TypeError('fetch failed'));
     expect(

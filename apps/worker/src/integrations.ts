@@ -402,6 +402,17 @@ export async function fileTelegramUpdate(
       ]);
       return { reply: { chatId: action.chatId, text: botText('groupLinked', language) } };
     }
+    case 'people':
+      await db.query(
+        'select stayput.telegram_people($1, $2::text::jsonb, $3::text::jsonb, $4::timestamptz)',
+        [
+          action.chatId,
+          JSON.stringify(action.joined),
+          JSON.stringify(action.left),
+          action.at.toISOString(),
+        ],
+      );
+      return {};
     case 'membership':
       await db.query('select stayput.telegram_chat_membership($1, $2, $3::timestamptz)', [
         action.chatId,

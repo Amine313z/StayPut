@@ -45,6 +45,14 @@ export interface DiscordClient {
    * null): Discord's JSON as is, for Postgres to read (ingest_page).
    */
   messagesRaw(channelId: string, before: string | null): Promise<string>;
+  /**
+   * One page of a server's member list, sorted by account, after account `after` (the first page
+   * when null), 1000 at most: Discord's JSON as is (ingest_page). Discord gives it only to an
+   * application with the Server Members Intent turned on (403 otherwise).
+   */
+  membersRaw(guildId: string, after: string | null): Promise<string>;
+  /** How many people a server has, as Discord counts them (no intent needed). */
+  memberCount(guildId: string): Promise<number | null>;
   /** The text channels of a server the bot is in, in Discord's order. */
   guildChannels(guildId: string): Promise<DiscordChannel[]>;
   /** The bot leaves a server (the creator disconnected it). */
@@ -112,6 +120,20 @@ export function createDiscordClient(options: {
       const text = await call('GET', path);
       if (!/^\s*\[/.test(text)) throw new DiscordApiError(200, 'not a list of messages');
       return text;
+    },
+    async membersRaw(guildId, after) {
+      const query = new URLSearchParams({ limit: '1000' });
+      if (after) query.set('after', snowflake(after));
+      const text = await call('GET', `/guilds/${snowflake(guildId)}/members?${query.toString()}`);
+      if (!/^\s*\[/.test(text)) throw new DiscordApiError(200, 'not a list of members');
+      return text;
+    },
+    async memberCount(guildId) {
+      const guild = await json<{ approximate_member_count?: unknown }>(
+        `/guilds/${snowflake(guildId)}?with_counts=true`,
+      );
+      const count = guild.approximate_member_count;
+      return typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count : null;
     },
     async guildChannels(guildId) {
       const id = snowflake(guildId);

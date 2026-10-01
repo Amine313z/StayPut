@@ -558,6 +558,51 @@ export interface PlatformActivity {
   daily: number[];
 }
 
+/**
+ * GET /api/creator/:companyId/people: everyone StayPut knows on the company's Discord servers and
+ * Telegram groups, not only who writes there, and each server and group. Names and dates, never
+ * what was written.
+ */
+export interface PeopleView {
+  places: PeoplePlace[];
+  /** How many people StayPut knows in all; `people` holds 500 at most, the latest to write first. */
+  total: number;
+  people: PlatformPerson[];
+}
+
+export interface PeoplePlace {
+  platform: AccountPlatform;
+  id: string;
+  name: string | null;
+  /** How many people the server or group has, as Discord or Telegram counts them. */
+  total: number | null;
+  /** How many of them StayPut knows by name. */
+  known: number;
+  /**
+   * How StayPut knows them. Discord: the server's member list was read (`listed`), not yet
+   * (`pending`), or refused (`blocked`: the bot's application has the Server Members Intent off).
+   * Telegram (`joins`): who joined since the bot is there, the administrators, who wrote.
+   */
+  list: 'listed' | 'pending' | 'blocked' | 'joins';
+}
+
+export interface PlatformPerson {
+  platform: AccountPlatform;
+  accountId: string;
+  name: string | null;
+  username: string | null;
+  /** A member of the community, the team, a guest, or an account not tied to anyone yet. */
+  status: 'member' | 'team' | 'guest' | 'unlinked';
+  member: { id: string; name: string | null } | null;
+  /** On one of the company's servers or groups now; null when StayPut cannot tell. */
+  here: boolean | null;
+  joinedAt: string | null;
+  leftAt: string | null;
+  /** Messages over the last 30 days. */
+  messages: number;
+  lastMessageAt: string | null;
+}
+
 /** GET /api/creator/:companyId/accounts, and the answer of each change. */
 export interface AccountsView {
   unlinked: UnlinkedAccount[];

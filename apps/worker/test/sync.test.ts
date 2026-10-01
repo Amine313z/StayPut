@@ -77,8 +77,9 @@ function fakeWhop(lists: Record<string, unknown[]>, pageSize = 2) {
 }
 
 /** Discord channels (id → messages, newest first), served 100 a page before a message. */
-function fakeDiscord(channels: Record<string, unknown[]>) {
+function fakeDiscord(channels: Record<string, unknown[]>, servers: Record<string, unknown[]> = {}) {
   const calls: string[] = [];
+  const memberCalls: string[] = [];
   const failures: Record<string, DiscordApiError> = {};
   const client = {
     messagesRaw(channelId: string, before: string | null) {
@@ -89,9 +90,25 @@ function fakeDiscord(channels: Record<string, unknown[]>) {
       const start = before ? messages.findIndex((m) => m.id === before) + 1 : 0;
       return Promise.resolve(JSON.stringify(messages.slice(start, start + 100)));
     },
+    membersRaw(guildId: string, after: string | null) {
+      memberCalls.push(after ? `${guildId}@${after}` : guildId);
+      const failure = failures[guildId];
+      if (failure) return Promise.reject(failure);
+      const members = (servers[guildId] ?? []) as { user: { id: string } }[];
+      const start = after ? members.findIndex((m) => m.user.id === after) + 1 : 0;
+      return Promise.resolve(JSON.stringify(members.slice(start, start + 1000)));
+    },
   } as unknown as DiscordClient;
-  return { client, calls, failures };
+  return { client, calls, memberCalls, failures };
 }
+
+/** Someone on a Discord server, as its member list gives them. */
+const serverMember = (id: string, name: string | null, extra: Record<string, unknown> = {}) => ({
+  user: { id, username: `user${id.slice(-4)}`, global_name: name, bot: false },
+  nick: null,
+  joined_at: '2026-09-01T10:00:00.000000+00:00',
+  ...extra,
+});
 
 /** A Discord message by `author`, `hoursAgo` before NOW. */
 const discordMessage = (id: number, author: string, hoursAgo: number) => ({
@@ -499,6 +516,59 @@ describe('Discord', () => {
     expect(await refreshDiscordNow(context(whop.client), id)).toBeNull();
   });
 
+  it('lists everyone on a connected server, who left it, and a refusal of the list', async () => {
+    const { id, u } = await company();
+    const guild = `96500${companies}`;
+    const [ana, bruno, bot] = [`9651${companies}001`, `9651${companies}002`, `9651${companies}009`];
+    await followDiscord(id, guild, []);
+    const servers: Record<string, unknown[]> = {
+      [guild]: [
+        serverMember(ana, 'Ana Lopez'),
+        serverMember(bruno, 'Bruno', { nick: 'Bruno du club' }),
+        { user: { id: bot, username: 'somebot', bot: true }, joined_at: null },
+      ],
+    };
+    const discord = fakeDiscord({}, servers);
+    const whop = fakeWhop(community(u));
+    await syncIfFree(context(whop.client, NOW, 40, discord.client), id, 0);
+    expect(discord.memberCalls).toEqual([guild]);
+    const present = () =>
+      t.db.query<{ account_id: string; display_name: string | null; left_at: Date | null }>(
+        `select p.account_id, a.display_name, p.left_at
+           from stayput.platform_presence p
+           join stayput.platform_accounts a using (company_id, platform, account_id)
+          where p.company_id = $1 and p.place_id = $2 order by p.account_id`,
+        [id, guild],
+      );
+    // People only, by their name on the server (nickname first), never a bot.
+    expect(await present()).toEqual([
+      { account_id: ana, display_name: 'Ana Lopez', left_at: null },
+      { account_id: bruno, display_name: 'Bruno du club', left_at: null },
+    ]);
+
+    // Bruno leaves the server: the next reading, 7 hours later, no longer meets him.
+    servers[guild] = [serverMember(ana, 'Ana Lopez')];
+    await syncIfFree(context(whop.client, hours(7), 40, discord.client), id, 0);
+    expect(await present()).toEqual([
+      { account_id: ana, display_name: 'Ana Lopez', left_at: null },
+      { account_id: bruno, display_name: 'Bruno du club', left_at: hours(7) },
+    ]);
+
+    // An application with the Server Members Intent off: Discord refuses the list, which is
+    // noted for the Sources tab; who StayPut knows stays.
+    discord.failures[guild] = new DiscordApiError(
+      403,
+      `GET /guilds/${guild}/members: 403 Missing Access`,
+    );
+    await syncIfFree(context(whop.client, hours(14), 40, discord.client), id, 0);
+    const [state] = await t.db.query<{ last_error: string }>(
+      'select last_error from stayput.sync_state where company_id = $1 and stream = $2',
+      [id, `discord_members:${guild}`],
+    );
+    expect(state?.last_error).toMatch(/^403 /);
+    expect((await present())[0]).toMatchObject({ account_id: ana, left_at: null });
+  });
+
   it("leaves Discord for the next run when it refuses the bot's token, Whop goes on", async () => {
     const { id, u } = await company();
     const channels = [`95000${companies}1`, `95000${companies}2`];
@@ -525,7 +595,7 @@ describe('Discord', () => {
     await syncIfFree(context(fakeWhop(community(u)).client, NOW, 40, discord.client), id, 0);
     const states = await t.db.query<{ stream: string; last_error: string | null }>(
       `select stream, last_error from stayput.sync_state
-        where company_id = $1 and stream like 'discord%'`,
+        where company_id = $1 and stream like 'discord_messages:%'`,
       [id],
     );
     expect(states).toEqual([

@@ -13,6 +13,7 @@ import type {
   MemberRow,
   MemberTelegramStatus,
   MembersPage,
+  PeopleView,
   RiskSettingsView,
   SyncRun,
   SyncStatus,
@@ -690,6 +691,10 @@ describe('activity sources', () => {
   };
 
   const NO_ACCOUNTS: AccountsView = { unlinked: [], linked: [], dismissed: [] };
+  const NOBODY_THERE: PeopleView = { places: [], total: 0, people: [] };
+  /** The people card's reads: the first, then after news, changes and its own polling. */
+  const PEOPLE_READS = (times: number, view: PeopleView = NOBODY_THERE) =>
+    Array.from({ length: times }, () => ({ status: 200, body: view }));
   /** The live card's reads: the first, then one after each change. */
   const READ_ACTIVITY = (times: number) =>
     Array.from({ length: times }, () => ({ status: 200, body: ACTIVITY }));
@@ -750,6 +755,7 @@ describe('activity sources', () => {
   it('shows what StayPut saw on Discord and Telegram: per day, author, place and member', async () => {
     mockApi({
       ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/people': PEOPLE_READS(4),
       'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
       '/api/creator/biz_A1/accounts': [{ status: 200, body: NO_ACCOUNTS }],
     });
@@ -780,6 +786,7 @@ describe('activity sources', () => {
     } satisfies AccountsView['linked'][number];
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/people': PEOPLE_READS(4),
       'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
       '/api/creator/biz_A1/accounts': [
         {
@@ -844,7 +851,7 @@ describe('activity sources', () => {
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Tie to Bruno Petit' }));
-    expect(await screen.findByText('Every account that wrote is tied to a member.')).toBeTruthy();
+    expect(await screen.findByText('Every account is tied to a member.')).toBeTruthy();
     const post = 'POST /api/creator/biz_A1/accounts/link';
     expect(bodies.get(post)).toEqual({
       platform: 'telegram',
@@ -869,6 +876,7 @@ describe('activity sources', () => {
     const waiting = { ...mine, messages: 2, lastAt: '2026-10-01T09:00:00.000Z', suggestions: [] };
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/people': PEOPLE_READS(4),
       'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
       '/api/creator/biz_A1/accounts': [
         { status: 200, body: { unlinked: [waiting], linked: [], dismissed: [] } },
@@ -929,6 +937,7 @@ describe('activity sources', () => {
       };
       const calls = mockApi({
         ...dashboard(MEMBERS, connected),
+        '/api/creator/biz_A1/people': PEOPLE_READS(4),
         'POST /api/creator/biz_A1/platform-activity/refresh': [
           { status: 200, body: ACTIVITY },
           { status: 200, body: later },
@@ -958,6 +967,111 @@ describe('activity sources', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('shows everyone on the server and in the group, not only who writes', async () => {
+    const people: PeopleView = {
+      places: [
+        {
+          platform: 'discord',
+          id: '910000000000000001',
+          name: 'Le Club',
+          total: 12,
+          known: 0,
+          list: 'blocked',
+        },
+        {
+          platform: 'telegram',
+          id: '-1009000000001',
+          name: 'VIP',
+          total: 34,
+          known: 3,
+          list: 'joins',
+        },
+      ],
+      total: 3,
+      people: [
+        {
+          platform: 'telegram',
+          accountId: '7102',
+          name: 'Marc Dupont',
+          username: 'marcd',
+          status: 'unlinked',
+          member: null,
+          here: true,
+          joinedAt: null,
+          leftAt: null,
+          messages: 2,
+          lastMessageAt: '2026-10-01T09:00:00.000Z',
+        },
+        {
+          platform: 'telegram',
+          accountId: '7101',
+          name: 'Léa',
+          username: null,
+          status: 'member',
+          member: { id: 'mber_1', name: 'Léa Martin' },
+          here: true,
+          joinedAt: '2026-09-29T09:00:00.000Z',
+          leftAt: null,
+          messages: 0,
+          lastMessageAt: null,
+        },
+        {
+          platform: 'telegram',
+          accountId: '7104',
+          name: 'Paul',
+          username: null,
+          status: 'guest',
+          member: null,
+          here: false,
+          joinedAt: '2026-09-20T09:00:00.000Z',
+          leftAt: '2026-09-30T09:00:00.000Z',
+          messages: 0,
+          lastMessageAt: null,
+        },
+      ],
+    };
+    mockApi({
+      ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/people': PEOPLE_READS(4, people),
+      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(2),
+      '/api/creator/biz_A1/accounts': [{ status: 200, body: NO_ACCOUNTS }],
+    });
+    renderAt('/dashboard/biz_A1/sources');
+    const card = (
+      await screen.findByRole('heading', { name: 'Members on Discord and Telegram' })
+    ).closest('section')!;
+    expect(await within(card).findByText('Marc Dupont')).toBeTruthy();
+    expect(within(card).getByText(/Members in the group: 34 · StayPut knows 3/)).toBeTruthy();
+    // Discord keeps its list until the application turns the Server Members Intent on.
+    expect(
+      within(card).getByText(/Discord does not give StayPut the member list yet/),
+    ).toBeTruthy();
+    expect(
+      within(card)
+        .getByRole('link', { name: /Open the Discord Developer Portal/ })
+        .getAttribute('href'),
+    ).toBe('https://discord.com/developers/applications');
+    expect(within(card).getByText('Not tied yet')).toBeTruthy();
+    expect(within(card).getByText('Member: Léa Martin')).toBeTruthy();
+    expect(within(card).getByText(/No message in 30 days · there since/)).toBeTruthy();
+    expect(within(card).getByText(/left on Sep 30, 2026/)).toBeTruthy();
+    // A name, accents and case aside; a platform.
+    fireEvent.change(within(card).getByRole('searchbox', { name: 'Search by name' }), {
+      target: { value: 'lea' },
+    });
+    expect(within(card).queryByText('Marc Dupont')).toBeNull();
+    expect(within(card).getByText('Léa')).toBeTruthy();
+    fireEvent.change(within(card).getByRole('searchbox', { name: 'Search by name' }), {
+      target: { value: 'nobody' },
+    });
+    expect(within(card).getByText('No one matches this search.')).toBeTruthy();
+    fireEvent.change(within(card).getByRole('searchbox', { name: 'Search by name' }), {
+      target: { value: '' },
+    });
+    fireEvent.click(within(card).getByRole('button', { name: /Discord/ }));
+    expect(within(card).getByText('No one matches this search.')).toBeTruthy();
   });
 
   it('offers to connect Discord and Telegram, with the steps', async () => {
@@ -998,6 +1112,7 @@ describe('activity sources', () => {
   it('chooses the channels of a connected server, then saves them', async () => {
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/people': PEOPLE_READS(4),
       'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
       '/api/creator/biz_A1/discord/910000000000000001/channels': [
         {
@@ -1061,6 +1176,7 @@ describe('activity sources', () => {
   it('disconnects a group after asking once more', async () => {
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/people': PEOPLE_READS(4),
       'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
       'DELETE /api/creator/biz_A1/telegram/-1009000000001': [
         { status: 200, body: { removed: true } },
