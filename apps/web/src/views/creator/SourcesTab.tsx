@@ -1,4 +1,5 @@
 import { ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
 import { AccountsCard } from '../../components/AccountsCard';
 import { DiscordCard } from '../../components/DiscordCard';
 import { PlatformActivityCard } from '../../components/PlatformActivityCard';
@@ -21,10 +22,23 @@ export function SourcesTab() {
     ...(status && status.telegram.groups.length > 0 ? (['telegram'] as const) : []),
   ];
   const connected = platforms.length > 0;
+  // New messages may come from accounts to tie; tying one moves its messages.
+  const [accountsKey, setAccountsKey] = useState(0);
+  const [activityKey, setActivityKey] = useState(0);
   return (
     <div className="space-y-6">
       <SyncPanel sync={sync} />
-      {connected ? <PlatformActivityCard api={api} platforms={platforms} /> : null}
+      {connected ? (
+        <PlatformActivityCard
+          api={api}
+          platforms={platforms}
+          refreshKey={activityKey}
+          onNews={() => {
+            integrations.reload();
+            setAccountsKey((key) => key + 1);
+          }}
+        />
+      ) : null}
       {integrations.state.status === 'loading' ? (
         <Loading />
       ) : integrations.state.status === 'error' ? (
@@ -53,9 +67,11 @@ export function SourcesTab() {
         <AccountsCard
           api={api}
           members={members.state.status === 'ready' ? members.state.data.members : []}
+          refreshKey={accountsKey}
           onChange={() => {
             integrations.reload();
             members.reload();
+            setActivityKey((key) => key + 1);
           }}
         />
       ) : null}

@@ -73,7 +73,13 @@ import {
   signingKey,
   verify,
 } from './session';
-import { SYNC_REQUEST_BUDGET, summarize, syncIfFree } from './sync';
+import {
+  LIVE_DISCORD_BUDGET,
+  SYNC_REQUEST_BUDGET,
+  refreshDiscordNow,
+  summarize,
+  syncIfFree,
+} from './sync';
 import {
   botLanguage,
   createTelegramClient,
@@ -975,6 +981,36 @@ export function createApp(deps: AppDeps) {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
       const view = await readPlatformActivity(db, c.get('userId'), c.get('companyId'), deps.now());
+      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+    },
+  );
+
+  /**
+   * The same, live: the page asks every half minute while it is open. Telegram's messages are
+   * already in (Telegram sends them); Discord's channels are read first when not read for a
+   * minute, since Discord sends nothing.
+   */
+  app.post(
+    '/api/creator/:companyId/platform-activity/refresh',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const config = c.get('config');
+      const companyId = c.get('companyId');
+      const now = deps.now();
+      const whop = deps.whopClient(config, { maxRetries: 0 });
+      const discord = deps.discord(config);
+      if (whop && discord) {
+        const read = await refreshDiscordNow(
+          { db, whop, discord, now, budget: { left: LIVE_DISCORD_BUDGET } },
+          companyId,
+        );
+        if (read && read.calls > 0) console.info(summarize(read));
+      }
+      const view = await readPlatformActivity(db, c.get('userId'), companyId, now);
       return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
     },
   );

@@ -492,6 +492,24 @@ d'une seule couleur : Discord et Telegram sont deux bleus trop proches pour part
 graphique (vérifié avec le validateur de palettes). Survoler une barre lit le jour ; les
 chiffres sont aussi dans un tableau pour les lecteurs d'écran.
 
+### L'activité en direct (même jour, demande du fondateur)
+
+« Qu'on n'ait plus besoin de réactualiser la page pour voir les nouveaux messages. » La carte
+d'activité se relit seule toutes les 30 secondes tant que l'onglet est visible, et tout de
+suite quand on y revient (badge « En direct ») :
+
+- **Telegram** envoie chaque message à StayPut au moment où il est écrit : il apparaît à la
+  relecture suivante.
+- **Discord** n'envoie rien. Tant que la page est ouverte, chaque relecture lit d'abord les
+  salons Discord de l'entreprise s'ils n'ont pas été lus depuis une minute (10 appels au plus,
+  migration 0015). Cette lecture prend le même verrou qu'une synchronisation (deux lectures ne
+  lisent jamais un salon en même temps), mais ne touche pas à la date de la dernière
+  synchronisation : les listes de Whop gardent leur rythme. Hors de la page, Discord reste lu
+  toutes les 3 heures.
+- Quand de nouveaux messages arrivent, la liste des comptes à relier et les compteurs des
+  sources se relisent aussi. Relier un compte relit l'activité (ses messages changent de case).
+- Un échec de relecture garde l'affichage : la suivante réessaie.
+
 ### Interface : un vrai tableau de bord
 
 - Trois sections à onglets dans la vue créateur : vue d'ensemble (chiffres, « À surveiller »,

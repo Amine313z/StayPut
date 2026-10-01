@@ -1,7 +1,7 @@
 import type { AccountPlatform, PlatformActivity, PlatformActivityView } from '@stayput/core';
 import { Activity, MapPin, Trophy } from 'lucide-react';
-import { useState } from 'react';
-import { useApi } from '../api';
+import { useEffect, useRef, useState } from 'react';
+import { ApiError, postJson, type Loadable } from '../api';
 import { useI18n } from '../i18n';
 import { Badge } from '../ui/Badge';
 import { DiscordIcon, TelegramIcon } from '../ui/BrandIcons';
@@ -16,27 +16,49 @@ const BAR: Readonly<Record<AccountPlatform, string>> = {
   telegram: 'bg-telegram',
 };
 
+/** While the page shows the activity, it is read again this often. */
+export const LIVE_REFRESH_MS = 30_000;
+
 /**
  * What StayPut sees on Discord and Telegram over the last 30 days (the founder, 2026-10-01): the
  * messages per platform and per day, who wrote them (members, the team, guests, accounts not tied
  * yet), each server and group, and the most active members. The team's messages show here, never
- * in the scores.
+ * in the scores. Live: no need to reload the page to see a new message.
  */
 export function PlatformActivityCard({
   api,
   platforms,
+  refreshKey = 0,
+  onNews,
 }: {
   api: string;
   /** The connected platforms: a platform not connected is left out. */
   platforms: readonly AccountPlatform[];
+  /** Read again at once when it changes (an account was tied: its messages moved). */
+  refreshKey?: number;
+  /** New messages arrived: the accounts to tie and the counts of the sources may have moved. */
+  onNews?: () => void;
 }) {
   const { t } = useI18n();
-  const { state, retry } = useApi<PlatformActivityView>(`${api}/platform-activity`);
+  const { state, retry } = useLiveActivity(api, refreshKey, onNews);
   return (
     <Card
       icon={<Activity aria-hidden="true" className="size-4" />}
       title={t('activity.title')}
       description={t('activity.description')}
+      actions={
+        <Badge
+          tone="accent"
+          icon={
+            <span
+              aria-hidden="true"
+              className="size-1.5 rounded-full bg-accent motion-safe:animate-pulse"
+            />
+          }
+        >
+          {t('activity.live')}
+        </Badge>
+      }
     >
       {state.status === 'loading' ? (
         <Loading />
@@ -47,6 +69,69 @@ export function PlatformActivityCard({
       )}
     </Card>
   );
+}
+
+/**
+ * The activity kept current while the page is open: read at once (the server reads Discord's
+ * channels first, Telegram sends its messages itself), then every half minute while the tab is
+ * visible, at once when the creator comes back to it, and when `refreshKey` changes. What is shown
+ * stays when a read fails: the next one tries again.
+ */
+function useLiveActivity(
+  api: string,
+  refreshKey: number,
+  onNews: (() => void) | undefined,
+): { state: Loadable<PlatformActivityView>; retry: () => void } {
+  const [state, setState] = useState<Loadable<PlatformActivityView>>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+  const news = useRef(onNews);
+  const seen = useRef<string | null>(null);
+  useEffect(() => {
+    news.current = onNews;
+  });
+  useEffect(() => {
+    let alive = true;
+    const read = async () => {
+      if (document.visibilityState === 'hidden') return;
+      try {
+        const view = await postJson<PlatformActivityView>(`${api}/platform-activity/refresh`);
+        if (!alive) return;
+        const mark = signature(view);
+        if (seen.current !== null && seen.current !== mark) news.current?.();
+        seen.current = mark;
+        setState({ status: 'ready', data: view });
+      } catch (error) {
+        if (!alive) return;
+        const failure = error instanceof ApiError ? error : new ApiError('internal', String(error));
+        setState((current) =>
+          current.status === 'ready' ? current : { status: 'error', error: failure },
+        );
+      }
+    };
+    void read();
+    const timer = window.setInterval(() => void read(), LIVE_REFRESH_MS);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void read();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [api, refreshKey, attempt]);
+  return {
+    state,
+    retry: () => {
+      setState({ status: 'loading' });
+      setAttempt((n) => n + 1);
+    },
+  };
+}
+
+/** What changes when a message arrives. */
+function signature(view: PlatformActivityView): string {
+  return view.platforms.map((p) => `${p.platform}:${p.messages}:${p.lastAt ?? ''}`).join('|');
 }
 
 function ActivityBody({

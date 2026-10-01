@@ -66,6 +66,7 @@ export const fr: Messages = {
   'members.status.left': 'Parti',
   'members.team': 'Équipe',
   'activity.title': 'Activité sur Discord et Telegram',
+  'activity.live': 'En direct',
   'activity.description':
     'Les 30 derniers jours : qui écrit, et quand. Les messages de l’équipe apparaissent ici, jamais dans les scores.',
   'activity.messages.one': '{count} message',

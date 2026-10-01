@@ -7,7 +7,7 @@ import type {
 } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
 import { EyeOff, Link2, Undo2, Unlink, UserRoundCheck, UsersRound } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { postJson, useApi } from '../api';
 import { useI18n } from '../i18n';
 import { Badge } from '../ui/Badge';
@@ -36,21 +36,34 @@ type Change = 'link' | 'unlink' | 'dismiss' | 'restore';
 export function AccountsCard({
   api,
   members,
+  refreshKey = 0,
   onChange,
 }: {
   api: string;
   /** The community's members, to choose from. */
   members: readonly MemberRow[];
+  /** Read again when it changes: new messages may come from accounts to tie. */
+  refreshKey?: number;
   /** After a change: the counts of the sources, and the members' activity, move. */
   onChange: () => void;
 }) {
   const { t } = useI18n();
-  const { state, retry } = useApi<AccountsView>(`${api}/accounts`);
-  const [changed, setChanged] = useState<AccountsView | null>(null);
-  const view = changed ?? (state.status === 'ready' ? state.data : null);
+  const { state, retry, reload } = useApi<AccountsView>(`${api}/accounts`);
+  // The answer of the creator's last change, until the list is read again.
+  const [changed, setChanged] = useState<{ key: number; view: AccountsView } | null>(null);
+  const view =
+    changed?.key === refreshKey ? changed.view : state.status === 'ready' ? state.data : null;
+  const latestReload = useRef(reload);
+  useEffect(() => {
+    latestReload.current = reload;
+  });
+  useEffect(() => {
+    if (refreshKey > 0) latestReload.current();
+  }, [refreshKey]);
 
   const change = async (what: Change, body: Record<string, string>) => {
-    setChanged(await postJson<AccountsView>(`${api}/accounts/${what}`, body));
+    const next = await postJson<AccountsView>(`${api}/accounts/${what}`, body);
+    setChanged({ key: refreshKey, view: next });
     onChange();
   };
 

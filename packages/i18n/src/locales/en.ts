@@ -65,6 +65,7 @@ export const en = {
   'members.team': 'Team',
   'members.unnamed': 'Member without a name',
   'activity.title': 'Activity on Discord and Telegram',
+  'activity.live': 'Live',
   'activity.description':
     'The last 30 days: who writes, and when. The team’s messages show here, never in the scores.',
   'activity.messages.one': '{count} message',

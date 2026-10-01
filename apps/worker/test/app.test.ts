@@ -1168,6 +1168,12 @@ describe('Discord and Telegram', () => {
     expect(
       (await request('/api/creator/biz_Int9/platform-activity', await asUser('user_eve'))).status,
     ).toBe(403);
+    // Live, as the page asks every half minute: the same view.
+    const live = await request('/api/creator/biz_Int9/platform-activity/refresh', {
+      ...init,
+      method: 'POST',
+    });
+    expect(((await live.json()) as PlatformActivityView).places).toEqual(activity.places);
   });
 
   it('lets a member link their Telegram account, once the community has a group', async () => {

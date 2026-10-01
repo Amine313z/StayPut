@@ -687,6 +687,9 @@ describe('activity sources', () => {
   };
 
   const NO_ACCOUNTS: AccountsView = { unlinked: [], linked: [], dismissed: [] };
+  /** The live card's reads: the first, then one after each change. */
+  const READ_ACTIVITY = (times: number) =>
+    Array.from({ length: times }, () => ({ status: 200, body: ACTIVITY }));
   const ACTIVITY: PlatformActivityView = {
     from: '2026-09-02',
     to: '2026-10-01',
@@ -744,7 +747,7 @@ describe('activity sources', () => {
   it('shows what StayPut saw on Discord and Telegram: per day, author, place and member', async () => {
     mockApi({
       ...dashboard(MEMBERS, connected),
-      '/api/creator/biz_A1/platform-activity': [{ status: 200, body: ACTIVITY }],
+      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
       '/api/creator/biz_A1/accounts': [{ status: 200, body: NO_ACCOUNTS }],
     });
     renderAt('/dashboard/biz_A1/sources');
@@ -774,7 +777,7 @@ describe('activity sources', () => {
     } satisfies AccountsView['linked'][number];
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
-      '/api/creator/biz_A1/platform-activity': [{ status: 200, body: ACTIVITY }],
+      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
       '/api/creator/biz_A1/accounts': [
         {
           status: 200,
@@ -863,7 +866,7 @@ describe('activity sources', () => {
     const waiting = { ...mine, messages: 2, lastAt: '2026-10-01T09:00:00.000Z', suggestions: [] };
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
-      '/api/creator/biz_A1/platform-activity': [{ status: 200, body: ACTIVITY }],
+      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
       '/api/creator/biz_A1/accounts': [
         { status: 200, body: { unlinked: [waiting], linked: [], dismissed: [] } },
       ],
@@ -905,6 +908,55 @@ describe('activity sources', () => {
     expect(calls).toContain('POST /api/creator/biz_A1/accounts/restore');
   });
 
+  it('shows new messages without reloading the page', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const later: PlatformActivityView = {
+        ...ACTIVITY,
+        platforms: ACTIVITY.platforms.map((p) =>
+          p.platform === 'telegram'
+            ? {
+                ...p,
+                messages: 3,
+                lastAt: '2026-10-01T10:00:00.000Z',
+                daily: [...p.daily.slice(0, 29), 1],
+              }
+            : p,
+        ),
+      };
+      const calls = mockApi({
+        ...dashboard(MEMBERS, connected),
+        'POST /api/creator/biz_A1/platform-activity/refresh': [
+          { status: 200, body: ACTIVITY },
+          { status: 200, body: later },
+        ],
+        '/api/creator/biz_A1/accounts': [
+          { status: 200, body: NO_ACCOUNTS },
+          { status: 200, body: NO_ACCOUNTS },
+        ],
+        '/api/creator/biz_A1/integrations?lang=en': [
+          { status: 200, body: connected },
+          { status: 200, body: connected },
+        ],
+      });
+      renderAt('/dashboard/biz_A1/sources');
+      const places = (await screen.findByText('Servers and groups')).closest('section')!;
+      const card = places.parentElement!.parentElement!;
+      expect(within(card).getByText('2 messages')).toBeTruthy();
+      expect(screen.getByText('Live')).toBeTruthy();
+
+      // Half a minute later, a Telegram message: it shows, and what may have moved is read again.
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(await within(card).findByText('3 messages')).toBeTruthy();
+      const reads = (path: string) => calls.filter((call) => call === path).length;
+      expect(reads('POST /api/creator/biz_A1/platform-activity/refresh')).toBe(2);
+      await vi.waitFor(() => expect(reads('/api/creator/biz_A1/accounts')).toBe(2));
+      expect(reads('/api/creator/biz_A1/integrations?lang=en')).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('offers to connect Discord and Telegram, with the steps', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1/sources');
@@ -943,7 +995,7 @@ describe('activity sources', () => {
   it('chooses the channels of a connected server, then saves them', async () => {
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
-      '/api/creator/biz_A1/platform-activity': [{ status: 200, body: ACTIVITY }],
+      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
       '/api/creator/biz_A1/discord/910000000000000001/channels': [
         {
           status: 200,
@@ -1006,7 +1058,7 @@ describe('activity sources', () => {
   it('disconnects a group after asking once more', async () => {
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
-      '/api/creator/biz_A1/platform-activity': [{ status: 200, body: ACTIVITY }],
+      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
       'DELETE /api/creator/biz_A1/telegram/-1009000000001': [
         { status: 200, body: { removed: true } },
       ],

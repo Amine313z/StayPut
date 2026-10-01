@@ -197,6 +197,8 @@ export interface PassOptions {
    * a creator trying it out would otherwise wait up to 3 hours.
    */
   refreshDiscordAfterMinutes?: number;
+  /** Only the Discord channels: the creator watches the activity (refreshDiscordNow). */
+  onlyDiscord?: boolean;
 }
 
 export interface PassPlan {
@@ -284,6 +286,7 @@ export async function syncCompany(
   let listed = false;
   for (const stream of STREAMS) {
     if (stream.source === 'discord' && (!ctx.discord || ctx.discordPaused)) continue;
+    if (options.onlyDiscord && stream.source !== 'discord') continue;
     if (stream.scoped && listed) {
       // Channels, forums or courses were just listed: their streams exist now.
       states = await loadStates(ctx.db, companyId);
@@ -311,7 +314,7 @@ export async function syncCompany(
       if (LISTINGS.has(stream.kind) && read.calls > 0) listed = true;
     }
   }
-  if (ctx.discord) {
+  if (ctx.discord && !options.onlyDiscord) {
     const linking = await linkDiscordAccounts(ctx, companyId);
     result.calls += linking.calls;
     result.profiles = linking.calls;
@@ -512,6 +515,37 @@ export async function syncIfFree(
     return await syncCompany(ctx, companyId, options);
   } finally {
     await ctx.db.query('select stayput.release_sync($1, $2::timestamptz)', [companyId, now]);
+  }
+}
+
+/** While the creator watches the activity, a Discord channel is read again after this long. */
+export const LIVE_DISCORD_REFRESH_MINUTES = 1;
+/** Discord calls such a read makes at most: a channel or two in a page, usually. */
+export const LIVE_DISCORD_BUDGET = 10;
+
+/**
+ * The company's Discord channels read now when not read for a minute, while its creator watches
+ * what StayPut sees (nothing tells StayPut of a Discord message). Only Discord, and the company's
+ * last synchronization is left as it was: Whop's lists keep their cadence. Null when a run holds
+ * the company.
+ */
+export async function refreshDiscordNow(
+  ctx: SyncContext,
+  companyId: string,
+): Promise<CompanySync | null> {
+  if (!ctx.discord) return null;
+  const [claim] = await ctx.db.query<{ claimed: boolean }>(
+    'select stayput.claim_lease($1, $2::timestamptz, $3) as claimed',
+    [companyId, ctx.now.toISOString(), SYNC_LEASE_SECONDS],
+  );
+  if (!claim?.claimed) return null;
+  try {
+    return await syncCompany(ctx, companyId, {
+      onlyDiscord: true,
+      refreshDiscordAfterMinutes: LIVE_DISCORD_REFRESH_MINUTES,
+    });
+  } finally {
+    await ctx.db.query('select stayput.release_lease($1)', [companyId]);
   }
 }
 

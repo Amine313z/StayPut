@@ -4,6 +4,7 @@ import { DiscordApiError, type DiscordClient } from '../src/discord';
 import {
   STREAMS,
   planPass,
+  refreshDiscordNow,
   summarize,
   syncDueCompanies,
   syncIfFree,
@@ -456,6 +457,46 @@ describe('Discord', () => {
     discord.calls.length = 0;
     await syncIfFree(context(whop.client, hours(4), 40, discord.client), id, 0);
     expect(discord.calls).toEqual([channel]);
+  });
+
+  it('reads the channels again each minute while the creator watches, Whop untouched', async () => {
+    const { id, u } = await company();
+    const channel = `97000${companies}`;
+    await followDiscord(id, `98000${companies}`, [channel]);
+    const messages = [discordMessage(9_100_000, `99000${companies}`, 1)];
+    const discord = fakeDiscord({ [channel]: messages });
+    const whop = fakeWhop(community(u));
+    await syncIfFree(context(whop.client, NOW, 40, discord.client), id, 0);
+    const synced = async () =>
+      (
+        await t.db.query<{ at: Date }>(
+          'select last_synced_at as at from stayput.company_sync where company_id = $1',
+          [id],
+        )
+      )[0]?.at;
+    const before = await synced();
+    whop.calls.length = 0;
+    discord.calls.length = 0;
+
+    // A minute later, a new message: read at once, and only Discord's channels.
+    messages.unshift(discordMessage(9_100_001, `99000${companies}`, -0.01));
+    const live = await refreshDiscordNow(
+      context(whop.client, new Date(NOW.getTime() + 61_000), 10, discord.client),
+      id,
+    );
+    expect(live?.streams[`discord_messages:${channel}`]).toBe('caught_up');
+    expect(discord.calls).toEqual([channel]);
+    expect(whop.calls).toEqual([]);
+    // Whop's lists keep their cadence: the last synchronization did not move.
+    expect(await synced()).toEqual(before);
+    // Within the minute, nothing is read again; without the bot, nothing at all.
+    discord.calls.length = 0;
+    await refreshDiscordNow(
+      context(whop.client, new Date(NOW.getTime() + 90_000), 10, discord.client),
+      id,
+    );
+    expect(discord.calls).toEqual([]);
+    expect(await refreshDiscordNow(context(whop.client), id)).toBeNull();
   });
 
   it("leaves Discord for the next run when it refuses the bot's token, Whop goes on", async () => {
