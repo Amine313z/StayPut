@@ -18,7 +18,7 @@ il a sauvé.
 | 1. Fondations                  | Validée le 01/10/2026                                     |
 | 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation |
 | 3. Détection (score de risque) | Faite, en attente de validation                           |
-| 4. Actions                     | En cours (reste l'offre Alumni)                           |
+| 4. Actions                     | En cours (reste la démonstration de chaque déclencheur)   |
 
 ## Architecture
 
@@ -193,8 +193,10 @@ sans rien envoyer. Dans la **vue membre**, un membre qui a programmé son annula
 en un clic et reçoit l'offre qui répond à sa raison (pause, code promo, aide, jours offerts) ;
 un membre dont le paiement attend voit le bouton pour le régler. L'équipe y voit un aperçu, où
 rien n'est enregistré. L'**offre Alumni** (onglet Actions) se crée en un clic sur Whop : une
-offre gratuite et cachée où les anciens membres gardent le contact. Détails : `DECISIONS.md`,
-« Phase 4 ».
+offre gratuite et cachée où les anciens membres gardent le contact. 7, 30 et 60 jours après leur
+départ, ils y reçoivent des nouvelles de la communauté avec un code de retour à usage unique, et
+le retrouvent dans leur vue de l'espace Alumni avec le bouton pour revenir. Détails :
+`DECISIONS.md`, « Phase 4 ».
 
 ## Outils de la Phase 0
 

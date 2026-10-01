@@ -201,7 +201,9 @@ export function checkGuardrails(
         return { allowed: false, reason: 'payment_retry_cap' };
       }
       break;
+    // An Alumni follow-up carries a return code (SPEC 5.9): the same caps as a promo code.
     case 'promo_offer':
+    case 'alumni_followup':
       if (member.activePromo) return { allowed: false, reason: 'promo_already_active' };
       if (company.promosLast30 >= settings.monthlyPromoCap) {
         return { allowed: false, reason: 'monthly_promo_cap' };

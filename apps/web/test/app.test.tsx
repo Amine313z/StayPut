@@ -1478,6 +1478,7 @@ describe('member view', () => {
       preview: null,
       payment: null,
       departure: null,
+      alumni: null,
       ...over,
     } satisfies MemberRetentionView,
   });
@@ -1719,6 +1720,34 @@ describe('member view', () => {
     expect(screen.getByRole('button', { name: 'Non merci' })).toBeTruthy();
   });
 
+  it('gives a former member in the Alumni their return code, and the way back', async () => {
+    mockApi({
+      '/api/member/exp_E1/session': [memberSession],
+      '/api/member/exp_E1/retention': [
+        retention({
+          alumni: {
+            code: {
+              code: 'STAY-K7QM2XPA',
+              percentOff: 20,
+              months: 3,
+              expiresAt: '2026-10-08T17:00:00.000Z',
+            },
+            returnUrl: 'https://whop.com/checkout/plan_Club',
+          },
+        }),
+      ],
+      '/api/member/exp_E1/telegram?lang=fr': [telegram({ available: false, link: null })],
+    });
+    renderAt('/experiences/exp_E1', 'fr');
+    expect(await screen.findByText('Bienvenue dans l’Alumni')).toBeTruthy();
+    expect(screen.getByText('20 % de réduction pendant 3 mois')).toBeTruthy();
+    expect(screen.getByText('STAY-K7QM2XPA')).toBeTruthy();
+    expect(screen.getByText('Saisissez-le au moment du paiement.')).toBeTruthy();
+    expect(
+      screen.getByRole('link', { name: /Revenir dans la communauté/ }).getAttribute('href'),
+    ).toBe('https://whop.com/checkout/plan_Club');
+  });
+
   it('explains a refused access in member words', async () => {
     mockApi({
       '/api/member/exp_E1/session': [
@@ -1848,6 +1877,15 @@ describe('the actions (SPEC Phase 4)', () => {
               note: 'payment_no_longer_failed',
               message: null,
             }),
+            row({
+              id: 'e',
+              type: 'alumni_followup',
+              trigger: 'alumni',
+              alumniStep: 30,
+              status: 'cancelled',
+              note: 'member_returned',
+              message: null,
+            }),
           ],
           { dryRun: true },
         ),
@@ -1866,6 +1904,9 @@ describe('the actions (SPEC Phase 4)', () => {
     expect(screen.getByText('Error: 403 forbidden: missing permission')).toBeTruthy();
     expect(screen.getByText('The payment went through in the meantime')).toBeTruthy();
     expect(screen.getByText('Golden-hour message')).toBeTruthy();
+    // An Alumni follow-up: its step, and why it no longer goes.
+    expect(screen.getByText('· 30 days after leaving, in the Alumni')).toBeTruthy();
+    expect(screen.getByText('The member came back to a paid offer')).toBeTruthy();
     // Done: nothing to approve or cancel any more.
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();

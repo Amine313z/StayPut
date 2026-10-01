@@ -360,6 +360,8 @@ export interface ActionRow {
   note: string | null;
   /** An offer a member accepted in the departure survey: what, why, and what came of it. */
   offer: ActionOffer | null;
+  /** An Alumni follow-up: the day after the departure it belongs to (7, 30 or 60). */
+  alumniStep?: number;
 }
 
 /** An accepted offer, as the creator reviews it. */
@@ -457,6 +459,16 @@ export interface MemberRetentionView {
     outcome: 'pending' | 'accepted' | 'declined';
     result: OfferResult | null;
   } | null;
+  /** A former member in the Alumni space (SPEC 5.9): their return code, and the way back. */
+  alumni: AlumniReturn | null;
+}
+
+/** What a former member sees in StayPut's view of the Alumni space. */
+export interface AlumniReturn {
+  /** Their return code while it holds: its discount, for how many months, until when. */
+  code: { code: string; percentOff: number; months: number; expiresAt: string } | null;
+  /** The checkout of the plan they left, where the code is entered. */
+  returnUrl: string | null;
 }
 
 /** What came of an accepted offer. */

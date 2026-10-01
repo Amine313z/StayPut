@@ -9,12 +9,14 @@ import {
   outOfQuietHours,
   promoCode,
   renderMessage,
+  returnOfferText,
   type ActionType,
   type BlockReason,
   type GuardrailSettings,
   type MessageAction,
   type MessageTemplate,
   type OfferType,
+  type ReturnOffer,
   type TemplateLocale,
   type TemplateValues,
 } from '@stayput/core';
@@ -129,7 +131,8 @@ export async function prepareActions(
 ): Promise<{ planned: number; scheduled: number; blocked: number }> {
   const at = now.toISOString();
   const [plan] = await db.query<{ planned: number }>(
-    'select stayput.plan_actions($1, $2::timestamptz) as planned',
+    `select stayput.plan_actions($1, $2::timestamptz)
+              + stayput.plan_alumni_followups($1, $2::timestamptz) as planned`,
     [companyId, at],
   );
   const [row] = await db.query<{ context: ScheduleContext | null }>(
@@ -159,6 +162,8 @@ export interface DueAction {
   type: string;
   attempts: number;
   content: Record<string, unknown>;
+  /** What an earlier attempt kept: an Alumni follow-up's code, already made on Whop. */
+  result?: Record<string, unknown> | null;
   globalKillSwitch: boolean;
   killSwitch: boolean;
   dryRun: boolean;
@@ -183,10 +188,18 @@ export interface DueAction {
     canceling: boolean;
     ended: boolean;
     productId: string | null;
+    planId: string | null;
     currency: string | null;
     periodEnd: string | null;
   } | null;
   values: TemplateValues;
+  /** An Alumni follow-up: the member's place in the Alumni, its space, the code's discount. */
+  alumni?: {
+    status: string;
+    experienceId: string | null;
+    percentOff: number;
+    months: number;
+  } | null;
 }
 
 const FAILED_PAYMENT = new Set(['failed', 'past_due', 'uncollectible', 'unresolved']);
@@ -214,6 +227,13 @@ function stale(type: ActionType, action: DueAction): string | null {
         : 'payment_no_longer_waiting';
     case 'exit_survey':
       return action.membership?.canceling ? null : 'cancellation_withdrawn';
+    case 'alumni_followup':
+      // Back in a paid offer, or gone from the Alumni: never called back (SPEC 5.9).
+      return action.alumni?.status === 'entered'
+        ? null
+        : action.alumni?.status === 'returned'
+          ? 'member_returned'
+          : 'left_alumni';
     default:
       return null;
   }
@@ -250,7 +270,7 @@ type Outcome =
   | { status: 'sent' | 'simulated'; result: Record<string, unknown> }
   | { status: 'cancelled'; result: Record<string, unknown> }
   | { status: 'blocked_by_guardrail'; reason: BlockReason }
-  | { status: 'failed'; error: string; retry: boolean };
+  | { status: 'failed'; error: string; retry: boolean; result?: Record<string, unknown> };
 
 /**
  * What one action comes to at `now`: the last stops, the quiet hours, then the test mode, then
@@ -299,6 +319,7 @@ export async function runAction(
   }
 
   if (OFFERS.has(type)) return runOffer(action, type as OfferType, whop);
+  if (type === 'alumni_followup') return runAlumniFollowup(action, whop, now);
   if (MESSAGE_KINDS[type] === 'none') {
     return { status: 'failed', error: `${type} is not run by StayPut`, retry: false };
   }
@@ -421,6 +442,117 @@ async function runOffer(
     if (outcome.status !== 'sent') return outcome;
   }
   return { status: 'sent', result };
+}
+
+/** The return code an Alumni follow-up gives, from the action: the preview shows it too. */
+export function followupOffer(
+  actionId: string,
+  settings: { percentOff: number; months: number },
+): ReturnOffer {
+  return { code: promoCode(bytesOf(actionId)), ...settings };
+}
+
+/** The Alumni follow-up's message, its `{offer}` the return code and what it gives. */
+export function followupMessage(
+  locale: string,
+  templates: DueAction['templates'],
+  values: TemplateValues,
+  offer: ReturnOffer,
+): MessageTemplate {
+  const language: TemplateLocale = locale === 'fr' ? 'fr' : 'en';
+  return renderActionMessage('alumni_followup', locale, templates, {
+    ...values,
+    offer: returnOfferText(language, offer),
+  });
+}
+
+/**
+ * An Alumni follow-up (SPEC 5.9): a single-use return code for the product the member left, valid
+ * 7 days and not reserved to new customers, then the notification through the Alumni space with
+ * the code in it. Each Whop call has its own idempotency key and the code comes from the action:
+ * a retry never creates a second code, and the expiry Whop answers is the one kept.
+ */
+async function runAlumniFollowup(
+  action: DueAction,
+  whop: WhopClient | null,
+  now: number,
+): Promise<Outcome> {
+  const alumni = action.alumni;
+  const experienceId = alumni?.experienceId;
+  if (!alumni || !experienceId) {
+    return { status: 'failed', error: 'the Alumni space is not ready', retry: false };
+  }
+  // A code an earlier attempt made on Whop is the one sent: same discount, same expiry.
+  const earlier = action.result?.promo_created === true ? action.result : null;
+  const offer = earlier
+    ? followupOffer(action.id, {
+        percentOff: Number(earlier.percent_off),
+        months: Number(earlier.months),
+      })
+    : followupOffer(action.id, { percentOff: alumni.percentOff, months: alumni.months });
+  const message = followupMessage(action.locale, action.templates, action.values, offer);
+  const result: Record<string, unknown> = {
+    message,
+    step: Number(action.content.step) || null,
+    code: offer.code,
+    expires_at:
+      typeof earlier?.expires_at === 'string'
+        ? earlier.expires_at
+        : new Date(now + PROMO_VALID_DAYS * DAY_MS).toISOString(),
+    percent_off: offer.percentOff,
+    months: offer.months,
+  };
+  if (action.dryRun) return { status: 'simulated', result };
+  if (!whop) return { status: 'failed', error: 'the Whop API key is not set', retry: false };
+
+  if (earlier) {
+    result.promo_created = true;
+    if (typeof earlier.promo_code_id === 'string') result.promo_code_id = earlier.promo_code_id;
+  } else {
+    const membership = action.membership;
+    const created: { code?: { id?: unknown; expires_at?: unknown } } = {};
+    const promo = await callWhop(action, async () => {
+      created.code = await whop.request<{ id?: unknown; expires_at?: unknown }>(
+        'POST',
+        '/promo_codes',
+        {
+          body: {
+            account_id: action.companyId,
+            code: offer.code,
+            amount_off: offer.percentOff,
+            promo_type: 'percentage',
+            promo_duration_months: offer.months,
+            base_currency: (membership?.currency ?? 'usd').toLowerCase(),
+            new_users_only: false,
+            one_per_customer: true,
+            stock: 1,
+            expires_at: result.expires_at,
+            ...(membership?.productId ? { product_id: membership.productId } : {}),
+          },
+          idempotencyKey: `stayput-action-${action.id}-promo`,
+        },
+      );
+    });
+    if (promo.status !== 'sent') return promo;
+    result.promo_created = true;
+    // Kept for the attribution: a payment with this code is a return (SPEC 5.9).
+    if (typeof created.code?.id === 'string') result.promo_code_id = created.code.id;
+    if (typeof created.code?.expires_at === 'string') result.expires_at = created.code.expires_at;
+  }
+  const sent = await callWhop(action, () =>
+    whop.request('POST', '/notifications', {
+      body: {
+        experience_id: experienceId,
+        user_ids: [action.member.userId],
+        title: message.title,
+        content: message.body,
+      },
+      idempotencyKey: `stayput-action-${action.id}-notify`,
+    }),
+  );
+  if (sent.status === 'sent') return { status: 'sent', result };
+  // The code exists: kept with the action, so that a retry only sends the notification.
+  return sent.status === 'failed' ? { ...sent, result } : sent;
 }
 
 /** 8 bytes of an action's id (a random UUID): its promo code, the same on every attempt. */

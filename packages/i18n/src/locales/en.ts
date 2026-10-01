@@ -386,6 +386,11 @@ export const en = {
   'member.alumni.body':
     'Join the Alumni space: the community’s news, and offers if you ever come back.',
   'member.alumni.join': 'Join the Alumni',
+  'member.alumniSpace.title': 'Welcome to the Alumni',
+  'member.alumniSpace.body':
+    'You will find the community’s news here, and now and then a code to come back for less.',
+  'member.alumniSpace.codeHint': 'Enter it at checkout.',
+  'member.alumniSpace.return': 'Come back to the community',
   'home.point.members': 'Every member, their membership and their payments, read from Whop.',
   'home.point.payments':
     'Failed payments and scheduled cancellations, seen before the member leaves.',
@@ -574,6 +579,7 @@ export const en = {
   'actions.trigger.score_high': 'Score turned high',
   'actions.trigger.activation_radar': 'New member who has not started',
   'actions.trigger.exit_survey': 'Answer to the departure survey',
+  'actions.trigger.alumni': '{days} days after leaving, in the Alumni',
   'actions.status.proposed': 'To approve',
   'actions.status.approved': 'Approved',
   'actions.status.scheduled': 'Scheduled',
@@ -601,6 +607,8 @@ export const en = {
   'actions.note.not_retryable': 'Whop cannot retry this payment',
   'actions.note.membership_ended': 'The member’s membership had already ended',
   'actions.note.survey_answered': 'The member answered the survey in StayPut first',
+  'actions.note.member_returned': 'The member came back to a paid offer',
+  'actions.note.left_alumni': 'The member left the Alumni: StayPut no longer writes to them',
   'actions.offer.reason': 'Reason: “{reason}”',
   'actions.offer.pause': '{days}-day break',
   'actions.offer.promo.one': '{discount} off for {count} month',

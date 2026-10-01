@@ -497,6 +497,7 @@ describe('running the actions', () => {
       canceling: true,
       ended: false,
       productId: 'prod_X1',
+      planId: 'plan_X1',
       currency: 'EUR',
       periodEnd: '2026-10-20T00:00:00.000Z',
     },
@@ -589,6 +590,170 @@ describe('running the actions', () => {
       result: { code },
     });
     expect(test.calls).toEqual([]);
+  });
+
+  /** A former member's follow-up, 7 days after they left the paid product mem_X1 belongs to. */
+  const followup = (over: Partial<DueAction> = {}) =>
+    offer({
+      type: 'alumni_followup',
+      locale: 'fr',
+      content: { step: 7, departed_at: '2026-09-24T10:00:00.000Z' },
+      values: { first_name: 'Ana', creator_name: 'Le Club' },
+      membership: { ...offer().membership!, canceling: false, ended: true },
+      alumni: { status: 'entered', experienceId: 'exp_Alu1', percentOff: 20, months: 3 },
+      ...over,
+    });
+
+  it('sends an Alumni follow-up: a return code for the product left, then the news', async () => {
+    const at = NOW.getTime();
+    const { whop, calls } = fakeWhop((path) =>
+      path === '/promo_codes' ? { id: 'promo_R1', expires_at: '2026-10-08T08:00:05.000Z' } : {},
+    );
+    const sent = await runAction(followup(), whop, at);
+    const code = (sent as unknown as { result: { code: string } }).result.code;
+    expect(code).toMatch(/^STAY-[A-HJ-NP-Z2-9]{8}$/);
+    const message = {
+      title: 'Des nouvelles de Le Club',
+      body:
+        'Salut Ana, il s’est passé beaucoup de choses depuis ton départ. Voici un code de retour ' +
+        `si tu as envie de revenir : ${code} (-20\u00a0% pendant 3 mois, valable 7 jours).`,
+    };
+    // The code Whop made, with the expiry it answered.
+    expect(sent).toEqual({
+      status: 'sent',
+      result: {
+        message,
+        step: 7,
+        code,
+        expires_at: '2026-10-08T08:00:05.000Z',
+        percent_off: 20,
+        months: 3,
+        promo_created: true,
+        promo_code_id: 'promo_R1',
+      },
+    });
+    expect(calls).toEqual([
+      {
+        method: 'POST',
+        path: '/promo_codes',
+        body: {
+          account_id: 'biz_X',
+          code,
+          amount_off: 20,
+          promo_type: 'percentage',
+          promo_duration_months: 3,
+          base_currency: 'eur',
+          new_users_only: false,
+          one_per_customer: true,
+          stock: 1,
+          expires_at: '2026-10-08T08:00:00.000Z',
+          product_id: 'prod_X1',
+        },
+        key: 'stayput-action-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6-promo',
+      },
+      {
+        method: 'POST',
+        path: '/notifications',
+        // Through the Alumni space, the only one a former member can still open.
+        body: {
+          experience_id: 'exp_Alu1',
+          user_ids: ['user_X'],
+          title: message.title,
+          content: message.body,
+        },
+        key: 'stayput-action-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6-notify',
+      },
+    ]);
+
+    // In test mode: the message and the code it would send, nothing asked of Whop.
+    const test = fakeWhop();
+    expect(await runAction(followup({ dryRun: true }), test.whop, at)).toEqual({
+      status: 'simulated',
+      result: {
+        message,
+        step: 7,
+        code,
+        expires_at: '2026-10-08T08:00:00.000Z',
+        percent_off: 20,
+        months: 3,
+      },
+    });
+    expect(test.calls).toEqual([]);
+
+    // Whop refuses the code (a permission missing): no notification without it.
+    const refused = fakeWhop((path) =>
+      path === '/promo_codes'
+        ? new WhopApiError(403, 'forbidden', 'missing permission promo_code:create', {
+            method: 'POST',
+            path,
+          })
+        : {},
+    );
+    expect(await runAction(followup(), refused.whop, at)).toMatchObject({
+      status: 'failed',
+      retry: false,
+    });
+    expect(refused.calls.map((c) => c.path)).toEqual(['/promo_codes']);
+  });
+
+  it('sends only the notification when an outage stopped it after the code was made', async () => {
+    const at = NOW.getTime();
+    const down = fakeWhop((path) =>
+      path === '/promo_codes'
+        ? { id: 'promo_R2', expires_at: '2026-10-08T08:00:00.000Z' }
+        : new WhopApiError(503, 'unavailable', 'try later', { method: 'POST', path }),
+    );
+    const first = await runAction(followup(), down.whop, at);
+    // Tried again later, with what this attempt keeps: the code and its expiry.
+    expect(first).toMatchObject({
+      status: 'failed',
+      retry: true,
+      result: { promo_created: true, promo_code_id: 'promo_R2' },
+    });
+    const kept = (first as { result: Record<string, unknown> }).result;
+
+    // An hour later, the creator having changed the discount meanwhile: the code already made
+    // is the one sent, with its own discount and expiry, and Whop is not asked for another.
+    const again = fakeWhop();
+    const retried = await runAction(
+      followup({
+        attempts: 1,
+        result: kept,
+        alumni: { status: 'entered', experienceId: 'exp_Alu1', percentOff: 30, months: 1 },
+      }),
+      again.whop,
+      at + 3_600_000,
+    );
+    expect(retried).toEqual({ status: 'sent', result: kept });
+    expect(again.calls.map((c) => c.path)).toEqual(['/notifications']);
+    expect(again.calls[0]?.body).toMatchObject({
+      content: expect.stringContaining(`${String(kept.code)} (-20`) as string,
+    });
+  });
+
+  it('never calls back a former member who came back or left the Alumni', async () => {
+    const at = NOW.getTime();
+    const status = (s: string) => ({
+      alumni: { status: s, experienceId: 'exp_Alu1', percentOff: 20, months: 3 },
+    });
+    expect(await runAction(followup(status('returned')), null, at)).toEqual({
+      status: 'cancelled',
+      result: { reason: 'member_returned' },
+    });
+    expect(await runAction(followup(status('left')), null, at)).toEqual({
+      status: 'cancelled',
+      result: { reason: 'left_alumni' },
+    });
+    // The space is gone: nothing to send it through.
+    expect(
+      await runAction(
+        followup({
+          alumni: { status: 'entered', experienceId: null, percentOff: 20, months: 3 },
+        }),
+        null,
+        at,
+      ),
+    ).toEqual({ status: 'failed', error: 'the Alumni space is not ready', retry: false });
   });
 
   it('drops an offer whose membership ended, and what no longer holds', async () => {

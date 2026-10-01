@@ -1,5 +1,5 @@
-import type { AlumniProblem, AlumniStep, AlumniView } from '@stayput/core';
-import { WhopApiError, type WhopClient } from '@stayput/whop';
+import type { AlumniProblem, AlumniReturn, AlumniStep, AlumniView } from '@stayput/core';
+import { WHOP_CHECKOUT_BASE_URL, WhopApiError, type WhopClient, type WhopEnv } from '@stayput/whop';
 import { withUser, type Db, type TransactionalDb } from './db';
 
 /**
@@ -150,13 +150,51 @@ export async function createAlumniOffer(
   }
 }
 
-/** The Alumni offer's link, once the offer is ready: shown to a member who leaves. */
-export async function alumniUrl(db: Db, companyId: string): Promise<string | null> {
-  const [row] = await db.query<{ url: string | null }>(
-    `select url from stayput.alumni_offers where company_id = $1 and completed_at is not null`,
-    [companyId],
+/** What stayput.member_alumni returns. */
+interface MemberAlumniRow {
+  code: string | null;
+  expiresAt: string | null;
+  percentOff: number | null;
+  months: number | null;
+  planId: string | null;
+}
+
+/**
+ * The Alumni as the member view needs it, in one query: the offer's link once it is ready (shown
+ * to a member who leaves), and for a former member in the Alumni, their return code and the
+ * checkout of the plan they left.
+ */
+export async function alumniOfMember(
+  db: Db,
+  companyId: string,
+  userId: string,
+  now: Date,
+  env: WhopEnv,
+): Promise<{ url: string | null; alumni: AlumniReturn | null }> {
+  const [row] = await db.query<{ url: string | null; alumni: MemberAlumniRow | null }>(
+    `select (select o.url from stayput.alumni_offers o
+              where o.company_id = $1 and o.completed_at is not null) as url,
+            stayput.member_alumni($1, $2, $3::timestamptz) as alumni`,
+    [companyId, userId, now.toISOString()],
   );
-  return row?.url ?? null;
+  const alumni = row?.alumni;
+  return {
+    url: row?.url ?? null,
+    alumni: alumni
+      ? {
+          code:
+            alumni.code && alumni.expiresAt
+              ? {
+                  code: alumni.code,
+                  percentOff: Number(alumni.percentOff),
+                  months: Number(alumni.months),
+                  expiresAt: new Date(alumni.expiresAt).toISOString(),
+                }
+              : null,
+          returnUrl: alumni.planId ? `${WHOP_CHECKOUT_BASE_URL[env]}${alumni.planId}` : null,
+        }
+      : null,
+  };
 }
 
 function idOf(value: unknown, prefix: string): string {

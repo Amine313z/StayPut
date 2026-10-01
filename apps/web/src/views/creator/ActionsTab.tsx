@@ -122,6 +122,8 @@ const NOTES: Readonly<Record<string, MessageKey>> = {
   not_retryable: 'actions.note.not_retryable',
   membership_ended: 'actions.note.membership_ended',
   survey_answered: 'actions.note.survey_answered',
+  member_returned: 'actions.note.member_returned',
+  left_alumni: 'actions.note.left_alumni',
 };
 
 /**
@@ -297,7 +299,11 @@ function ActionItem({
   const status = applied
     ? { label: 'actions.status.applied' as const, tone: STATUSES.sent.tone }
     : STATUSES[action.status];
-  const trigger = TRIGGERS[action.trigger];
+  const trigger = action.alumniStep
+    ? t('actions.trigger.alumni', { days: action.alumniStep })
+    : TRIGGERS[action.trigger]
+      ? t(TRIGGERS[action.trigger]!)
+      : null;
   const waiting = ['proposed', 'approved', 'scheduled'].includes(action.status);
 
   const moment = (() => {
@@ -347,7 +353,7 @@ function ActionItem({
             <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
               <Icon aria-hidden="true" className="size-4 shrink-0 text-accent" />
               <span className="font-medium">{t(label)}</span>
-              {trigger ? <span className="text-muted">· {t(trigger)}</span> : null}
+              {trigger ? <span className="text-muted">· {trigger}</span> : null}
             </p>
             {action.message ? (
               <div className="rounded-xl border border-line bg-surface-2 px-3 py-2.5 text-sm">

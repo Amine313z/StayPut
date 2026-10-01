@@ -397,6 +397,11 @@ export const fr: Messages = {
   'member.alumni.body':
     'Rejoignez l’espace Alumni : les actualités de la communauté, et des offres si vous revenez un jour.',
   'member.alumni.join': 'Rejoindre l’Alumni',
+  'member.alumniSpace.title': 'Bienvenue dans l’Alumni',
+  'member.alumniSpace.body':
+    'Vous trouverez ici les nouvelles de la communauté, et de temps en temps un code pour revenir à prix réduit.',
+  'member.alumniSpace.codeHint': 'Saisissez-le au moment du paiement.',
+  'member.alumniSpace.return': 'Revenir dans la communauté',
   'home.point.members': 'Chaque membre, son abonnement et ses paiements, lus dans Whop.',
   'home.point.payments':
     'Paiements échoués et annulations programmées, vus avant que le membre parte.',
@@ -588,6 +593,7 @@ export const fr: Messages = {
   'actions.trigger.score_high': 'Score passé en risque élevé',
   'actions.trigger.activation_radar': 'Nouveau membre qui n’a pas commencé',
   'actions.trigger.exit_survey': 'Réponse au questionnaire de départ',
+  'actions.trigger.alumni': '{days} jours après son départ, dans l’Alumni',
   'actions.status.proposed': 'À valider',
   'actions.status.approved': 'Validée',
   'actions.status.scheduled': 'Programmée',
@@ -615,6 +621,8 @@ export const fr: Messages = {
   'actions.note.not_retryable': 'Whop ne peut pas relancer ce paiement',
   'actions.note.membership_ended': 'L’abonnement du membre était déjà terminé',
   'actions.note.survey_answered': 'Le membre a d’abord répondu au questionnaire dans StayPut',
+  'actions.note.member_returned': 'Le membre est revenu dans une offre payante',
+  'actions.note.left_alumni': 'Le membre a quitté l’Alumni : StayPut ne lui écrit plus',
   'actions.offer.reason': 'Raison : « {reason} »',
   'actions.offer.pause': 'Pause de {days} jours',
   'actions.offer.promo.one': '{discount} de réduction pendant {count} mois',

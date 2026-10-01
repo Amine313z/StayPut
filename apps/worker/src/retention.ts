@@ -3,6 +3,7 @@ import {
   DEFAULT_OFFERS,
   checkGuardrails,
   exitOffer,
+  type AlumniReturn,
   type ExitOffer,
   type ExitReason,
   type MemberRetentionView,
@@ -158,6 +159,8 @@ export function retentionView(
     preview: boolean;
     whopAppId: string | null;
     alumniUrl?: string | null;
+    /** A former member in the Alumni: their return code, and the way back. */
+    alumni?: AlumniReturn | null;
     manageUrl?: string | null;
   },
 ): MemberRetentionView {
@@ -174,6 +177,7 @@ export function retentionView(
         : { offers: DEFAULT_OFFERS, testMode: false },
       payment: null,
       departure: null,
+      alumni: null,
     };
   }
   const payment = row.payment;
@@ -211,6 +215,7 @@ export function retentionView(
           result: survey?.action ? offerResult(survey.action) : null,
         }
       : null,
+    alumni: options.alumni ?? null,
   };
 }
 

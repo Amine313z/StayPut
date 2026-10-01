@@ -1,6 +1,7 @@
 import {
   EXIT_REASONS,
   exitOffer,
+  type AlumniReturn,
   type ExitOffer,
   type ExitReason,
   type MemberRetentionView,
@@ -76,7 +77,55 @@ export function MemberRetention({ api }: { api: string }) {
           onAnswer={(next) => setAnswer({ base: loaded, view: next })}
         />
       ) : null}
+      {view.alumni ? <AlumniReturnCard alumni={view.alumni} whopAppId={view.whopAppId} /> : null}
     </>
+  );
+}
+
+/**
+ * A former member in the Alumni space (SPEC 5.9): the community's news reach them here, with now
+ * and then a return code; the code while it holds, and the way back to the offer they left.
+ */
+function AlumniReturnCard({
+  alumni,
+  whopAppId,
+}: {
+  alumni: AlumniReturn;
+  whopAppId: string | null;
+}) {
+  const { t, plural, percent, date } = useI18n();
+  const code = alumni.code;
+  return (
+    <Card
+      icon={<GraduationCap aria-hidden="true" className="size-4 text-accent" />}
+      title={t('member.alumniSpace.title')}
+      description={t('member.alumniSpace.body')}
+    >
+      <div className="space-y-4">
+        {code ? (
+          <Notice tone="accent" icon={<Percent aria-hidden="true" className="size-4" />}>
+            <div className="space-y-2">
+              <p className="font-medium">
+                {plural('member.offer.promo.title', code.months, {
+                  discount: percent(code.percentOff / 100),
+                })}
+              </p>
+              <PromoCode code={code.code} until={date(new Date(code.expiresAt))} />
+              <p className="text-muted">{t('member.alumniSpace.codeHint')}</p>
+            </div>
+          </Notice>
+        ) : null}
+        {alumni.returnUrl ? (
+          <ExternalButton
+            href={alumni.returnUrl}
+            whopAppId={whopAppId}
+            icon={<RotateCcw aria-hidden="true" className="size-4" />}
+          >
+            {t('member.alumniSpace.return')}
+          </ExternalButton>
+        ) : null}
+      </div>
+    </Card>
   );
 }
 

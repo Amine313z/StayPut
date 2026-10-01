@@ -1972,6 +1972,7 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
       },
       payment: null,
       departure: null,
+      alumni: null,
     });
   });
 

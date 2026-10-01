@@ -39,7 +39,7 @@ import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
-import { alumniUrl, createAlumniOffer, readAlumni } from './alumni';
+import { alumniOfMember, createAlumniOffer, readAlumni } from './alumni';
 import {
   accountOf,
   accountsView,
@@ -1371,10 +1371,18 @@ export function createApp(deps: AppDeps) {
     now: Date,
   ): Promise<MemberRetentionView> {
     const row = await readRetention(db, companyId, c.get('userId'), now);
+    const alumni = await alumniOfMember(
+      db,
+      companyId,
+      c.get('userId'),
+      now,
+      c.get('config').whopEnv,
+    );
     const view = retentionView(row, {
       preview: c.get('accessLevel') === 'admin',
       whopAppId: c.get('config').appId,
-      alumniUrl: await alumniUrl(db, companyId),
+      alumniUrl: alumni.url,
+      alumni: alumni.alumni,
     });
     if (view.payment?.kind === 'failed' && !view.payment.url && row.payment?.membershipId) {
       // Where the member updates their payment method: Whop's page for their membership.

@@ -901,12 +901,53 @@ permet de l'activer à la place du créateur).
 - **Limite connue** : un membre de l'Alumni reste un membre de la communauté pour Whop ; il
   apparaît donc dans l'onglet Membres (adhésion « Accès à vie »).
 
+### L'offre Alumni, seconde partie : les nouvelles de J+7, J+30 et J+60 (migration 0019)
+
+SPEC 5.9 : une fois dans l'Alumni, l'ancien membre reçoit, 7, 30 et 60 jours après son départ,
+une notification Whop par l'**espace Alumni** (le seul qu'il voit encore) avec des nouvelles de
+la communauté et un **code de retour**. Chaque relance est une action comme les autres : le mode
+du créateur (à valider en mode manuel), les garde-fous, le mode test.
+
+- **Quand** : chaque étape est préparée une fois par départ (la date de départ est dans sa clé :
+  un membre revenu puis reparti recommence la série), envoyée à l'heure d'or. Une étape n'est
+  préparée que tant qu'elle reste à distance de la suivante : J+7 jusqu'au 23ᵉ jour, J+30
+  jusqu'au 53ᵉ, J+60 jusqu'au 85ᵉ. Un membre entré tard dans l'Alumni reçoit seulement l'étape
+  en cours, jamais deux relances coup sur coup (l'espacement des relances les bloquerait).
+- **Le code** : `STAY-` et 8 caractères, à usage unique, valable 7 jours, limité au produit que
+  le membre a quitté, pas réservé aux nouveaux clients. La réduction et sa durée sont celles
+  du code promo des offres de départ (réglage « Offres de départ »). Il est créé au moment de
+  l'envoi, puis la notification part avec le code dans `{offer}` :
+  « STAY-K7QM2XPA (-20 % pendant 3 mois, valable 7 jours) ».
+- **Garde-fous** : comme un code promo, un seul code actif par membre, et le plafond mensuel de
+  codes du créateur compte désormais aussi ces codes de retour. Plus l'espacement et le plafond
+  des relances, les heures silencieuses et la liste « ne jamais contacter ».
+- **Plus jamais relancé** : un membre revenu dans une offre payante, ou parti de l'Alumni, voit
+  ses relances annulées au moment de partir (« Le membre est revenu dans une offre payante »).
+- **Une panne entre le code et la notification** : le code déjà créé est gardé avec l'action, et
+  la reprise, une heure plus tard, n'envoie que la notification, avec ce code-là (même
+  réduction, même date de fin, même si le créateur a changé ses réglages entre-temps).
+- **Côté ancien membre** : en ouvrant StayPut dans l'espace Alumni, il voit « Bienvenue dans
+  l'Alumni », son code tant qu'il est valable (à copier) et le bouton **« Revenir dans la
+  communauté »**, qui ouvre la page de paiement du prix qu'il avait. Ce lien est construit sur
+  le modèle des liens de Whop (`https://whop.com/checkout/plan_…`, vu en sandbox) : si ce prix
+  n'est plus en vente, c'est la page de Whop qui le dira (à vérifier en démonstration).
+- **Côté créateur** : l'onglet Actions montre chaque relance avec le message exact, code compris
+  (le code vient de l'action : l'aperçu montre celui qui partira), et l'étape (« 30 jours après
+  son départ, dans l'Alumni »).
+- **Correctif** : StayPut retenait comme espace de la communauté le dernier espace où un membre
+  l'avait ouvert. Un ancien membre (ou l'équipe) ouvrant StayPut dans l'espace Alumni aurait
+  envoyé toutes les notifications des membres payants vers un espace qu'ils ne voient pas.
+  L'espace Alumni n'est plus jamais retenu (aucune offre Alumni n'existait encore en
+  production : rien à réparer).
+- **Le retour** : l'identifiant Whop du code est gardé (`promo_code_id`). Un paiement fait avec
+  ce code sera compté comme un sauvetage direct quand l'argent sauvé sera calculé (Phase 6).
+
 ### Reste à faire dans cette phase
 
-La seconde partie de l'offre Alumni (les nouvelles de J+7, J+30 et J+60 avec un code de retour,
-l'espace Alumni côté membre, le compte des retours), la démonstration de chaque déclencheur, et
-les permissions d'écriture à ajouter dans Whop (`member:manage`, `payment:manage`, `promo_code:create`, `promo_code:basic:read`,
-`notification:create`). À trancher au rapport de phase : un code promo valable 7 jours ne sert
-qu'à un nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en cours
+La démonstration de chaque déclencheur, et les permissions d'écriture à ajouter dans Whop :
+`member:manage`, `payment:manage`, `promo_code:create`, `notification:create` pour les actions,
+et `access_pass:create`, `plan:create`, `experience:create`, `experience:attach` pour créer
+l'offre Alumni. À trancher au rapport de phase : un code promo valable 7 jours ne sert qu'à un
+nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en cours
 (`existing_memberships_only`). Les défis de sauvetage et les binômes dépendent de la Phase 5
 (espace membre).

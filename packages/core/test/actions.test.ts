@@ -122,6 +122,15 @@ describe('checkGuardrails', () => {
     expect(
       check({ type: 'promo_offer' }, {}, { promos: 10, settings: { monthlyPromoCap: 11 } }).allowed,
     ).toBe(true);
+    // An Alumni follow-up carries a return code: the same caps (SPEC 5.9).
+    expect(check({ type: 'alumni_followup' }, { activePromo: true })).toEqual({
+      allowed: false,
+      reason: 'promo_already_active',
+    });
+    expect(check({ type: 'alumni_followup' }, {}, { promos: 10 })).toEqual({
+      allowed: false,
+      reason: 'monthly_promo_cap',
+    });
   });
 
   it('caps the free days at 14 a member over 90 days', () => {

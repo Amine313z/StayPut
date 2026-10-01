@@ -7,6 +7,7 @@ import {
   exitOffer,
   isExitReason,
   promoCode,
+  returnOfferText,
 } from '../src/offers';
 
 describe('the departure survey’s offers (SPEC Phase 4)', () => {
@@ -47,5 +48,16 @@ describe('the departure survey’s offers (SPEC Phase 4)', () => {
     ).join('');
     expect(all.slice(5)).not.toMatch(/[01OIL]/);
     expect(() => promoCode(new Uint8Array(7))).toThrow();
+  });
+
+  it('words an Alumni return code in the company’s language', () => {
+    const offer = { code: 'STAY-K7QM2XPA', percentOff: 20, months: 3 };
+    expect(returnOfferText('fr', offer)).toBe(
+      'STAY-K7QM2XPA (-20\u00a0% pendant 3 mois, valable 7 jours)',
+    );
+    expect(returnOfferText('en', offer)).toBe('STAY-K7QM2XPA (20% off for 3 months, valid 7 days)');
+    expect(returnOfferText('en', { ...offer, months: 1 })).toBe(
+      'STAY-K7QM2XPA (20% off for 1 month, valid 7 days)',
+    );
   });
 });

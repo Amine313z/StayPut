@@ -16,6 +16,15 @@ export const WHOP_OAUTH_BASE_URL: Readonly<Record<WhopEnv, string>> = {
   sandbox: 'https://sandbox-api.whop.com/oauth',
 };
 
+/**
+ * A plan's checkout page, as Whop gives it in `purchase_url` (`https://sandbox.whop.com/checkout/
+ * plan_…` in the sandbox, 2026-09-30): where a former member comes back with their return code.
+ */
+export const WHOP_CHECKOUT_BASE_URL: Readonly<Record<WhopEnv, string>> = {
+  production: 'https://whop.com/checkout/',
+  sandbox: 'https://sandbox.whop.com/checkout/',
+};
+
 /** Keys that sign the iframe's `x-whop-user-token`: the sandbox has its own. */
 export const WHOP_JWKS_URL: Readonly<Record<WhopEnv, string>> = {
   production: 'https://api.whop.com/.well-known/jwks.json',

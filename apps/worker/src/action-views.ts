@@ -22,7 +22,7 @@ import {
   type TemplateLocale,
   type TemplateValues,
 } from '@stayput/core';
-import { renderActionMessage } from './actions';
+import { followupMessage, followupOffer, renderActionMessage } from './actions';
 import { withUser, type TransactionalDb } from './db';
 
 /**
@@ -66,11 +66,14 @@ export async function readActions(
       dry_run: boolean;
       kill_switch: boolean;
       templates: Templates;
+      promo_percent: number;
+      promo_months: number;
       queue: number;
       scheduled: number;
       history: number;
     }>(
       `select c.mode, c.locale, s.dry_run, s.kill_switch, s.active_templates as templates,
+              s.promo_percent, s.promo_months,
               (select count(*) from stayput.actions a
                 where a.company_id = c.id and a.status in ('proposed', 'approved'))::int as queue,
               (select count(*) from stayput.actions a
@@ -103,7 +106,7 @@ export async function readActions(
     }>(
       `select a.id, a.type, a.status, a.trigger, a.member_id, m.display_name, a.send_at,
               a.sent_at, a.created_at, a.blocked_reason, a.result,
-              case when a.trigger = 'exit_survey' then a.content end as content,
+              case when a.trigger in ('exit_survey', 'alumni') then a.content end as content,
               a.error_log -> -1 ->> 'error' as last_error,
               case when $3 <> 'history' and a.message_kind <> 'none'
                    then stayput.message_values(a.company_id, a.member_id, $4::timestamptz)
@@ -117,15 +120,28 @@ export async function readActions(
     );
     const actions: ActionRow[] = rows.flatMap((row): ActionRow[] => {
       if (!isActionType(row.type)) return [];
-      const preview =
-        row.message_values && (MESSAGE_ACTIONS as readonly string[]).includes(row.type)
-          ? renderActionMessage(
-              row.type as MessageAction,
+      const preview = !row.message_values
+        ? null
+        : row.type === 'alumni_followup'
+          ? // The return code is the action's own: the preview shows the one that will go.
+            followupMessage(
               company.locale,
               company.templates,
               row.message_values,
+              followupOffer(row.id, {
+                percentOff: company.promo_percent,
+                months: company.promo_months,
+              }),
             )
-          : null;
+          : (MESSAGE_ACTIONS as readonly string[]).includes(row.type)
+            ? renderActionMessage(
+                row.type as MessageAction,
+                company.locale,
+                company.templates,
+                row.message_values,
+              )
+            : null;
+      const step = row.type === 'alumni_followup' ? Number(row.content?.step) : 0;
       return [
         {
           id: row.id,
@@ -144,7 +160,9 @@ export async function readActions(
               : row.status === 'cancelled'
                 ? text(row.result?.reason)
                 : null,
-          offer: row.content ? offerOf(row.content, row.result) : null,
+          offer:
+            row.trigger === 'exit_survey' && row.content ? offerOf(row.content, row.result) : null,
+          ...(step > 0 ? { alumniStep: step } : {}),
         },
       ];
     });

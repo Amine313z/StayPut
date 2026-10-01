@@ -136,3 +136,23 @@ export function promoCode(bytes: Uint8Array): string {
   for (let i = 0; i < 8; i += 1) code += CODE_ALPHABET[bytes[i]! % CODE_ALPHABET.length];
   return `STAY-${code}`;
 }
+
+/** A return code and what it gives (SPEC 5.9): an Alumni follow-up's `{offer}`. */
+export interface ReturnOffer {
+  code: string;
+  percentOff: number;
+  months: number;
+}
+
+/**
+ * The `{offer}` of an Alumni follow-up, in the company's language: the code, its discount and for
+ * how long, and how long it is valid (`STAY-K7QM2XPA (-20 % pendant 3 mois, valable 7 jours)`).
+ */
+export function returnOfferText(locale: 'en' | 'fr', offer: ReturnOffer): string {
+  // Written out rather than with Intl, whose spacing of « % » differs between runtimes.
+  if (locale === 'fr') {
+    return `${offer.code} (-${offer.percentOff}\u00a0% pendant ${offer.months} mois, valable ${PROMO_VALID_DAYS} jours)`;
+  }
+  const months = offer.months === 1 ? '1 month' : `${offer.months} months`;
+  return `${offer.code} (${offer.percentOff}% off for ${months}, valid ${PROMO_VALID_DAYS} days)`;
+}
