@@ -18,7 +18,7 @@ il a sauvé.
 | 1. Fondations                  | Validée le 01/10/2026                                     |
 | 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation |
 | 3. Détection (score de risque) | Faite, en attente de validation                           |
-| 4. Actions                     | En cours (reste la démonstration de chaque déclencheur)   |
+| 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les droits |
 
 ## Architecture
 

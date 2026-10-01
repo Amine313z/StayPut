@@ -942,9 +942,28 @@ du créateur (à valider en mode manuel), les garde-fous, le mode test.
 - **Le retour** : l'identifiant Whop du code est gardé (`promo_code_id`). Un paiement fait avec
   ce code sera compté comme un sauvetage direct quand l'argent sauvé sera calculé (Phase 6).
 
+### La démonstration en mode test (arrêt de la phase 4)
+
+Le 1er octobre au soir, sur le sandbox (mode test, mode manuel), chaque déclencheur a proposé son
+action sur les membres fictifs : 3 paiements refusés (3 messages, et 1 nouvelle tentative, pour le
+seul que Whop ne retente pas lui-même), 1 paiement en attente de 3D Secure (1 message), 3
+annulations programmées (3 questionnaires), des scores devenus élevés (messages à l'heure d'or)
+et 1 nouveau membre inactif (accueil). Le créateur les valide dans l'onglet Actions, et le passage
+horaire suivant les simule (les messages attendent la fin des heures de silence).
+
+- **Le script des membres fictifs** crée désormais un nouveau paiement à chaque passage pour
+  chaque problème de paiement (son identifiant porte l'heure) : Whop ne change jamais la date de
+  création d'un paiement, et un paiement déjà enregistré gardait la sienne, trop ancienne pour
+  les déclencheurs (ils ne regardent que 3 jours). Il prépare aussi les actions aussitôt, sans
+  attendre le passage horaire.
+- **Le réel sur les membres fictifs est impossible** : ils n'existent que dans la base de
+  StayPut (l'API de Whop ne crée pas d'utilisateurs), et Whop refuserait un message ou un
+  prélèvement pour eux. L'essai réel se fera sur un vrai membre de test (un second compte Whop
+  qui rejoint la communauté du sandbox), une fois les permissions d'écriture accordées.
+
 ### Reste à faire dans cette phase
 
-La démonstration de chaque déclencheur, et les permissions d'écriture à ajouter dans Whop :
+Les permissions d'écriture à ajouter dans Whop :
 `member:manage`, `payment:manage`, `promo_code:create`, `notification:create` pour les actions,
 et `access_pass:create`, `plan:create`, `experience:create`, `experience:attach` pour créer
 l'offre Alumni. À trancher au rapport de phase : un code promo valable 7 jours ne sert qu'à un
