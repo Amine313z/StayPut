@@ -1,0 +1,35 @@
+name: Seed sandbox
+
+# Started by hand (GitHub -> Actions -> Seed sandbox -> Run workflow) or by Claude through the
+# API: adds 25 fake members with 60 days of history to a sandbox company, or removes them
+# (scripts/seed-sandbox.ts). Refused when the repository variable WHOP_ENV is "production".
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: seed (add the fake members) or remove (take them away)
+        type: choice
+        options: [seed, remove]
+        default: seed
+      company:
+        description: The sandbox company (biz_…)
+        default: biz_2whAzkbCRpcGqQ
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: ${{ inputs.action }} the fake members
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          WHOP_ENV: ${{ vars.WHOP_ENV }}
+          ACTION: ${{ inputs.action }}
+          COMPANY: ${{ inputs.company }}
+        run: npx tsx scripts/seed-sandbox.ts "$ACTION" "$COMPANY"
