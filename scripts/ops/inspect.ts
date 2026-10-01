@@ -205,7 +205,8 @@ async function main() {
       }
     }
     // The Alumni offer (migration 0018): which steps of its creation are done on Whop, and who
-    // entered, left or came back. Counts only.
+    // entered, left or came back; its follow-ups (0019) and the return codes they made. Counts
+    // only.
     const [alumni] = await sql`
       select to_regclass('stayput.alumni_offers') is not null as present`;
     if (alumni?.present) {
@@ -220,7 +221,13 @@ async function main() {
                  (select count(*) from stayput.alumni_members a
                    where a.company_id = ${id as string} and a.status = 'left') as left_,
                  (select count(*) from stayput.alumni_members a
-                   where a.company_id = ${id as string} and a.status = 'returned') as returned
+                   where a.company_id = ${id as string} and a.status = 'returned') as returned,
+                 (select count(*) from stayput.actions f
+                   where f.company_id = ${id as string} and f.type = 'alumni_followup')
+                   as followups,
+                 (select count(*) from stayput.actions f
+                   where f.company_id = ${id as string} and f.type = 'alumni_followup'
+                     and f.status = 'sent' and f.result ->> 'code' is not null) as codes_sent
             from (select ${id as string}::text as company_id) c
             left join stayput.alumni_offers o on o.company_id = c.company_id`,
       );
