@@ -9,6 +9,9 @@ import {
   isExitReason,
   isNiche,
   normalizeWeights,
+  parseGoalInput,
+  parseGoalProposals,
+  parseResultEntry,
   timeZoneName,
   type AccessLevel,
   type CreatorSession,
@@ -17,6 +20,7 @@ import {
   type AlumniView,
   type MemberRetentionView,
   type MemberSession,
+  type ResultAnswer,
   type RiskSettingsView,
   type SignInMethod,
   type SyncRun,
@@ -72,6 +76,15 @@ import { readInsights, readMembers, readRiskSettings, readSyncStatus } from './m
 import { answerSurvey, decideOffer, readRetention, retentionView } from './retention';
 import { REQUEST_RISK_BATCH, refreshDetection } from './risk';
 import { LATEST_MIGRATION } from './schema-version';
+import {
+  readGoalProposals,
+  readMemberSpace,
+  recordOpen,
+  recordResult,
+  saveGoalProposals,
+  setGoal,
+  spaceLocale,
+} from './space';
 import {
   LOGIN_COOKIE,
   LOGIN_TTL_SECONDS,
@@ -685,6 +698,39 @@ export function createApp(deps: AppDeps) {
       return c.json((await readRiskSettings(db, c.get('userId'), companyId)) ?? settings);
     },
   );
+
+  /** The goals proposed to members (SPEC Phase 5): the creator's own, or their niche's. */
+  app.get('/api/creator/:companyId/goals', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const view = await readGoalProposals(
+      db,
+      c.get('userId'),
+      c.get('companyId'),
+      spaceLocale(c.req.query('lang')),
+    );
+    return view ? c.json(view) : apiError('not_found', 'no settings for this company');
+  });
+
+  /** The creator writes their own goals for members, or goes back to the niche's (null). */
+  app.put('/api/creator/:companyId/goals', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const body = await c.req.json<{ proposals?: unknown }>().catch(() => null);
+    const proposals = body?.proposals === null ? null : parseGoalProposals(body?.proposals);
+    if (body?.proposals !== null && !proposals) {
+      return apiError('invalid_request', 'expected { proposals: up to 6 goals, or null }');
+    }
+    const companyId = c.get('companyId');
+    await saveGoalProposals(db, companyId, proposals);
+    const view = await readGoalProposals(
+      db,
+      c.get('userId'),
+      companyId,
+      spaceLocale(c.req.query('lang')),
+    );
+    return view ? c.json(view) : apiError('not_found', 'no settings for this company');
+  });
 
   /** SPEC Phase 4: one list of actions (to approve, scheduled, done) and how many each holds. */
   app.get('/api/creator/:companyId/actions', authenticate, withDb, requireCreator, async (c) => {
@@ -1420,6 +1466,92 @@ export function createApp(deps: AppDeps) {
       return null;
     }
   }
+
+  /**
+   * The member space (SPEC Phase 5): the member's goal, results, milestones and badges. Opening it
+   * is an activity of the member (stayput_open), never of the team, who see a preview.
+   */
+  app.get('/api/member/:experienceId/space', authenticate, withDb, requireMember, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const companyId = await memberCompany(c);
+    if (companyId instanceof Response) return companyId;
+    const preview = c.get('accessLevel') === 'admin';
+    const userId = c.get('userId');
+    const fresh = preview ? [] : await recordOpen(db, companyId, userId, deps.now());
+    return c.json(
+      await readMemberSpace(db, companyId, userId, {
+        locale: spaceLocale(c.req.query('lang')),
+        preview,
+        fresh,
+      }),
+    );
+  });
+
+  /** The member sets their goal: the one under way ends. */
+  app.post(
+    '/api/member/:experienceId/space/goal',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      if (c.get('accessLevel') === 'admin') {
+        return apiError('forbidden', 'the team previews the member space, nothing is recorded');
+      }
+      const now = deps.now();
+      const goal = parseGoalInput(await c.req.json<unknown>().catch(() => null), now);
+      if (!goal) {
+        return apiError(
+          'invalid_request',
+          'expected { title, unit, category, entry, start, target, targetDate }',
+        );
+      }
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const userId = c.get('userId');
+      if (!(await setGoal(db, companyId, userId, goal, now))) {
+        return apiError('not_found', 'StayPut does not know this member yet');
+      }
+      return c.json(
+        await readMemberSpace(db, companyId, userId, {
+          locale: spaceLocale(c.req.query('lang')),
+          preview: false,
+        }),
+      );
+    },
+  );
+
+  /** A result on the member's goal: the milestones and badges it brings, to celebrate them. */
+  app.post(
+    '/api/member/:experienceId/space/result',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      if (c.get('accessLevel') === 'admin') {
+        return apiError('forbidden', 'the team previews the member space, nothing is recorded');
+      }
+      const entry = parseResultEntry(await c.req.json<unknown>().catch(() => null));
+      if (!entry) return apiError('invalid_request', 'expected { goalId, value }');
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const userId = c.get('userId');
+      const brought = await recordResult(db, companyId, userId, entry, deps.now());
+      if (!brought) return apiError('not_found', 'no such goal under way');
+      const answer: ResultAnswer = {
+        ...brought,
+        space: await readMemberSpace(db, companyId, userId, {
+          locale: spaceLocale(c.req.query('lang')),
+          preview: false,
+        }),
+      };
+      return c.json(answer);
+    },
+  );
 
   /** Linking one's Telegram account, so that one's messages in the community's groups count. */
   app.get('/api/member/:experienceId/telegram', authenticate, withDb, requireMember, async (c) => {

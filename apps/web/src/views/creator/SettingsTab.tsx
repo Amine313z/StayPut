@@ -23,6 +23,7 @@ import { Card } from '../../ui/Card';
 import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { useCreatorData } from '../CreatorView';
 import { ActionSettings } from './ActionSettings';
+import { GoalProposals } from './GoalProposals';
 
 const NICHE_LABELS: Readonly<Record<Niche, MessageKey>> = {
   trading: 'niche.trading',
@@ -46,8 +47,8 @@ const FACTORS: Readonly<Record<keyof RiskWeights, { name: MessageKey; hint: Mess
 const RELOAD_AFTER_MS = 4_000;
 
 /**
- * The creator's settings (SPEC Phase 6, point 12): how the score is computed (Phase 3), and how
- * the actions leave (Phase 4).
+ * The creator's settings (SPEC Phase 6, point 12): how the score is computed (Phase 3), the goals
+ * proposed to members (Phase 5), and how the actions leave (Phase 4).
  */
 export function SettingsTab() {
   const { api } = useCreatorData();
@@ -58,9 +59,16 @@ export function SettingsTab() {
       <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
     );
   }
+  return <Settings initial={state.data} />;
+}
+
+/** The niche saved above decides the goals StayPut proposes to members below. */
+function Settings({ initial }: { initial: RiskSettingsView }) {
+  const [niche, setNiche] = useState(initial.niche);
   return (
     <div className="space-y-6">
-      <RiskSettingsForm initial={state.data} />
+      <RiskSettingsForm initial={initial} onSaved={(saved) => setNiche(saved.niche)} />
+      <GoalProposals niche={niche} />
       <ActionSettings />
     </div>
   );
@@ -122,7 +130,13 @@ function sameSettings(a: RiskSettingsView, b: RiskSettingsView): boolean {
   );
 }
 
-function RiskSettingsForm({ initial }: { initial: RiskSettingsView }) {
+function RiskSettingsForm({
+  initial,
+  onSaved,
+}: {
+  initial: RiskSettingsView;
+  onSaved: (saved: RiskSettingsView) => void;
+}) {
   const { t, percent, number } = useI18n();
   const { api, members } = useCreatorData();
   const [saved, setSaved] = useState(initial);
@@ -173,6 +187,7 @@ function RiskSettingsForm({ initial }: { initial: RiskSettingsView }) {
     try {
       const next = await putJson<RiskSettingsView>(`${api}/settings/risk`, view);
       setSaved(next);
+      onSaved(next);
       setDraft(toDraft(next));
       setStatus('saved');
       setSaves((n) => n + 1);

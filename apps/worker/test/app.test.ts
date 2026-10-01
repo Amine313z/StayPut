@@ -1,7 +1,10 @@
 import type {
   AccountsView,
   AlumniView,
+  GoalProposalsView,
   MemberRetentionView,
+  MemberSpaceView,
+  ResultAnswer,
   PlatformActivityView,
   ActionsPage,
   AccessLevel,
@@ -2047,5 +2050,146 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     });
     await t.db.query(`update stayput.members set do_not_contact = true where id = 'mber_Ret3'`);
     expect((await read()).departure).toBeNull();
+  });
+});
+
+describe('the member space (SPEC Phase 5)', () => {
+  const json = (init: RequestInit, method: string, body: unknown) => ({
+    ...init,
+    method,
+    headers: { ...init.headers, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  /** A fitness community with its member Lina; `boss` is of the team. */
+  async function community(n: number) {
+    const [company, experience] = [`biz_Spc${n}`, `exp_Spc${n}`];
+    const env = setup(
+      {
+        [`user_lina${n}:${experience}`]: 'customer',
+        [`user_boss${n}:${experience}`]: 'admin',
+        [`user_boss${n}:${company}`]: 'admin',
+      },
+      { experiences: { [experience]: company } },
+    );
+    await env.request(`/api/creator/${company}/session`, await asUser(`user_boss${n}`));
+    await settle();
+    await t.db.query(`update stayput.companies set niche = 'fitness' where id = $1`, [company]);
+    await t.db.query('select stayput.ingest_page($1, $2, null, $3::text::jsonb)', [
+      company,
+      'members',
+      JSON.stringify(page([member(`mber_Spc${n}`, `user_lina${n}`)])),
+    ]);
+    const lina = await asUser(`user_lina${n}`);
+    const boss = await asUser(`user_boss${n}`);
+    const base = `/api/member/${experience}/space`;
+    return { ...env, company, experience, lina, boss, base };
+  }
+
+  const opensOf = async (company: string) =>
+    (
+      await t.db.query<{ n: number }>(
+        `select count(*)::int as n from stayput.activity_events
+          where company_id = $1 and type = 'stayput_open'`,
+        [company],
+      )
+    )[0]?.n;
+
+  it('records the member’s opening, their goal and their results', async () => {
+    const { request, company, lina, base } = await community(1);
+    const first = (await (await request(`${base}?lang=fr`, lina)).json()) as MemberSpaceView;
+    expect(first).toMatchObject({ preview: false, known: true, goal: null, fresh: [] });
+    expect(first.proposals[0]).toEqual({
+      title: 'Atteindre mon poids cible',
+      unit: 'kg',
+      category: 'body',
+      entry: 'total',
+    });
+    expect(await opensOf(company)).toBe(1);
+
+    const goal = {
+      title: 'Atteindre mon poids cible',
+      unit: 'kg',
+      category: 'body',
+      entry: 'total',
+      start: 92,
+      target: 85,
+      targetDate: new Date(NOW.getTime() + 90 * 86_400_000).toISOString().slice(0, 10),
+    };
+    expect(
+      (await request(`${base}/goal`, json(lina, 'POST', { ...goal, target: 92 }))).status,
+    ).toBe(400);
+    const set = (await (
+      await request(`${base}/goal?lang=fr`, json(lina, 'POST', goal))
+    ).json()) as MemberSpaceView;
+    expect(set.goal).toMatchObject({ title: goal.title, start: 92, target: 85, progress: 0 });
+
+    const goalId = set.goal!.id;
+    const recorded = (await (
+      await request(`${base}/result?lang=fr`, json(lina, 'POST', { goalId, value: 88.5 }))
+    ).json()) as ResultAnswer;
+    expect(recorded).toMatchObject({
+      milestones: [25, 50],
+      badges: ['first_result', 'milestone_25', 'milestone_50'],
+      achieved: false,
+      space: { goal: { current: 88.5, progress: 50 } },
+    });
+    expect(
+      (
+        await request(
+          `${base}/result`,
+          json(lina, 'POST', { goalId: '00000000-0000-4000-8000-000000000000', value: 1 }),
+        )
+      ).status,
+    ).toBe(404);
+    expect((await request(`${base}/result`, json(lina, 'POST', { goalId }))).status).toBe(400);
+  });
+
+  it('shows the team a preview where nothing is recorded', async () => {
+    const { request, company, boss, base } = await community(2);
+    const preview = (await (await request(`${base}?lang=en`, boss)).json()) as MemberSpaceView;
+    expect(preview).toMatchObject({ preview: true, known: false, goal: null });
+    expect(preview.proposals.map((p) => p.title)).toEqual([
+      'Reach my target weight',
+      'Train regularly',
+      'Run further',
+    ]);
+    expect(await opensOf(company)).toBe(0);
+    const goal = {
+      title: 'Run',
+      unit: 'km',
+      category: 'performance',
+      entry: 'total',
+      start: 1,
+      target: 10,
+      targetDate: NOW.toISOString().slice(0, 10),
+    };
+    expect((await request(`${base}/goal`, json(boss, 'POST', goal))).status).toBe(403);
+  });
+
+  it('lets the creator write the goals proposed to members', async () => {
+    const { request, company, boss, lina, base } = await community(3);
+    const url = `/api/creator/${company}/goals`;
+    const read = (await (await request(`${url}?lang=fr`, boss)).json()) as GoalProposalsView;
+    expect(read).toMatchObject({ niche: 'fitness', custom: null });
+    expect(read.defaults).toHaveLength(3);
+
+    expect((await request(url, json(boss, 'PUT', { proposals: 'none' }))).status).toBe(400);
+    expect((await request(url, json(boss, 'PUT', {}))).status).toBe(400);
+    const own = [{ title: 'Courir 5 km', unit: 'km', category: 'performance', entry: 'total' }];
+    const saved = (await (
+      await request(`${url}?lang=fr`, json(boss, 'PUT', { proposals: own }))
+    ).json()) as GoalProposalsView;
+    expect(saved.custom).toEqual(own);
+    // The members choose among the creator's own.
+    const seen = (await (await request(`${base}?lang=en`, lina)).json()) as MemberSpaceView;
+    expect(seen.proposals).toEqual(own);
+
+    const back = (await (
+      await request(url, json(boss, 'PUT', { proposals: null }))
+    ).json()) as GoalProposalsView;
+    expect(back.custom).toBeNull();
+    // A member is no creator.
+    expect((await request(url, lina)).status).toBe(403);
   });
 });

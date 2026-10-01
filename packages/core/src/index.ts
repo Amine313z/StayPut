@@ -7,3 +7,4 @@ export * from './risk';
 export * from './actions';
 export * from './templates';
 export * from './offers';
+export * from './goals';

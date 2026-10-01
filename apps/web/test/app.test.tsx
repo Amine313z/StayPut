@@ -2,6 +2,9 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import type {
   AccountsView,
   AlumniView,
+  GoalProposalsView,
+  MemberSpaceView,
+  ResultAnswer,
   PlatformActivityView,
   ActionRow,
   ActionSettingsView,
@@ -416,7 +419,7 @@ describe('creator view', () => {
     const chloe = screen.getByText('Chloé Dubois').closest('li')!;
     expect(chloe.textContent).toContain('New, not started yet');
     expect(chloe.textContent).toContain('No activity since joining, 4 days ago');
-    expect(chloe.textContent).toContain('No lesson for 4 days');
+    expect(chloe.textContent).toContain('No lesson or result for 4 days');
   });
 
   it('keeps the facts of Whop before the first scores', async () => {
@@ -1302,6 +1305,26 @@ describe('analyses', () => {
   });
 });
 
+const OTHER_GOALS: GoalProposalsView = {
+  niche: 'other',
+  custom: null,
+  defaults: [
+    { title: 'Finish the course', unit: '%', category: 'learning', entry: 'total' },
+    { title: 'Practice regularly', unit: 'sessions', category: 'practice', entry: 'add' },
+    { title: 'Move forward every week', unit: 'steps', category: 'other', entry: 'add' },
+  ],
+};
+
+const TRADING_GOALS: GoalProposalsView = {
+  niche: 'trading',
+  custom: null,
+  defaults: [
+    { title: 'Reach my monthly profit target', unit: '$', category: 'income', entry: 'total' },
+    { title: 'Follow my trading plan', unit: 'days', category: 'practice', entry: 'add' },
+    { title: 'Improve my win rate', unit: '%', category: 'performance', entry: 'total' },
+  ],
+};
+
 describe('risk settings', () => {
   const DEFAULTS: RiskSettingsView = {
     niche: 'other',
@@ -1322,10 +1345,71 @@ describe('risk settings', () => {
       ...dashboard(),
       '/api/creator/biz_A1/settings/risk': [{ status: 200, body: DEFAULTS }],
       '/api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
+      '/api/creator/biz_A1/goals?lang=en&niche=other': [{ status: 200, body: OTHER_GOALS }],
+      '/api/creator/biz_A1/goals?lang=fr&niche=other': [{ status: 200, body: OTHER_GOALS }],
+      '/api/creator/biz_A1/goals?lang=en&niche=trading': [{ status: 200, body: TRADING_GOALS }],
       ...answers,
     });
   const share = (name: string) =>
     screen.getByRole('slider', { name }).closest('div')!.querySelector('output')!.textContent;
+
+  it('proposes the goals of the niche saved to members', async () => {
+    const calls = settings({
+      'PUT /api/creator/biz_A1/settings/risk': [{ status: 200, body: TRADING }],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    expect(await screen.findByText('Finish the course')).toBeTruthy();
+    expect(screen.getByText('StayPut’s goals for Other, in each member’s language.')).toBeTruthy();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Your niche' }), {
+      target: { value: 'trading' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('Follow my trading plan')).toBeTruthy();
+    expect(calls).toContain('/api/creator/biz_A1/goals?lang=en&niche=trading');
+  });
+
+  it('lets the creator write their own goals, and go back to StayPut’s', async () => {
+    const own = [
+      { title: 'Finish the course', unit: '%', category: 'learning', entry: 'total' },
+      { title: 'Book 3 calls', unit: 'calls', category: 'clients', entry: 'add' },
+    ] satisfies GoalProposalsView['defaults'];
+    const calls = settings({
+      'PUT /api/creator/biz_A1/goals?lang=en': [
+        { status: 200, body: { ...OTHER_GOALS, custom: own } },
+        { status: 200, body: OTHER_GOALS },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    fireEvent.click(await screen.findByRole('button', { name: 'Write my own' }));
+    // StayPut's three, to change: the second and third go, one of the creator's comes.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Move forward every week' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Practice regularly' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add a goal' }));
+    const titles = screen.getAllByRole('textbox', { name: 'Goal' });
+    const units = screen.getAllByRole('textbox', { name: 'Unit' });
+    // A goal without a unit is refused.
+    fireEvent.change(titles[1]!, { target: { value: 'Book 3 calls' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[1]!);
+    expect(await screen.findByText('Each goal needs a title and a unit.')).toBeTruthy();
+    fireEvent.change(units[1]!, { target: { value: 'calls' } });
+    fireEvent.change(screen.getAllByRole('combobox', { name: 'Kind' })[1]!, {
+      target: { value: 'clients' },
+    });
+    fireEvent.change(screen.getAllByRole('combobox', { name: 'Results' })[1]!, {
+      target: { value: 'add' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[1]!);
+    expect(await screen.findByText('Saved')).toBeTruthy();
+    expect(bodies.get('PUT /api/creator/biz_A1/goals?lang=en')).toEqual({ proposals: own });
+    expect(screen.getByText('Your own goals, as you wrote them.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to StayPut’s goals' }));
+    await vi.waitFor(() =>
+      expect(bodies.get('PUT /api/creator/biz_A1/goals?lang=en')).toEqual({ proposals: null }),
+    );
+    expect(await screen.findByRole('button', { name: 'Write my own' })).toBeTruthy();
+    expect(calls.filter((c) => c === 'PUT /api/creator/biz_A1/goals?lang=en')).toHaveLength(2);
+  });
 
   it('applies a niche, shows what each sign weighs, then saves', async () => {
     const calls = settings({
@@ -1772,6 +1856,292 @@ describe('member view', () => {
     });
     renderAt('/experiences/exp_E1');
     expect(await screen.findByText('You do not have access to this space.')).toBeTruthy();
+  });
+});
+
+describe('member space', () => {
+  const memberSession = {
+    status: 200,
+    body: { experienceId: 'exp_E1', userId: 'user_m', accessLevel: 'customer', via: 'iframe' },
+  };
+  const noRetention = {
+    status: 200,
+    body: {
+      creatorName: 'Le Club',
+      whopAppId: 'app_stayput',
+      alumniUrl: null,
+      preview: null,
+      payment: null,
+      departure: null,
+      alumni: null,
+    } satisfies MemberRetentionView,
+  };
+  const noTelegram = {
+    status: 200,
+    body: {
+      available: false,
+      linked: false,
+      link: null,
+      whopAppId: 'app_stayput',
+    } satisfies MemberTelegramStatus,
+  };
+  const PROPOSALS: MemberSpaceView['proposals'] = [
+    { title: 'Reach my target weight', unit: 'kg', category: 'body', entry: 'total' },
+    { title: 'Train regularly', unit: 'sessions', category: 'practice', entry: 'add' },
+  ];
+  const WEIGHT = {
+    id: '0b9d4c8e-3f2a-4c1d-9e8f-7a6b5c4d3e2f',
+    title: 'Reach my target weight',
+    category: 'body',
+    unit: 'kg',
+    entry: 'total',
+    start: 92,
+    target: 85,
+    current: 92,
+    progress: 0,
+    targetDate: '2026-12-31',
+    status: 'active',
+    createdAt: '2026-10-01T08:00:00.000Z',
+    milestones: [],
+  } satisfies NonNullable<MemberSpaceView['goal']>;
+  const space = (over: Partial<MemberSpaceView> = {}): MemberSpaceView => ({
+    preview: false,
+    known: true,
+    goal: null,
+    results: [],
+    badges: [],
+    proposals: PROPOSALS,
+    fresh: [],
+    ...over,
+  });
+  const open = (answers: Record<string, Answer[]>, locale: Locale = 'en') => {
+    const calls = mockApi({
+      '/api/member/exp_E1/session': [memberSession],
+      '/api/member/exp_E1/retention': [noRetention],
+      [`/api/member/exp_E1/telegram?lang=${locale}`]: [noTelegram],
+      ...answers,
+    });
+    renderAt('/experiences/exp_E1', locale);
+    return calls;
+  };
+
+  it('lets the member choose a goal, record a result, and celebrates the milestone', async () => {
+    const after: ResultAnswer = {
+      milestones: [25],
+      badges: ['first_result', 'milestone_25'],
+      achieved: false,
+      space: space({
+        goal: {
+          ...WEIGHT,
+          current: 90.25,
+          progress: 25,
+          milestones: [{ percent: 25, reachedAt: '2026-10-01T09:00:00.000Z' }],
+        },
+        results: [{ id: 'r1', value: 90.25, recordedAt: '2026-10-01T09:00:00.000Z' }],
+        badges: [
+          { code: 'first_result', awardedAt: '2026-10-01T09:00:00.000Z' },
+          { code: 'milestone_25', awardedAt: '2026-10-01T09:00:00.000Z' },
+        ],
+      }),
+    };
+    open({
+      '/api/member/exp_E1/space?lang=en': [{ status: 200, body: space() }],
+      'POST /api/member/exp_E1/space/goal?lang=en': [
+        { status: 200, body: space({ goal: WEIGHT }) },
+      ],
+      'POST /api/member/exp_E1/space/result?lang=en': [{ status: 200, body: after }],
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /Reach my target weight/ }));
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Your goal' }).value).toBe(
+      'Reach my target weight',
+    );
+    fireEvent.change(screen.getByRole('textbox', { name: 'Where you are today' }), {
+      target: { value: '92' },
+    });
+    // Nothing goes without a target different from the start.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Your target' }), {
+      target: { value: '92' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Set my goal' }));
+    expect(screen.getByText('Your target must differ from where you start.')).toBeTruthy();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Your target' }), {
+      target: { value: '85' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Set my goal' }));
+
+    expect(await screen.findByRole('heading', { name: 'Reach my target weight' })).toBeTruthy();
+    expect(bodies.get('POST /api/member/exp_E1/space/goal?lang=en')).toEqual({
+      title: 'Reach my target weight',
+      unit: 'kg',
+      category: 'body',
+      entry: 'total',
+      start: 92,
+      target: 85,
+      targetDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) as unknown,
+    });
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0');
+    expect(screen.getByText('No result yet: record your first one!')).toBeTruthy();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Where are you now?' }), {
+      target: { value: '90.25' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Record' }));
+    expect(await screen.findByText('Milestone reached: 25% of your goal!')).toBeTruthy();
+    expect(screen.getByText('New badge: First result')).toBeTruthy();
+    expect(screen.getByText('New badge: A quarter of the way')).toBeTruthy();
+    expect(bodies.get('POST /api/member/exp_E1/space/result?lang=en')).toEqual({
+      goalId: WEIGHT.id,
+      value: 90.25,
+    });
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25');
+    expect(screen.getByText('25% of the way')).toBeTruthy();
+    expect(screen.getByText('25%, reached')).toBeTruthy();
+    expect(screen.getAllByText(/^Earned /)).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByText('Milestone reached: 25% of your goal!')).toBeNull();
+  });
+
+  it('adds one in a tap for a goal counted, with French numbers', async () => {
+    const sessions = { ...WEIGHT, title: 'M’entraîner', unit: 'séances', entry: 'add' as const };
+    open(
+      {
+        '/api/member/exp_E1/space?lang=fr': [
+          { status: 200, body: space({ goal: { ...sessions, start: 0, target: 20, current: 3 } }) },
+        ],
+        'POST /api/member/exp_E1/space/result?lang=fr': [
+          {
+            status: 200,
+            body: {
+              milestones: [],
+              badges: [],
+              achieved: false,
+              space: space({ goal: { ...sessions, start: 0, target: 20, current: 4 } }),
+            } satisfies ResultAnswer,
+          },
+          {
+            status: 200,
+            body: {
+              milestones: [25],
+              badges: [],
+              achieved: false,
+              space: space({ goal: { ...sessions, start: 0, target: 20, current: 5.5 } }),
+            } satisfies ResultAnswer,
+          },
+        ],
+      },
+      'fr',
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Ajouter 1' }));
+    expect(await screen.findByText('C’est noté. Continuez comme ça !')).toBeTruthy();
+    expect(bodies.get('POST /api/member/exp_E1/space/result?lang=fr')).toEqual({
+      goalId: WEIGHT.id,
+      value: 1,
+    });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Combien de plus ?' }), {
+      target: { value: '1,5' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    expect(await screen.findByText('Jalon atteint : 25 % de votre objectif !')).toBeTruthy();
+    expect(bodies.get('POST /api/member/exp_E1/space/result?lang=fr')).toEqual({
+      goalId: WEIGHT.id,
+      value: 1.5,
+    });
+  });
+
+  it('celebrates seven days in a row on opening, and a goal reached', async () => {
+    open({
+      '/api/member/exp_E1/space?lang=en': [
+        {
+          status: 200,
+          body: space({
+            goal: { ...WEIGHT, current: 85, progress: 100, status: 'achieved' },
+            fresh: ['streak_7_days'],
+            badges: [{ code: 'streak_7_days', awardedAt: '2026-10-01T08:00:00.000Z' }],
+          }),
+        },
+      ],
+    });
+    expect(await screen.findByText('New badge: 7 days in a row')).toBeTruthy();
+    expect(screen.getByText('Goal reached!')).toBeTruthy();
+    // The text matcher reads a no-break space as a space.
+    expect(screen.getByText(/You reached 85 kg\./)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Set a new goal' }));
+    expect(screen.getByRole('button', { name: /Train regularly/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Create my own goal/ })).toBeTruthy();
+  });
+
+  it('lets a member write their own goal, counted as they add', async () => {
+    open({
+      '/api/member/exp_E1/space?lang=en': [{ status: 200, body: space() }],
+      'POST /api/member/exp_E1/space/goal?lang=en': [
+        { status: 200, body: space({ goal: { ...WEIGHT, title: 'Write 3 articles' } }) },
+      ],
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /Create my own goal/ }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Your goal' }), {
+      target: { value: 'Write 3 articles' },
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Kind of goal' }), {
+      target: { value: 'practice' },
+    });
+    fireEvent.click(screen.getByRole('radio', { name: /What I add each time/ }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Unit' }), {
+      target: { value: 'articles' },
+    });
+    // « Already done » starts at 0 for a goal counted.
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Already done' }).value).toBe('0');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Your target' }), {
+      target: { value: '3' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Set my goal' }));
+    expect(await screen.findByRole('heading', { name: 'Write 3 articles' })).toBeTruthy();
+    expect(bodies.get('POST /api/member/exp_E1/space/goal?lang=en')).toMatchObject({
+      title: 'Write 3 articles',
+      unit: 'articles',
+      category: 'practice',
+      entry: 'add',
+      start: 0,
+      target: 3,
+    });
+  });
+
+  it('lets the team try the space in their browser, where nothing is recorded', async () => {
+    const calls = open({
+      '/api/member/exp_E1/space?lang=en': [
+        { status: 200, body: space({ preview: true, known: false }) },
+      ],
+    });
+    expect(await screen.findByText(/Nothing is recorded/)).toBeTruthy();
+    expect(screen.getByText(/Your members choose their goal from this list/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Train regularly/ }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Your target' }), {
+      target: { value: '8' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Set my goal' }));
+    expect(await screen.findByRole('heading', { name: 'Train regularly' })).toBeTruthy();
+    // 2 of 8 sessions: a quarter of the way, as StayPut would count it.
+    fireEvent.change(screen.getByRole('textbox', { name: 'How many more?' }), {
+      target: { value: '2' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(await screen.findByText('Milestone reached: 25% of your goal!')).toBeTruthy();
+    expect(screen.getByText('New badge: First result')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add 1' }));
+    expect(await screen.findByText('Recorded. Keep it up!')).toBeTruthy();
+    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('37');
+    expect(calls.filter((c) => !c.startsWith('/'))).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start the trial again' }));
+    expect(screen.getByRole('button', { name: /Train regularly/ })).toBeTruthy();
+    expect(screen.queryByText(/^Earned /)).toBeNull();
+  });
+
+  it('tells a member not read yet that their space comes', async () => {
+    open({
+      '/api/member/exp_E1/space?lang=en': [{ status: 200, body: space({ known: false }) }],
+    });
+    expect(await screen.findByText('Your space is getting ready')).toBeTruthy();
   });
 });
 

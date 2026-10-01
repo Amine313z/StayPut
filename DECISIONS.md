@@ -1000,3 +1000,55 @@ l'offre Alumni. À trancher au rapport de phase : un code promo valable 7 jours 
 nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en cours
 (`existing_memberships_only`). Les défis de sauvetage et les binômes dépendent de la Phase 5
 (espace membre).
+
+## 2026-10-01 — Phase 5 : espace membre (en cours)
+
+### Objectif, résultats, jalons et premiers badges (migration 0020)
+
+- **Un objectif en cours par membre** (index unique partiel). En fixer un nouveau met fin au
+  précédent (« abandonné ») ; un objectif atteint le reste. Les résultats d'un objectif
+  abandonné restent en base, l'espace ne les montre plus.
+- **Deux façons de noter un résultat**, choisies avec l'objectif : `total`, où le membre en est
+  (un poids, un chiffre d'affaires mensuel) ; `add`, ce qu'il a fait depuis la dernière fois
+  (deux clients de plus, une séance), avec un bouton « Ajouter 1 » ; un nombre négatif corrige
+  une erreur. La valeur atteinte est gardée sur l'objectif (`current_value`), verrouillée pendant
+  l'enregistrement : deux saisies au même instant s'additionnent, aucune ne se perd.
+- **La progression** est la part du chemin parcouru du départ à la cible, de 0 à 100 %, dans les
+  deux sens (perdre 7 kg compte comme gagner 3 000 €), arrondie vers le bas : un jalon n'est
+  jamais annoncé avant d'être atteint. La base la calcule (`goal_progress`) et packages/core la
+  calcule à l'identique, en centimes (`goalProgress`) ; un test compare les deux sur 305 cas.
+- **Jalons à 25, 50, 75 et 100 %** : atteints, ils le restent, même si la valeur redescend (un
+  trader qui perd une semaine). À 100 %, l'objectif est atteint et ne prend plus de résultat :
+  l'espace félicite le membre et l'invite à en fixer un nouveau.
+- **Badges**, une fois pour toutes par membre : « Premier résultat », un par jalon, et « 7 jours
+  d'affilée » = sept jours de suite (fuseau du créateur) où le membre a ouvert son espace ou noté
+  un objectif ou un résultat. « Première preuve » viendra avec les captures (étape 2), « Mentor »
+  et « Sauveteur » avec les binômes et les défis de sauvetage. Un badge pas encore obtenu
+  s'affiche avec la façon de l'obtenir : jamais de score, seulement la prochaine étape (SPEC 5.3).
+- **L'activité** (SPEC Phase 5, point 10) : chaque ouverture de l'espace compte une fois par jour
+  (`stayput_open`, fuseau du créateur : l'ouvrir dix fois reste une journée active), chaque
+  objectif et chaque résultat une fois (`goal_update`). Ils comptent dans le score (récence,
+  fréquence, progression). L'ouverture par quelqu'un que StayPut ne connaît pas encore attend son
+  adhésion, comme ses autres activités. L'équipe ne compte jamais. La raison du score « Aucune
+  leçon depuis X jours » devient « Aucune leçon ni résultat depuis X jours ».
+- **Les messages** : les variables `{goal}` et `{progress}` des modèles, prévues en Phase 4, ont
+  maintenant une valeur : le titre de l'objectif en cours et la progression (« 40 % »).
+- **Les objectifs proposés** : trois par niche, écrits par StayPut en français et en anglais (le
+  membre les voit dans sa langue ; les montants sont en € en français et en $ en anglais, le
+  membre change l'unité). Le créateur peut écrire les siens, jusqu'à six, dans ses mots (une
+  seule langue), dans Réglages → « Objectifs proposés aux membres », ou revenir à ceux de
+  StayPut. Changer de niche change les objectifs de StayPut proposés. Le membre peut toujours
+  créer le sien (type d'objectif, façon de noter, unité).
+- **La date cible** va de la veille (l'« aujourd'hui » du membre, où qu'il soit) à cinq ans.
+- **Les nombres** se tapent comme on les écrit : « 3 000,5 » ou « 3,000.5 ». Avec deux
+  séparateurs, le dernier commence les décimales ; une virgule seule aussi, sauf en anglais
+  entre groupes de trois chiffres (« 3,000 »).
+- **L'aperçu de l'équipe** : dans la vue membre, l'équipe essaie l'espace dans son navigateur,
+  comme un membre (choisir, noter, voir les jalons et badges, même calcul que la base) ; rien
+  n'est enregistré et l'ouverture ne compte pas. C'est ce qui permet de le voir dans le sandbox
+  sans second compte.
+- **Un membre que StayPut n'a pas encore lu** (une adhésion toute neuve, avant le passage de la
+  synchronisation) voit « Votre espace se prépare » plutôt qu'un formulaire qui échouerait.
+- À trancher : un ancien membre entré dans l'Alumni voit aussi l'espace de progression (son
+  objectif peut lui donner envie de revenir) ; ses ouvertures ne comptent dans aucun score
+  (les membres de l'Alumni n'en ont pas).

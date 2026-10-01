@@ -1,6 +1,7 @@
 import type { AccessLevel } from './access';
 import type { ActionType, BlockReason } from './actions';
 import type { CohortHorizon } from './analyses';
+import type { BadgeCode, GoalCategory, GoalEntry, GoalProposal, Milestone } from './goals';
 import type { ExitOffer, ExitReason, OfferSettings } from './offers';
 import type { Niche, RiskLevel, RiskReason, RiskWeights } from './risk';
 import type { MessageAction, MessageTemplate, TemplateLocale } from './templates';
@@ -493,6 +494,80 @@ export interface ExitSurveyAnswer {
 export interface ExitOfferDecision {
   accept: boolean;
   keep?: boolean;
+}
+
+/**
+ * GET /api/member/:experienceId/space: the member space (SPEC Phase 5), the member's goal, their
+ * latest results and their badges, and the goals the creator proposes. Progress only, never a
+ * score (SPEC 5.3).
+ */
+export interface MemberSpaceView {
+  /** A team member previews the space: the proposals, nothing recorded. */
+  preview: boolean;
+  /** StayPut knows this member (their membership was read from Whop); else nothing is kept yet. */
+  known: boolean;
+  /** The goal under way, or the last one reached; null: none chosen yet. */
+  goal: MemberGoal | null;
+  /** The goal's latest results, the newest first. */
+  results: GoalResult[];
+  badges: EarnedBadge[];
+  /** The goals the creator proposes (their niche's until they write their own). */
+  proposals: GoalProposal[];
+  /** The badges this opening of the space brought (coming back seven days in a row). */
+  fresh: BadgeCode[];
+}
+
+export interface MemberGoal {
+  id: string;
+  title: string;
+  category: GoalCategory;
+  unit: string;
+  entry: GoalEntry;
+  start: number;
+  target: number;
+  /** The latest result, or the start before the first one. */
+  current: number;
+  /** From 0 to 100: how far from the start to the target. */
+  progress: number;
+  targetDate: string | null;
+  status: 'active' | 'achieved';
+  createdAt: string;
+  milestones: { percent: Milestone; reachedAt: string }[];
+}
+
+export interface GoalResult {
+  id: string;
+  /** Where the member stood after this result (an `add` goal adds up its entries). */
+  value: number;
+  recordedAt: string;
+}
+
+export interface EarnedBadge {
+  code: BadgeCode;
+  awardedAt: string;
+}
+
+/** POST …/space/result: what the result brought, to celebrate it. */
+export interface ResultAnswer {
+  space: MemberSpaceView;
+  milestones: Milestone[];
+  badges: BadgeCode[];
+  /** The goal is reached with this result. */
+  achieved: boolean;
+}
+
+/** GET and PUT /api/creator/:companyId/goals: the goals proposed to members. */
+export interface GoalProposalsView {
+  niche: Niche;
+  /** The creator's own list; null: their niche's. */
+  custom: GoalProposal[] | null;
+  /** Their niche's, in the dashboard's language. */
+  defaults: GoalProposal[];
+}
+
+/** PUT /api/creator/:companyId/goals: null goes back to the niche's goals. */
+export interface GoalProposalsUpdate {
+  proposals: GoalProposal[] | null;
 }
 
 /** Discord or Telegram: where StayPut sees members write beside Whop. */
