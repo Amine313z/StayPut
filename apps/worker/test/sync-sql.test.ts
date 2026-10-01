@@ -283,6 +283,15 @@ describe('the company lease', () => {
     const old = await company();
     const demo = await company();
     const gone = await company();
+    const unopened = await company();
+    // Opened by their team: every company but `unopened`.
+    for (const c of [recent, old, demo, gone]) {
+      await t.db.query(
+        `insert into stayput.company_admins (company_id, user_id, verified_at)
+         values ($1, 'user_owner', $2::timestamptz)`,
+        [c, NOW],
+      );
+    }
     await t.db.query(`update stayput.companies set is_demo = true where id = $1`, [demo]);
     await t.db.query(
       `update stayput.companies set status = 'uninstalled', uninstalled_at = $2::timestamptz
@@ -300,6 +309,8 @@ describe('the company lease', () => {
     expect(list).not.toContain(recent);
     expect(list).not.toContain(demo);
     expect(list).not.toContain(gone);
+    // Its webhooks are filed, but Whop's lists wait for the team's first visit.
+    expect(list).not.toContain(unopened);
     expect(list.indexOf(old)).toBeGreaterThanOrEqual(0);
     expect(await claim(demo, NOW)).toBe(false);
 
@@ -358,6 +369,23 @@ describe('statistics', () => {
 });
 
 describe('webhook replay', () => {
+  it("ignores Whop's test deliveries, whose company is a placeholder", async () => {
+    await t.db.query(
+      `insert into stayput.webhook_events (id, company_id, type, payload, received_at)
+       values ('msg_testdelivery', 'biz_xxxxxxxxxxxxxx', 'membership.activated',
+               $1::text::jsonb, $2::timestamptz)`,
+      [JSON.stringify({ data: membership('mem_xxxxxxxx', 'user_xxxxxxxx') }), NOW],
+    );
+    const [row] = await rows<{ status: string }>(
+      'select stayput.process_webhook_event($1, $2::timestamptz) as status',
+      ['msg_testdelivery', NOW],
+    );
+    expect(row?.status).toBe('ignored');
+    expect(await rows(`select 1 from stayput.companies where id = 'biz_xxxxxxxxxxxxxx'`)).toEqual(
+      [],
+    );
+  });
+
   it('files the deliveries left behind, not the ones just received', async () => {
     const c = await company();
     const deliver = (id: string, receivedAt: string) =>

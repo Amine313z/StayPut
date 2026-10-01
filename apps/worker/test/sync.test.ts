@@ -63,6 +63,12 @@ async function company() {
   companies += 1;
   const id = `biz_Y${companies}`;
   await t.db.query('select stayput.ensure_company($1, $2::timestamptz)', [id, NOW.toISOString()]);
+  // Its team opened StayPut: the cron reads it.
+  await t.db.query(
+    `insert into stayput.company_admins (company_id, user_id, verified_at)
+     values ($1, 'user_owner', $2::timestamptz)`,
+    [id, NOW.toISOString()],
+  );
   const u = (base: string) => `${base}Y${companies}`;
   return { id, u };
 }
