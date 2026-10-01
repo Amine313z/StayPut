@@ -1,0 +1,22 @@
+name: Inspect
+
+# Started by hand (GitHub -> Actions -> Inspect -> Run workflow) or by Claude through the API:
+# what the database holds, as counts only (scripts/ops/inspect.ts). It changes nothing.
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Read the database (counts only, nothing personal)
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: npx tsx scripts/ops/inspect.ts
