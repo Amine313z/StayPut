@@ -43,8 +43,10 @@ Guidance for Claude Code in this repository.
   `hook_M3uOKxSzLzx8u` created through the API (README.md, « L'app Whop du sandbox »);
   `WHOP_API_KEY` (accepted by Whop) and `WHOP_WEBHOOK_SECRET` stored and deployed; app installed
   in « StayPut Test ». Whop's sandbox cannot display app views, so StayPut also opens outside
-  the iframe with « Sign in with Whop » (sandbox only, 2026-10-01). Waiting for the founder to try
-  it, then for Phase 1 validation.
+  the iframe with « Sign in with Whop » (sandbox only, 2026-10-01): the founder signed in and the
+  creator view opened for `biz_2whAzkbCRpcGqQ` (access checked with Whop, company recorded in the
+  database). Hyperdrive now uses Supabase's direct connection. Waiting for Phase 1 validation;
+  Phase 2 starts by setting the app's permissions in the sandbox dashboard (founder, by hand).
 - **Deploying**: the `Deploy` workflow (`.github/workflows/deploy.yml`, `workflow_dispatch`),
   started from GitHub's Actions tab or through the GitHub API (`actions_run_trigger`, workflow
   `deploy.yml`, ref `main`). It migrates the database, creates Hyperdrive if needed, publishes
