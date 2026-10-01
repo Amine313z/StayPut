@@ -34,6 +34,8 @@ import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
+import { isActionView, readActionSettings, readActions, validActionSettings } from './action-views';
+import { executeDueActions, prepareActions } from './actions';
 import { createPostgresDb, type ClosableDb, type Db } from './db';
 import { createDiscordClient, type DiscordClient } from './discord';
 import { readConfig, type Config, type Env } from './env';
@@ -177,6 +179,9 @@ export const OPEN_SYNC_INTERVAL_SECONDS = 10 * 60;
 export const MANUAL_SYNC_INTERVAL_SECONDS = 60;
 /** « Sync now » also reads the Discord channels not read for this long (their cadence is 3 h). */
 export const MANUAL_DISCORD_REFRESH_MINUTES = 10;
+/** Actions run right after the creator approves some (the hourly cron runs the rest). */
+const REQUEST_ACTION_BATCH = 5;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const REQUEST_SYNC_BUDGET = SYNC_REQUEST_BUDGET - 2;
 
 export function createApp(deps: AppDeps) {
@@ -654,6 +659,142 @@ export function createApp(deps: AppDeps) {
       return c.json((await readRiskSettings(db, c.get('userId'), companyId)) ?? settings);
     },
   );
+
+  /** SPEC Phase 4: one list of actions (to approve, scheduled, done) and how many each holds. */
+  app.get('/api/creator/:companyId/actions', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const view = c.req.query('view') ?? 'queue';
+    if (!isActionView(view))
+      return apiError('invalid_request', 'view: queue, scheduled or history');
+    const page = await readActions(db, c.get('userId'), c.get('companyId'), view, deps.now());
+    return page ? c.json(page) : apiError('not_found', 'no settings for this company');
+  });
+
+  /**
+   * Manual mode: the creator approves actions, the ones named or all of them. They go through
+   * the guardrails at once, and what is due runs at once; the rest waits for its time.
+   */
+  app.post(
+    '/api/creator/:companyId/actions/approve',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ ids?: unknown }>().catch(() => null);
+      const ids = body?.ids;
+      if (
+        ids !== undefined &&
+        (!Array.isArray(ids) ||
+          ids.length === 0 ||
+          ids.length > 500 ||
+          !ids.every((id) => typeof id === 'string' && UUID.test(id)))
+      ) {
+        return apiError('invalid_request', 'expected { ids?: uuid[] }');
+      }
+      const companyId = c.get('companyId');
+      const now = deps.now();
+      const [row] = await db.query<{ approved: number }>(
+        'select stayput.approve_actions($1, $2, $3, $4::timestamptz) as approved',
+        [companyId, ids ? (ids as string[]).join(',') : null, c.get('userId'), now.toISOString()],
+      );
+      runActionsInBackground(c, companyId, now);
+      return c.json({ approved: row?.approved ?? 0 });
+    },
+  );
+
+  /** The creator cancels an action that has not run yet. */
+  app.post(
+    '/api/creator/:companyId/actions/:actionId/cancel',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const actionId = c.req.param('actionId');
+      if (!UUID.test(actionId)) return apiError('not_found', 'no such action');
+      const [row] = await db.query<{ cancelled: boolean }>(
+        'select stayput.cancel_action($1, $2::uuid, $3, $4::timestamptz) as cancelled',
+        [c.get('companyId'), actionId, c.get('userId'), deps.now().toISOString()],
+      );
+      return row?.cancelled
+        ? c.json({ cancelled: true })
+        : apiError('not_found', 'no such action waiting here');
+    },
+  );
+
+  /** The actions' settings: the mode, the test mode, the stop, the guardrails, the messages. */
+  app.get(
+    '/api/creator/:companyId/settings/actions',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const settings = await readActionSettings(db, c.get('userId'), c.get('companyId'));
+      return settings ? c.json(settings) : apiError('not_found', 'no settings for this company');
+    },
+  );
+
+  app.put(
+    '/api/creator/:companyId/settings/actions',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const settings = validActionSettings(await c.req.json<unknown>().catch(() => null));
+      if (!settings) return apiError('invalid_request', 'expected the action settings');
+      const companyId = c.get('companyId');
+      await db.query('select stayput.save_action_settings($1, $2::text::jsonb)', [
+        companyId,
+        JSON.stringify(settings),
+      ]);
+      // In automatic mode, what waits for the guardrails goes through them now.
+      if (settings.mode === 'auto') runActionsInBackground(c, companyId, deps.now());
+      return c.json((await readActionSettings(db, c.get('userId'), companyId)) ?? settings);
+    },
+  );
+
+  /** The « never contact » list: no action of any kind for this member. */
+  app.put(
+    '/api/creator/:companyId/members/:memberId/contact',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ doNotContact?: unknown }>().catch(() => null);
+      if (typeof body?.doNotContact !== 'boolean') {
+        return apiError('invalid_request', 'expected { doNotContact: boolean }');
+      }
+      const [row] = await db.query<{ found: boolean }>(
+        'select stayput.set_do_not_contact($1, $2, $3) as found',
+        [c.get('companyId'), c.req.param('memberId'), body.doNotContact],
+      );
+      return row?.found
+        ? c.json({ doNotContact: body.doNotContact })
+        : apiError('not_found', 'no such member here');
+    },
+  );
+
+  /**
+   * After the creator acted: the company's actions go through the guardrails, and what is due
+   * runs (a few, within the request's subrequests); the hourly cron does the rest.
+   */
+  function runActionsInBackground(c: Context<AppEnv>, companyId: string, now: Date): void {
+    const whop = deps.whopClient(c.get('config'));
+    inBackground(c, 'Actions', async (work) => {
+      await prepareActions(work, companyId, now);
+      await executeDueActions(work, whop, now, REQUEST_ACTION_BATCH);
+    });
+  }
 
   /** Discord and Telegram: what is connected, and the links to connect more. */
   app.get(

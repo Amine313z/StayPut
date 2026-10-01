@@ -160,7 +160,7 @@ export interface DueAction {
   locale: string;
   experienceId: string | null;
   /** The creator's own templates: `{ fr: { welcome_message: { title, body } } }`. */
-  templates: Record<string, Record<string, Partial<MessageTemplate>> | undefined>;
+  templates: Partial<Record<string, Partial<Record<string, Partial<MessageTemplate>>>>>;
   member: { userId: string; doNotContact: boolean; joined: boolean };
   payment: {
     id: string;
@@ -205,14 +205,28 @@ function stale(type: ActionType, action: DueAction): string | null {
 
 /** The message of an action: the creator's template when they wrote one, else StayPut's. */
 export function actionMessage(action: DueAction, type: MessageAction): MessageTemplate {
-  const locale: TemplateLocale = action.locale === 'fr' ? 'fr' : 'en';
-  const fallback = DEFAULT_TEMPLATES[locale][type];
-  const own = action.templates[locale]?.[type];
+  return renderActionMessage(type, action.locale, action.templates, action.values);
+}
+
+/**
+ * A message in the company's language: the creator's wording where they wrote one (title and
+ * text apart), StayPut's otherwise, with the member's values. The preview the creator approves
+ * is the message that leaves.
+ */
+export function renderActionMessage(
+  type: MessageAction,
+  locale: string,
+  templates: Partial<Record<string, Partial<Record<string, Partial<MessageTemplate>>>>>,
+  values: TemplateValues,
+): MessageTemplate {
+  const language: TemplateLocale = locale === 'fr' ? 'fr' : 'en';
+  const fallback = DEFAULT_TEMPLATES[language][type];
+  const own = templates[language]?.[type];
   const template: MessageTemplate = {
     title: own?.title?.trim() ? own.title : fallback.title,
     body: own?.body?.trim() ? own.body : fallback.body,
   };
-  return renderMessage(template, action.values);
+  return renderMessage(template, values);
 }
 
 type Outcome =

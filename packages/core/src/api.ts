@@ -1,6 +1,8 @@
 import type { AccessLevel } from './access';
+import type { ActionType, BlockReason } from './actions';
 import type { CohortHorizon } from './analyses';
 import type { Niche, RiskLevel, RiskReason, RiskWeights } from './risk';
+import type { MessageAction, MessageTemplate, TemplateLocale } from './templates';
 
 /**
  * The shapes the Worker's API returns and the frontend reads. Both sides import them from here,
@@ -318,6 +320,68 @@ export interface RiskSettingsView {
   recencyThresholdDays: number;
   mediumFrom: number;
   highFrom: number;
+}
+
+/** Where an action stands (SPEC Phase 4); `simulated`: run in test mode, nothing sent. */
+export type ActionStatus =
+  | 'proposed'
+  | 'approved'
+  | 'scheduled'
+  | 'sent'
+  | 'simulated'
+  | 'failed'
+  | 'cancelled'
+  | 'blocked_by_guardrail';
+
+/** The three lists of the Actions section. */
+export type ActionView = 'queue' | 'scheduled' | 'history';
+
+export const ACTION_VIEWS: readonly ActionView[] = ['queue', 'scheduled', 'history'];
+
+export interface ActionRow {
+  id: string;
+  type: ActionType;
+  status: ActionStatus;
+  /** What started it: `payment_failed`, `score_high`, `activation_radar`… */
+  trigger: string;
+  member: { id: string; name: string | null };
+  sendAt: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  blockedReason: BlockReason | null;
+  /** The message: what it will say (a preview), or what it said or would have said. */
+  message: MessageTemplate | null;
+  /** Why it was cancelled, or its last error. */
+  note: string | null;
+}
+
+/** GET /api/creator/:companyId/actions?view=…: one list, and how many each list holds. */
+export interface ActionsPage {
+  view: ActionView;
+  counts: Record<ActionView, number>;
+  actions: ActionRow[];
+  mode: 'auto' | 'manual';
+  dryRun: boolean;
+  killSwitch: boolean;
+}
+
+/** GET and PUT /api/creator/:companyId/settings/actions. */
+export interface ActionSettingsView {
+  mode: 'auto' | 'manual';
+  /** The language of the messages members receive. */
+  locale: TemplateLocale;
+  dryRun: boolean;
+  killSwitch: boolean;
+  quietHoursStart: number;
+  quietHoursEnd: number;
+  defaultSendHour: number;
+  maxMessagesPer5Days: number;
+  maxMessagesPerMonth: number;
+  maxPaymentRetries: number;
+  monthlyPromoCap: number;
+  maxFreeDaysPerQuarter: number;
+  /** The creator's own wording; StayPut's default for what is left out. */
+  templates: Partial<Record<TemplateLocale, Partial<Record<MessageAction, MessageTemplate>>>>;
 }
 
 /** GET /health */

@@ -1,4 +1,5 @@
 import type {
+  ActionsPage,
   AccessLevel,
   DiscordChannelChoice,
   InsightsReport,
@@ -12,6 +13,7 @@ import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@
 import { SignJWT, generateKeyPair, type CryptoKey } from 'jose';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AccessCache } from '../src/access';
+import { prepareActions } from '../src/actions';
 import {
   HEALTH_DB_TIMEOUT_MS,
   MAX_WEBHOOK_BYTES,
@@ -1216,5 +1218,184 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
         },
       ],
     });
+  });
+});
+
+describe('the actions (SPEC Phase 4)', () => {
+  const json = (init: RequestInit, method: string, body: unknown) => ({
+    ...init,
+    method,
+    headers: { ...init.headers, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const DEFAULTS = {
+    mode: 'manual',
+    locale: 'en',
+    dryRun: false,
+    killSwitch: false,
+    quietHoursStart: 22,
+    quietHoursEnd: 8,
+    defaultSendHour: 19,
+    maxMessagesPer5Days: 1,
+    maxMessagesPerMonth: 4,
+    maxPaymentRetries: 2,
+    monthlyPromoCap: 10,
+    maxFreeDaysPerQuarter: 14,
+    templates: {},
+  };
+
+  /** A company with one new member who has not started: StayPut proposes to welcome them. */
+  async function withProposal(companyId: string, admin: string) {
+    const env = setup({
+      [`${admin}:${companyId}`]: 'admin',
+      [`user_eve:${companyId}`]: 'customer',
+    });
+    const init = await asUser(admin);
+    await env.request(`/api/creator/${companyId}/session`, init);
+    await settle();
+    const memberId = `mber_${companyId.slice(4)}A`;
+    await t.db.query(`update stayput.companies set name = 'Le Club', locale = 'fr' where id = $1`, [
+      companyId,
+    ]);
+    await t.db.query(
+      `insert into stayput.members (id, company_id, user_id, display_name, joined_at)
+       values ($1, $2, 'user_newcomer1', 'Ana Lopez', $3::timestamptz - interval '4 days')`,
+      [memberId, companyId, NOW.toISOString()],
+    );
+    await t.db.query(
+      `insert into stayput.member_risk (company_id, member_id, score, level, sub_scores,
+                                        level_since, computed_at, inactive_newcomer)
+       values ($1, $2, 20, 'low', '{}', $3::timestamptz, $3::timestamptz, true)`,
+      [companyId, memberId, NOW.toISOString()],
+    );
+    await prepareActions(t.db, companyId, NOW);
+    return { ...env, init, memberId };
+  }
+
+  it('lists what waits for approval with each message as it will read, to the creator only', async () => {
+    const { request, init, memberId } = await withProposal('biz_ActQ1', 'user_ava');
+    const page = (await (
+      await request('/api/creator/biz_ActQ1/actions?view=queue', init)
+    ).json()) as ActionsPage;
+    expect(page).toMatchObject({
+      view: 'queue',
+      counts: { queue: 1, scheduled: 0, history: 0 },
+      mode: 'manual',
+      dryRun: false,
+      killSwitch: false,
+    });
+    expect(page.actions).toEqual([
+      expect.objectContaining({
+        type: 'welcome_message',
+        status: 'proposed',
+        trigger: 'activation_radar',
+        member: { id: memberId, name: 'Ana Lopez' },
+        message: {
+          title: 'Bienvenue, Ana',
+          body: 'Content de t’avoir dans Le Club. Le meilleur premier pas : présente-toi à la communauté, puis lance la première leçon.',
+        },
+      }),
+    ]);
+    expect((await request('/api/creator/biz_ActQ1/actions?view=nope', init)).status).toBe(400);
+    // A member of the community sees nothing of it.
+    const eve = await asUser('user_eve');
+    expect((await request('/api/creator/biz_ActQ1/actions', eve)).status).toBe(403);
+  });
+
+  it('runs what the creator approves, in test mode a simulation, and cancels what they drop', async () => {
+    const { request, init } = await withProposal('biz_ActQ2', 'user_bob');
+    await request(
+      '/api/creator/biz_ActQ2/settings/actions',
+      json(init, 'PUT', { ...DEFAULTS, locale: 'fr', dryRun: true }),
+    );
+    await settle();
+    const [proposal] = (
+      (await (await request('/api/creator/biz_ActQ2/actions', init)).json()) as ActionsPage
+    ).actions;
+    const approved = await request(
+      '/api/creator/biz_ActQ2/actions/approve',
+      json(init, 'POST', { ids: [proposal!.id] }),
+    );
+    expect(await approved.json()).toEqual({ approved: 1 });
+    await settle();
+    const history = (await (
+      await request('/api/creator/biz_ActQ2/actions?view=history', init)
+    ).json()) as ActionsPage;
+    expect(history.counts).toEqual({ queue: 0, scheduled: 0, history: 1 });
+    expect(history.actions[0]).toMatchObject({
+      status: 'simulated',
+      message: { title: 'Bienvenue, Ana' },
+    });
+
+    expect(
+      (await request('/api/creator/biz_ActQ2/actions/approve', json(init, 'POST', { ids: ['x'] })))
+        .status,
+    ).toBe(400);
+    const cancel = (id: string) =>
+      request(`/api/creator/biz_ActQ2/actions/${id}/cancel`, { ...init, method: 'POST' });
+    // Already run: nothing to cancel.
+    expect((await cancel(proposal!.id)).status).toBe(404);
+    expect((await cancel('not-an-id')).status).toBe(404);
+  });
+
+  it('cancels an action that has not run, and keeps a member off every action', async () => {
+    const { request, init, memberId } = await withProposal('biz_ActQ3', 'user_cid');
+    const [proposal] = (
+      (await (await request('/api/creator/biz_ActQ3/actions', init)).json()) as ActionsPage
+    ).actions;
+    const cancelled = await request(`/api/creator/biz_ActQ3/actions/${proposal!.id}/cancel`, {
+      ...init,
+      method: 'POST',
+    });
+    expect(await cancelled.json()).toEqual({ cancelled: true });
+    const history = (await (
+      await request('/api/creator/biz_ActQ3/actions?view=history', init)
+    ).json()) as ActionsPage;
+    expect(history.actions[0]).toMatchObject({ status: 'cancelled', note: 'cancelled_by_creator' });
+
+    const contact = (id: string, body: unknown) =>
+      request(`/api/creator/biz_ActQ3/members/${id}/contact`, json(init, 'PUT', body));
+    expect(await (await contact(memberId, { doNotContact: true })).json()).toEqual({
+      doNotContact: true,
+    });
+    expect((await contact('mber_Elsewhere1', { doNotContact: true })).status).toBe(404);
+    expect((await contact(memberId, { doNotContact: 'yes' })).status).toBe(400);
+  });
+
+  it('reads and saves the settings, stricter than the SPEC never looser', async () => {
+    const { request, init } = await withProposal('biz_ActQ4', 'user_dan');
+    const path = '/api/creator/biz_ActQ4/settings/actions';
+    expect(await (await request(path, init)).json()).toEqual({ ...DEFAULTS, locale: 'fr' });
+    const welcome = { title: 'Bienvenue {first_name}', body: 'On est ravis[[, {first_name}]].' };
+    const saved = await request(
+      path,
+      json(init, 'PUT', {
+        ...DEFAULTS,
+        mode: 'auto',
+        maxMessagesPerMonth: 2,
+        templates: { fr: { welcome_message: welcome, exit_survey: { title: ' ', body: '' } } },
+      }),
+    );
+    expect(await saved.json()).toEqual({
+      ...DEFAULTS,
+      mode: 'auto',
+      maxMessagesPerMonth: 2,
+      templates: { fr: { welcome_message: welcome } },
+    });
+    for (const wrong of [
+      { ...DEFAULTS, maxMessagesPerMonth: 5 },
+      { ...DEFAULTS, maxFreeDaysPerQuarter: 30 },
+      { ...DEFAULTS, quietHoursStart: 24 },
+      { ...DEFAULTS, mode: 'yolo' },
+      {
+        ...DEFAULTS,
+        templates: { fr: { welcome_message: { title: 'Hi {firstname}', body: '' } } },
+      },
+      { ...DEFAULTS, templates: { fr: { welcome_message: { title: 'x'.repeat(81), body: '' } } } },
+    ]) {
+      expect((await request(path, json(init, 'PUT', wrong))).status, JSON.stringify(wrong)).toBe(
+        400,
+      );
+    }
   });
 });
