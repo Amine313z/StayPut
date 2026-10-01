@@ -253,6 +253,19 @@ et la requête n'atteint jamais le Worker. Même symptôme dans un signalement p
 **les vues de l'app ne s'affichent pas dans le sandbox** ; l'API, elle, y fonctionne (clé de l'app
 acceptée, webhooks créés). Reste à voir si les notifications partent (Phases 3 et 4).
 
+**Revu le 01/10/2026** (le fondateur a revu l'écran) : la configuration est toujours bonne
+(`GET /apps/app_rjFkp2xKgjfPxY` : `base_url`, `dashboard_path`, `experience_path` renseignés ;
+`origin` = `https://dm4jquomz8hrsmrk6gb9.apps.whop.com`, le relais de **production**), et le guide
+du sandbox dit toujours « Apps & Messaging – Don't use apps or messaging features in sandbox ».
+Rien à corriger côté StayPut : on teste l'interface hors de Whop (connexion avec Whop), et
+l'affichage dans Whop sur un compte de production.
+
+**Cartes de test du sandbox** (même guide) : `4242 4242 4242 4242` paiement accepté ;
+`4000 0000 0000 0002` refusé ; `4000 0000 0000 0341` carte enregistrée, puis les prélèvements
+suivants échouent (le paiement échoué de la Phase 4, en vrai) ; `5385 3083 6013 5181` 3D Secure
+(saisir `Checkout1!` à l'écran de la banque). Date d'expiration future (12/34), code à 3 chiffres
+(123). Le sandbox n'accepte que les cartes.
+
 **OAuth dans le sandbox** (vérifié le 01/10/2026) : `https://sandbox-api.whop.com/oauth/authorize`
 connaît l'app du sandbox (sans adresse de retour déclarée : `redirect_uri is invalid` ; ensuite :
 302 vers `https://sandbox.whop.com/oauth/authorize`), `/oauth/token` répond `invalid_grant` à un
