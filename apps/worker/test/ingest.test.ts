@@ -421,7 +421,7 @@ describe('activity', () => {
       ),
     ).toEqual([{ day: '2026-09-30', messages: 2 }]);
     const [hours] = await rows<{ hours: number[] }>(
-      'select hours from stayput.activity_hours where company_id = $1',
+      'select to_jsonb(hours) as hours from stayput.activity_hours where company_id = $1',
       [c],
     );
     expect(hours?.hours[0]).toBe(1);

@@ -472,7 +472,7 @@ describe('Discord', () => {
       { stream: `discord_messages:${hidden}`, last_error: '403 Missing Access' },
     ]);
     const [server] = await t.db.query<{ channel_ids: string[] }>(
-      'select channel_ids from stayput.discord_guilds where guild_id = $1',
+      'select to_jsonb(channel_ids) as channel_ids from stayput.discord_guilds where guild_id = $1',
       [guild],
     );
     expect(server?.channel_ids).toEqual([hidden]);

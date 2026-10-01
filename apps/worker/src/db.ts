@@ -5,7 +5,10 @@ import postgres from 'postgres';
  * with postgres.js through Hyperdrive; tests with PGlite running the real migrations.
  *
  * Portability rules: `$1, $2` parameters only; cast what you read when the type matters
- * (`::int`, `::float8`); numeric and bigint come back as strings from postgres.js.
+ * (`::int`, `::float8`); numeric and bigint come back as strings from postgres.js. Read an
+ * array column as jsonb (`to_jsonb(channel_ids) as channel_ids`): without `fetch_types`
+ * (below), postgres.js hands a Postgres array over as text (`{1,2}`). The test database does
+ * the same (test/helpers/db.ts).
  */
 export interface Db {
   query<T = Record<string, unknown>>(text: string, params?: readonly unknown[]): Promise<T[]>;

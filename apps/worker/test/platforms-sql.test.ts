@@ -178,7 +178,7 @@ describe('Discord', () => {
     expect(await streams(a)).toEqual(['discord_messages:222222']);
     expect(
       await rows('select channel_ids from stayput.discord_guilds where guild_id = $1', [guild]),
-    ).toEqual([{ channel_ids: ['222222'] }]);
+    ).toEqual([{ channel_ids: '{222222}' }]);
 
     // Another company connects the same server: it moves, and leaves no stream behind.
     const b = await company();
@@ -189,7 +189,7 @@ describe('Discord', () => {
       await rows('select company_id, channel_ids from stayput.discord_guilds where guild_id = $1', [
         guild,
       ]),
-    ).toEqual([{ company_id: b, channel_ids: [] }]);
+    ).toEqual([{ company_id: b, channel_ids: '{}' }]);
 
     await choose(b, '555555');
     expect(

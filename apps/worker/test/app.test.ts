@@ -892,6 +892,9 @@ describe('Discord and Telegram', () => {
       await choose(['930000000000000001', '920000000000000001'], jon)
     ).json()) as DiscordChannelChoice[];
     expect(saved.filter((c) => c.followed).map((c) => c.id)).toEqual(['930000000000000001']);
+    // Read back as the choice dialog opens: the chosen channel shows as followed.
+    const reopened = (await (await request(channels, jon)).json()) as DiscordChannelChoice[];
+    expect(reopened.filter((c) => c.followed).map((c) => c.id)).toEqual(['930000000000000001']);
     expect((await choose('nope', jon)).status).toBe(400);
 
     // Another company's team sees nothing of this server.

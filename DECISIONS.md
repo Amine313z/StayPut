@@ -375,6 +375,21 @@ un échec : les modules sont optionnels et un déploiement qui corrige autre cho
 attendre Discord ou Telegram. Le résultat s'affiche dans le résumé de l'exécution. Aucun
 secret n'est affiché : les adresses de Telegram contiennent le jeton, aucune n'est répétée.
 
+### Correctif : les listes Postgres arrivent en texte en production (même jour)
+
+Premier serveur Discord relié en production : « Sources d'activité » tombait en erreur. Le
+Worker lit la base avec postgres.js **sans** lire les types au démarrage (`fetch_types: false`,
+un aller-retour de moins par connexion) : une colonne tableau (`discord_guilds.channel_ids`,
+`text[]`) arrive alors en texte (`{123,456}`), pas en liste. PGlite, dans les tests, rend une
+vraie liste : le bug était invisible tant qu'aucun serveur n'était relié. Il en cachait un
+second, silencieux : la fenêtre « Choisir les salons » aurait montré tous les salons décochés.
+
+- Les deux lectures de `channel_ids` passent par `to_jsonb(channel_ids)` (jsonb est lu
+  pareil partout) ; la règle est écrite dans `apps/worker/src/db.ts`.
+- La base de test rend désormais chaque tableau en texte, comme la production
+  (`test/helpers/db.ts`) : tout code qui lirait encore une colonne tableau échoue dans les
+  tests. Les deux bugs y échouent sans le correctif et passent avec.
+
 ### Interface : un vrai tableau de bord
 
 - Trois sections à onglets dans la vue créateur : vue d'ensemble (chiffres, « À surveiller »,

@@ -93,8 +93,8 @@ async function readConnections(db: TransactionalDb, userId: string, companyId: s
       channel_ids: string[];
       connected_at: Date | string;
     }>(
-      `select guild_id, name, channel_ids, connected_at from stayput.discord_guilds
-        where company_id = $1 order by connected_at, guild_id`,
+      `select guild_id, name, to_jsonb(channel_ids) as channel_ids, connected_at
+         from stayput.discord_guilds where company_id = $1 order by connected_at, guild_id`,
       [companyId],
     );
     const streams = await tx.query<{
@@ -252,7 +252,8 @@ async function followedChannels(
   if (!isSnowflake(guildId)) return null;
   const [guild] = await withUser(db, userId, (tx) =>
     tx.query<{ channel_ids: string[] }>(
-      'select channel_ids from stayput.discord_guilds where guild_id = $1 and company_id = $2',
+      `select to_jsonb(channel_ids) as channel_ids from stayput.discord_guilds
+        where guild_id = $1 and company_id = $2`,
       [guildId, companyId],
     ),
   );
