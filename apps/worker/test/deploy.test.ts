@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { checkWhopKey, deployedVar } from '../../../scripts/deploy/check-whop';
-import { withHyperdriveBinding } from '../../../scripts/deploy/hyperdrive';
+import {
+  hyperdriveOrigin,
+  sameOrigin,
+  withHyperdriveBinding,
+} from '../../../scripts/deploy/hyperdrive';
 import {
   cloudflareAccountId,
   describeValue,
@@ -22,6 +26,45 @@ describe('withHyperdriveBinding', () => {
     const toml = `[[hyperdrive]]\nbinding = "HYPERDRIVE"\nid = "${ID}"\n`;
     expect(withHyperdriveBinding(toml, ID)).toBe(toml);
     expect(() => withHyperdriveBinding('', 'x"\n[evil]')).toThrow(/unexpected Hyperdrive id/);
+  });
+});
+
+describe('hyperdriveOrigin', () => {
+  const ref = 'abcdefghij0123456789';
+  const pooler = `postgresql://postgres.${ref}:p%40ss%2Fword@aws-0-eu-west-3.pooler.supabase.com:5432/postgres`;
+
+  it("turns Supabase's session pooler URI into its direct connection, same password", () => {
+    const direct = new URL(hyperdriveOrigin(pooler));
+    expect(direct.hostname).toBe(`db.${ref}.supabase.co`);
+    expect(direct.port).toBe('5432');
+    expect(direct.username).toBe('postgres');
+    expect(decodeURIComponent(direct.password)).toBe('p@ss/word');
+    expect(direct.pathname).toBe('/postgres');
+    expect(hyperdriveOrigin(pooler.replace(':5432/', ':6543/'))).toContain(':5432/');
+  });
+
+  it('keeps any other URI as it is', () => {
+    const direct = `postgresql://postgres:pw@db.${ref}.supabase.co:5432/postgres`;
+    expect(hyperdriveOrigin(direct)).toBe(direct);
+    expect(hyperdriveOrigin('postgres://u:p@localhost:5432/db')).toBe(
+      'postgres://u:p@localhost:5432/db',
+    );
+  });
+
+  it('tells whether the Hyperdrive configuration already points there', () => {
+    const origin = hyperdriveOrigin(pooler);
+    const current = {
+      host: `db.${ref}.supabase.co`,
+      port: 5432,
+      user: 'postgres',
+      database: 'postgres',
+    };
+    expect(sameOrigin(current, origin)).toBe(true);
+    expect(sameOrigin({ ...current, host: 'aws-0-eu-west-3.pooler.supabase.com' }, origin)).toBe(
+      false,
+    );
+    expect(sameOrigin({ ...current, user: `postgres.${ref}` }, origin)).toBe(false);
+    expect(sameOrigin(undefined, origin)).toBe(false);
   });
 });
 

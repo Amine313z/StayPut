@@ -156,3 +156,16 @@ un onglet normal, avec la connexion officielle de Whop (OAuth 2.1 + PKCE) :
 - Toute requête `/api` qui modifie quelque chose, venant d'un navigateur connecté, doit porter
   l'en-tête `x-stayput-csrf` (qu'une page étrangère ne peut pas poser) ; l'adresse de retour
   après connexion n'accepte qu'un chemin du site (jamais un autre site).
+
+### Hyperdrive branché sur la connexion directe de Supabase
+
+Après plusieurs déploiements, la base ne répondait plus pendant 2 à 4 minutes (`/health` :
+`database: "timeout"`), alors que les migrations passaient juste avant. Cause : deux pools de
+connexions en cascade. Hyperdrive garde ses propres connexions vers l'origine (environ 20 sur
+l'offre gratuite, 10 minutes d'inactivité) ; derrière le pooler de Supabase en mode session (un
+client = une connexion Postgres, environ 15 pour le plus petit projet), les connexions en trop
+font la queue jusqu'à expiration. Le guide Supabase de Cloudflare demande la **connexion
+directe** : le script de déploiement la déduit de l'URI du pooler rangée dans
+`SUPABASE_DB_URL` (même mot de passe ; `db.<ref>.supabase.co`, en IPv6, que le réseau de
+Cloudflare joint) et met Hyperdrive à jour. Les migrations, lancées depuis les machines de
+GitHub (IPv4 seulement), gardent le pooler.
