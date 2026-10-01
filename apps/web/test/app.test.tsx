@@ -40,7 +40,7 @@ function renderAt(path: string, locale: Locale = 'en') {
 
 const creatorSession = {
   status: 200,
-  body: { companyId: 'biz_A1', userId: 'user_alice', accessLevel: 'admin' },
+  body: { companyId: 'biz_A1', userId: 'user_alice', accessLevel: 'admin', via: 'iframe' },
 };
 
 afterEach(() => {
@@ -88,18 +88,73 @@ describe('creator view', () => {
   });
 });
 
+describe('signing in with Whop outside the iframe (sandbox)', () => {
+  const outside = (login?: string) => ({
+    status: 401,
+    body: { error: { code: 'unauthenticated', message: 'no token', ...(login ? { login } : {}) } },
+  });
+
+  it('offers to sign in, then to come back to the same page', async () => {
+    mockApi({ '/api/creator/biz_A1/session': [outside('/auth/login')] });
+    renderAt('/dashboard/biz_A1?tab=members');
+    const link = await screen.findByRole('link', { name: 'Sign in with Whop' });
+    expect(link.getAttribute('href')).toBe(
+      '/auth/login?next=%2Fdashboard%2Fbiz_A1%3Ftab%3Dmembers',
+    );
+    expect(
+      screen.getByText(
+        'You opened StayPut outside Whop: sign in with your Whop account to continue.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('says when signing in did not work, and offers it again', async () => {
+    mockApi({ '/api/creator/biz_A1/session': [outside('/auth/login')] });
+    renderAt('/dashboard/biz_A1?login=failed', 'fr');
+    expect(
+      await screen.findByText("La connexion avec Whop n'a pas abouti. Réessayez."),
+    ).toBeTruthy();
+    const link = screen.getByRole('link', { name: 'Se connecter avec Whop' });
+    expect(link.getAttribute('href')).toBe('/auth/login?next=%2Fdashboard%2Fbiz_A1');
+  });
+
+  it('keeps the inside-Whop message where signing in outside is off (production)', async () => {
+    mockApi({ '/api/creator/biz_A1/session': [outside()] });
+    renderAt('/dashboard/biz_A1');
+    expect(await screen.findByText('Open StayPut from Whop to sign in.')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Sign in with Whop' })).toBeNull();
+  });
+
+  it('offers to sign out only to someone who signed in that way', async () => {
+    mockApi({
+      '/api/creator/biz_A1/session': [
+        { status: 200, body: { ...creatorSession.body, via: 'login' } },
+        creatorSession,
+      ],
+    });
+    renderAt('/dashboard/biz_A1');
+    const signOut = await screen.findByRole('link', { name: 'Sign out' });
+    expect(signOut.getAttribute('href')).toBe('/auth/logout');
+    cleanup();
+    renderAt('/dashboard/biz_A1');
+    expect(await screen.findByRole('heading', { name: 'Retention dashboard' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Sign out' })).toBeNull();
+  });
+});
+
 describe('member view', () => {
   it('opens the progress space of the experience', async () => {
     mockApi({
       '/api/member/exp_E1/session': [
         {
           status: 200,
-          body: { experienceId: 'exp_E1', userId: 'user_m', accessLevel: 'customer' },
+          body: { experienceId: 'exp_E1', userId: 'user_m', accessLevel: 'customer', via: 'login' },
         },
       ],
     });
     renderAt('/experiences/exp_E1');
     expect(await screen.findByRole('heading', { name: 'Your progress space' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Sign out' })).toBeTruthy();
   });
 
   it('explains a refused access in member words', async () => {

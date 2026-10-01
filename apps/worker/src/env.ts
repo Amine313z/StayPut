@@ -28,6 +28,12 @@ export interface Config {
   appId: string | null;
   apiKey: string | null;
   webhookSecret: string | null;
+  /**
+   * "Sign in with Whop" outside the iframe (/auth/*): sandbox only, where Whop cannot display
+   * the app's views (DECISIONS.md). Needs the app id (OAuth client) and the API key (signs the
+   * session cookie).
+   */
+  oauthLogin: boolean;
   /** Set only in development (ENVIRONMENT=development), never in a deployed Worker. */
   dev: { userId: string; accessLevel: AccessLevel | null } | null;
 }
@@ -36,11 +42,15 @@ export function readConfig(env: Env): Config {
   const development = env.ENVIRONMENT === 'development';
   const devUser = development && isUserId(env.DEV_USER_ID) ? env.DEV_USER_ID : null;
   const devLevel = isAccessLevel(env.DEV_ACCESS_LEVEL) ? env.DEV_ACCESS_LEVEL : null;
+  const whopEnv = parseWhopEnv(env.WHOP_ENV);
+  const appId = env.WHOP_APP_ID || null;
+  const apiKey = env.WHOP_API_KEY || null;
   return {
-    whopEnv: parseWhopEnv(env.WHOP_ENV),
-    appId: env.WHOP_APP_ID || null,
-    apiKey: env.WHOP_API_KEY || null,
+    whopEnv,
+    appId,
+    apiKey,
     webhookSecret: env.WHOP_WEBHOOK_SECRET || null,
+    oauthLogin: whopEnv === 'sandbox' && appId !== null && apiKey !== null,
     dev: devUser ? { userId: devUser, accessLevel: devLevel } : null,
   };
 }

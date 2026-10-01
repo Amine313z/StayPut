@@ -12,8 +12,12 @@ const STATUS: Record<ApiErrorCode, number> = {
 };
 
 /** Every API error has this shape; the frontend maps `code` to a translated message. */
-export function apiError(code: ApiErrorCode, message: string): Response {
-  const body: ApiErrorBody = { error: { code, message } };
+export function apiError(
+  code: ApiErrorCode,
+  message: string,
+  extra: Pick<ApiErrorBody['error'], 'login'> = {},
+): Response {
+  const body: ApiErrorBody = { error: { code, message, ...extra } };
   return Response.json(body, { status: STATUS[code] });
 }
 

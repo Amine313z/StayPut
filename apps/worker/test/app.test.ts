@@ -62,6 +62,7 @@ function setup(access: Record<string, AccessLevel | Error> = {}, options: { db?:
       },
     whopClient: (config) => (config.apiKey ? whop.client : null),
     userTokenKeys: () => keys.publicKey,
+    oauth: () => null,
     accessCache: new AccessCache(),
   };
   const app = createApp(deps);
@@ -149,6 +150,7 @@ describe('GET /api/creator/:companyId/session', () => {
       companyId: 'biz_A1',
       userId: 'user_alice',
       accessLevel: 'admin',
+      via: 'iframe',
     });
     const companies = await withUser(t.db, 'user_alice', (tx) =>
       tx.query<{ id: string; status: string }>('select id, status from stayput.companies'),
@@ -240,6 +242,7 @@ describe('GET /api/member/:experienceId/session', () => {
       experienceId: 'exp_E1',
       userId: 'user_member',
       accessLevel: 'customer',
+      via: 'iframe',
     });
   });
 

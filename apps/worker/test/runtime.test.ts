@@ -12,8 +12,16 @@ describe('readConfig', () => {
       appId: null,
       apiKey: null,
       webhookSecret: null,
+      oauthLogin: false,
       dev: null,
     });
+  });
+
+  it('turns "Sign in with Whop" on in the sandbox only, once the app id and key exist', () => {
+    const app = { WHOP_APP_ID: 'app_1', WHOP_API_KEY: 'apik_1' };
+    expect(readConfig(app).oauthLogin).toBe(true);
+    expect(readConfig({ ...app, WHOP_ENV: 'production' }).oauthLogin).toBe(false);
+    expect(readConfig({ WHOP_APP_ID: 'app_1' }).oauthLogin).toBe(false);
   });
 
   it('refuses an unknown WHOP_ENV', () => {

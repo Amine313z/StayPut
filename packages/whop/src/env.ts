@@ -6,6 +6,16 @@ export const WHOP_API_BASE_URL: Readonly<Record<WhopEnv, string>> = {
   sandbox: 'https://sandbox-api.whop.com/api/v1',
 };
 
+/**
+ * "Sign in with Whop" (OAuth 2.1 + PKCE). The sandbox answers at its own host and knows the
+ * sandbox's apps, although its `.well-known/openid-configuration` lists the production endpoints
+ * (checked on 2026-10-01: production answers `client_id is invalid` for a sandbox app).
+ */
+export const WHOP_OAUTH_BASE_URL: Readonly<Record<WhopEnv, string>> = {
+  production: 'https://api.whop.com/oauth',
+  sandbox: 'https://sandbox-api.whop.com/oauth',
+};
+
 /** Keys that sign the iframe's `x-whop-user-token`: the sandbox has its own. */
 export const WHOP_JWKS_URL: Readonly<Record<WhopEnv, string>> = {
   production: 'https://api.whop.com/.well-known/jwks.json',

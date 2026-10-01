@@ -109,8 +109,19 @@ la clé de compte `WHOP_SANDBOX_API_KEY` :
 
 Le guide sandbox de Whop déconseille les apps et la messagerie dans le sandbox (« Known
 limitations »). Constaté le 30/09/2026 : l'app s'installe, mais Whop affiche « App Base URL not set »
-à la place de ses vues, alors que l'URL est bien enregistrée. L'affichage dans Whop se vérifiera sur
-un compte de production.
+à la place de ses vues, alors que l'URL est bien enregistrée.
+
+### Tester l'interface avec le sandbox
+
+StayPut s'ouvre dans un onglet normal, avec « Se connecter avec Whop » (sandbox seulement) :
+
+- tableau de bord du créateur : `https://stayput.chezbenz18.workers.dev/dashboard/biz_2whAzkbCRpcGqQ` ;
+- espace membre : `https://stayput.chezbenz18.workers.dev/experiences/<exp_…>` ;
+- **Se connecter avec Whop** → page de connexion du sandbox → retour sur la page, connecté ;
+  **Se déconnecter** pour revenir avec un autre compte du sandbox (un membre, par exemple).
+
+Les accès sont vérifiés chez Whop comme dans l'iframe. Réglage de l'app (fait par l'API) :
+adresse de retour `https://stayput.chezbenz18.workers.dev/auth/callback`, client OAuth public.
 
 ## Outils de la Phase 0
 

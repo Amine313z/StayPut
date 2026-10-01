@@ -41,10 +41,10 @@ Guidance for Claude Code in this repository.
   Hyperdrive `stayput-db`, migrations 0001–0004 applied to the Supabase project `stayput`);
   `/health` answers `ok`. Whop sandbox app `app_rjFkp2xKgjfPxY` and its webhook
   `hook_M3uOKxSzLzx8u` created through the API (README.md, « L'app Whop du sandbox »);
-  `WHOP_API_KEY` (accepted by Whop) and `WHOP_WEBHOOK_SECRET` are stored and deployed. The app is
-  installed in « StayPut Test », but Whop's sandbox cannot display app views (« App Base URL not
-  set », a known Whop defect): waiting for the founder's validation and two decisions (testing
-  the views on a production Whop account, and how to show sandbox data in Phases 2–5).
+  `WHOP_API_KEY` (accepted by Whop) and `WHOP_WEBHOOK_SECRET` stored and deployed; app installed
+  in « StayPut Test ». Whop's sandbox cannot display app views, so StayPut also opens outside
+  the iframe with « Sign in with Whop » (sandbox only, 2026-10-01). Waiting for the founder to try
+  it, then for Phase 1 validation.
 - **Deploying**: the `Deploy` workflow (`.github/workflows/deploy.yml`, `workflow_dispatch`),
   started from GitHub's Actions tab or through the GitHub API (`actions_run_trigger`, workflow
   `deploy.yml`, ref `main`). It migrates the database, creates Hyperdrive if needed, publishes
@@ -70,6 +70,11 @@ npm run db:bundle    # after adding a migration: supabase/install.sql + schema-v
 - **Auth**: every `/api` route goes through `authenticate` (iframe token verified with the JWKS
   of `WHOP_ENV`), then `accessTo` (Whop's access check, cached 5 min per instance). Creator
   routes need `admin` on the `biz_…`; member routes need access to the `exp_…`.
+  **Sandbox only**: without an iframe token, a `__Host-stayput_session` cookie from « Sign in
+  with Whop » (`/auth/login` → `/auth/callback`, OAuth PKCE on `sandbox-api.whop.com/oauth`,
+  `src/session.ts`) identifies the user instead, because Whop's sandbox cannot display app views
+  (DECISIONS.md, 2026-10-01). Access is still checked with Whop. Changing `/api` requests from
+  such a browser need the `x-stayput-csrf` header.
 - **Database**: schema `stayput` (not exposed by Supabase's Data API). The Worker writes as
   the owner; reads for a user go through `withUser` (role `stayput_user` + `stayput.user_id`),
   so RLS applies. Keep the `company_id` filter in every query anyway.

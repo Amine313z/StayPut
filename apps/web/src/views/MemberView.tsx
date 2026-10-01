@@ -1,6 +1,7 @@
 import type { MemberSession } from '@stayput/core';
 import { useParams } from 'react-router';
 import { useApi } from '../api';
+import { SignOut } from '../components/SignOut';
 import { ErrorPanel, Loading } from '../components/Status';
 import { useI18n } from '../i18n';
 
@@ -23,6 +24,7 @@ export function MemberView() {
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('member.title')}</h1>
       <p className="text-muted">{t('member.welcome')}</p>
+      <SignOut via={state.data.via} />
     </div>
   );
 }

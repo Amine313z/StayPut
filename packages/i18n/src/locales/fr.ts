@@ -33,6 +33,8 @@ export const fr: Messages = {
 
   'error.title': 'Un obstacle',
   'error.unauthenticated': 'Ouvrez StayPut depuis Whop pour vous connecter.',
+  'error.unauthenticated.login':
+    'Vous avez ouvert StayPut hors de Whop : connectez-vous avec votre compte Whop pour continuer.',
   'error.forbidden.creator': "Seule l'équipe de cette communauté peut ouvrir ce tableau de bord.",
   'error.forbidden.member': "Vous n'avez pas accès à cet espace.",
   'error.invalid_request': "Ce lien n'a pas l'air correct.",
@@ -42,6 +44,10 @@ export const fr: Messages = {
   'error.not_configured': 'StayPut est encore en cours de configuration. Réessayez plus tard.',
   'error.internal': 'Un problème est survenu de notre côté. Réessayez dans une minute.',
   'error.network': 'Pas de connexion. Vérifiez votre réseau et réessayez.',
+
+  'auth.signIn': 'Se connecter avec Whop',
+  'auth.failed': "La connexion avec Whop n'a pas abouti. Réessayez.",
+  'auth.signOut': 'Se déconnecter',
 
   'notFound.title': 'Page introuvable',
 };

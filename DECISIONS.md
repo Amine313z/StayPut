@@ -126,3 +126,33 @@ quelles à Postgres (`jsonb`) plutôt qu'analysées dans le Worker.
   Conséquences : l'affichage dans Whop ne peut se vérifier que sur un compte de production, et les
   démonstrations sur les données du sandbox (Phases 2 à 5) demanderont un autre accès à
   l'interface. Les deux choix reviennent au fondateur.
+
+## 2026-10-01 — Tester dans le sandbox sans l'iframe de Whop
+
+### « Se connecter avec Whop », réservé au sandbox
+
+Le sandbox de Whop ne peut pas afficher les vues de l'app (section précédente). Or toutes les
+phases se testent sur ses membres fictifs. StayPut s'ouvre donc aussi **hors de l'iframe**, dans
+un onglet normal, avec la connexion officielle de Whop (OAuth 2.1 + PKCE) :
+
+- `/auth/login` envoie le navigateur sur la page de connexion du sandbox
+  (`https://sandbox-api.whop.com/oauth/authorize`, qui renvoie vers `sandbox.whop.com`) ;
+  `/auth/callback` échange le code (vérificateur PKCE) contre un jeton, lit l'utilisateur
+  (`/oauth/userinfo`), **révoque** le jeton (StayPut n'en garde aucun) et pose un cookie de
+  session ; `/auth/logout` le retire.
+- Ensuite, **les mêmes vérifications que dans l'iframe** : l'identifiant Whop de l'utilisateur,
+  puis l'accès réel vérifié chez Whop (admin pour la vue créateur, accès à l'expérience pour la
+  vue membre). Se connecter n'ouvre aucun droit à soi seul. On teste comme créateur, puis comme
+  membre en se reconnectant avec un autre compte du sandbox.
+- **Uniquement dans le sandbox** (`WHOP_ENV=sandbox`) : en production, StayPut ne s'ouvre que
+  dans Whop, et `/auth/*` répond 404.
+- App OAuth **publique** (PKCE, sans secret client) : l'API ne donne pas le secret client, et
+  le vérificateur PKCE protège l'échange. Adresse de retour déclarée sur l'app :
+  `https://stayput.chezbenz18.workers.dev/auth/callback` (réglage fait par l'API).
+- Cookies `__Host-` (HTTPS, tout le site, illisibles par les scripts, `SameSite=Lax`), signés
+  HMAC-SHA256 avec une clé **dérivée de la clé API de l'app** (HKDF) : aucun secret de plus à
+  ranger ; changer la clé déconnecte tout le monde. Session de 12 h ; le passage par Whop dure
+  au plus 10 min (état et vérificateur PKCE dans un cookie signé).
+- Toute requête `/api` qui modifie quelque chose, venant d'un navigateur connecté, doit porter
+  l'en-tête `x-stayput-csrf` (qu'une page étrangère ne peut pas poser) ; l'adresse de retour
+  après connexion n'accepte qu'un chemin du site (jamais un autre site).

@@ -10,8 +10,16 @@ export interface ApiErrorBody {
   error: {
     code: ApiErrorCode;
     message: string;
+    /**
+     * With `unauthenticated`, when "Sign in with Whop" outside the iframe is on (sandbox): where
+     * to send the browser, with `?next=` the page to come back to.
+     */
+    login?: string;
   };
 }
+
+/** How the user reached StayPut: Whop's iframe token, or signing in with Whop outside it. */
+export type SignInMethod = 'iframe' | 'login';
 
 export type ApiErrorCode =
   | 'unauthenticated'
@@ -28,6 +36,7 @@ export interface CreatorSession {
   companyId: string;
   userId: string;
   accessLevel: AccessLevel;
+  via: SignInMethod;
 }
 
 /** GET /api/member/:experienceId/session */
@@ -35,6 +44,7 @@ export interface MemberSession {
   experienceId: string;
   userId: string;
   accessLevel: AccessLevel;
+  via: SignInMethod;
 }
 
 /** GET /health */

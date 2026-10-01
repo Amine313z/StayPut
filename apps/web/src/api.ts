@@ -8,6 +8,8 @@ export class ApiError extends Error {
   constructor(
     readonly code: ApiErrorCode | 'network',
     message: string,
+    /** With `unauthenticated` in the sandbox: where to sign in with Whop outside the iframe. */
+    readonly login: string | null = null,
   ) {
     super(message);
   }
@@ -31,9 +33,11 @@ export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T>
   }
   if (response.ok) return (await response.json()) as T;
   const body = (await response.json().catch(() => null)) as Partial<ApiErrorBody> | null;
+  const login = body?.error?.login;
   throw new ApiError(
     body?.error?.code ?? codeForStatus(response.status),
     body?.error?.message ?? response.statusText,
+    typeof login === 'string' && login.startsWith('/') ? login : null,
   );
 }
 

@@ -33,6 +33,8 @@ export const en = {
 
   'error.title': 'Something is in the way',
   'error.unauthenticated': 'Open StayPut from Whop to sign in.',
+  'error.unauthenticated.login':
+    'You opened StayPut outside Whop: sign in with your Whop account to continue.',
   'error.forbidden.creator': 'Only the team of this community can open this dashboard.',
   'error.forbidden.member': 'You do not have access to this space.',
   'error.invalid_request': 'This link does not look right.',
@@ -42,6 +44,10 @@ export const en = {
   'error.not_configured': 'StayPut is still being set up. Try again later.',
   'error.internal': 'Something went wrong on our side. Try again in a minute.',
   'error.network': 'No connection. Check your network and try again.',
+
+  'auth.signIn': 'Sign in with Whop',
+  'auth.failed': 'Signing in with Whop did not work. Try again.',
+  'auth.signOut': 'Sign out',
 
   'notFound.title': 'Page not found',
 } as const;

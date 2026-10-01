@@ -253,6 +253,14 @@ et la requête n'atteint jamais le Worker. Même symptôme dans un signalement p
 **les vues de l'app ne s'affichent pas dans le sandbox** ; l'API, elle, y fonctionne (clé de l'app
 acceptée, webhooks créés). Reste à voir si les notifications partent (Phases 3 et 4).
 
+**OAuth dans le sandbox** (vérifié le 01/10/2026) : `https://sandbox-api.whop.com/oauth/authorize`
+connaît l'app du sandbox (sans adresse de retour déclarée : `redirect_uri is invalid` ; ensuite :
+302 vers `https://sandbox.whop.com/oauth/authorize`), `/oauth/token` répond `invalid_grant` à un
+faux code, `/oauth/userinfo` demande un jeton. La production répond `client_id is invalid` pour
+cette app. Attention : le `.well-known/openid-configuration` du sandbox annonce les adresses de
+production ; StayPut utilise donc `sandbox-api.whop.com/oauth` en dur pour le sandbox. C'est la
+solution retenue pour tester l'interface dans le sandbox (`DECISIONS.md`, 01/10/2026).
+
 ## 12. À trancher au début de la Phase 1
 
 - **Même origine** : le jeton de l'iframe n'est envoyé qu'à l'origine de l'app. Le Worker (API)
