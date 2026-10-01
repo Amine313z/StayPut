@@ -1360,6 +1360,10 @@ describe('the actions (SPEC Phase 4)', () => {
     expect(await (await contact(memberId, { doNotContact: true })).json()).toEqual({
       doNotContact: true,
     });
+    const members = (await (
+      await request('/api/creator/biz_ActQ3/members', init)
+    ).json()) as MembersPage;
+    expect(members.members.find((m) => m.id === memberId)).toMatchObject({ doNotContact: true });
     expect((await contact('mber_Elsewhere1', { doNotContact: true })).status).toBe(404);
     expect((await contact(memberId, { doNotContact: 'yes' })).status).toBe(400);
   });

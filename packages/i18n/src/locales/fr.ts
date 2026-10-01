@@ -80,6 +80,11 @@ export const fr: Messages = {
   'members.lastActivity': 'Dernière activité : {date}',
   'members.lastAction': 'Dernière visite dans la communauté : {date}',
   'members.noActivity': "Aucune activité enregistrée pour l'instant.",
+  'members.contact.never': 'Ne jamais contacter',
+  'members.contact.off': 'StayPut peut contacter ce membre, dans le respect des garde-fous.',
+  'members.contact.on':
+    'StayPut ne fait aucune action, de quelque type que ce soit, pour ce membre.',
+  'members.contact.error': 'Non enregistré. Réessayez.',
   'members.activity30': '30 derniers jours : {list}',
   'members.messages.one': '{count} message',
   'members.messages.other': '{count} messages',

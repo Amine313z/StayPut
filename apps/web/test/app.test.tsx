@@ -100,6 +100,7 @@ const memberRow = (over: Partial<MemberRow> & Pick<MemberRow, 'id' | 'name'>): M
   joinedAt: '2026-06-01T10:00:00.000Z',
   lastActionAt: '2026-09-30T10:00:00.000Z',
   lastActivityAt: '2026-09-30T10:00:00.000Z',
+  doNotContact: false,
   activity: { messages: 0, reactions: 0, posts: 0, lessons: 0 },
   risk: null,
   membership: {
@@ -452,6 +453,33 @@ describe('creator view', () => {
       target: { value: 'nobody' },
     });
     expect(screen.getByText('No member matches.')).toBeTruthy();
+  });
+
+  it('keeps a member off every action, and says when that was not saved', async () => {
+    mockApi({
+      ...dashboard(),
+      'PUT /api/creator/biz_A1/members/mber_3/contact': [
+        { status: 200, body: { doNotContact: true } },
+        new Error('offline'),
+      ],
+    });
+    renderAt('/dashboard/biz_A1/members?filter=high');
+    await screen.findByText('Bruno Petit');
+    const never = screen.getByRole('button', { name: 'Never contact' });
+    expect(never.getAttribute('aria-pressed')).toBe('false');
+    expect(
+      screen.getByText('StayPut may contact this member, within the guardrails.'),
+    ).toBeTruthy();
+    fireEvent.click(never);
+    await vi.waitFor(() => expect(never.getAttribute('aria-pressed')).toBe('true'));
+    const put = 'PUT /api/creator/biz_A1/members/mber_3/contact';
+    expect(bodies.get(put)).toEqual({ doNotContact: true });
+    expect(headersOf.get(put)?.get('x-stayput-csrf')).toBe('1');
+    expect(screen.getByText('StayPut takes no action of any kind for this member.')).toBeTruthy();
+    // Not saved: it says so, and the switch stays as it was.
+    fireEvent.click(never);
+    expect(await screen.findByText('Not saved. Try again.')).toBeTruthy();
+    expect(never.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('opens on the level a link asks for', async () => {

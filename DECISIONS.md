@@ -669,8 +669,10 @@ ne laisse jamais « Salut , ». L'emplacement d'une IA de rédaction existe, ét
   14 jours offerts sur 90 jours) ; le plafond de codes promo est au choix du créateur (0 à 100),
   comme le prévoit la SPEC. Un champ de message vide garde le texte de StayPut, affiché en
   exemple ; une variable inconnue est refusée avant l'envoi au serveur.
-- **Liste « ne jamais contacter »** : l'API existe (`PUT /members/:id/contact`) ; le bouton
-  dans la liste des membres vient avec la vue membre.
+- **Liste « ne jamais contacter »** : un interrupteur sur chaque membre de l'onglet Membres
+  (pas l'équipe, pas les membres partis), `PUT /members/:id/contact`. Il vaut dès le passage
+  suivant : une action déjà proposée pour ce membre est bloquée, avec la raison dans
+  l'historique, plutôt qu'effacée en silence.
 
 ### Le fuseau du créateur (migration 0011, même jour)
 
@@ -698,6 +700,6 @@ le fondateur, l'heure par défaut 19 h devenait 21 h à Paris.
 
 ### Reste à faire dans cette phase
 
-La vue membre (questionnaire de départ et offres, liens de paiement), le bouton « ne jamais
-contacter », l'offre Alumni, et la démonstration de chaque déclencheur. Les défis de sauvetage
+La vue membre (questionnaire de départ et offres, liens de paiement), l'offre Alumni, et la
+démonstration de chaque déclencheur. Les défis de sauvetage
 et les binômes dépendent de la Phase 5 (espace membre).

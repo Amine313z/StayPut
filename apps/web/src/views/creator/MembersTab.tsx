@@ -53,7 +53,7 @@ function fold(text: string): string {
  */
 export function MembersTab() {
   const { t, number } = useI18n();
-  const { members } = useCreatorData();
+  const { members, api } = useCreatorData();
   const [params, setParams] = useSearchParams();
   const filter = FILTERS.find((f) => f === params.get('filter')) ?? 'all';
   const query = params.get('q') ?? '';
@@ -139,7 +139,7 @@ export function MembersTab() {
         ) : shown.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted">{t('members.noMatch')}</p>
         ) : (
-          <MemberList members={shown} />
+          <MemberList members={shown} api={api} />
         )}
       </div>
       {page.truncated ? (

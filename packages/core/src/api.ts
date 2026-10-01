@@ -161,6 +161,8 @@ export interface MemberRow {
   lastActionAt: string | null;
   /** The last activity StayPut recorded (message, reaction, post, lesson, ticket). */
   lastActivityAt: string | null;
+  /** On the « never contact » list: StayPut takes no action of any kind for this member. */
+  doNotContact: boolean;
   /** Last 30 days. */
   activity: { messages: number; reactions: number; posts: number; lessons: number };
   /** Null until the first computation, and for the team. */

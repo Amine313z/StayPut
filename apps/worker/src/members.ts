@@ -180,7 +180,7 @@ export async function readMembers(
           group by member_id
        )
        select m.id, m.display_name as name, m.status, m.access_level, m.joined_at,
-              m.last_action_at, a.last_activity_at,
+              m.last_action_at, a.last_activity_at, m.do_not_contact,
               coalesce(r.messages, 0) as messages, coalesce(r.reactions, 0) as reactions,
               coalesce(r.posts, 0) as posts, coalesce(r.lessons, 0) as lessons,
               ms.status as membership_status, ms.price::float8 as price, ms.currency,
@@ -240,6 +240,7 @@ interface MemberSqlRow {
   joined_at: Date | string | null;
   last_action_at: Date | string | null;
   last_activity_at: Date | string | null;
+  do_not_contact: boolean;
   messages: number;
   reactions: number;
   posts: number;
@@ -321,6 +322,7 @@ function toMemberRow(r: MemberSqlRow): MemberRow {
     joinedAt: iso(r.joined_at),
     lastActionAt: iso(r.last_action_at),
     lastActivityAt: iso(r.last_activity_at),
+    doNotContact: r.do_not_contact,
     activity: { messages: r.messages, reactions: r.reactions, posts: r.posts, lessons: r.lessons },
     membership: r.membership_status
       ? {

@@ -1,10 +1,13 @@
 import type { MemberRow } from '@stayput/core';
 import { isFailedPayment } from '@stayput/core';
 import type { MessageKey, Translator } from '@stayput/i18n';
-import { CalendarClock, CreditCard, ShieldCheck, Sprout } from 'lucide-react';
+import { BellOff, CalendarClock, CreditCard, ShieldCheck, Sprout } from 'lucide-react';
+import { useId, useState } from 'react';
+import { putJson } from '../api';
 import { useI18n } from '../i18n';
 import { Avatar } from '../ui/Avatar';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
 import { RiskBadge, RiskReasons } from './Risk';
 
 const MEMBERSHIP_STATUSES: Record<string, MessageKey> = {
@@ -37,18 +40,21 @@ export function attentionReasons(member: MemberRow): AttentionReason[] {
   return member.status === 'joined' ? reasons : [];
 }
 
-/** The members, one row each: who and their risk, their membership and payments, their activity. */
-export function MemberList({ members }: { members: readonly MemberRow[] }) {
+/**
+ * The members, one row each: who and their risk, their membership and payments, their activity,
+ * and the « never contact » switch (`api`: `/api/creator/<company>`).
+ */
+export function MemberList({ members, api }: { members: readonly MemberRow[]; api: string }) {
   return (
     <ul className="divide-y divide-line">
       {members.map((member) => (
-        <MemberItem key={member.id} member={member} />
+        <MemberItem key={member.id} member={member} api={api} />
       ))}
     </ul>
   );
 }
 
-function MemberItem({ member }: { member: MemberRow }) {
+function MemberItem({ member, api }: { member: MemberRow; api: string }) {
   const i18n = useI18n();
   const { t, date, currency, plural } = i18n;
   const { membership, lastPayment, activity, risk } = member;
@@ -119,8 +125,61 @@ function MemberItem({ member }: { member: MemberRow }) {
               ? t('members.lastAction', { date: date(new Date(member.lastActionAt)) })
               : t('members.noActivity')}
         </p>
+        {member.status === 'joined' && member.accessLevel !== 'admin' ? (
+          <NeverContact api={api} member={member} />
+        ) : null}
       </div>
     </li>
+  );
+}
+
+/**
+ * The « never contact » switch of one member (SPEC 5.8): on, StayPut takes no action of any kind
+ * for them, from the next run on.
+ */
+function NeverContact({ api, member }: { api: string; member: MemberRow }) {
+  const { t } = useI18n();
+  const id = useId();
+  const [value, setValue] = useState<boolean | null>(null);
+  const [state, setState] = useState<'idle' | 'saving' | 'failed'>('idle');
+  const on = value ?? member.doNotContact;
+  const toggle = async () => {
+    setState('saving');
+    try {
+      const next = await putJson<{ doNotContact: boolean }>(
+        `${api}/members/${encodeURIComponent(member.id)}/contact`,
+        { doNotContact: !on },
+      );
+      setValue(next.doNotContact);
+      setState('idle');
+    } catch {
+      setState('failed');
+    }
+  };
+  return (
+    <div className="mt-2">
+      <Button
+        variant={on ? 'secondary' : 'ghost'}
+        size="sm"
+        aria-pressed={on}
+        aria-describedby={`${id}-hint`}
+        loading={state === 'saving'}
+        icon={<BellOff aria-hidden="true" className="size-4" />}
+        onClick={() => void toggle()}
+        className={on ? '' : '-ms-3'}
+      >
+        {t('members.contact.never')}
+      </Button>
+      <p id={`${id}-hint`} className="text-xs text-muted">
+        {state === 'failed' ? (
+          <span className="text-danger">{t('members.contact.error')}</span>
+        ) : on ? (
+          t('members.contact.on')
+        ) : (
+          t('members.contact.off')
+        )}
+      </p>
+    </div>
   );
 }
 
