@@ -394,6 +394,14 @@ canal. Ce que Telegram permet, vérifié dans l'API des bots :
   reçoit les abonnements et désabonnements, `chat_member`), un signal de départ. Il faudrait
   relier le canal à la communauté et garder ces événements.
 
+Essai du fondateur : ses messages dans le groupe de discussion ne comptaient pas. Il y écrivait
+en **administrateur anonyme** (« Envoi anonyme… ») : Telegram les envoie au nom du groupe et ne
+dit à personne, bot compris, qui les a écrits. Ignorés à raison ; la carte Telegram le dit
+maintenant. Pour le diagnostic, le workflow Inspect demande aussi à Telegram ce qu'il voit de
+chaque groupe relié (le bot y est-il encore, groupe devenu supergroupe, groupe de discussion
+d'un canal, livraisons en attente ou en erreur), sans nom ni identifiant
+(`scripts/ops/telegram-groups.ts`).
+
 **Langue du bot.** Il répondait selon la langue que Telegram dit de l'utilisateur
 (`language_code`) : chez le fondateur, Telegram en français, le bot a répondu en anglais. Le
 lien signé porte maintenant la **langue de l'interface StayPut** (`?lang=` envoyé par la page,

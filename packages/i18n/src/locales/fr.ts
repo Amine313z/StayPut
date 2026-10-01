@@ -194,7 +194,7 @@ export const fr: Messages = {
   'telegram.step.members':
     'Les membres relient leur Telegram depuis StayPut, dans votre communauté Whop (« Relier mon Telegram »).',
   'telegram.linkHow':
-    'Whop ne partage pas le compte Telegram des membres : chacun relie le sien depuis StayPut, dans la communauté. Les messages des comptes non reliés attendent 7 jours.',
+    'Whop ne partage pas le compte Telegram des membres : chacun relie le sien depuis StayPut, dans la communauté. Les messages des comptes non reliés attendent 7 jours. Un message envoyé anonymement (administrateur anonyme) ou au nom d’un canal ne compte pas : Telegram ne dit pas qui l’a écrit.',
   'telegram.unnamed': 'Groupe Telegram',
   'telegram.lastMessage': 'Dernier message {when}',
   'telegram.listening': "À l'écoute",

@@ -1,8 +1,9 @@
 name: Inspect
 
 # Started by hand (GitHub -> Actions -> Inspect -> Run workflow) or by Claude through the API:
-# what the database holds, as counts only (scripts/ops/inspect.ts), and which permissions Whop
-# grants the app's key (scripts/ops/whop-permissions.ts). It changes nothing.
+# what the database holds, as counts only (scripts/ops/inspect.ts), which permissions Whop
+# grants the app's key (scripts/ops/whop-permissions.ts), and how Telegram sees the connected
+# groups (scripts/ops/telegram-groups.ts). It changes nothing.
 on:
   workflow_dispatch:
 
@@ -26,3 +27,8 @@ jobs:
           WHOP_API_KEY: ${{ secrets.WHOP_API_KEY }}
           WHOP_ENV: ${{ vars.WHOP_ENV }}
         run: npx tsx scripts/ops/whop-permissions.ts
+      - name: Ask Telegram about the connected groups (never prints the token, a name or an id)
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: npx tsx scripts/ops/telegram-groups.ts
