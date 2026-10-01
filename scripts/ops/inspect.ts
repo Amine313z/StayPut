@@ -126,6 +126,30 @@ async function main() {
                  (select count(*) from stayput.activity_events
                    where company_id = ${id as string} and type = 'telegram_message')`,
       );
+      // Each Telegram group, without its name or id: a group Telegram turns into a supergroup
+      // (a channel's discussion group, say) changes id, and its messages must follow it.
+      out();
+      table(
+        await sql`
+          select case when c.chat_id like '-100%' then 'supergroup' else 'group' end as kind,
+                 c.connected_at, c.left_at, c.last_message_at,
+                 (select count(*) from stayput.pending_activity p
+                   where p.company_id = c.company_id and p.metadata ->> 'chat_id' = c.chat_id)
+                   as pending_messages
+            from stayput.telegram_chats c
+           where c.company_id = ${id as string}
+           order by c.connected_at`,
+      );
+      // Activity waiting for its account to be linked to a member, per platform.
+      out();
+      table(
+        await sql`
+          select split_part(user_id, ':', 1) as platform, count(distinct user_id) as accounts,
+                 count(*) as messages, max(occurred_at) as last_at
+            from stayput.pending_activity
+           where company_id = ${id as string} and user_id like '%:%'
+           group by 1 order by 1`,
+      );
     }
     // The risk score (migration 0008): members per level, when they were scored, the history
     // kept, and the weekly analyses. Counts only, like the rest.
