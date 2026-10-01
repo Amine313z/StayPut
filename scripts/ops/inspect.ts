@@ -99,6 +99,34 @@ async function main() {
         select 'member_stats_daily', 0, count(distinct member_id), count(*)
           from stayput.member_stats_daily where company_id = ${id as string}`,
     );
+    // Discord and Telegram (migration 0007): what is connected, who is linked, what was counted.
+    const [sources] = await sql`
+      select to_regclass('stayput.discord_guilds') is not null as present`;
+    if (sources?.present) {
+      out();
+      table(
+        await sql`
+          select 'discord' as source,
+                 (select count(*) from stayput.discord_guilds
+                   where company_id = ${id as string}) as connected,
+                 (select coalesce(sum(cardinality(channel_ids)), 0) from stayput.discord_guilds
+                   where company_id = ${id as string}) as channels,
+                 (select count(*) from stayput.members
+                   where company_id = ${id as string} and discord_user_id is not null)
+                   as linked_members,
+                 (select count(*) from stayput.activity_events
+                   where company_id = ${id as string} and type = 'discord_message') as events
+          union all
+          select 'telegram',
+                 (select count(*) from stayput.telegram_chats
+                   where company_id = ${id as string} and left_at is null),
+                 0,
+                 (select count(*) from stayput.members
+                   where company_id = ${id as string} and telegram_user_id is not null),
+                 (select count(*) from stayput.activity_events
+                   where company_id = ${id as string} and type = 'telegram_message')`,
+      );
+    }
   }
 
   out();
