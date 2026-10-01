@@ -1,7 +1,7 @@
 /**
  * What the database holds, without anything personal: the schema version, each company's
- * synchronization (streams, errors) and row counts, and the webhook deliveries by type and
- * status. Names, user ids, e-mails and payloads are never read.
+ * synchronization (streams, errors), row counts and risk levels, and the webhook deliveries by
+ * type and status. Names, user ids, e-mails and payloads are never read.
  *
  *   DATABASE_URL=… npx tsx scripts/ops/inspect.ts
  *
@@ -125,6 +125,41 @@ async function main() {
                    where company_id = ${id as string} and telegram_user_id is not null),
                  (select count(*) from stayput.activity_events
                    where company_id = ${id as string} and type = 'telegram_message')`,
+      );
+    }
+    // The risk score (migration 0008): members per level, when they were scored, the history
+    // kept, and the weekly analyses. Counts only, like the rest.
+    const [detection] = await sql`
+      select to_regclass('stayput.member_risk') is not null as present`;
+    if (detection?.present) {
+      out();
+      table(
+        await sql`
+          select level, count(*) as members,
+                 count(*) filter (where inactive_newcomer) as inactive_newcomers,
+                 min(score) as min_score, max(score) as max_score,
+                 max(computed_at) as last_computed
+            from stayput.member_risk where company_id = ${id as string}
+           group by level order by max(score) desc`,
+      );
+      out();
+      table(
+        await sql`
+          select (select count(*) from stayput.risk_scores
+                   where company_id = ${id as string}) as history_rows,
+                 (select count(distinct day) from stayput.risk_scores
+                   where company_id = ${id as string}) as history_days,
+                 (select count(*) from stayput.cohort_stats
+                   where company_id = ${id as string}) as cohorts,
+                 (select count(*) from stayput.cohort_stats
+                   where company_id = ${id as string} and alert_horizon is not null)
+                   as cohort_alerts,
+                 (select count(*) from stayput.lesson_dropoff_stats
+                   where company_id = ${id as string}) as lessons,
+                 (select count(*) from stayput.lesson_dropoff_stats
+                   where company_id = ${id as string} and flagged) as blocking_lessons,
+                 (select analyses_at from stayput.company_sync
+                   where company_id = ${id as string}) as analyses_at`,
       );
     }
   }
