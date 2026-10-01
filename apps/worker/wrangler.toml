@@ -28,8 +28,9 @@ WHOP_APP_ID = "app_rjFkp2xKgjfPxY"
 # id = "<id printed by npx wrangler hyperdrive create>"
 
 [triggers]
-# Hourly work, and the weekly analyses on Monday 07:30 UTC (src/cron.ts).
-crons = ["0 * * * *", "30 7 * * 1"]
+# The synchronization with Whop every 10 minutes, hourly work, and the weekly analyses on Monday
+# 07:30 UTC (src/cron.ts).
+crons = ["*/10 * * * *", "0 * * * *", "30 7 * * 1"]
 
 [observability]
 enabled = true

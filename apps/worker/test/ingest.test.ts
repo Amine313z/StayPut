@@ -306,9 +306,13 @@ describe('activity', () => {
       {
         type: 'support_ticket_resolved',
         external_id: `${u('sc_1')}:2026-09-27T15:00:00Z`,
-        metadata: {},
+        metadata: { channel_id: u('sc_1') },
       },
-      { type: 'support_ticket_opened', external_id: u('sc_1'), metadata: {} },
+      {
+        type: 'support_ticket_opened',
+        external_id: `${u('sc_1')}:first`,
+        metadata: { channel_id: u('sc_1') },
+      },
       {
         type: 'lesson_completed',
         external_id: u('li_1'),
@@ -328,15 +332,67 @@ describe('activity', () => {
     expect(content).toEqual([]);
   });
 
-  it('hands back the ids a listing finds (channels, forums, courses)', async () => {
+  it('opens one stream per channel, forum and course a listing finds', async () => {
     const c = await company();
+    await ingest(c, 'chat_channels', page([{ id: u('chat_A') }, { id: u('chat_B') }]));
+    await ingest(c, 'forums', page([{ id: 'forum_1', experience: { id: u('exp_F1') } }]));
+    await ingest(c, 'courses', page([{ id: u('cors_1') }, { id: 'not an id' }]));
+    // Listed again: nothing doubles.
+    await ingest(c, 'chat_channels', page([{ id: u('chat_A') }]));
     expect(
-      (await ingest(c, 'chat_channels', page([{ id: u('chat_A') }, { id: u('chat_B') }]))).ids,
-    ).toEqual([u('chat_A'), u('chat_B')]);
-    expect(
-      (await ingest(c, 'forums', page([{ id: 'forum_1', experience: { id: u('exp_F1') } }]))).ids,
-    ).toEqual([u('exp_F1')]);
-    expect((await ingest(c, 'courses', page([{ id: u('cors_1') }]))).ids).toEqual([u('cors_1')]);
+      (
+        await rows<{ stream: string }>(
+          'select stream from stayput.sync_state where company_id = $1 order by stream',
+          [c],
+        )
+      ).map((r) => r.stream),
+    ).toEqual([
+      `forum_posts:${u('exp_F1')}`,
+      `lesson_interactions:${u('cors_1')}`,
+      `messages:${u('chat_A')}`,
+      `messages:${u('chat_B')}`,
+    ]);
+  });
+
+  it('follows a support channel through its openings and resolutions', async () => {
+    const c = await company();
+    await ingest(c, 'members', page([member(u('mber_M1'), u('user_U1'))]));
+    const channel = (over: Record<string, unknown>) =>
+      page([{ id: u('sc_1'), customer_user: { id: u('user_U1') }, ...over }]);
+    const events = async () =>
+      (
+        await rows<{ type: string; external_id: string; at: string }>(
+          `select type, external_id, to_char(occurred_at at time zone 'UTC', 'MM-DD HH24:MI') as at
+             from stayput.activity_events where company_id = $1 order by occurred_at, type`,
+          [c],
+        )
+      ).map((e) => `${e.at} ${e.type} ${e.external_id.replace(u('sc_1'), 'sc')}`);
+
+    // Open, seen twice: one opening, dated by the last message seen.
+    await ingest(c, 'support_channels', channel({ last_message_at: '2026-09-20T10:00:00Z' }));
+    await ingest(c, 'support_channels', channel({ last_message_at: '2026-09-21T10:00:00Z' }));
+    // Resolved, then written to again (reopened), then resolved again.
+    await ingest(
+      c,
+      'support_channels',
+      channel({ last_message_at: '2026-09-21T10:00:00Z', resolved_at: '2026-09-22T10:00:00Z' }),
+    );
+    await ingest(
+      c,
+      'support_channels',
+      channel({ last_message_at: '2026-09-25T10:00:00Z', resolved_at: '2026-09-22T10:00:00Z' }),
+    );
+    await ingest(
+      c,
+      'support_channels',
+      channel({ last_message_at: '2026-09-25T10:00:00Z', resolved_at: '2026-09-26T10:00:00Z' }),
+    );
+    expect(await events()).toEqual([
+      '09-20 10:00 support_ticket_opened sc:first',
+      '09-22 10:00 support_ticket_resolved sc:2026-09-22T10:00:00Z',
+      '09-25 10:00 support_ticket_opened sc:2026-09-22T10:00:00.000000Z',
+      '09-26 10:00 support_ticket_resolved sc:2026-09-26T10:00:00Z',
+    ]);
   });
 
   it('rolls activity up per day and per hour, in the company time zone', async () => {

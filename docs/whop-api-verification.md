@@ -276,6 +276,32 @@ solution retenue pour tester l'interface dans le sandbox (`DECISIONS.md`, 01/10/
 - **Langue** : code, commentaires et commits en anglais, interface en anglais avec le français
   en seconde langue, comme le demande `SPEC.md`.
 
+## 13. Constats de la Phase 2 (sandbox, 01/10/2026)
+
+Lus avec la clé de compte du sandbox (`Api-Version-Date: 2026-09-29`), sans rien afficher de
+personnel :
+
+- **Formes réelles** : une adhésion porte `user_id`, `plan_id`, `product_id`, `member`,
+  `current_period_end`, `billing_period_days`, `canceled_at` ; un paiement `member_id`,
+  `membership_id`, `plan_id`, `total` (objet Money, montant en texte décimal),
+  `next_payment_attempt_at` ; un membre `last_accessed_at` (et non `most_recent_action_at`, que
+  StayPut lit aussi). Les fonctions SQL lisent les deux formes (SDK 2.0.0 et version du 29/09).
+- **Membre sans utilisateur** : le compte technique créé à l'installation de l'app est un membre
+  `admin` dont `user` vaut `null` : StayPut l'ignore.
+- **Tri des listes** : `order` + `direction` existent pour les membres (`created_at`,
+  `joined_at`, `last_accessed_at`, `usd_total_spent`), les adhésions (`created_at`) et les
+  paiements (`created_at`, `paid_at`) ; `direction` seul pour les messages et les tickets
+  (`order`: `created_at` ou `last_post_sent_at`). Rien pour les posts de forum et les
+  interactions de leçons. Un ticket n'a pas de date de création (`last_message_at`,
+  `resolved_at` seulement).
+- **Webhooks** : `PATCH /webhooks/{id}` change la liste d'événements (fait : ajout de
+  `chat.message.created` et `chat.reaction.created`) ; `GET /webhooks/{id}/deliveries` liste les
+  livraisons avec leur code de réponse, et `POST /webhooks/{id}/test` en envoie une d'essai :
+  de quoi vérifier depuis l'API que le Worker reçoit bien.
+- **Contenu du sandbox « StayPut Test »** au 01/10/2026 : 2 membres (le fondateur, admin, et le
+  compte technique de l'app), 1 adhésion (accès gratuit à l'app), 1 paiement de 0 $, 1 variante,
+  1 forum vide, aucun salon de discussion, cours ni ticket.
+
 ## Sources
 
 Documentation Whop, lue le 30/09/2026 :

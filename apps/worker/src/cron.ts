@@ -1,8 +1,10 @@
 import type { WhopClient } from '@stayput/whop';
 import type { ClosableDb } from './db';
 import type { Config } from './env';
+import { refreshStats, replayWebhooks, syncWithWhop } from './jobs';
 
-/** Must match `triggers.crons` in wrangler.toml (cron.test.ts checks it). */
+/** Must match `triggers.crons` in wrangler.toml (runtime.test.ts checks it). */
+export const SYNC_CRON = '*/10 * * * *';
 export const HOURLY_CRON = '0 * * * *';
 export const WEEKLY_CRON = '30 7 * * 1';
 
@@ -10,6 +12,8 @@ export interface JobContext {
   config: Config;
   db: ClosableDb | null;
   whop: WhopClient | null;
+  /** The same API without retries, for the sync: one call is one subrequest of its budget. */
+  syncWhop: WhopClient | null;
   /** The time the run was scheduled for: jobs never read the clock themselves. */
   now: Date;
 }
@@ -20,10 +24,13 @@ export interface CronJob {
 }
 
 /**
- * What each trigger runs. The phases fill these lists: sync and webhook replay (Phase 2),
- * scores (3), due actions (4) every hour; cohorts and blocking lessons (3) every week.
+ * What each trigger runs. Every 10 minutes, a slice of the synchronization with Whop (Phase 2):
+ * each run reads the companies that waited longest, so that the free plan's 50 subrequests per
+ * run still cover every company each hour (DECISIONS.md). Every hour, scores (3) and due actions
+ * (4); every week, cohorts and blocking lessons (3).
  */
 export const SCHEDULE: Readonly<Record<string, readonly CronJob[]>> = {
+  [SYNC_CRON]: [replayWebhooks, syncWithWhop, refreshStats],
   [HOURLY_CRON]: [],
   [WEEKLY_CRON]: [],
 };

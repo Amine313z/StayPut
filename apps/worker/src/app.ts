@@ -8,6 +8,7 @@ import {
   type HealthReport,
   type MemberSession,
   type SignInMethod,
+  type SyncRun,
 } from '@stayput/core';
 import {
   USER_TOKEN_HEADER,
@@ -29,6 +30,7 @@ import { AccessCache } from './access';
 import { createPostgresDb, type ClosableDb, type Db } from './db';
 import { readConfig, type Config, type Env } from './env';
 import { API_HEADERS, apiError } from './http';
+import { readMembers, readSyncStatus } from './members';
 import { LATEST_MIGRATION } from './schema-version';
 import {
   LOGIN_COOKIE,
@@ -42,14 +44,18 @@ import {
   signingKey,
   verify,
 } from './session';
+import { SYNC_REQUEST_BUDGET, summarize, syncIfFree } from './sync';
 
 /** What the routes depend on, injected so that tests run them against fakes. */
 export interface AppDeps {
   now(): Date;
   /** A database client for one request, or null when the Worker has no database binding. */
   openDb(env: Env): ClosableDb | null;
-  /** The Whop API with the app key, or null when the key is not configured. */
-  whopClient(config: Config): WhopClient | null;
+  /**
+   * The Whop API with the app key, or null when the key is not configured. The sync asks for
+   * `maxRetries: 0`: each call is then one subrequest of its budget.
+   */
+  whopClient(config: Config, options?: { maxRetries?: number }): WhopClient | null;
   /** Whop's public keys for the iframe token. */
   userTokenKeys(config: Config): JWTVerifyGetKey | CryptoKey;
   /** "Sign in with Whop" outside the iframe (sandbox), or null without an app id. */
@@ -61,8 +67,16 @@ export function productionDeps(): AppDeps {
   return {
     now: () => new Date(),
     openDb: (env) => (env.HYPERDRIVE ? createPostgresDb(env.HYPERDRIVE.connectionString) : null),
-    whopClient: (config) =>
-      config.apiKey ? createWhopClient({ apiKey: config.apiKey, env: config.whopEnv }) : null,
+    whopClient: (config, options = {}) =>
+      config.apiKey
+        ? createWhopClient({
+            apiKey: config.apiKey,
+            env: config.whopEnv,
+            ...(options.maxRetries === undefined
+              ? {}
+              : { retry: { maxRetries: options.maxRetries } }),
+          })
+        : null,
     userTokenKeys: (config) => whopUserTokenKeys(config.whopEnv),
     oauth: (config) =>
       config.appId ? createWhopOAuth({ env: config.whopEnv, clientId: config.appId }) : null,
@@ -72,7 +86,15 @@ export function productionDeps(): AppDeps {
 
 type AppEnv = {
   Bindings: Env;
-  Variables: { config: Config; userId: string; via: SignInMethod; db: ClosableDb | null };
+  Variables: {
+    config: Config;
+    userId: string;
+    via: SignInMethod;
+    db: ClosableDb | null;
+    /** Set by requireCreator: the company of the route, checked with Whop. */
+    companyId: string;
+    accessLevel: AccessLevel;
+  };
 };
 
 /** Whop's deliveries are small JSON documents; anything bigger is refused unread. */
@@ -80,6 +102,15 @@ export const MAX_WEBHOOK_BYTES = 256 * 1024;
 const HEALTH_CACHE_MS = 30_000;
 /** /health never waits longer than this for the database: a silent database is reported. */
 export const HEALTH_DB_TIMEOUT_MS = 5_000;
+/**
+ * Opening the dashboard brings the company's data up to date in the background (the backfill,
+ * the first time), at most this often. The access check may have used a Whop call: the
+ * background reading gets what is left of the budget.
+ */
+export const OPEN_SYNC_INTERVAL_SECONDS = 10 * 60;
+/** "Sync now" in the dashboard: at most once a minute. */
+export const MANUAL_SYNC_INTERVAL_SECONDS = 60;
+const REQUEST_SYNC_BUDGET = SYNC_REQUEST_BUDGET - 2;
 
 export function createApp(deps: AppDeps) {
   const app = new Hono<AppEnv>();
@@ -178,6 +209,62 @@ export function createApp(deps: AppDeps) {
     }
     deps.accessCache.set(userId, resourceId, level, now);
     return level;
+  }
+
+  /** The routes of the creator view: a company id, and a team member of it (checked with Whop). */
+  const requireCreator = createMiddleware<AppEnv>(async (c, next) => {
+    const companyId = c.req.param('companyId');
+    if (!isCompanyId(companyId)) return apiError('invalid_request', 'not a Whop company id');
+    const level = await accessTo(c, companyId);
+    if (level instanceof Response) return level;
+    if (!canOpenCreatorView(level)) {
+      return apiError('forbidden', "the creator view is for the account's team");
+    }
+    c.set('companyId', companyId);
+    c.set('accessLevel', level);
+    await next();
+    return undefined;
+  });
+
+  /**
+   * Work after the response (the Worker's waitUntil), on a database client of its own: the
+   * request's client closes with the response.
+   */
+  function inBackground(
+    c: Context<AppEnv>,
+    label: string,
+    work: (db: ClosableDb) => Promise<void>,
+  ): void {
+    const db = deps.openDb(c.env);
+    if (!db) return;
+    defer(
+      c,
+      work(db)
+        .catch((error: unknown) => {
+          console.error(`${label} failed:`, describe(error));
+        })
+        .finally(() => db.close()),
+    );
+  }
+
+  /** Brings the company's data up to date after the response, unless it was done recently. */
+  function syncInBackground(c: Context<AppEnv>, companyId: string): void {
+    const whop = deps.whopClient(c.get('config'), { maxRetries: 0 });
+    if (!whop) return;
+    inBackground(c, 'Background sync', async (db) => {
+      const now = deps.now();
+      const result = await syncIfFree(
+        { db, whop, now, budget: { left: REQUEST_SYNC_BUDGET } },
+        companyId,
+        OPEN_SYNC_INTERVAL_SECONDS,
+      );
+      if (!result) return;
+      console.info(summarize(result));
+      await db.query('select stayput.refresh_stats($1::timestamptz, $2)', [
+        now.toISOString(),
+        companyId,
+      ]);
+    });
   }
 
   // A signed-in browser sends its session cookie on every request to this site, even one a
@@ -295,10 +382,9 @@ export function createApp(deps: AppDeps) {
     return c.json(health.report, health.report.status === 'ok' ? 200 : 503);
   });
 
-  app.post('/webhooks/whop', withDb, async (c) => {
+  app.post('/webhooks/whop', async (c) => {
     const config = c.get('config');
-    const db = c.get('db');
-    if (!config.webhookSecret || !db) {
+    if (!config.webhookSecret) {
       // Whop retries a failed delivery: nothing is lost while the Worker is being set up.
       return apiError('not_configured', 'webhooks are not configured yet');
     }
@@ -326,31 +412,90 @@ export function createApp(deps: AppDeps) {
     }
     const type = isObject(event) && typeof event.type === 'string' ? event.type : null;
     if (!type) return apiError('invalid_request', 'the webhook has no type');
-    // Stored as received; processing (Phase 2) reads the table, so a delivery is never lost
-    // and a retry of the same delivery (same webhook-id) is stored once.
-    const stored = await db.query(
-      `insert into stayput.webhook_events (id, company_id, type, payload, received_at)
-       values ($1, $2, $3, $4::text::jsonb, $5::timestamptz)
-       on conflict (id) do nothing
-       returning id`,
-      [verification.id, companyIdOf(event), type, raw, deps.now().toISOString()],
+    const db = deps.openDb(c.env);
+    if (!db) return apiError('not_configured', 'webhooks are not configured yet');
+    const now = deps.now();
+    // Stored as received, so that a delivery is never lost; a retry of the same delivery (same
+    // webhook-id) is stored once.
+    let stored: unknown[];
+    try {
+      stored = await db.query(
+        `insert into stayput.webhook_events (id, company_id, type, payload, received_at)
+         values ($1, $2, $3, $4::text::jsonb, $5::timestamptz)
+         on conflict (id) do nothing
+         returning id`,
+        [verification.id, companyIdOf(event), type, raw, now.toISOString()],
+      );
+    } catch (error) {
+      defer(c, db.close());
+      throw error;
+    }
+    // Filed after the answer (SPEC Phase 2, 1); the cron retries a delivery that fails.
+    defer(
+      c,
+      fileWebhook(db, verification.id, now).finally(() => db.close()),
     );
     return c.json({ received: true, duplicate: stored.length === 0 });
   });
 
-  app.get('/api/creator/:companyId/session', authenticate, withDb, async (c) => {
-    const companyId = c.req.param('companyId');
-    if (!isCompanyId(companyId)) return apiError('invalid_request', 'not a Whop company id');
-    const level = await accessTo(c, companyId);
-    if (level instanceof Response) return level;
-    if (!canOpenCreatorView(level)) {
-      return apiError('forbidden', "the creator view is for the account's team");
-    }
+  app.get('/api/creator/:companyId/session', authenticate, withDb, requireCreator, async (c) => {
+    const companyId = c.get('companyId');
     const userId = c.get('userId');
     const db = c.get('db');
-    if (db) await recordAdmin(db, companyId, userId, deps.now());
-    const session: CreatorSession = { companyId, userId, accessLevel: level, via: c.get('via') };
+    if (db) {
+      await recordAdmin(db, companyId, userId, deps.now());
+      // The first visit starts the backfill, later ones bring the data up to date (SPEC
+      // Phase 2, 2).
+      syncInBackground(c, companyId);
+    }
+    const session: CreatorSession = {
+      companyId,
+      userId,
+      accessLevel: c.get('accessLevel'),
+      via: c.get('via'),
+    };
     return c.json(session);
+  });
+
+  /** Where the reading of the company's Whop data stands. */
+  app.get('/api/creator/:companyId/sync', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    return c.json(await readSyncStatus(db, c.get('userId'), c.get('companyId')));
+  });
+
+  /** "Sync now": reads what is due from Whop during the request, then the status. */
+  app.post('/api/creator/:companyId/sync', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    const whop = deps.whopClient(c.get('config'), { maxRetries: 0 });
+    if (!db || !whop) return apiError('not_configured', 'the database or the Whop key is missing');
+    const companyId = c.get('companyId');
+    const now = deps.now();
+    const result = await syncIfFree(
+      { db, whop, now, budget: { left: REQUEST_SYNC_BUDGET } },
+      companyId,
+      MANUAL_SYNC_INTERVAL_SECONDS,
+    );
+    if (result) {
+      console.info(summarize(result));
+      await db.query('select stayput.refresh_stats($1::timestamptz, $2)', [
+        now.toISOString(),
+        companyId,
+      ]);
+    }
+    const run: SyncRun = {
+      ...(await readSyncStatus(db, c.get('userId'), companyId)),
+      ran: result !== null,
+      calls: result?.calls ?? 0,
+    };
+    return c.json(run);
+  });
+
+  /** The members StayPut collected, with their membership, last payment and recent activity. */
+  app.get('/api/creator/:companyId/members', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    return c.json(await readMembers(db, c.get('userId'), c.get('companyId'), deps.now()));
   });
 
   app.get('/api/member/:experienceId/session', authenticate, async (c) => {
@@ -415,6 +560,21 @@ async function databaseState(db: Db | null): Promise<HealthReport['database']> {
     return code === '42P01' || code === '3F000' ? 'outdated' : 'unreachable';
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/** A stored delivery into members, memberships, payments and activity_events. */
+async function fileWebhook(db: Db, id: string, now: Date): Promise<void> {
+  try {
+    const [row] = await db.query<{ status: string }>(
+      'select stayput.process_webhook_event($1, $2::timestamptz) as status',
+      [id, now.toISOString()],
+    );
+    if (row?.status === 'failed') {
+      console.warn(`Webhook ${id} could not be filed: the cron retries it.`);
+    }
+  } catch (error) {
+    console.error(`Webhook ${id} could not be filed:`, describe(error));
   }
 }
 

@@ -47,6 +47,84 @@ export interface MemberSession {
   via: SignInMethod;
 }
 
+/** GET /api/creator/:companyId/sync: how far StayPut has read the company's Whop data. */
+export interface SyncStatus {
+  /** Every list was read once: the 90-day history is in (the backfill). */
+  backfillDone: boolean;
+  /** The last time StayPut read from Whop for this company. */
+  lastSyncAt: string | null;
+  streams: SyncStreamStatus[];
+}
+
+export interface SyncStreamStatus {
+  /** `members`, `payments`… or `messages:<channel id>`. */
+  stream: string;
+  backfillDone: boolean;
+  /** A reading under way, to go on at the next run. */
+  inProgress: boolean;
+  lastPassAt: string | null;
+  /** HTTP status and message of the last failure, while it is the latest news. */
+  error: string | null;
+}
+
+/** POST /api/creator/:companyId/sync: reads what is due now, then the status. */
+export interface SyncRun extends SyncStatus {
+  /** False when another reading was under way, or one ended less than a minute ago. */
+  ran: boolean;
+  /** Calls made to Whop. */
+  calls: number;
+}
+
+/** GET /api/creator/:companyId/members */
+export interface MembersPage {
+  summary: MembersSummary;
+  members: MemberRow[];
+  /** More members than the page shows. */
+  truncated: boolean;
+}
+
+export interface MembersSummary {
+  /** Members in the community now (status `joined`). */
+  members: number;
+  /** Memberships that still give access (LIVE_MEMBERSHIP_STATUSES). */
+  liveMemberships: number;
+  /** Live memberships set to end at the close of the period. */
+  scheduledCancellations: number;
+  /** Members whose latest payment failed (FAILED_PAYMENT_STATUSES). */
+  failedPayments: number;
+  /** Activity recorded over the last 30 days: messages, reactions, posts, lessons, tickets. */
+  activity30d: number;
+}
+
+export interface MemberRow {
+  id: string;
+  name: string | null;
+  status: 'joined' | 'left';
+  accessLevel: AccessLevel | null;
+  joinedAt: string | null;
+  /** Whop's last action of the member anywhere in the community. */
+  lastActionAt: string | null;
+  /** The last activity StayPut recorded (message, reaction, post, lesson, ticket). */
+  lastActivityAt: string | null;
+  /** Last 30 days. */
+  activity: { messages: number; reactions: number; posts: number; lessons: number };
+  membership: {
+    status: string;
+    price: number | null;
+    currency: string | null;
+    billingPeriodDays: number | null;
+    cancelAtPeriodEnd: boolean;
+    currentPeriodEnd: string | null;
+  } | null;
+  lastPayment: {
+    status: string;
+    amount: number;
+    currency: string;
+    at: string;
+    failureReason: string | null;
+  } | null;
+}
+
 /** GET /health */
 export interface HealthReport {
   status: 'ok' | 'degraded';

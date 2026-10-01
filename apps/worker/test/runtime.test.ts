@@ -2,7 +2,14 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { AccessCache } from '../src/access';
-import { HOURLY_CRON, WEEKLY_CRON, runScheduled, type CronJob, type JobContext } from '../src/cron';
+import {
+  HOURLY_CRON,
+  SYNC_CRON,
+  WEEKLY_CRON,
+  runScheduled,
+  type CronJob,
+  type JobContext,
+} from '../src/cron';
 import { readConfig } from '../src/env';
 
 describe('readConfig', () => {
@@ -69,6 +76,7 @@ describe('cron', () => {
     const toml = readFileSync(path.resolve(import.meta.dirname, '../wrangler.toml'), 'utf8');
     const crons = /^crons\s*=\s*\[(.*)\]$/m.exec(toml)?.[1];
     expect(crons?.split(',').map((c) => c.trim().replace(/"/g, ''))).toEqual([
+      SYNC_CRON,
       HOURLY_CRON,
       WEEKLY_CRON,
     ]);

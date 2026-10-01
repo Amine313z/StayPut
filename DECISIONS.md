@@ -169,3 +169,94 @@ directe** : le script de déploiement la déduit de l'URI du pooler rangée dans
 `SUPABASE_DB_URL` (même mot de passe ; `db.<ref>.supabase.co`, en IPv6, que le réseau de
 Cloudflare joint) et met Hyperdrive à jour. Les migrations, lancées depuis les machines de
 GitHub (IPv4 seulement), gardent le pooler.
+
+## 2026-10-01 — Phase 2 : collecte des données
+
+### Le Worker transporte les pages, Postgres les lit
+
+L'offre gratuite de Cloudflare accorde 10 ms de calcul par exécution du Worker. Lire une page
+de 50 membres en JavaScript (`JSON.parse`, puis une requête par ligne) les consommerait vite.
+Le Worker passe donc chaque page de Whop **telle quelle** à une fonction SQL
+(`stayput.sync_page`, migration 0005), qui la lit, range chaque élément (membres, adhésions,
+paiements, activité) et note où en est la liste. Une page = un appel à Whop + une requête SQL.
+Les e-mails et numéros de téléphone que Whop renvoie ne sont jamais enregistrés, ni le contenu
+des messages (seuls l'auteur, la date et le salon).
+
+### Synchronisation par passes, reprise au curseur
+
+Chaque liste de Whop est un « flux » (`sync_state`) : `members`, `payments`… ou une liste par
+salon de discussion, forum ou cours (`messages:<salon>`), créée quand StayPut découvre le salon.
+Un flux se lit par **passes** : du haut de la liste (le plus récent) jusqu'à ce qu'une passe
+précédente a déjà lu, ou jusqu'au bout. Une passe peut s'étaler sur plusieurs exécutions : le
+curseur de Whop est enregistré, et l'exécution suivante reprend à la page suivante.
+
+- **Premier passage (backfill)** : 90 jours pour les paiements, messages et posts de forum ;
+  la liste entière pour les membres et les adhésions (tous comptent, même anciens).
+- **Cadence** : membres, adhésions, paiements, tickets support et messages toutes les heures ;
+  relecture complète des membres et adhésions chaque jour (statuts, dates de renouvellement,
+  dernière action) ; variantes (prix), salons, forums et cours chaque jour ; leçons terminées
+  chaque jour (le webhook les apporte en temps réel).
+- **Ordre des listes** : StayPut demande le tri du plus récent au plus ancien quand Whop le
+  permet (membres, adhésions, paiements, messages). Whop ne documente pas l'ordre des posts de
+  forum : StayPut suppose « épinglés d'abord, puis du plus récent », et relit tout chaque jour au
+  cas où. Une page triée du plus ancien au plus récent n'arrête jamais une passe avant la fin :
+  au pire StayPut lit trop, jamais trop peu.
+
+### Budget : 40 appels à Whop par exécution, une exécution toutes les 10 minutes
+
+L'offre gratuite limite une exécution à 50 sous-requêtes. StayPut s'accorde **40 appels à Whop
+par exécution** (le reste pour la base), sans relance automatique (une relance compterait
+double). Le cahier des charges demande une synchronisation horaire ; le cron tourne **toutes les
+10 minutes** (`*/10 * * * *`) pour multiplier par six ce que l'offre gratuite permet (environ
+240 appels par heure). Chaque créateur reste lu au plus une fois par heure : chaque exécution
+prend les créateurs qui attendent depuis le plus longtemps, un seul traitement à la fois par
+créateur (bail de 5 minutes en base). Un gros créateur lit son historique en plusieurs
+exécutions. Avec Workers payant (5 $/mois, plus tard), la limite passe à 1 000 sous-requêtes.
+
+- Whop répond **429** (trop d'appels) ou **401** (clé refusée) : l'exécution s'arrête, la
+  suivante reprend.
+- **403** (le créateur n'a pas accordé une permission) : le flux attend sa prochaine passe, et
+  l'erreur est visible dans l'état de la synchronisation. **404** d'un salon supprimé : son flux
+  disparaît.
+- À l'ouverture du tableau de bord, une synchronisation part en arrière-plan (au plus toutes
+  les 10 minutes) : la première ouverture lance le backfill. Le bouton « Synchroniser » lit ce
+  qui est dû pendant la requête, au plus une fois par minute.
+
+### Webhooks : réponse immédiate, rangement juste après
+
+`POST /webhooks/whop` vérifie la signature, enregistre la livraison et répond 200 ; le
+rangement se fait ensuite (`waitUntil`). Une livraison qui échoue (ou que le Worker n'a pas eu
+le temps de ranger) est rejouée par le cron, 5 fois au plus, à partir d'une minute d'âge.
+Les événements de chat (`chat.message.created`, `chat.reaction.created`) ont été ajoutés au
+webhook de l'app du sandbox (par l'API) : c'est la **seule source des réactions**, que la liste
+de Whop ne donne qu'un message à la fois (un appel par message, impossible dans le budget).
+
+### Ce qui arrive dans le désordre
+
+- Une activité (message, réaction…) d'un utilisateur que StayPut ne connaît pas encore comme
+  membre attend 7 jours dans `pending_activity`, puis rejoint `activity_events` dès que le
+  membre arrive (webhook `member.created` ou synchronisation).
+- Un paiement reçu avant son adhésion ou son membre garde leurs identifiants Whop
+  (`whop_membership_id`, `whop_member_id`) : le lien se fait à leur arrivée.
+
+### Tickets support
+
+Whop ne donne pas la date d'ouverture d'un ticket, seulement celle du dernier message et de la
+résolution. Une ouverture est donc datée par le dernier message vu, et comptée une fois par
+épisode (la première, puis une après chaque résolution) ; une résolution est datée par Whop.
+Les tickets se relisent en entier toutes les heures (le seul moyen de voir une résolution).
+
+### Statistiques par jour et par heure
+
+`member_stats_daily` et `activity_hours` sont recalculées pour chaque créateur dont l'activité
+a changé, à partir du plus ancien changement (marque `stats_dirty_since`, posée par chaque
+nouvelle activité ; un verrou garantit qu'aucune activité écrite pendant le calcul n'est
+oubliée).
+
+### Limites connues
+
+- Réactions : par webhook seulement (voir plus haut).
+- Commentaires de forum : la liste des posts sans `parent_id` ne dit pas si elle inclut les
+  commentaires ; à vérifier sur un vrai forum (celui du sandbox est vide).
+- Le module Discord (optionnel, désactivé par défaut) n'est pas fait : il attend que le
+  fondateur décide de l'activer.

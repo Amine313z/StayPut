@@ -1,7 +1,7 @@
-import type { AccessLevel } from '@stayput/core';
+import type { AccessLevel, MembersPage, SyncRun, SyncStatus } from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
 import { SignJWT, generateKeyPair, type CryptoKey } from 'jose';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AccessCache } from '../src/access';
 import {
   HEALTH_DB_TIMEOUT_MS,
@@ -12,9 +12,12 @@ import {
 } from '../src/app';
 import { withUser, type ClosableDb, type Db } from '../src/db';
 import type { Env } from '../src/env';
+import { member, membership, message, page, payment, variant } from './fixtures/whop';
 import { createTestDb, type TestDb } from './helpers/db';
 
-const NOW = new Date('2026-09-30T12:00:00Z');
+// The real time (to the second): RLS checks a creator's access against the database's own
+// clock (is_company_admin), so a fixed date would make these tests expire.
+const NOW = new Date(Math.floor(Date.now() / 1000) * 1000);
 const NOW_S = Math.floor(NOW.getTime() / 1000);
 const APP_ID = 'app_stayput';
 const SECRET = 'ws_test_secret';
@@ -34,9 +37,29 @@ beforeAll(async () => {
 });
 afterAll(() => t.close());
 
-/** A fake Whop answering access checks from a table; counts the calls. */
-function fakeWhop(access: Record<string, AccessLevel | Error>) {
+/** What the Worker left running after its answers (waitUntil): every test waits for it. */
+const pending: Promise<unknown>[] = [];
+const executionCtx = {
+  waitUntil: (promise: Promise<unknown>) => {
+    pending.push(promise);
+  },
+  passThroughOnException: () => {},
+  props: {},
+};
+async function settle() {
+  while (pending.length > 0) await Promise.all(pending.splice(0));
+}
+afterEach(settle);
+
+const EMPTY_PAGE = '{"data":[],"page_info":{"end_cursor":null,"has_next_page":false}}';
+
+/**
+ * A fake Whop answering access checks from a table, and every list with an empty page (or the
+ * pages given); counts the calls.
+ */
+function fakeWhop(access: Record<string, AccessLevel | Error>, lists: Record<string, string> = {}) {
   const calls: string[] = [];
+  const listed: string[] = [];
   const client = {
     env: 'sandbox',
     checkAccess(userId: string, resourceId: string) {
@@ -45,15 +68,23 @@ function fakeWhop(access: Record<string, AccessLevel | Error>) {
       if (answer instanceof Error) return Promise.reject(answer);
       return Promise.resolve({ hasAccess: answer !== 'no_access', accessLevel: answer });
     },
+    listPageRaw(path: string) {
+      listed.push(path);
+      return Promise.resolve(lists[path] ?? EMPTY_PAGE);
+    },
   } as unknown as WhopClient;
-  return { client, calls };
+  return { client, calls, listed };
 }
 
-function setup(access: Record<string, AccessLevel | Error> = {}, options: { db?: Db | null } = {}) {
+function setup(
+  access: Record<string, AccessLevel | Error> = {},
+  options: { db?: Db | null; lists?: Record<string, string> } = {},
+) {
   const db = options.db === undefined ? t.db : options.db;
-  const whop = fakeWhop(access);
+  const whop = fakeWhop(access, options.lists);
+  const clock = { now: NOW };
   const deps: AppDeps = {
-    now: () => NOW,
+    now: () => clock.now,
     openDb: (): ClosableDb | null =>
       db && {
         query: <T>(text: string, params?: readonly unknown[]) => db.query<T>(text, params),
@@ -67,8 +98,8 @@ function setup(access: Record<string, AccessLevel | Error> = {}, options: { db?:
   };
   const app = createApp(deps);
   const request = (path: string, init: RequestInit = {}, env: Env = ENV) =>
-    app.request(path, init, env);
-  return { request, whop };
+    app.request(path, init, env, executionCtx);
+  return { request, whop, clock };
 }
 
 function userToken(sub: string, { aud = APP_ID, key = keys.privateKey } = {}) {
@@ -296,26 +327,36 @@ describe('POST /webhooks/whop', () => {
     data: { id: 'mem_1' },
   });
 
-  it('stores a signed delivery as a JSON object, once', async () => {
+  it('stores a signed delivery once, answers, then files it', async () => {
+    const event = JSON.stringify({
+      type: 'membership.activated',
+      company_id: 'biz_Hook',
+      data: membership('mem_Hook1', 'user_Hook1', { account: { id: 'biz_Hook' } }),
+    });
     const { request } = setup();
-    const first = await request('/webhooks/whop', await delivery(EVENT, 'msg_store'));
+    const first = await request('/webhooks/whop', await delivery(event, 'msg_store'));
     expect(first.status).toBe(200);
     expect(await first.json()).toEqual({ received: true, duplicate: false });
-    const again = await request('/webhooks/whop', await delivery(EVENT, 'msg_store'));
+    await settle();
+    const again = await request('/webhooks/whop', await delivery(event, 'msg_store'));
     expect(await again.json()).toEqual({ received: true, duplicate: true });
+    await settle();
     const rows = await t.db.query(
-      `select company_id, type, status, jsonb_typeof(payload) as kind, payload->'data'->>'id' as data_id
+      `select company_id, type, status, attempts, jsonb_typeof(payload) as kind
          from stayput.webhook_events where id = 'msg_store'`,
     );
     expect(rows).toEqual([
       {
-        company_id: 'biz_A1',
+        company_id: 'biz_Hook',
         type: 'membership.activated',
-        status: 'received',
+        status: 'processed',
+        attempts: 1,
         kind: 'object',
-        data_id: 'mem_1',
       },
     ]);
+    expect(
+      await t.db.query(`select company_id, status from stayput.memberships where id = 'mem_Hook1'`),
+    ).toEqual([{ company_id: 'biz_Hook', status: 'active' }]);
   });
 
   it('refuses a bad signature, and a body without JSON or type', async () => {
@@ -371,5 +412,162 @@ describe('reserved and unknown routes', () => {
     const res = await setup().request('/api/nope');
     expect(res.status).toBe(404);
     expect(await res.json()).toMatchObject({ error: { code: 'not_found' } });
+  });
+});
+
+describe('the synchronization from the creator view', () => {
+  const ACCOUNT_LISTS = [
+    '/variants',
+    '/members',
+    '/memberships',
+    '/payments',
+    '/support_channels',
+    '/chat_channels',
+    '/forums',
+    '/courses',
+  ];
+
+  it('starts reading the company on the first visit, after answering', async () => {
+    const { request, whop } = setup({ 'user_carla:biz_Sync1': 'admin' });
+    const init = await asUser('user_carla');
+    expect((await request('/api/creator/biz_Sync1/session', init)).status).toBe(200);
+    await settle();
+    expect(whop.listed).toEqual(ACCOUNT_LISTS);
+
+    // Another visit soon after reads nothing again.
+    whop.listed.length = 0;
+    await request('/api/creator/biz_Sync1/session', init);
+    await settle();
+    expect(whop.listed).toEqual([]);
+
+    const res = await request('/api/creator/biz_Sync1/sync', init);
+    expect(res.status).toBe(200);
+    const status = (await res.json()) as SyncStatus;
+    expect(status.backfillDone).toBe(true);
+    expect(status.lastSyncAt).toBe(NOW.toISOString());
+    expect(status.streams.map((s) => s.stream)).toEqual(
+      ACCOUNT_LISTS.map((p) => (p === '/variants' ? 'plans' : p.slice(1))).sort(),
+    );
+  });
+
+  it('reads now on demand, at most once a minute', async () => {
+    const { request, clock } = setup({ 'user_erin:biz_Sync2': 'admin' });
+    const init = await asUser('user_erin');
+    await request('/api/creator/biz_Sync2/session', init);
+    await settle();
+    const syncNow = async () =>
+      (await (
+        await request('/api/creator/biz_Sync2/sync', { method: 'POST', ...init })
+      ).json()) as SyncRun;
+
+    expect(await syncNow()).toMatchObject({ ran: false, calls: 0, backfillDone: true });
+    clock.now = new Date(NOW.getTime() + 61_000);
+    expect(await syncNow()).toMatchObject({ ran: true, calls: 0 });
+    expect(await syncNow()).toMatchObject({ ran: false });
+  });
+
+  it('keeps the synchronization to the team', async () => {
+    const { request } = setup({ 'user_dan:biz_Sync3': 'customer' });
+    const init = await asUser('user_dan');
+    for (const [path, method] of [
+      ['/api/creator/biz_Sync3/sync', 'GET'],
+      ['/api/creator/biz_Sync3/sync', 'POST'],
+      ['/api/creator/biz_Sync3/members', 'GET'],
+    ] as const) {
+      expect((await request(path, { method, ...init })).status, `${method} ${path}`).toBe(403);
+    }
+  });
+});
+
+describe('GET /api/creator/:companyId/members', () => {
+  const ingest = (companyId: string, kind: string, body: unknown, scope: string | null = null) =>
+    t.db.query('select stayput.ingest_page($1, $2, $3, $4::text::jsonb)', [
+      companyId,
+      kind,
+      scope,
+      JSON.stringify(body),
+    ]);
+  const daysAgo = (n: number) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
+
+  it("lists the company's members with what StayPut collected about them", async () => {
+    const { request } = setup({ 'user_mia:biz_Mem1': 'admin', 'user_mia:biz_Mem2': 'admin' });
+    const init = await asUser('user_mia');
+    await request('/api/creator/biz_Mem1/session', init);
+    await request('/api/creator/biz_Mem2/session', init);
+    await settle();
+
+    const c = 'biz_Mem1';
+    await ingest(c, 'plans', page([variant('plan_VM1')]));
+    await ingest(
+      c,
+      'members',
+      page([
+        member('mber_MA', 'user_UA'),
+        member('mber_MB', 'user_UB'),
+        member('mber_MC', 'user_UC', { status: 'left' }),
+      ]),
+    );
+    await ingest(
+      c,
+      'memberships',
+      page([
+        membership('mem_MA', 'user_UA', { plan_id: 'plan_VM1' }),
+        membership('mem_MB', 'user_UB', { plan_id: 'plan_VM1', cancel_at_period_end: true }),
+        membership('mem_MC', 'user_UC', { plan_id: 'plan_VM1', status: 'canceled' }),
+      ]),
+    );
+    await ingest(
+      c,
+      'payments',
+      page([
+        payment('pay_MA1', { membership_id: 'mem_MA', member_id: 'mber_MA' }),
+        payment('pay_MB1', {
+          membership_id: 'mem_MB',
+          member_id: 'mber_MB',
+          substatus: 'failed',
+          failure_message: 'Card declined',
+          created_at: daysAgo(1),
+        }),
+      ]),
+    );
+    await ingest(
+      c,
+      'messages',
+      page([message('msg_MA1', 'user_UA', daysAgo(1)), message('msg_MA2', 'user_UA', daysAgo(2))]),
+      'chat_M1',
+    );
+    await ingest('biz_Mem2', 'members', page([member('mber_Other', 'user_Other')]));
+    await t.db.query('select stayput.refresh_stats($1::timestamptz)', [NOW.toISOString()]);
+
+    const res = await request('/api/creator/biz_Mem1/members', init);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as MembersPage;
+    expect(body.summary).toEqual({
+      members: 2,
+      liveMemberships: 2,
+      scheduledCancellations: 1,
+      failedPayments: 1,
+      activity30d: 2,
+    });
+    expect(body.truncated).toBe(false);
+    expect(body.members.map((m) => [m.id, m.status])).toEqual([
+      ['mber_MA', 'joined'],
+      ['mber_MB', 'joined'],
+      ['mber_MC', 'left'],
+    ]);
+    expect(body.members[0]).toMatchObject({
+      name: 'Name user_UA',
+      accessLevel: 'customer',
+      lastActivityAt: daysAgo(1),
+      activity: { messages: 2, reactions: 0, posts: 0, lessons: 0 },
+      membership: { status: 'active', price: 49, currency: 'usd', cancelAtPeriodEnd: false },
+      lastPayment: { status: 'succeeded', amount: 49, currency: 'usd' },
+    });
+    expect(body.members[1]).toMatchObject({
+      membership: { cancelAtPeriodEnd: true },
+      lastPayment: { status: 'failed', failureReason: 'Card declined' },
+    });
+    // Nothing personal leaves the database: no e-mail, no phone.
+    expect(JSON.stringify(body)).not.toMatch(/@mail\.test|\+33/);
   });
 });

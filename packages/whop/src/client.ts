@@ -53,6 +53,15 @@ export interface WhopClient {
     query?: Record<string, QueryValue>,
     cursor?: { after?: string | null; first?: number },
   ): Promise<Page<T>>;
+  /**
+   * One page of a list endpoint as Whop sent it, unparsed: the sync hands it to Postgres as is,
+   * so that the Worker spends no CPU time on JSON (DECISIONS.md, Phase 2).
+   */
+  listPageRaw(
+    path: string,
+    query?: Record<string, QueryValue>,
+    cursor?: { after?: string | null; first?: number },
+  ): Promise<string>;
   /** Pages one after the other, from `after`, at most `maxPages` of them. */
   paginate<T>(
     path: string,
@@ -79,11 +88,12 @@ export function createWhopClient(options: WhopClientOptions): WhopClient {
   const now = options.now ?? Date.now;
   const apiVersionDate = options.apiVersionDate ?? WHOP_API_VERSION_DATE;
 
-  async function request<T>(
+  /** The body of a successful response, as text; retries what is safe to retry. */
+  async function call(
     method: HttpMethod,
     path: string,
     { query, body, idempotencyKey }: RequestOptions = {},
-  ): Promise<T> {
+  ): Promise<string> {
     const url = buildUrl(baseUrl, path, query);
     const headers = new Headers({
       Authorization: `Bearer ${options.apiKey}`,
@@ -110,17 +120,7 @@ export function createWhopClient(options: WhopClientOptions): WhopClient {
       }
 
       const text = await response.text();
-      if (response.ok) {
-        if (text === '') return undefined as T;
-        try {
-          return JSON.parse(text) as T;
-        } catch {
-          throw new WhopApiError(response.status, 'invalid_response', 'the body is not JSON', {
-            method,
-            path,
-          });
-        }
-      }
+      if (response.ok) return text;
 
       const parsed = readErrorBody(text);
       const retryAfterMs = parseRetryAfter(response.headers.get('retry-after'), now());
@@ -141,6 +141,20 @@ export function createWhopClient(options: WhopClientOptions): WhopClient {
     }
   }
 
+  async function request<T>(
+    method: HttpMethod,
+    path: string,
+    requestOptions?: RequestOptions,
+  ): Promise<T> {
+    const text = await call(method, path, requestOptions);
+    if (text === '') return undefined as T;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new WhopApiError(200, 'invalid_response', 'the body is not JSON', { method, path });
+    }
+  }
+
   async function listPage<T>(
     path: string,
     query: Record<string, QueryValue> = {},
@@ -154,6 +168,21 @@ export function createWhopClient(options: WhopClientOptions): WhopClient {
     }
     const { has_next_page: hasNext, end_cursor: endCursor } = page.page_info;
     return { items: page.data as T[], nextCursor: hasNext && endCursor ? endCursor : null };
+  }
+
+  async function listPageRaw(
+    path: string,
+    query: Record<string, QueryValue> = {},
+    cursor: { after?: string | null; first?: number } = {},
+  ): Promise<string> {
+    const text = await call('GET', path, {
+      query: { ...query, first: cursor.first ?? DEFAULT_PAGE_SIZE, after: cursor.after },
+    });
+    // A cheap look at the first character only: Postgres reads the rest.
+    if (!/^\s*\{/.test(text)) {
+      throw new WhopApiError(200, 'invalid_response', 'not a list page', { method: 'GET', path });
+    }
+    return text;
   }
 
   async function* paginate<T>(
@@ -190,7 +219,7 @@ export function createWhopClient(options: WhopClientOptions): WhopClient {
     return { hasAccess: body.has_access, accessLevel: body.access_level };
   }
 
-  return { env: options.env, request, listPage, paginate, checkAccess };
+  return { env: options.env, request, listPage, listPageRaw, paginate, checkAccess };
 }
 
 function buildUrl(baseUrl: string, path: string, query?: Record<string, QueryValue>): string {

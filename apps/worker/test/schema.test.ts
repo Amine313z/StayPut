@@ -7,7 +7,7 @@ import { createTestDb, type TestDb } from './helpers/db';
  */
 
 // Tables no Whop user may read, even their own rows: the Worker alone uses them.
-const SERVER_ONLY = ['company_admins', 'webhook_events'];
+const SERVER_ONLY = ['company_admins', 'company_sync', 'pending_activity', 'webhook_events'];
 
 // Tables with a company_id that is not a foreign key to companies, and why.
 const COMPANY_ID_WITHOUT_FK: Record<string, string> = {

@@ -209,6 +209,33 @@ describe('pagination', () => {
       type: 'invalid_response',
     });
   });
+
+  it('hands a page over unparsed, for the database to read', async () => {
+    const body = '{"data":[{"id":"mem_1"}],"page_info":{"end_cursor":"c1","has_next_page":true}}';
+    const whop = fakeWhop(new Response(body), new Response('<html>maintenance</html>'));
+    const client = createWhopClient(whop.options);
+    expect(await client.listPageRaw('/memberships', { account_id: 'biz_1' }, { after: 'c0' })).toBe(
+      body,
+    );
+    expect(whop.calls[0]!.url.search).toBe('?account_id=biz_1&first=50&after=c0');
+    await expect(client.listPageRaw('/memberships')).rejects.toMatchObject({
+      type: 'invalid_response',
+    });
+  });
+
+  it('retries a raw page like any GET, and reports Whop errors the same way', async () => {
+    const whop = fakeWhop(
+      whopError(503, 'unavailable', 'try again'),
+      whopError(403, 'forbidden', 'missing permission chat:read'),
+    );
+    await expect(
+      createWhopClient(whop.options).listPageRaw('/messages', { channel_id: 'chat_1' }),
+    ).rejects.toMatchObject({
+      status: 403,
+      message: expect.stringContaining('missing permission chat:read') as string,
+    });
+    expect(whop.calls).toHaveLength(2);
+  });
 });
 
 describe('access check', () => {

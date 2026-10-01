@@ -45,8 +45,14 @@ Guidance for Claude Code in this repository.
   in « StayPut Test ». Whop's sandbox cannot display app views, so StayPut also opens outside
   the iframe with « Sign in with Whop » (sandbox only, 2026-10-01): the founder signed in and the
   creator view opened for `biz_2whAzkbCRpcGqQ` (access checked with Whop, company recorded in the
-  database). Hyperdrive now uses Supabase's direct connection. Waiting for Phase 1 validation;
-  Phase 2 starts by setting the app's permissions in the sandbox dashboard (founder, by hand).
+  database). Hyperdrive now uses Supabase's direct connection. Phase 1 validated by the founder
+  on 2026-10-01.
+- **Phase 2** (data collection), in progress: the founder granted the 19 read permissions
+  (checked through `GET /apps/{id}`); migration 0005 files Whop's pages and webhook deliveries
+  in SQL; `src/sync.ts` reads each company's lists by passes (cron every 10 minutes, 40 Whop
+  calls per run, background sync when the dashboard opens, « Sync now »); the app webhook also
+  receives `chat.message.created` and `chat.reaction.created` (set through the API). Still to
+  do: the members screen, the seed of test members, deployment and the stop report.
 - **Deploying**: the `Deploy` workflow (`.github/workflows/deploy.yml`, `workflow_dispatch`),
   started from GitHub's Actions tab or through the GitHub API (`actions_run_trigger`, workflow
   `deploy.yml`, ref `main`). It migrates the database, creates Hyperdrive if needed, publishes
@@ -92,6 +98,15 @@ npm run db:bundle    # after adding a migration: supabase/install.sql + schema-v
   `new Date()`.
 - **Free plan limits**: 10 ms CPU per invocation, 50 subrequests, 5 crons. Heavy work goes to
   SQL; sync advances by small batches with a cursor.
+- **Sync** (`apps/worker/src/sync.ts`, DECISIONS.md « Phase 2 »): `STREAMS` lists every Whop
+  list; `planPass` decides what is due; each page goes **raw** to `stayput.sync_page` (never
+  `JSON.parse` a page in the Worker); the sync client has `maxRetries: 0` and each call costs one
+  unit of `budget`; `syncIfFree` holds the company lease (`claim_sync` / `release_sync`).
+  Webhook deliveries are stored, answered, then filed in the background
+  (`process_webhook_event`); the cron replays failures. Activity of an unknown user waits in
+  `pending_activity`. Statistics: `refresh_stats` after new activity (`stats_dirty_since`).
+- **Background work** in a request: `inBackground(c, label, work)` (own database client,
+  `waitUntil`); tests pass an execution context and await it (`settle()` in app.test.ts).
 - **Frontend**: no text in components, everything through `t()` from `packages/i18n` (English
   reference, French typed on it; `no-hardcoded-text.test.ts`); colors only as tokens in
   `apps/web/src/styles.css` (`contrast.test.ts` checks WCAG AA in both themes).

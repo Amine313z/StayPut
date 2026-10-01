@@ -24,6 +24,7 @@ export default {
         config,
         db,
         whop: deps.whopClient(config),
+        syncWhop: deps.whopClient(config, { maxRetries: 0 }),
         now: new Date(controller.scheduledTime),
       });
     } finally {
