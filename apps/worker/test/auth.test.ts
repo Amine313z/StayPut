@@ -132,6 +132,8 @@ describe('signing in with Whop outside the iframe (sandbox)', () => {
       userId: 'user_alice',
       accessLevel: 'admin',
       via: 'login',
+      // No database in these tests: nothing to ask the browser.
+      timezoneSet: true,
     });
   });
 

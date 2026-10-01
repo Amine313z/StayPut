@@ -47,6 +47,8 @@ export interface CreatorSession {
   userId: string;
   accessLevel: AccessLevel;
   via: SignInMethod;
+  /** Whether the company has its time zone; the dashboard sends the browser's when not. */
+  timezoneSet: boolean;
 }
 
 /** GET /api/member/:experienceId/session */
@@ -372,6 +374,8 @@ export interface ActionSettingsView {
   locale: TemplateLocale;
   dryRun: boolean;
   killSwitch: boolean;
+  /** The creator's time zone (an IANA name): the hours below are its local hours. */
+  timezone: string;
   quietHoursStart: number;
   quietHoursEnd: number;
   defaultSendHour: number;
@@ -382,6 +386,17 @@ export interface ActionSettingsView {
   maxFreeDaysPerQuarter: number;
   /** The creator's own wording; StayPut's default for what is left out. */
   templates: Partial<Record<TemplateLocale, Partial<Record<MessageAction, MessageTemplate>>>>;
+}
+
+/**
+ * The PUT body: the settings, with the time zone only when the creator changed it (the zone
+ * their browser reported may have arrived since the form was read).
+ */
+export type ActionSettingsUpdate = Omit<ActionSettingsView, 'timezone'> & { timezone?: string };
+
+/** POST /api/creator/:companyId/timezone: the zone in effect for the company. */
+export interface TimezoneAnswer {
+  timezone: string;
 }
 
 /** GET /health */

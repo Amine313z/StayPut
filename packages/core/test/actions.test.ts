@@ -12,6 +12,7 @@ import {
   localHour,
   nextLocalHour,
   outOfQuietHours,
+  timeZoneName,
   type GuardrailSettings,
   type MemberHistory,
   type ProposedAction,
@@ -205,6 +206,17 @@ describe('time of day', () => {
     expect(localHour(NOW, 'Europe/Paris')).toBe(10);
     expect(localHour(NOW, 'America/Toronto')).toBe(4);
     expect(localHour(NOW, 'Mars/Olympus_Mons')).toBe(8);
+  });
+
+  it('takes the IANA zones the runtime knows, as given, and nothing else', () => {
+    for (const zone of ['Europe/Paris', 'America/Montreal', 'America/Argentina/Buenos_Aires']) {
+      expect(timeZoneName(zone)).toBe(zone);
+    }
+    expect(timeZoneName('UTC')).toBe('UTC');
+    for (const wrong of ['Mars/Olympus_Mons', '+01:00', 'Europe/Paris; drop', '', 42, null]) {
+      expect(timeZoneName(wrong)).toBeNull();
+    }
+    expect(timeZoneName(`Europe/${'x'.repeat(60)}`)).toBeNull();
   });
 
   it('knows quiet hours that wrap around midnight, or not', () => {

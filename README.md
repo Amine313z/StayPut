@@ -158,8 +158,9 @@ avertissement avec la correction à faire, jamais un échec du déploiement.
   qui est dû (au plus une fois par minute). Détails : `DECISIONS.md`, « Phase 2 ».
 - **Inspect** (**Actions → Inspect → Run workflow**) : l'état de la base en chiffres seulement
   (version du schéma, flux de synchronisation et leurs erreurs, nombre de lignes par table,
-  webhooks reçus par type). Aucun nom, aucune adresse, aucun contenu. Le rapport s'affiche dans
-  le résumé de l'exécution.
+  actions par type et par statut, réglages des actions : mode, mode test, arrêts, fuseau et
+  heures, webhooks reçus par type). Aucun nom, aucune adresse, aucun contenu. Le rapport
+  s'affiche dans le résumé de l'exécution.
 - **Seed sandbox** (**Actions → Seed sandbox → Run workflow**, `seed`, `remove` ou `report`) :
   25 membres fictifs avec 60 jours d'historique dans « StayPut Test » (8 actifs, 5 en déclin,
   4 inactifs, 3 paiements échoués, 3 annulations programmées, 2 nouveaux dont un qui n'a encore

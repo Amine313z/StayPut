@@ -258,6 +258,23 @@ export function localHour(time: number, timezone: string): number {
   return Number(format.format(time)) % 24;
 }
 
+/**
+ * An IANA time zone name the runtime knows (`Europe/Paris`), as given, or null: what a
+ * creator's browser reports, or the creator picks, before it becomes the company's zone. Kept as
+ * given rather than canonical (America/Montreal stays so): the runtimes do not all agree on the
+ * canonical names, and Postgres knows both.
+ */
+export function timeZoneName(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 64) return null;
+  if (!/^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+){0,2}$/.test(value)) return null;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return value;
+  } catch {
+    return null;
+  }
+}
+
 /** Whether `hour` falls in the quiet hours (which may wrap around midnight). */
 export function isQuietHour(hour: number, start: number, end: number): boolean {
   if (start === end) return false;

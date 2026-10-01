@@ -659,7 +659,9 @@ ne laisse jamais « Salut , ». L'emplacement d'une IA de rédaction existe, ét
   qui s'est passé : envoyée, simulée (mode test), bloquée par un garde-fou avec la raison en
   clair, annulée et pourquoi (« le paiement est passé entre-temps »), échouée avec l'erreur.
 - **Validée, elle passe tout de suite** les garde-fous, et ce qui est dû part aussitôt : pas
-  besoin d'attendre le passage de l'heure.
+  besoin d'attendre le passage de l'heure. Ce qui a une heure à respecter (l'heure d'or d'un
+  message de risque) attend son heure dans _Programmées_, mode test compris : le mode test
+  simule l'envoi au moment où il aurait eu lieu.
 - **Réglages** (onglet Réglages, sous le score) : mode manuel ou automatique, mode test, arrêt
   d'urgence, langue des messages, heures silencieuses, heure d'envoi par défaut, limites et
   textes des messages. Les limites ne peuvent être que **plus strictes** que celles du cahier
@@ -669,6 +671,30 @@ ne laisse jamais « Salut , ». L'emplacement d'une IA de rédaction existe, ét
   exemple ; une variable inconnue est refusée avant l'envoi au serveur.
 - **Liste « ne jamais contacter »** : l'API existe (`PUT /members/:id/contact`) ; le bouton
   dans la liste des membres vient avec la vue membre.
+
+### Le fuseau du créateur (migration 0011, même jour)
+
+Les heures silencieuses, l'heure d'or et l'heure par défaut sont celles du créateur. Mais
+`companies.timezone` valait `UTC` depuis 0001, une valeur que personne n'avait choisie : chez
+le fondateur, l'heure par défaut 19 h devenait 21 h à Paris.
+
+- **Le navigateur du créateur la donne** à sa première visite du tableau de bord : la session
+  dit si l'entreprise a déjà son fuseau (`timezoneSet`), et sinon la page envoie celui du
+  navigateur (`POST /timezone`). Le premier entendu reste ; un autre navigateur, ailleurs, ne
+  le change pas. Ensuite, seul le créateur le change, dans Réglages → Actions et garde-fous,
+  avec un bouton « Utiliser celui de ce navigateur ».
+- Le formulaire n'envoie le fuseau **que si le créateur l'a modifié** : celui du navigateur a
+  pu arriver après la lecture du formulaire, il ne faut pas l'écraser par l'ancien.
+- **Validé deux fois** : le Worker n'accepte qu'un nom IANA que son moteur connaît
+  (`Europe/Paris`), gardé tel quel (les moteurs ne s'accordent pas tous sur les noms
+  canoniques) ; Postgres vérifie qu'il le connaît aussi (`pg_timezone_names`). Un fuseau
+  inconnu de l'un ou de l'autre ne passe pas : il casserait les calculs en SQL.
+- Changer de fuseau **recompte l'activité** des 90 derniers jours dans le nouveau (les jours
+  et les heures d'activité sont locaux).
+- **Les heures silencieuses sont revérifiées au moment d'envoyer**, dans le fuseau et avec les
+  heures du moment : une action programmée avant un changement de fuseau ou d'heures, ou un
+  passage du cron en retard, ne fait jamais partir un message la nuit. Le message attend la fin
+  des heures silencieuses ; ce n'est pas une tentative.
 
 ### Reste à faire dans cette phase
 

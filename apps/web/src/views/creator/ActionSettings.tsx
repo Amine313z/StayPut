@@ -3,18 +3,20 @@ import {
   MESSAGE_ACTIONS,
   TEMPLATE_VARIABLES,
   templateProblems,
+  type ActionSettingsUpdate,
   type ActionSettingsView,
   type MessageAction,
   type MessageTemplate,
   type TemplateLocale,
 } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
-import { CircleAlert, CircleCheck, Save, ShieldCheck } from 'lucide-react';
-import { useId, useState, type FormEvent } from 'react';
+import { CircleAlert, CircleCheck, Globe, Save, ShieldCheck } from 'lucide-react';
+import { useId, useMemo, useState, type FormEvent } from 'react';
 import { putJson, useApi } from '../../api';
 import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { useI18n } from '../../i18n';
+import { browserTimeZone, timeZoneGroups, zoneLabel } from '../../timezone';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { useCreatorData } from '../CreatorView';
@@ -110,8 +112,16 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
   const { api } = useCreatorData();
   const [draft, setDraft] = useState(() => toDraft(initial));
   const [saved, setSaved] = useState(() => JSON.stringify(initial));
+  // The zone goes along only when the creator changed it: the one their browser told may have
+  // arrived since this form was read.
+  const [savedZone, setSavedZone] = useState(initial.timezone);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const ids = useId();
+  const browserZone = useMemo(() => browserTimeZone(), []);
+  const zoneGroups = useMemo(
+    () => timeZoneGroups(initial.timezone, browserZone),
+    [initial.timezone, browserZone],
+  );
 
   const view = toView(draft);
   const changed = view !== null && JSON.stringify(view) !== saved;
@@ -140,9 +150,12 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
     event.preventDefault();
     if (!view || !changed) return;
     setStatus('saving');
+    const { timezone, ...rest } = view;
+    const body: ActionSettingsUpdate = timezone === savedZone ? rest : view;
     try {
-      const next = await putJson<ActionSettingsView>(`${api}/settings/actions`, view);
+      const next = await putJson<ActionSettingsView>(`${api}/settings/actions`, body);
       setSaved(JSON.stringify(next));
+      setSavedZone(next.timezone);
       setDraft(toDraft(next));
       setStatus('saved');
     } catch {
@@ -277,6 +290,49 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
 
         <Row label={t('actionSettings.hours')} labelId={`${ids}-hours`}>
           <div role="group" aria-labelledby={`${ids}-hours`} className="space-y-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <label htmlFor={`${ids}-zone`}>{t('actionSettings.timezone')}</label>
+                <select
+                  id={`${ids}-zone`}
+                  value={draft.timezone}
+                  aria-describedby={`${ids}-zone-hint`}
+                  onChange={(event) => {
+                    const timezone = event.target.value;
+                    edit((current) => ({ ...current, timezone }));
+                  }}
+                  className={`${FIELD} w-full sm:w-72`}
+                >
+                  {zoneGroups.map(({ region, zones }) => (
+                    <optgroup
+                      key={region ?? ''}
+                      label={region ?? t('actionSettings.timezone.other')}
+                    >
+                      {zones.map((zone) => (
+                        <option key={zone} value={zone}>
+                          {zoneLabel(zone)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <p id={`${ids}-zone-hint`} className="mt-1.5 text-sm text-muted">
+                {t('actionSettings.timezone.hint')}
+              </p>
+              {browserZone && browserZone !== draft.timezone ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="mt-1"
+                  icon={<Globe aria-hidden="true" className="size-4" />}
+                  onClick={() => edit((current) => ({ ...current, timezone: browserZone }))}
+                >
+                  {t('actionSettings.timezone.useBrowser', { zone: zoneLabel(browserZone) })}
+                </Button>
+              ) : null}
+            </div>
             <div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <label htmlFor={`${ids}-quiet-from`}>{t('actionSettings.quietFrom')}</label>

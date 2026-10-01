@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type {
   ActionRow,
   ActionSettingsView,
@@ -64,7 +64,13 @@ function renderAt(path: string, locale: Locale = 'en') {
 
 const creatorSession = {
   status: 200,
-  body: { companyId: 'biz_A1', userId: 'user_alice', accessLevel: 'admin', via: 'iframe' },
+  body: {
+    companyId: 'biz_A1',
+    userId: 'user_alice',
+    accessLevel: 'admin',
+    via: 'iframe',
+    timezoneSet: true,
+  },
 };
 
 const syncStatus = (over: Partial<SyncStatus> = {}) => ({
@@ -252,6 +258,7 @@ const ACTION_SETTINGS: ActionSettingsView = {
   locale: 'en',
   dryRun: false,
   killSwitch: false,
+  timezone: 'Europe/Paris',
   quietHoursStart: 22,
   quietHoursEnd: 8,
   defaultSendHour: 19,
@@ -1267,6 +1274,71 @@ describe('the actions (SPEC Phase 4)', () => {
       maxMessagesPerMonth: 2,
       templates: { en: { welcome_message: { title: 'Hi {first_name}', body: '' } } },
     });
+    // The zone was not touched: it does not go along.
+    expect(bodies.get('PUT /api/creator/biz_A1/settings/actions')).not.toHaveProperty('timezone');
     expect(await screen.findByText('Saved.')).toBeTruthy();
+  });
+
+  it('tells the browser’s time zone for a company that has none, once', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/session': [
+        { status: 200, body: { ...creatorSession.body, timezoneSet: false } },
+      ],
+      'POST /api/creator/biz_A1/timezone': [{ status: 200, body: { timezone: 'UTC' } }],
+    });
+    renderAt('/dashboard/biz_A1');
+    await vi.waitFor(() => expect(calls).toContain('POST /api/creator/biz_A1/timezone'));
+    expect(bodies.get('POST /api/creator/biz_A1/timezone')).toEqual({
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    expect(headersOf.get('POST /api/creator/biz_A1/timezone')?.get('x-stayput-csrf')).toBe('1');
+    expect(await screen.findByText('Up to date.')).toBeTruthy();
+    expect(calls.filter((call) => call.endsWith('/timezone'))).toHaveLength(1);
+  });
+
+  it('changes the time zone of the hours, by hand or to the browser’s', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/settings/risk': [
+        {
+          status: 200,
+          body: {
+            niche: 'other',
+            weights: { recency: 0.3, frequency: 0.25, progress: 0.2, payment: 0.15, friction: 0.1 },
+            recencyThresholdDays: 14,
+            mediumFrom: 40,
+            highFrom: 70,
+          },
+        },
+      ],
+      '/api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
+      'PUT /api/creator/biz_A1/settings/actions': [
+        { status: 200, body: { ...ACTION_SETTINGS, timezone: 'Asia/Tokyo' } },
+        { status: 200, body: { ...ACTION_SETTINGS, timezone: 'UTC' } },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    const zone = await screen.findByRole<HTMLSelectElement>('combobox', { name: 'Time zone' });
+    expect(zone.value).toBe('Europe/Paris');
+    expect(within(zone).getByRole('option', { name: 'America/New York' })).toBeTruthy();
+    const save = () => screen.getByRole('button', { name: 'Save the action settings' });
+    fireEvent.change(zone, { target: { value: 'Asia/Tokyo' } });
+    fireEvent.click(save());
+    await vi.waitFor(() => expect(calls).toContain('PUT /api/creator/biz_A1/settings/actions'));
+    expect(bodies.get('PUT /api/creator/biz_A1/settings/actions')).toMatchObject({
+      timezone: 'Asia/Tokyo',
+    });
+    expect(await screen.findByText('Saved.')).toBeTruthy();
+    // The browser here says UTC: one click takes it.
+    fireEvent.click(screen.getByRole('button', { name: 'Use this browser’s: UTC' }));
+    expect(zone.value).toBe('UTC');
+    expect(screen.queryByRole('button', { name: /Use this browser’s/ })).toBeNull();
+    fireEvent.click(save());
+    await vi.waitFor(() =>
+      expect(bodies.get('PUT /api/creator/biz_A1/settings/actions')).toMatchObject({
+        timezone: 'UTC',
+      }),
+    );
   });
 });

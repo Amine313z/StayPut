@@ -1,11 +1,13 @@
 import type { CreatorSession, IntegrationsStatus, MembersPage } from '@stayput/core';
 import { ChartColumn, LayoutDashboard, Plug, SlidersHorizontal, Users, Zap } from 'lucide-react';
+import { useEffect } from 'react';
 import { Outlet, useOutletContext, useParams } from 'react-router';
 import { useApi, useReloadOnReturn, type Loadable } from '../api';
 import { SignOut } from '../components/SignOut';
 import { ErrorPanel, Loading } from '../components/Status';
 import { useI18n } from '../i18n';
 import { useSync, type SyncState } from '../sync';
+import { shareTimeZone } from '../timezone';
 import { NavTabs } from '../ui/Tabs';
 
 /** What every section of the creator view reads, loaded once for all of them. */
@@ -62,6 +64,11 @@ function Dashboard({ session }: { session: CreatorSession }) {
     integrations.reload();
   });
   const data: CreatorData = { companyId, root, api, members, sync, integrations };
+  // A company StayPut does not know the zone of yet: the creator's browser tells it.
+  const timezoneSet = session.timezoneSet;
+  useEffect(() => {
+    if (!timezoneSet) shareTimeZone(api);
+  }, [api, timezoneSet]);
 
   return (
     <div className="space-y-6">

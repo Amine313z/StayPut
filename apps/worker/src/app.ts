@@ -8,6 +8,7 @@ import {
   isExperienceId,
   isNiche,
   normalizeWeights,
+  timeZoneName,
   type AccessLevel,
   type CreatorSession,
   type DiscordChannelsUpdate,
@@ -16,6 +17,7 @@ import {
   type RiskSettingsView,
   type SignInMethod,
   type SyncRun,
+  type TimezoneAnswer,
 } from '@stayput/core';
 import {
   USER_TOKEN_HEADER,
@@ -527,8 +529,9 @@ export function createApp(deps: AppDeps) {
     const companyId = c.get('companyId');
     const userId = c.get('userId');
     const db = c.get('db');
+    let timezoneSet = true;
     if (db) {
-      await recordAdmin(db, companyId, userId, deps.now());
+      timezoneSet = await recordAdmin(db, companyId, userId, deps.now());
       // The first visit starts the backfill, later ones bring the data up to date (SPEC
       // Phase 2, 2).
       syncInBackground(c, companyId);
@@ -538,6 +541,7 @@ export function createApp(deps: AppDeps) {
       userId,
       accessLevel: c.get('accessLevel'),
       via: c.get('via'),
+      timezoneSet,
     };
     return c.json(session);
   });
@@ -751,6 +755,10 @@ export function createApp(deps: AppDeps) {
       const settings = validActionSettings(await c.req.json<unknown>().catch(() => null));
       if (!settings) return apiError('invalid_request', 'expected the action settings');
       const companyId = c.get('companyId');
+      if (settings.timezone) {
+        const zone = await setTimezone(db, companyId, settings.timezone, false);
+        if (!zone) return apiError('invalid_request', 'unknown time zone');
+      }
       await db.query('select stayput.save_action_settings($1, $2::text::jsonb)', [
         companyId,
         JSON.stringify(settings),
@@ -760,6 +768,36 @@ export function createApp(deps: AppDeps) {
       return c.json((await readActionSettings(db, c.get('userId'), companyId)) ?? settings);
     },
   );
+
+  /**
+   * The creator's time zone, as their browser reports it: kept while the company has none of its
+   * own yet (the quiet hours and the golden hour are the creator's local hours), then changed
+   * only in the action settings. Answers the zone in effect.
+   */
+  app.post('/api/creator/:companyId/timezone', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const body = await c.req.json<{ timezone?: unknown }>().catch(() => null);
+    const timezone = timeZoneName(body?.timezone);
+    if (!timezone) return apiError('invalid_request', 'expected { timezone: an IANA time zone }');
+    const zone = await setTimezone(db, c.get('companyId'), timezone, true);
+    return zone
+      ? c.json({ timezone: zone } satisfies TimezoneAnswer)
+      : apiError('invalid_request', 'unknown time zone');
+  });
+
+  async function setTimezone(
+    db: Db,
+    companyId: string,
+    timezone: string,
+    onlyIfUnset: boolean,
+  ): Promise<string | null> {
+    const [row] = await db.query<{ zone: string | null }>(
+      'select stayput.set_company_timezone($1, $2, $3, $4::timestamptz) as zone',
+      [companyId, timezone, onlyIfUnset, deps.now().toISOString()],
+    );
+    return row?.zone ?? null;
+  }
 
   /** The « never contact » list: no action of any kind for this member. */
   app.put(
@@ -1158,9 +1196,15 @@ async function fileWebhook(db: Db, id: string, now: Date): Promise<void> {
  * A team member of the company opened the dashboard: the company exists for StayPut (created on
  * the first visit, reactivated after an uninstall), and the Whop check is recorded for RLS.
  */
-async function recordAdmin(db: ClosableDb, companyId: string, userId: string, now: Date) {
+/** Records the company and the admin's check; answers whether the company has its time zone. */
+async function recordAdmin(
+  db: ClosableDb,
+  companyId: string,
+  userId: string,
+  now: Date,
+): Promise<boolean> {
   const at = now.toISOString();
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     await tx.query(
       `insert into stayput.companies (id, installed_at) values ($1, $2::timestamptz)
        on conflict (id) do update set status = 'active', uninstalled_at = null
@@ -1177,6 +1221,11 @@ async function recordAdmin(db: ClosableDb, companyId: string, userId: string, no
        on conflict (company_id, user_id) do update set verified_at = excluded.verified_at`,
       [companyId, userId, at],
     );
+    const [company] = await tx.query<{ timezone_set: boolean }>(
+      'select timezone_set_at is not null as timezone_set from stayput.companies where id = $1',
+      [companyId],
+    );
+    return company?.timezone_set ?? true;
   });
 }
 

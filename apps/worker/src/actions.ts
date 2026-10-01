@@ -5,6 +5,7 @@ import {
   goldenHour,
   isActionType,
   nextLocalHour,
+  outOfQuietHours,
   renderMessage,
   type ActionType,
   type BlockReason,
@@ -158,6 +159,10 @@ export interface DueAction {
   killSwitch: boolean;
   dryRun: boolean;
   locale: string;
+  /** The company's zone and quiet hours now: they may have changed since the scheduling. */
+  timezone: string;
+  quietHoursStart: number;
+  quietHoursEnd: number;
   experienceId: string | null;
   /** The creator's own templates: `{ fr: { welcome_message: { title, body } } }`. */
   templates: Partial<Record<string, Partial<Record<string, Partial<MessageTemplate>>>>>;
@@ -230,13 +235,21 @@ export function renderActionMessage(
 }
 
 type Outcome =
+  | { status: 'postponed'; sendAt: number }
   | { status: 'sent' | 'simulated'; result: Record<string, unknown> }
   | { status: 'cancelled'; result: Record<string, unknown> }
   | { status: 'blocked_by_guardrail'; reason: BlockReason }
   | { status: 'failed'; error: string; retry: boolean };
 
-/** What one action comes to: the last stops, then the test mode, then Whop. */
-export async function runAction(action: DueAction, whop: WhopClient | null): Promise<Outcome> {
+/**
+ * What one action comes to at `now`: the last stops, the quiet hours, then the test mode, then
+ * Whop.
+ */
+export async function runAction(
+  action: DueAction,
+  whop: WhopClient | null,
+  now: number,
+): Promise<Outcome> {
   if (action.globalKillSwitch)
     return { status: 'blocked_by_guardrail', reason: 'global_kill_switch' };
   if (action.killSwitch) return { status: 'blocked_by_guardrail', reason: 'kill_switch' };
@@ -249,6 +262,12 @@ export async function runAction(action: DueAction, whop: WhopClient | null): Pro
   const type: ActionType = action.type;
   const gone = stale(type, action);
   if (gone) return { status: 'cancelled', result: { reason: gone } };
+  if (MESSAGE_KINDS[type] !== 'none') {
+    // Scheduled before the creator changed their zone or quiet hours, or run late: a message
+    // never leaves during the quiet hours, it waits for their end.
+    const sendAt = outOfQuietHours(now, action);
+    if (sendAt > now) return { status: 'postponed', sendAt };
+  }
 
   if (type === 'payment_retry') {
     const payment = action.payment;
@@ -339,7 +358,15 @@ export async function executeDueActions(
   );
   const counts: Record<string, number> = {};
   for (const action of row?.actions ?? []) {
-    const outcome = await runAction(action, whop);
+    const outcome = await runAction(action, whop, now.getTime());
+    if (outcome.status === 'postponed') {
+      await db.query('select stayput.postpone_action($1, $2::timestamptz)', [
+        action.id,
+        new Date(outcome.sendAt).toISOString(),
+      ]);
+      counts.postponed = (counts.postponed ?? 0) + 1;
+      continue;
+    }
     const retryAt =
       outcome.status === 'failed' && outcome.retry
         ? new Date(now.getTime() + RETRY_DELAY_MS).toISOString()

@@ -4,7 +4,9 @@ import {
   MESSAGE_ACTIONS,
   isActionType,
   templateProblems,
+  timeZoneName,
   type ActionRow,
+  type ActionSettingsUpdate,
   type ActionSettingsView,
   type ActionStatus,
   type ActionView,
@@ -160,6 +162,7 @@ export async function readActionSettings(
       locale: string;
       dry_run: boolean;
       kill_switch: boolean;
+      timezone: string;
       quiet_hours_start: number;
       quiet_hours_end: number;
       default_send_hour: number;
@@ -170,7 +173,7 @@ export async function readActionSettings(
       max_free_days_per_quarter: number;
       templates: Templates;
     }>(
-      `select c.mode, c.locale, s.dry_run, s.kill_switch, s.quiet_hours_start,
+      `select c.mode, c.locale, s.dry_run, s.kill_switch, c.timezone, s.quiet_hours_start,
               s.quiet_hours_end, s.default_send_hour, s.max_messages_per_5_days,
               s.max_messages_per_month, s.max_payment_retries, s.monthly_promo_cap,
               s.max_free_days_per_quarter, s.active_templates as templates
@@ -186,6 +189,7 @@ export async function readActionSettings(
     locale: row.locale === 'fr' ? 'fr' : 'en',
     dryRun: row.dry_run,
     killSwitch: row.kill_switch,
+    timezone: row.timezone,
     quietHoursStart: row.quiet_hours_start,
     quietHoursEnd: row.quiet_hours_end,
     defaultSendHour: row.default_send_hour,
@@ -213,8 +217,11 @@ export const ACTION_LIMITS = {
 export const TEMPLATE_TITLE_MAX = 80;
 export const TEMPLATE_BODY_MAX = 300;
 
-/** The settings as the creator sent them, or null when one value is out of bounds. */
-export function validActionSettings(body: unknown): ActionSettingsView | null {
+/**
+ * The settings as the creator sent them, or null when one value is out of bounds. The time
+ * zone comes only when the creator changed it.
+ */
+export function validActionSettings(body: unknown): ActionSettingsUpdate | null {
   if (typeof body !== 'object' || body === null) return null;
   const b = body as Record<string, unknown>;
   const hour = (v: unknown) => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 23;
@@ -224,6 +231,8 @@ export function validActionSettings(body: unknown): ActionSettingsView | null {
   if (b.locale !== 'en' && b.locale !== 'fr') return null;
   if (typeof b.dryRun !== 'boolean' || typeof b.killSwitch !== 'boolean') return null;
   if (!hour(b.quietHoursStart) || !hour(b.quietHoursEnd) || !hour(b.defaultSendHour)) return null;
+  const timezone = b.timezone === undefined ? undefined : timeZoneName(b.timezone);
+  if (timezone === null) return null;
   for (const [key, range] of Object.entries(ACTION_LIMITS)) {
     if (!within(b[key], range)) return null;
   }
@@ -234,6 +243,7 @@ export function validActionSettings(body: unknown): ActionSettingsView | null {
     locale: b.locale,
     dryRun: b.dryRun,
     killSwitch: b.killSwitch,
+    ...(timezone ? { timezone } : {}),
     quietHoursStart: b.quietHoursStart as number,
     quietHoursEnd: b.quietHoursEnd as number,
     defaultSendHour: b.defaultSendHour as number,

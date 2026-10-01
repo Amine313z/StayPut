@@ -484,6 +484,9 @@ describe('running the actions', () => {
       killSwitch: false,
       dryRun: false,
       locale: 'en',
+      timezone: 'Europe/Paris',
+      quietHoursStart: 22,
+      quietHoursEnd: 8,
       experienceId: 'exp_X',
       templates: {},
       member: { userId: 'user_X', doNotContact: false, joined: true },
@@ -491,16 +494,92 @@ describe('running the actions', () => {
       membership: null,
       values: {},
     } satisfies DueAction;
-    expect(await runAction(action, fakeWhop().whop)).toMatchObject({
+    const at = NOW.getTime();
+    expect(await runAction(action, fakeWhop().whop, at)).toMatchObject({
       status: 'failed',
       retry: false,
     });
     expect(
-      await runAction({ ...action, member: { ...action.member, joined: false } }, null),
+      await runAction({ ...action, member: { ...action.member, joined: false } }, null, at),
     ).toEqual({ status: 'cancelled', result: { reason: 'member_left' } });
-    expect(await runAction({ ...action, type: 'exit_survey' }, null)).toEqual({
+    expect(await runAction({ ...action, type: 'exit_survey' }, null, at)).toEqual({
       status: 'cancelled',
       result: { reason: 'cancellation_withdrawn' },
     });
+  });
+
+  it('keeps a message for the end of the quiet hours, in the zone the creator has now', async () => {
+    const { c } = await scheduled({ dryRun: true });
+    // Scheduled for 10:00 in Paris; the creator now lives in Tokyo, where it is 17:00, and keeps
+    // quiet from 16:00 to 18:00.
+    await t.db.query(`update stayput.companies set timezone = 'Asia/Tokyo' where id = $1`, [c]);
+    await t.db.query(
+      `update stayput.company_settings set quiet_hours_start = 16, quiet_hours_end = 18
+        where company_id = $1`,
+      [c],
+    );
+    const { whop, calls } = fakeWhop();
+    // The two messages wait for 18:00 in Tokyo; the payment retry is not a message and runs.
+    expect(await executeDueActions(t.db, whop, NOW)).toEqual({ postponed: 2, simulated: 1 });
+    expect(calls).toEqual([]);
+    expect((await rows(c)).map((r) => [r.type, r.status, r.send_at, r.attempts, r.errors])).toEqual(
+      [
+        ['payment_failed_notice', 'scheduled', '2026-10-01 09:00:00+00', 0, 0],
+        ['payment_retry', 'simulated', expect.any(String), 1, 0],
+        ['welcome_message', 'scheduled', '2026-10-01 09:00:00+00', 0, 0],
+      ],
+    );
+    // Their time comes again at 18:00 in Tokyo: they run.
+    expect(await executeDueActions(t.db, whop, new Date('2026-10-01T09:00:00Z'))).toEqual({
+      simulated: 2,
+    });
+  });
+});
+
+describe('the company time zone', () => {
+  const zone = async (companyId: string, timezone: string, onlyIfUnset: boolean) =>
+    (
+      await t.db.query<{ zone: string | null }>(
+        'select stayput.set_company_timezone($1, $2, $3, $4::timestamptz) as zone',
+        [companyId, timezone, onlyIfUnset, NOW.toISOString()],
+      )
+    )[0]?.zone;
+  const state = async (companyId: string) =>
+    (
+      await t.db.query<{ timezone: string; set: boolean; dirty: string | null }>(
+        `select c.timezone, c.timezone_set_at is not null as set,
+                s.stats_dirty_since::text as dirty
+           from stayput.companies c
+           left join stayput.company_sync s on s.company_id = c.id
+          where c.id = $1`,
+        [companyId],
+      )
+    )[0];
+
+  it('takes the browser zone once, then only the creator changes it', async () => {
+    const c = await company();
+    await t.db.query(
+      `update stayput.companies set timezone = 'UTC', timezone_set_at = null where id = $1`,
+      [c],
+    );
+    // The first creator's browser sets it, and the activity is counted again in that zone.
+    expect(await zone(c, 'America/Montreal', true)).toBe('America/Montreal');
+    expect(await state(c)).toEqual({
+      timezone: 'America/Montreal',
+      set: true,
+      dirty: '2026-07-03 08:00:00+00',
+    });
+    // Another browser, elsewhere, changes nothing.
+    expect(await zone(c, 'Asia/Tokyo', true)).toBe('America/Montreal');
+    // The creator does.
+    expect(await zone(c, 'Europe/Paris', false)).toBe('Europe/Paris');
+    expect((await state(c))?.timezone).toBe('Europe/Paris');
+  });
+
+  it('refuses a zone Postgres does not know, and an unknown company', async () => {
+    const c = await company();
+    expect(await zone(c, 'Mars/Olympus', false)).toBeNull();
+    expect((await state(c))?.timezone).toBe('Europe/Paris');
+    await expect(zone('biz_Nobody', 'Europe/Paris', false)).rejects.toThrow(/unknown company/);
   });
 });
