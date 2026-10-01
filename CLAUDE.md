@@ -147,8 +147,10 @@ npm run db:bundle    # after adding a migration: supabase/install.sql + schema-v
 - **Risk score** (DECISIONS.md « Phase 3 »): `risk_features` gathers each member as one compact
   JSON array (order in migration 0008 and `FeatureRow` in `src/risk.ts`: change both together);
   `computeRisk` decides; `save_risk_scores` keeps. Reasons are stored as codes with figures and
-  worded by `reasonText` (`apps/web/src/components/Risk.tsx`): a new reason code needs its
-  i18n keys and a case there. A level is never shown by color alone (`LEVELS`: tone, icon,
+  worded by `reasonText` (`apps/web/src/risk-text.ts`): a new reason code needs its i18n keys
+  and a case there. Two rules come before the weights (`computeRisk`): a scheduled cancellation
+  is 100 and « Leaving »; a failed or overdue payment is high risk at least, said first. The
+  reasons never repeat nor contradict each other (`consistent`). A level is never shown by color alone (`LEVELS`: tone, icon,
   name); the bars use the `--risk-*` tokens.
 
 ## Environment notes

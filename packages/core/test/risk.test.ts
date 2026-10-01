@@ -90,11 +90,71 @@ describe('computeRisk', () => {
   it('reads the payment: failed 1, waiting for 3D Secure 0.7', () => {
     const failed = computeRisk(steady({ payment: 'failed' }), settings(), NOW);
     expect(failed.subScores.payment).toBe(1);
-    expect(failed.score).toBe(15);
     expect(failed.reasons).toEqual([{ code: 'payment_failed' }]);
     const action = computeRisk(steady({ payment: 'action_required' }), settings(), NOW);
     expect(action.subScores.payment).toBe(0.7);
+    expect(action.score).toBe(11);
+    expect(action.level).toBe('low');
     expect(action.reasons).toEqual([{ code: 'payment_action_required' }]);
+  });
+
+  it('puts a failed or overdue payment at high risk at least, however active the member', () => {
+    // A steady member: 15 points from the weights, raised to the high level.
+    expect(computeRisk(steady({ payment: 'failed' }), settings(), NOW)).toMatchObject({
+      score: 70,
+      level: 'high',
+      reasons: [{ code: 'payment_failed' }],
+    });
+    // Where the creator put the high level; a higher score stays as computed.
+    expect(computeRisk(steady({ payment: 'failed' }), settings({ highFrom: 80 }), NOW).score).toBe(
+      80,
+    );
+    const inactive = computeRisk(
+      steady({
+        payment: 'failed',
+        lastActivityAt: daysAgo(20),
+        activity7d: 0,
+        lastProgressAt: daysAgo(21),
+      }),
+      settings(),
+      NOW,
+    );
+    expect(inactive.score).toBe(90);
+    // Said first, before what weighs most.
+    expect(inactive.reasons).toEqual([{ code: 'payment_failed' }, { code: 'inactive', days: 20 }]);
+    // Even when the creator gave payment no weight.
+    expect(
+      computeRisk(
+        steady({ payment: 'failed' }),
+        settings({ weights: { ...DEFAULT_WEIGHTS, payment: 0 } }),
+        NOW,
+      ),
+    ).toMatchObject({ level: 'high', reasons: [{ code: 'payment_failed' }] });
+  });
+
+  it('never says the same thing twice, nor two things that contradict', () => {
+    // Inactive for 10 days already says there was nothing this week: the next reason instead.
+    const away = computeRisk(
+      steady({ lastActivityAt: daysAgo(10), activity7d: 0, lastProgressAt: daysAgo(15) }),
+      settings(),
+      NOW,
+    );
+    expect(away.subScores.frequency).toBe(1);
+    expect(away.reasons).toEqual([
+      { code: 'inactive', days: 10 },
+      { code: 'no_progress', days: 15, lesson: 'Lesson 3' },
+    ]);
+    // Came by 3 days ago (Whop's visit) but did nothing this week: not « no activity for 3 days ».
+    const visitor = computeRisk(
+      steady({ lastActivityAt: daysAgo(3), activity7d: 0, lastProgressAt: daysAgo(4) }),
+      settings(),
+      NOW,
+    );
+    expect(visitor.subScores.recency).toBe(0.214);
+    expect(visitor.reasons).toEqual([
+      { code: 'activity_drop', percent: 100 },
+      { code: 'no_progress', days: 4, lesson: 'Lesson 3' },
+    ]);
   });
 
   it('reads friction: a ticket open over 48 hours, or reactions halved over 14 days', () => {
@@ -132,7 +192,8 @@ describe('computeRisk', () => {
     );
     expect(result.score).toBe(100);
     expect(result.level).toBe('high');
-    expect(result.reasons.map((r) => r.code)).toEqual(['inactive', 'activity_drop']);
+    // The failed payment first; the activity drop goes without saying after 14 days away.
+    expect(result.reasons.map((r) => r.code)).toEqual(['payment_failed', 'inactive']);
   });
 
   it('says nothing of a factor that barely counts, or of « 0 days »', () => {
@@ -221,10 +282,10 @@ describe('computeRisk', () => {
       );
       expect(result.score).toBe(100);
       expect(result.level).toBe('high');
-      // All weights at zero: the defaults.
+      // All weights at zero: the defaults (7 of 14 days is half of R, 15 points).
       expect(
         computeRisk(
-          steady({ payment: 'failed' }),
+          steady({ lastActivityAt: daysAgo(7) }),
           settings({ weights: { recency: 0, frequency: 0, progress: 0, payment: 0, friction: 0 } }),
           NOW,
         ).score,

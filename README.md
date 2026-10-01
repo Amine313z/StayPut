@@ -158,8 +158,9 @@ tableau de bord ; chaque membre relie son Telegram depuis la vue membre.
   4 inactifs, 3 paiements échoués, 3 annulations programmées, 2 nouveaux dont un qui n'a encore
   rien fait). L'API de Whop ne sait pas créer d'utilisateurs : ils vivent dans la base de
   StayPut, identifiants commençant par `seed`, et `remove` les retire tous. Refusé en
-  production. Leurs scores de risque sont calculés dès `seed` ; `report` les liste du score le
-  plus haut au plus bas, avec leurs raisons, dans le résumé de l'exécution.
+  production. Leurs scores de risque et les analyses sont calculés dès `seed` ; `report` les
+  recalcule avec les règles du code déployé et liste les membres du score le plus haut au plus
+  bas, avec leurs raisons, dans le résumé de l'exécution.
 
 ### Score de risque (Phase 3)
 

@@ -95,6 +95,21 @@ describe('findBlockingLessons', () => {
     expect(lessons[2]?.courseAverage).toBe(0.5);
   });
 
+  it('needs 3 members who stalled: one is chance, not a signal', () => {
+    // 1 of 23 is over twice an average of near zero, yet says nothing.
+    const lessons = findBlockingLessons([
+      lesson('1', 23, 1),
+      lesson('2', 20, 0),
+      lesson('3', 18, 0),
+      lesson('4', 15, 0),
+      lesson('a', 20, 6, 'cors_B'),
+      lesson('b', 20, 1, 'cors_B'),
+      lesson('c', 20, 0, 'cors_B'),
+    ]);
+    expect(lessons[0]?.rate).toBeGreaterThan(2 * (lessons[0]?.courseAverage ?? 1));
+    expect(lessons.filter((l) => l.flagged).map((l) => l.lessonId)).toEqual(['a']);
+  });
+
   it('copes with a lesson nobody reached and with more stalls than members', () => {
     const lessons = findBlockingLessons([lesson('1', 0, 0), lesson('2', 10, 12)]);
     expect(lessons[0]).toMatchObject({ rate: 0, flagged: false });

@@ -92,7 +92,7 @@ export interface MembersPage {
 }
 
 export interface MembersSummary {
-  /** Members in the community now (status `joined`). */
+  /** Members in the community now (status `joined`), the team aside. */
   members: number;
   /** Memberships that still give access (LIVE_MEMBERSHIP_STATUSES). */
   liveMemberships: number;
@@ -100,10 +100,30 @@ export interface MembersSummary {
   scheduledCancellations: number;
   /** Members whose latest payment failed (FAILED_PAYMENT_STATUSES). */
   failedPayments: number;
-  /** Activity recorded over the last 30 days: messages, reactions, posts, lessons, tickets. */
+  /**
+   * What the members did over the last 30 days, the team aside: messages (Whop, Discord,
+   * Telegram), reactions, forum posts and lessons completed.
+   */
   activity30d: number;
+  /** The monthly revenue of the memberships still paying; null when there is none. */
+  revenue: RevenueSummary | null;
   /** How many members are at each risk level, and when the scores were last computed. */
   risk: RiskSummary;
+}
+
+/**
+ * Recurring memberships still paying (active, overdue, or set to end), the team aside, brought
+ * back to a month: a year counts for a twelfth, a week for 52 twelfths. In the currency that
+ * brings the most; the others are left out of both figures.
+ */
+export interface RevenueSummary {
+  /** ISO code, upper case (`USD`). */
+  currency: string;
+  monthly: number;
+  /** Of it, what the members at high risk or about to leave pay. */
+  atRisk: number;
+  /** Memberships in other currencies exist (and are not counted here). */
+  otherCurrencies: boolean;
 }
 
 export interface RiskSummary {

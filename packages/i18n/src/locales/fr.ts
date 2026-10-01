@@ -51,10 +51,15 @@ export const fr: Messages = {
 
   'members.title': 'Membres',
   'members.summary.members': 'Membres',
-  'members.summary.live': 'Adhésions actives',
+  'members.summary.membersHint': 'Dans la communauté, hors équipe',
+  'members.summary.revenue': 'Revenus mensuels',
+  'members.summary.revenueAtRisk': 'dont {amount} menacés',
+  'members.summary.revenueAtRiskMain': 'dont {amount} menacés, en {currency} seulement',
+  'members.summary.noRevenue': 'Aucun abonnement payant',
   'members.summary.cancellations': 'Annulations programmées',
   'members.summary.failed': 'Paiements échoués',
-  'members.summary.activity': 'Activité, 30 derniers jours',
+  'members.summary.activity': 'Actions, 30 jours',
+  'members.summary.activityHint': 'Messages, réactions, posts et leçons des membres',
   'members.empty':
     "Aucun membre pour l'instant. Ils apparaissent ici dès que StayPut les a lus dans Whop.",
   'members.truncated': 'Affichage des {count} premiers membres.',
@@ -111,8 +116,7 @@ export const fr: Messages = {
   'creator.tab.sources': "Sources d'activité",
   'overview.figures': 'Votre communauté en chiffres',
   'attention.title': 'À surveiller',
-  'attention.description':
-    'Ceux qui risquent le plus de partir bientôt, et chaque paiement échoué, avec les raisons.',
+  'attention.description': 'Ceux qui risquent le plus de partir bientôt, avec les raisons.',
   'attention.seeAll': 'Tout voir ({count})',
   'attention.none': 'Rien ne demande votre attention pour le moment.',
   'attention.paymentFailed': 'Paiement échoué',
@@ -239,6 +243,7 @@ export const fr: Messages = {
   'risk.reason.never_active.one': 'Aucune activité depuis son arrivée, il y a {count} jour',
   'risk.reason.never_active.other': 'Aucune activité depuis son arrivée, il y a {count} jours',
   'risk.reason.activity_drop': 'Activité en baisse de {percent} cette semaine',
+  'risk.reason.no_activity_week': 'Aucune activité cette semaine',
   'risk.reason.no_progress.one': 'Aucune leçon depuis {count} jour',
   'risk.reason.no_progress.other': 'Aucune leçon depuis {count} jours',
   'risk.reason.stalled.one': 'Dernière leçon terminée : « {lesson} », il y a {count} jour',
@@ -250,6 +255,7 @@ export const fr: Messages = {
   'risk.reason.ticket_open.one': 'Ticket support ouvert depuis {count} jour',
   'risk.reason.ticket_open.other': 'Ticket support ouvert depuis {count} jours',
   'risk.reason.reactions_drop': 'Réactions en baisse de {percent} sur 14 jours',
+  'risk.reason.no_reactions': 'Aucune réaction depuis 14 jours',
 
   'members.summary.highRisk': 'Risque élevé',
   'distribution.title': 'Le risque parmi vos membres',
@@ -319,7 +325,7 @@ export const fr: Messages = {
   'riskSettings.recencyInvalid': 'Un nombre entier de jours, de 1 à 90.',
   'riskSettings.levelsInvalid': 'Le risque élevé doit commencer au-dessus du risque moyen.',
   'riskSettings.departure':
-    'Un membre dont la résiliation est programmée est toujours en « Départ programmé », quel que soit son score.',
+    'Deux règles passent avant les poids : une résiliation programmée est toujours en « Départ programmé », et un paiement échoué ou en retard est toujours au moins en risque élevé.',
   'riskSettings.saved': 'Enregistré. Les scores sont en cours de recalcul.',
   'riskSettings.reset': 'Revenir aux valeurs de la niche',
   'niche.trading': 'Trading',

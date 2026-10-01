@@ -588,6 +588,8 @@ describe('GET /api/creator/:companyId/members', () => {
       scheduledCancellations: 1,
       failedPayments: 1,
       activity30d: 2,
+      // Two memberships at 49 $ a month; none at risk before the first scores.
+      revenue: { currency: 'USD', monthly: 98, atRisk: 0, otherCurrencies: false },
       // No score computed yet: the members arrived after the visit.
       risk: {
         high: 0,
@@ -618,6 +620,62 @@ describe('GET /api/creator/:companyId/members', () => {
     });
     // Nothing personal leaves the database: no e-mail, no phone.
     expect(JSON.stringify(body)).not.toMatch(/@mail\.test|\+33/);
+  });
+
+  it('brings the revenue back to a month, the team and other currencies aside', async () => {
+    const { request } = setup({ 'user_mia:biz_Rev1': 'admin' });
+    const init = await asUser('user_mia');
+    await request('/api/creator/biz_Rev1/session', init);
+    await settle();
+
+    const c = 'biz_Rev1';
+    await ingest(
+      c,
+      'plans',
+      page([
+        variant('plan_Year', { billing_period: 365, renewal_price: 120 }),
+        variant('plan_Week', { billing_period: 7, renewal_price: 12 }),
+        variant('plan_Month', { renewal_price: 49 }),
+        variant('plan_Eur', { currency: 'eur', renewal_price: 30 }),
+      ]),
+    );
+    await ingest(
+      c,
+      'members',
+      page([
+        member('mber_RY', 'user_RY'),
+        member('mber_RW', 'user_RW'),
+        member('mber_RT', 'user_RT'),
+        member('mber_RE', 'user_RE'),
+        member('mber_RF', 'user_RF'),
+        member('mber_RS', 'user_RS', { access_level: 'admin' }),
+      ]),
+    );
+    await ingest(
+      c,
+      'memberships',
+      page([
+        membership('mem_RY', 'user_RY', { plan_id: 'plan_Year', billing_period_days: 365 }),
+        membership('mem_RW', 'user_RW', { plan_id: 'plan_Week', billing_period_days: 7 }),
+        membership('mem_RT', 'user_RT', { plan_id: 'plan_Month', status: 'trialing' }),
+        membership('mem_RE', 'user_RE', { plan_id: 'plan_Eur' }),
+        membership('mem_RF', 'user_RF', { plan_id: 'plan_Month', status: 'past_due' }),
+        membership('mem_RS', 'user_RS', { plan_id: 'plan_Month' }),
+      ]),
+    );
+
+    const res = await request('/api/creator/biz_Rev1/members', init);
+    const body = (await res.json()) as MembersPage;
+    // 120 a year is 10 a month, 12 a week is 52, 49 overdue still counts; not the trial, the
+    // team, nor the euros (flagged instead).
+    expect(body.summary.revenue).toEqual({
+      currency: 'USD',
+      monthly: 111,
+      atRisk: 0,
+      otherCurrencies: true,
+    });
+    // The team is not counted among the members.
+    expect(body.summary.members).toBe(5);
   });
 });
 

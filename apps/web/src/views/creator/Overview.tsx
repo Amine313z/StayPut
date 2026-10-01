@@ -1,4 +1,4 @@
-import type { IntegrationsStatus, MemberRow, MembersPage } from '@stayput/core';
+import type { IntegrationsStatus, MemberRow, MembersPage, RevenueSummary } from '@stayput/core';
 import {
   Activity,
   ArrowRight,
@@ -9,6 +9,7 @@ import {
   Sprout,
   TriangleAlert,
   Users,
+  Wallet,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -86,15 +87,11 @@ function Figures({ page }: { page: MembersPage }) {
         <Stat
           label={t('members.summary.members')}
           value={number(summary.members)}
+          hint={t('members.summary.membersHint')}
           icon={<Users aria-hidden="true" className="size-4" />}
           tone="accent"
         />
-        <Stat
-          label={t('members.summary.live')}
-          value={number(summary.liveMemberships)}
-          icon={<CircleCheck aria-hidden="true" className="size-4" />}
-          tone="accent"
-        />
+        <RevenueStat revenue={summary.revenue} />
         <Stat
           label={t('members.summary.highRisk')}
           value={number(summary.risk.high)}
@@ -116,6 +113,7 @@ function Figures({ page }: { page: MembersPage }) {
         <Stat
           label={t('members.summary.activity')}
           value={number(summary.activity30d)}
+          hint={t('members.summary.activityHint')}
           icon={<Activity aria-hidden="true" className="size-4" />}
           tone="info"
         />
@@ -124,21 +122,49 @@ function Figures({ page }: { page: MembersPage }) {
   );
 }
 
+/** What the memberships still paying bring each month, and how much of it is at risk. */
+function RevenueStat({ revenue }: { revenue: RevenueSummary | null }) {
+  const { t, currency } = useI18n();
+  const icon = <Wallet aria-hidden="true" className="size-4" />;
+  if (!revenue) {
+    return (
+      <Stat
+        label={t('members.summary.revenue')}
+        value="—"
+        hint={t('members.summary.noRevenue')}
+        icon={icon}
+      />
+    );
+  }
+  const amount = (value: number) => currency(value, revenue.currency, { whole: true });
+  return (
+    <Stat
+      label={t('members.summary.revenue')}
+      value={amount(revenue.monthly)}
+      hint={t(
+        revenue.otherCurrencies
+          ? 'members.summary.revenueAtRiskMain'
+          : 'members.summary.revenueAtRisk',
+        { amount: amount(revenue.atRisk), currency: revenue.currency },
+      )}
+      icon={icon}
+      tone="accent"
+    />
+  );
+}
+
 /**
  * The members most likely to leave, the highest score first (the members arrive sorted): the
- * departures scheduled, the high risks, and every failed payment whatever its score (money is
- * leaving now), each with the reasons. Before the first scores, Whop's facts alone.
+ * departures scheduled and the high risks, a failed payment among them whatever the activity,
+ * each with the reasons. Before the first scores, Whop's facts.
  */
 function Attention({ members, root }: { members: readonly MemberRow[]; root: string }) {
   const i18n = useI18n();
   const { t, number } = i18n;
   const scored = members.some((m) => m.risk !== null);
-  const flagged = members.filter((m) => {
-    const facts = attentionReasons(m);
-    if (!scored) return facts.length > 0;
-    const level = m.risk?.level;
-    return level === 'scheduled_departure' || level === 'high' || facts.includes('paymentFailed');
-  });
+  const flagged = scored
+    ? members.filter((m) => m.risk?.level === 'scheduled_departure' || m.risk?.level === 'high')
+    : members.filter((m) => attentionReasons(m).length > 0);
   return (
     <Card
       icon={<TriangleAlert aria-hidden="true" className="size-4" />}

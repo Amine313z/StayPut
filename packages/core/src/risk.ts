@@ -246,8 +246,13 @@ export function computeRisk(inputs: RiskInputs, settings: RiskSettings, now: num
     friction: round3(friction),
   };
   const total = RISK_FACTORS.reduce((sum, f) => sum + weights[f] * subScores[f], 0);
+  const computed = Math.round(clamp(total) * 100);
+  // Two rules come before the weights. A scheduled cancellation is 100 and its own status. A
+  // failed or overdue payment is a high risk at least, however active the member: a card that
+  // does not go through cuts the access (founder's decision, 2026-10-01).
   const scheduled = inputs.cancelAtPeriodEnd;
-  const score = scheduled ? 100 : Math.round(clamp(total) * 100);
+  const unpaid = inputs.payment === 'failed';
+  const score = scheduled ? 100 : unpaid ? Math.max(computed, settings.highFrom) : computed;
   const level: RiskLevel = scheduled
     ? 'scheduled_departure'
     : score >= settings.highFrom
@@ -256,23 +261,22 @@ export function computeRisk(inputs: RiskInputs, settings: RiskSettings, now: num
         ? 'medium'
         : 'low';
 
-  // The reasons: what weighs most in the score, a scheduled departure first.
+  // The reasons: those two facts first, then what weighs most in the score.
+  const facts: RiskReason[] = [];
+  if (scheduled) facts.push(reasonFor('payment', inputs, now, weeklyAverage));
+  if (unpaid) facts.push({ code: 'payment_failed' });
   const ranked = RISK_FACTORS.map((f) => ({ factor: f, weight: weights[f] * subScores[f] }))
     .filter((r) => r.weight * 100 >= REASON_MIN_POINTS)
+    .filter((r) => facts.length === 0 || r.factor !== 'payment')
     .sort(
       (a, b) =>
         b.weight - a.weight || RISK_FACTORS.indexOf(a.factor) - RISK_FACTORS.indexOf(b.factor),
     );
-  if (scheduled) {
-    const paymentAt = ranked.findIndex((r) => r.factor === 'payment');
-    const [entry] = paymentAt >= 0 ? ranked.splice(paymentAt, 1) : [];
-    ranked.unshift(entry ?? { factor: 'payment', weight: 1 });
-  }
   // « No activity for 0 days » says nothing: a reason counted in days needs one day at least.
-  const reasons = ranked
+  const candidates = ranked
     .map((r) => reasonFor(r.factor, inputs, now, weeklyAverage))
-    .filter((r) => !('days' in r) || r.days >= 1)
-    .slice(0, 2);
+    .filter((r) => !('days' in r) || r.days >= 1);
+  const reasons = [...facts, ...consistent(candidates)].slice(0, 2);
 
   return {
     score,
@@ -281,6 +285,22 @@ export function computeRisk(inputs: RiskInputs, settings: RiskSettings, now: num
     reasons,
     inactiveNewcomer: isInactiveNewcomer(inputs, now),
   };
+}
+
+/**
+ * Two reasons must not say the same thing twice, nor contradict each other. Inactive for a week
+ * or more already says there was no activity this week. And a member with no activity this week
+ * whose last sign of life is more recent only came by (the recency counts Whop's visits): « no
+ * activity this week » is the truer of the two.
+ */
+function consistent(reasons: RiskReason[]): RiskReason[] {
+  const inactiveDays = reasons.find((r) => r.code === 'inactive')?.days;
+  const silentWeek = reasons.some((r) => r.code === 'activity_drop' && r.percent >= 100);
+  return reasons.filter((r) => {
+    if (r.code === 'activity_drop') return inactiveDays === undefined || inactiveDays < 7;
+    if (r.code === 'inactive') return !silentWeek || r.days >= 7;
+    return true;
+  });
 }
 
 function reasonFor(

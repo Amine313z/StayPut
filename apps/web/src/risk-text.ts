@@ -23,7 +23,10 @@ export function reasonText(reason: RiskReason, i18n: Translator): string | null 
     case 'never_active':
       return plural('risk.reason.never_active', reason.days);
     case 'activity_drop':
-      return t('risk.reason.activity_drop', { percent: percent(reason.percent / 100) });
+      // « Down 100 % » reads as a riddle: nothing at all this week.
+      return reason.percent >= 100
+        ? t('risk.reason.no_activity_week')
+        : t('risk.reason.activity_drop', { percent: percent(reason.percent / 100) });
     case 'no_progress':
       return reason.lesson
         ? plural('risk.reason.stalled', reason.days, { lesson: reason.lesson })
@@ -39,7 +42,9 @@ export function reasonText(reason: RiskReason, i18n: Translator): string | null 
     case 'ticket_open':
       return plural('risk.reason.ticket_open', reason.days);
     case 'reactions_drop':
-      return t('risk.reason.reactions_drop', { percent: percent(reason.percent / 100) });
+      return reason.percent >= 100
+        ? t('risk.reason.no_reactions')
+        : t('risk.reason.reactions_drop', { percent: percent(reason.percent / 100) });
     default:
       // A newer Worker may know more reasons than this page: say nothing rather than a code.
       return null;

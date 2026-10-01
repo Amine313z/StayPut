@@ -126,6 +126,7 @@ const MEMBERS: MembersPage = {
     scheduledCancellations: 1,
     failedPayments: 1,
     activity30d: 7,
+    revenue: { currency: 'USD', monthly: 245, atRisk: 98, otherCurrencies: false },
     risk: {
       high: 1,
       medium: 1,
@@ -148,7 +149,7 @@ const MEMBERS: MembersPage = {
         level: 'scheduled_departure',
         reasons: [
           { code: 'cancel_scheduled', date: '2026-10-20T10:00:00.000Z' },
-          { code: 'never_active', days: 92 },
+          { code: 'activity_drop', percent: 100 },
         ],
       }),
       membership: {
@@ -176,7 +177,7 @@ const MEMBERS: MembersPage = {
         level: 'high',
         reasons: [
           { code: 'inactive', days: 21 },
-          { code: 'activity_drop', percent: 100 },
+          { code: 'no_progress', days: 25, lesson: '3. Charts' },
         ],
       }),
     }),
@@ -187,7 +188,7 @@ const MEMBERS: MembersPage = {
         score: 52,
         level: 'medium',
         reasons: [
-          { code: 'no_progress', days: 18, lesson: '4. Risk management' },
+          { code: 'activity_drop', percent: 56 },
           { code: 'ticket_open', days: 3 },
         ],
       }),
@@ -212,7 +213,7 @@ const MEMBERS: MembersPage = {
       id: 'mber_1',
       name: 'Alice Martin',
       activity: { messages: 6, reactions: 1, posts: 0, lessons: 0 },
-      risk: risk({ score: 3, level: 'low' }),
+      risk: risk({ score: 3, level: 'low', reasons: [{ code: 'reactions_drop', percent: 100 }] }),
     }),
   ],
 };
@@ -257,6 +258,7 @@ const NOBODY: MembersPage = {
     scheduledCancellations: 0,
     failedPayments: 0,
     activity30d: 0,
+    revenue: null,
     risk: {
       high: 0,
       medium: 0,
@@ -298,20 +300,24 @@ describe('creator view', () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
     const figures = (await screen.findByText('Failed payments')).closest('dl')!;
+    expect(figures.textContent).toContain('Members5In the community, team aside');
+    expect(figures.textContent).toContain('Monthly revenue$245$98 at risk');
     expect(figures.textContent).toContain('High risk1');
     expect(figures.textContent).toContain('Cancellations scheduled1');
     expect(figures.textContent).toContain('Failed payments1');
-    expect(figures.textContent).toContain('Activity, last 30 days7');
+    expect(figures.textContent).toContain(
+      'Actions, 30 days7Members’ messages, reactions, posts and lessons',
+    );
 
     // The departures and the high risks, the highest score first, each with its reasons.
     const attention = screen.getByRole('heading', { name: 'Needs attention' }).closest('section')!;
     const text = attention.textContent ?? '';
     expect(text).toContain('Member without a name');
     expect(text).toContain('Leaves on Oct 20, 2026');
-    expect(text).toContain('No activity since joining, 92 days ago');
+    expect(text).toContain('No activity this week');
     expect(text).toContain('High risk · 78');
     expect(text).toContain('No activity for 21 days');
-    expect(text).toContain('Activity down 100% this week');
+    expect(text).toContain('Last lesson completed: “3. Charts”, 25 days ago');
     expect(text.indexOf('Member without a name')).toBeLessThan(text.indexOf('Bruno Petit'));
     expect(text).not.toContain('Denis Moreau');
     expect(text).not.toContain('Alice Martin');
@@ -354,6 +360,7 @@ describe('creator view', () => {
     renderAt('/dashboard/biz_A1/members');
     const alice = (await screen.findByText('Alice Martin')).closest('li')!;
     expect(alice.textContent).toContain('Low risk · 3');
+    expect(alice.textContent).toContain('No reaction in 14 days');
     expect(alice.textContent).toContain('Active · $49.00 per month · renews on Oct 15, 2026');
     expect(alice.textContent).toContain('Last payment: $49.00 on Sep 15, 2026');
     expect(alice.textContent).toContain('Last 30 days: 6 messages, 1 reaction, 0 posts, 0 lessons');
@@ -366,30 +373,12 @@ describe('creator view', () => {
     expect(unnamed.textContent).toContain('No activity recorded yet.');
     const denis = screen.getByText('Denis Moreau').closest('li')!;
     expect(denis.textContent).toContain('Medium risk · 52');
-    expect(denis.textContent).toContain('Last lesson completed: “4. Risk management”, 18 days ago');
+    expect(denis.textContent).toContain('Activity down 56% this week');
     expect(denis.textContent).toContain('Support ticket open for 3 days');
     const chloe = screen.getByText('Chloé Dubois').closest('li')!;
     expect(chloe.textContent).toContain('New, not started yet');
+    expect(chloe.textContent).toContain('No activity since joining, 4 days ago');
     expect(chloe.textContent).toContain('No lesson for 4 days');
-  });
-
-  it('keeps every failed payment in « Needs attention », whatever the score', async () => {
-    mockApi(
-      dashboard({
-        ...MEMBERS,
-        members: MEMBERS.members.map((m) =>
-          m.id === 'mber_1' && m.lastPayment
-            ? { ...m, lastPayment: { ...m.lastPayment, status: 'failed' } }
-            : m,
-        ),
-      }),
-    );
-    renderAt('/dashboard/biz_A1');
-    const heading = await screen.findByRole('heading', { name: 'Needs attention' });
-    const text = heading.closest('section')!.textContent ?? '';
-    expect(text).toContain('Alice Martin');
-    expect(text).toContain('Low risk · 3');
-    expect(text).not.toContain('Denis Moreau');
   });
 
   it('keeps the facts of Whop before the first scores', async () => {
@@ -461,6 +450,7 @@ describe('creator view', () => {
       ),
     ).toBeTruthy();
     expect(await screen.findByText('Nothing needs your attention right now.')).toBeTruthy();
+    expect(screen.getByText('No paying membership')).toBeTruthy();
     fireEvent.click(screen.getByRole('link', { name: 'Members' }));
     expect(
       await screen.findByText(
@@ -560,13 +550,14 @@ describe('creator view', () => {
     const bruno = screen.getByText('Bruno Petit').closest('li')!;
     expect(bruno.textContent).toContain('Risque élevé · 78');
     expect(bruno.textContent).toContain('Aucune activité depuis 21 jours');
-    expect(bruno.textContent).toMatch(/Activité en baisse de 100\s% cette semaine/);
+    expect(bruno.textContent).toContain('Dernière leçon terminée : « 3. Charts », il y a 25 jours');
     const unnamed = screen.getByText('Membre sans nom').closest('li')!;
     expect(unnamed.textContent).toContain('Départ programmé');
     expect(unnamed.textContent).toContain('Part le 20 oct. 2026');
-    expect(
-      screen.getByText('Dernière leçon terminée : « 4. Risk management », il y a 18 jours'),
-    ).toBeTruthy();
+    expect(unnamed.textContent).toContain('Aucune activité cette semaine');
+    expect(screen.getByText('Denis Moreau').closest('li')!.textContent).toMatch(
+      /Activité en baisse de 56\s% cette semaine/,
+    );
   });
 
   it('tells a non-admin the dashboard is for the team', async () => {

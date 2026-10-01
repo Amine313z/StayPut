@@ -55,6 +55,14 @@ describe('detection on the sandbox members', () => {
     expect(page.summary.risk).toMatchObject({ scheduledDeparture: 3, inactiveNewcomers: 1 });
     expect(page.summary.risk.high + page.summary.risk.medium + page.summary.risk.low + 3).toBe(25);
     expect(page.summary.risk.computedAt).toBe(NOW.toISOString());
+    // 25 memberships at 49 $ a month; at risk, the 3 departures, the 4 inactive members and
+    // the 3 failed payments (a high risk at least).
+    expect(page.summary.revenue).toEqual({
+      currency: 'USD',
+      monthly: 1225,
+      atRisk: 490,
+      otherCurrencies: false,
+    });
   });
 
   it('ranks the profiles as the SPEC expects, with reasons in plain codes', async () => {
@@ -71,9 +79,10 @@ describe('detection on the sandbox members', () => {
       expect(m.risk?.level).toBe('high');
       expect(m.risk?.reasons[0]).toMatchObject({ code: 'inactive' });
     }
-    // A failed payment always shows among the reasons.
+    // A failed payment is a high risk at least, and said first.
     for (const m of of('failed_payment')) {
-      expect(m.risk?.reasons.map((r) => r.code)).toContain('payment_failed');
+      expect(m.risk?.level).toBe('high');
+      expect(m.risk?.reasons[0]).toEqual({ code: 'payment_failed' });
     }
     // Active members stay low; the order of the profiles holds on average.
     for (const m of of('active')) expect(m.risk?.level).toBe('low');
@@ -121,7 +130,8 @@ describe('detection on the sandbox members', () => {
 
   it('writes the sandbox report: the members by score, the reasons in French', async () => {
     const lines = await riskReport(t.db, COMPANY, NOW);
-    expect(lines[0]).toBe(`Fake members of ${COMPANY} by risk score (0 scores computed now):`);
+    // Computed again with the current rules, every member.
+    expect(lines[0]).toBe(`Fake members of ${COMPANY} by risk score (25 scores computed now):`);
     expect(lines[2]).toBe('| Score | Level | Member | Profile | Reasons |');
     const rows = lines.slice(4);
     expect(rows).toHaveLength(25);

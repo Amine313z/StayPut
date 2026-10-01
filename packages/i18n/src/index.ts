@@ -38,7 +38,8 @@ export interface Translator {
   /** The plural form for `count` (passed as `{count}`, formatted for the locale). */
   plural: (key: PluralKey, count: number, params?: Params) => string;
   number: (value: number) => string;
-  currency: (amount: number, currency: string) => string;
+  /** An amount in its currency; `whole` drops the cents (a figure of the dashboard). */
+  currency: (amount: number, currency: string, options?: { whole?: boolean }) => string;
   /** A share from 0 to 1, as a whole percentage: « 42% », « 42 % ». */
   percent: (ratio: number) => string;
   date: (value: Date) => string;
@@ -91,8 +92,12 @@ export function createTranslator(locale: Locale): Translator {
       return fill(text, { ...params, count: numbers.format(count) });
     },
     number: (value) => numbers.format(value),
-    currency: (amount, currency) =>
-      new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount),
+    currency: (amount, currency, options) =>
+      new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency,
+        ...(options?.whole ? { minimumFractionDigits: 0, maximumFractionDigits: 0 } : {}),
+      }).format(amount),
     percent: (ratio) => percents.format(ratio),
     date: (value) => dates.format(value),
     month: (value) => months.format(value),

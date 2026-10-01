@@ -13,7 +13,7 @@
 import type { RiskLevel, RiskReason } from '@stayput/core';
 import { createTranslator } from '@stayput/i18n';
 import { LEVEL_LABELS, reasonText } from '../../apps/web/src/risk-text';
-import { scoreCompany } from '../../apps/worker/src/risk';
+import { analyzeCompany, scoreCompany } from '../../apps/worker/src/risk';
 
 /** What the seed needs from a database: parameterised SQL in, rows out. */
 export interface SeedDb {
@@ -386,12 +386,28 @@ const PROFILE_NAMES: Record<Profile, string> = {
 };
 
 /**
+ * Every score and the weekly analyses of the company, computed now with the rules of this code
+ * (the Worker only computes what is due: a score after an hour, the analyses after a week).
+ * Returns how many members were scored.
+ */
+export async function rescoreNow(db: SeedDb, companyId: string, now: Date): Promise<number> {
+  await db.query(
+    `update stayput.member_risk set computed_at = $2::timestamptz - interval '1 hour'
+      where company_id = $1`,
+    [companyId, now.toISOString()],
+  );
+  const scored = await scoreCompany(db, companyId, now, 5_000);
+  await analyzeCompany(db, companyId, now);
+  return scored;
+}
+
+/**
  * SPEC Phase 3, « show me the sandbox members sorted by score, with their reasons »: the scores
- * due are computed first, then the fake members come as a Markdown table, the reasons worded in
- * French as the dashboard shows them.
+ * are computed again first, then the fake members come as a Markdown table, the reasons worded
+ * in French as the dashboard shows them.
  */
 export async function riskReport(db: SeedDb, companyId: string, now: Date): Promise<string[]> {
-  const scored = await scoreCompany(db, companyId, now, 5_000);
+  const scored = await rescoreNow(db, companyId, now);
   const rows = await db.query<{
     id: string;
     name: string | null;

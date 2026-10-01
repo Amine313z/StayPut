@@ -78,8 +78,10 @@ export function analyzeCohorts(cohorts: readonly CohortCounts[]): CohortReport {
 
 /** A lesson whose stall rate is more than this many times its course's average is flagged… */
 export const LESSON_FLAG_RATIO = 2;
-/** …when at least this many members completed it. */
+/** …when at least this many members completed it… */
 export const LESSON_MIN_MEMBERS = 10;
+/** …and at least this many stalled after it: one member is chance, not a signal (2026-10-01). */
+export const LESSON_MIN_STALLED = 3;
 /** A member whose last activity is older than this has stalled. */
 export const LESSON_STALL_DAYS = 14;
 
@@ -117,10 +119,26 @@ export function findBlockingLessons(lessons: readonly LessonCounts[]): LessonAna
       ...lesson,
       rate,
       courseAverage,
-      flagged:
-        lesson.reached >= LESSON_MIN_MEMBERS &&
-        courseAverage > 0 &&
-        rate > LESSON_FLAG_RATIO * courseAverage,
+      flagged: isBlockingLesson({ ...lesson, rate, courseAverage }),
     };
   });
+}
+
+/**
+ * The rule of a blocking lesson, on its counts: enough members reached it, enough stalled after
+ * it, and its stall rate is over twice its course average. The dashboard applies it again to the
+ * stored counts, so that a change of rule shows at once.
+ */
+export function isBlockingLesson(lesson: {
+  reached: number;
+  stalled: number;
+  rate: number;
+  courseAverage: number;
+}): boolean {
+  return (
+    lesson.reached >= LESSON_MIN_MEMBERS &&
+    lesson.stalled >= LESSON_MIN_STALLED &&
+    lesson.courseAverage > 0 &&
+    lesson.rate > LESSON_FLAG_RATIO * lesson.courseAverage
+  );
 }

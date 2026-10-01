@@ -5,6 +5,7 @@ import {
   RISK_LEVELS,
   analyzeCohorts,
   isAccessLevel,
+  isBlockingLesson,
   isNiche,
   type CohortCounts,
   type CohortHorizon,
@@ -12,6 +13,7 @@ import {
   type MemberRisk,
   type MemberRow,
   type MembersPage,
+  type RevenueSummary,
   type RiskLevel,
   type RiskReason,
   type RiskSettingsView,
@@ -101,6 +103,7 @@ export async function readMembers(
       scheduled_cancellations: number;
       failed_payments: number;
       activity_30d: number;
+      revenue: { currency: string; monthly: number; at_risk: number }[] | null;
       risk: {
         high: number;
         medium: number;
@@ -112,7 +115,8 @@ export async function readMembers(
     }>(
       `select
          (select count(*) from stayput.members
-           where company_id = $1 and status = 'joined')::int as members,
+           where company_id = $1 and status = 'joined'
+             and coalesce(access_level, '') <> 'admin')::int as members,
          (select count(*) from stayput.memberships
            where company_id = $1 and status = any(string_to_array($3, ',')))::int
            as live_memberships,
@@ -124,8 +128,39 @@ export async function readMembers(
               from stayput.payments where company_id = $1 and member_id is not null
              order by coalesce(membership_id, id), whop_created_at desc) latest
            where status = any(string_to_array($4, ',')))::int as failed_payments,
-         (select count(*) from stayput.activity_events
-           where company_id = $1 and occurred_at >= $2::timestamptz)::int as activity_30d,
+         (select coalesce(sum(s.messages + s.reactions + s.forum_posts + s.lessons_completed), 0)
+            from stayput.member_stats_daily s
+            join stayput.members m on m.company_id = s.company_id and m.id = s.member_id
+           where s.company_id = $1 and s.day >= $2::timestamptz::date
+             and coalesce(m.access_level, '') <> 'admin')::int as activity_30d,
+         -- Recurring memberships still paying, brought back to a month, per currency.
+         (select jsonb_agg(jsonb_build_object('currency', r.currency, 'monthly', r.monthly,
+                                              'at_risk', r.at_risk)
+                           order by r.monthly desc)
+            from (
+              select upper(x.currency) as currency,
+                     round(sum(x.monthly), 2)::float8 as monthly,
+                     round(coalesce(sum(x.monthly) filter (
+                       where x.level in ('high', 'scheduled_departure')), 0), 2)::float8
+                       as at_risk
+                from (
+                  select ms.currency, k.level,
+                         case
+                           when ms.billing_period_days between 28 and 31 then ms.price
+                           when ms.billing_period_days = 7 then ms.price * 52 / 12
+                           when ms.billing_period_days between 365 and 366 then ms.price / 12
+                           else ms.price * 30 / ms.billing_period_days
+                         end as monthly
+                    from stayput.memberships ms
+                    join stayput.members m on m.company_id = ms.company_id and m.id = ms.member_id
+                    left join stayput.member_risk k
+                      on k.company_id = ms.company_id and k.member_id = ms.member_id
+                   where ms.company_id = $1
+                     and ms.status in ('active', 'past_due', 'canceling')
+                     and ms.price > 0 and ms.billing_period_days > 0
+                     and ms.currency is not null
+                     and m.status = 'joined' and coalesce(m.access_level, '') <> 'admin') x
+               group by upper(x.currency)) r) as revenue,
          (select jsonb_build_object(
                    'high', count(*) filter (where level = 'high'),
                    'medium', count(*) filter (where level = 'medium'),
@@ -188,6 +223,7 @@ export async function readMembers(
         scheduledCancellations: summary?.scheduled_cancellations ?? 0,
         failedPayments: summary?.failed_payments ?? 0,
         activity30d: summary?.activity_30d ?? 0,
+        revenue: toRevenue(summary?.revenue ?? null),
         risk: toRiskSummary(summary?.risk ?? null),
       },
       members: rows.slice(0, MEMBERS_PAGE_LIMIT).map(toMemberRow),
@@ -224,6 +260,19 @@ interface MemberSqlRow {
   risk_reasons: RiskReason[] | null;
   inactive_newcomer: boolean | null;
   risk_computed_at: Date | string | null;
+}
+
+function toRevenue(
+  rows: { currency: string; monthly: number; at_risk: number }[] | null,
+): RevenueSummary | null {
+  const main = rows?.[0];
+  if (!main) return null;
+  return {
+    currency: main.currency,
+    monthly: main.monthly,
+    atRisk: main.at_risk,
+    otherCurrencies: (rows?.length ?? 0) > 1,
+  };
 }
 
 function toRiskSummary(
@@ -331,10 +380,9 @@ export async function readInsights(
       stalled: number;
       dropoff_rate: string | number;
       course_average_rate: string | number;
-      flagged: boolean;
     }>(
       `select lesson_id, course_id, lesson_title, members_concerned, stalled, dropoff_rate,
-              course_average_rate, flagged
+              course_average_rate
          from stayput.lesson_dropoff_stats where company_id = $1
         order by flagged desc, dropoff_rate desc, members_concerned desc, lesson_id
         limit $2`,
@@ -361,16 +409,25 @@ export async function readInsights(
         // As stored by the weekly run (the same rule, judged with that week's figures).
         alertHorizon: horizon(cohortRows[i]?.alert_horizon ?? null),
       })),
-      lessons: lessonRows.map((l) => ({
-        lessonId: l.lesson_id,
-        courseId: l.course_id,
-        title: l.lesson_title,
-        reached: l.members_concerned,
-        stalled: l.stalled,
-        rate: Number(l.dropoff_rate),
-        courseAverage: Number(l.course_average_rate),
-        flagged: l.flagged,
-      })),
+      // The rule applied again to the stored counts: a change of rule shows at once, without
+      // waiting for the next weekly run.
+      lessons: lessonRows
+        .map((l) => {
+          const lesson = {
+            lessonId: l.lesson_id,
+            courseId: l.course_id,
+            title: l.lesson_title,
+            reached: l.members_concerned,
+            stalled: l.stalled,
+            rate: Number(l.dropoff_rate),
+            courseAverage: Number(l.course_average_rate),
+          };
+          return { ...lesson, flagged: isBlockingLesson(lesson) };
+        })
+        .sort(
+          (a, b) =>
+            Number(b.flagged) - Number(a.flagged) || b.rate - a.rate || b.reached - a.reached,
+        ),
     };
   });
 }

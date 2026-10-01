@@ -26,7 +26,8 @@ export function Stat({
 }) {
   return (
     <div className="flex flex-col rounded-2xl border border-line bg-surface p-4 shadow-card">
-      <dt className="flex items-start justify-between gap-2 text-sm text-muted">
+      {/* Room for two lines of label: the figures of a row line up, with a hint or without. */}
+      <dt className="flex min-h-11 items-start justify-between gap-2 text-sm text-muted">
         <span className="pt-1">{label}</span>
         {icon ? (
           <span
@@ -36,7 +37,7 @@ export function Stat({
           </span>
         ) : null}
       </dt>
-      <dd className="tabular mt-auto pt-2 text-2xl font-semibold tracking-tight">{value}</dd>
+      <dd className="tabular mt-2 text-2xl font-semibold tracking-tight">{value}</dd>
       {hint ? <dd className="mt-1 text-xs text-muted">{hint}</dd> : null}
     </div>
   );

@@ -163,7 +163,7 @@ Préréglages par niche (appliqués à l'onboarding, modifiables) :
 | Développement personnel | 0,25 | 0,25 | 0,25 | 0,15 | 0,10 | 14 jours |
 | Autre | valeurs par défaut | | | | | 14 jours |
 
-Niveaux : 0-39 **faible**, 40-69 **moyen**, 70-100 **élevé**. Règle prioritaire : si `cancel_at_period_end = true`, le membre passe au statut spécial **« départ programmé »** (score 100) quel que soit le calcul.
+Niveaux : 0-39 **faible**, 40-69 **moyen**, 70-100 **élevé**. Règle prioritaire : si `cancel_at_period_end = true`, le membre passe au statut spécial **« départ programmé »** (score 100) quel que soit le calcul. Seconde règle prioritaire (décision du 01/10/2026) : un **paiement échoué ou en retard** place le membre au minimum en **risque élevé** (score porté au seuil du niveau élevé), quelle que soit son activité, et c'est sa première raison.
 
 Pour chaque score, enregistre les 2 raisons principales en langage clair (« Aucun message depuis 12 jours », « A arrêté le cours à la leçon 4 »), affichées au créateur.
 
@@ -171,7 +171,7 @@ Pour chaque score, enregistre les 2 raisons principales en langage clair (« Auc
 
 **Alertes de cohortes** : chaque semaine, calcule par mois d'arrivée le taux de départ à 30, 60 et 90 jours. Alerte si une cohorte part au moins 1,5 fois plus que la moyenne du créateur (minimum 10 membres dans la cohorte).
 
-**Détecteur de leçon bloquante** : pour chaque leçon, calcule la part des membres dont c'est la dernière leçon terminée et qui sont inactifs depuis 14 jours ou partis. Signale les leçons dont ce taux dépasse 2 fois la moyenne des leçons du cours (minimum 10 membres concernés).
+**Détecteur de leçon bloquante** : pour chaque leçon, calcule la part des membres dont c'est la dernière leçon terminée et qui sont inactifs depuis 14 jours ou partis. Signale les leçons dont ce taux dépasse 2 fois la moyenne des leçons du cours (minimum 10 membres concernés, et au moins 3 membres décrochés : décision du 01/10/2026, un seul membre relève du hasard).
 
 **Tests obligatoires** : cas limites (nouveau membre, membre sans cours, poids modifiés, données manquantes, départ programmé).
 

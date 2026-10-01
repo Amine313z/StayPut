@@ -401,7 +401,8 @@ abonnement). Chaque module s'allume quand ses secrets existent (`DISCORD_BOT_TOK
   depuis plus de 48 h ; 0,5 si les réactions des 14 derniers jours font moins de la moitié des
   14 jours d'avant (**au moins 2 réactions avant** : passer de 1 à 0 ne dit rien) ; sinon 0.
 - Niveaux 40 / 70 réglables ; une résiliation programmée vaut 100 et son propre statut,
-  « Départ programmé ».
+  « Départ programmé » ; un paiement échoué ou en retard place au moins en risque élevé (voir
+  « Retouches après la revue du fondateur » plus bas).
 
 ### Les raisons
 
@@ -445,9 +446,8 @@ abonnement). Chaque module s'allume quand ses secrets existent (`DISCORD_BOT_TOK
 ### Interface
 
 - Onglets : vue d'ensemble, membres, **analyses**, sources d'activité, **réglages**.
-- Vue d'ensemble : la tuile « Risque élevé » ; « À surveiller » = départs programmés, risques
-  élevés **et tout paiement échoué** quel que soit le score (avec les poids par défaut, un
-  paiement échoué seul ne vaut que 15 points, mais l'argent part maintenant), du score le plus
+- Vue d'ensemble : six chiffres (voir les retouches plus bas) ; « À surveiller » = départs
+  programmés et risques élevés (un paiement échoué en fait toujours partie), du score le plus
   haut au plus bas, avec leurs raisons (avant les premiers scores, les faits de Whop comme en
   Phase 2) ; « Nouveaux membres qui n'ont pas commencé » ; « Le risque
   parmi vos membres » : une barre par niveau (part des membres notés), nom, icône, nombre et
@@ -465,3 +465,42 @@ abonnement). Chaque module s'allume quand ses secrets existent (`DISCORD_BOT_TOK
   StayPut connaît (Whop, Discord, Telegram) : un membre qui ne fait que regarder des vidéos hors
   des leçons suivies paraît inactif.
 - Pas encore d'historique du score à l'écran (Phase 6), ni d'action depuis la liste (Phase 4).
+
+### Retouches après la revue du fondateur (même jour)
+
+Le fondateur a fait le tour du tableau de bord du sandbox et relevé cinq incohérences qui
+pouvaient faire perdre confiance dans le score :
+
+1. **Paiement échoué ou en retard = risque élevé au minimum**, quelle que soit l'activité (une
+   carte refusée coupe l'accès d'un membre très actif aussi). Avec les poids du cahier des
+   charges, un paiement échoué seul ne valait que 15 points (Zoé Lambert, « Risque faible ·
+   20 »). Le score est porté au seuil du niveau élevé (70 par défaut, plus s'il était déjà plus
+   haut) et « Paiement échoué » est dit en premier, même si le créateur met le poids du paiement
+   à zéro. Le paiement en attente de 3D Secure garde son sous-score de 0,7 sans règle.
+2. **Leçon bloquante : au moins 3 membres décrochés**, en plus du double de la moyenne du cours
+   et des 10 membres concernés (« 1 sur 23 » était signalé). La règle est réappliquée aux
+   chiffres gardés à chaque lecture (`isBlockingLesson`), donc un changement de règle se voit
+   tout de suite, sans attendre l'analyse de la semaine suivante.
+3. **« Activité en baisse de 100 % » devient « Aucune activité cette semaine »** (et « Aucune
+   réaction depuis 14 jours » pour les réactions). Les deux raisons ne se répètent plus ni ne se
+   contredisent : inactif depuis 7 jours ou plus dit déjà « rien cette semaine » (la raison
+   suivante prend la place) ; un membre passé dans la communauté il y a 3 jours sans rien y
+   faire de la semaine n'est pas dit « inactif depuis 3 jours » (la récence compte les visites
+   vues par Whop).
+4. **« Membres » et « Adhésions actives » faisaient doublon** (26 et 26). « Membres » compte
+   maintenant les membres dans la communauté **hors équipe** ; « Adhésions actives » est
+   remplacé par **« Revenus mensuels »** : les adhésions récurrentes qui paient encore (actives,
+   en retard ou en fin de période), hors équipe, ramenées au mois (une année compte pour un
+   douzième, une semaine pour 52 douzièmes, un mois de 28 à 31 jours pour un mois ; les essais et
+   les achats uniques n'en font pas partie), avec **la part menacée** (membres en risque élevé ou
+   en départ programmé). Dans la devise qui rapporte le plus ; s'il y en a d'autres, la tuile le
+   dit. C'est le premier pas vers l'audit de la Phase 6 (« Y $ de revenus mensuels menacés »).
+5. **« Activité, 30 derniers jours » sans unité** devient **« Actions, 30 jours »** (précisé
+   sous le chiffre) :
+   messages (Whop, Discord, Telegram), réactions, posts et leçons terminées, hors équipe, les
+   mêmes compteurs que la ligne « 30 derniers jours » de chaque membre (auparavant, tous les
+   événements, tickets de support et passages de l'équipe compris).
+
+Le Worker ne recalcule un score qu'une fois par heure et les analyses qu'une fois par semaine :
+les actions `seed` et `report` du workflow « Seed sandbox » recalculent tout de suite les scores
+et les analyses du sandbox avec les règles du code déployé.
