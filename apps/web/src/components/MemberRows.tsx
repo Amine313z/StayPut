@@ -1,10 +1,11 @@
 import type { MemberRow } from '@stayput/core';
 import { isFailedPayment } from '@stayput/core';
 import type { MessageKey, Translator } from '@stayput/i18n';
-import { CalendarClock, CreditCard, ShieldCheck } from 'lucide-react';
+import { CalendarClock, CreditCard, ShieldCheck, Sprout } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { Avatar } from '../ui/Avatar';
 import { Badge } from '../ui/Badge';
+import { RiskBadge, RiskReasons } from './Risk';
 
 const MEMBERSHIP_STATUSES: Record<string, MessageKey> = {
   trialing: 'membership.status.trialing',
@@ -18,7 +19,10 @@ const MEMBERSHIP_STATUSES: Record<string, MessageKey> = {
   drafted: 'membership.status.drafted',
 };
 
-/** Why a member needs the creator's attention now, from Whop's facts (never a guess). */
+/**
+ * Why a member needs the creator's attention now, from Whop's facts (never a guess): what the
+ * dashboard says before the first scores, and for the team, who has none.
+ */
 export type AttentionReason = 'paymentFailed' | 'canceling';
 
 export function attentionReasons(member: MemberRow): AttentionReason[] {
@@ -33,7 +37,7 @@ export function attentionReasons(member: MemberRow): AttentionReason[] {
   return member.status === 'joined' ? reasons : [];
 }
 
-/** The members, one row each: who, their membership and payments, their activity. */
+/** The members, one row each: who and their risk, their membership and payments, their activity. */
 export function MemberList({ members }: { members: readonly MemberRow[] }) {
   return (
     <ul className="divide-y divide-line">
@@ -47,7 +51,7 @@ export function MemberList({ members }: { members: readonly MemberRow[] }) {
 function MemberItem({ member }: { member: MemberRow }) {
   const i18n = useI18n();
   const { t, date, currency, plural } = i18n;
-  const { membership, lastPayment, activity } = member;
+  const { membership, lastPayment, activity, risk } = member;
   const failed = lastPayment !== null && isFailedPayment(lastPayment.status);
   const reasons = attentionReasons(member);
   const counts = [
@@ -68,23 +72,31 @@ function MemberItem({ member }: { member: MemberRow }) {
             </p>
           ) : null}
           <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {risk ? <RiskBadge risk={risk} /> : null}
+            {risk?.inactiveNewcomer ? (
+              <Badge tone="info" icon={<Sprout aria-hidden="true" className="size-3" />}>
+                {t('risk.newcomer')}
+              </Badge>
+            ) : null}
             {member.accessLevel === 'admin' ? (
               <Badge tone="info" icon={<ShieldCheck aria-hidden="true" className="size-3" />}>
                 {t('members.team')}
               </Badge>
             ) : null}
             {member.status === 'left' ? <Badge>{t('members.status.left')}</Badge> : null}
-            {reasons.includes('paymentFailed') ? (
+            {/* Before the first score, Whop's facts; once scored, the reasons say them. */}
+            {!risk && reasons.includes('paymentFailed') ? (
               <Badge tone="danger" icon={<CreditCard aria-hidden="true" className="size-3" />}>
                 {t('attention.paymentFailed')}
               </Badge>
             ) : null}
-            {reasons.includes('canceling') ? (
+            {!risk && reasons.includes('canceling') ? (
               <Badge tone="warning" icon={<CalendarClock aria-hidden="true" className="size-3" />}>
                 {t('attention.canceling')}
               </Badge>
             ) : null}
           </div>
+          {risk ? <RiskReasons reasons={risk.reasons} /> : null}
         </div>
       </div>
       <div className="min-w-0 text-sm">

@@ -1,4 +1,5 @@
 import type { CronJob } from './cron';
+import { scoreDueCompanies } from './risk';
 import { SYNC_REQUEST_BUDGET, summarize, syncDueCompanies } from './sync';
 
 /** Deliveries replayed per run at most: failed ones, or ones the background never finished. */
@@ -43,5 +44,24 @@ export const refreshStats: CronJob = {
     if (!db) return;
     await db.query('select stayput.refresh_stats($1::timestamptz)', [now.toISOString()]);
     await db.query('select stayput.purge_pending_activity($1::timestamptz)', [now.toISOString()]);
+  },
+};
+
+/**
+ * SPEC Phase 3: every hour, the risk score of each member (the companies that waited longest
+ * first, within the run's CPU), and the weekly analyses of a company when a week has passed.
+ * The daily history of scores is kept 400 days.
+ */
+export const scoreMembers: CronJob = {
+  name: 'risk',
+  async run({ db, now }) {
+    if (!db) return;
+    const runs = await scoreDueCompanies(db, now);
+    for (const run of runs) {
+      console.info(
+        `Risk ${run.companyId}: ${run.scored} member(s) scored${run.analyzed ? ', analyses done' : ''}.`,
+      );
+    }
+    await db.query('select stayput.purge_risk_history($1::timestamptz)', [now.toISOString()]);
   },
 };

@@ -63,6 +63,10 @@ Guidance for Claude Code in this repository.
   `src/telegram.ts`, `src/integrations.ts`), each on once its secrets exist
   (`DISCORD_BOT_TOKEN` + `DISCORD_CLIENT_SECRET`, `TELEGRAM_BOT_TOKEN`); and the dashboard
   redesign (tabs Overview / Members / Activity sources, `apps/web/src/ui/*`).
+- **Phase 3** (detection), done, waiting for validation: migration 0008 (`member_risk`, daily
+  `risk_scores`, cohorts and lessons, settings), `packages/core` `risk.ts` / `analyses.ts` (pure,
+  tested edge cases), `apps/worker/src/risk.ts` (hourly `scoreMembers` job, after each sync,
+  after new settings), routes `/insights` and `/settings/risk`, tabs Analyses and Settings.
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;
   Whop's side: `GET /webhooks/{id}/deliveries` and `POST /webhooks/{id}/test` with
@@ -137,6 +141,12 @@ npm run db:bundle    # after adding a migration: supabase/install.sql + schema-v
   font Inter served by StayPut. The creator view loads its data once (`CreatorView`, read by
   the sections with `useCreatorData()`). Links that leave StayPut (Discord, Telegram) go through
   `ExternalButton`: inside Whop's frame it asks Whop to open them (`src/external.ts`).
+- **Risk score** (DECISIONS.md « Phase 3 »): `risk_features` gathers each member as one compact
+  JSON array (order in migration 0008 and `FeatureRow` in `src/risk.ts`: change both together);
+  `computeRisk` decides; `save_risk_scores` keeps. Reasons are stored as codes with figures and
+  worded by `reasonText` (`apps/web/src/components/Risk.tsx`): a new reason code needs its
+  i18n keys and a case there. A level is never shown by color alone (`LEVELS`: tone, icon,
+  name); the bars use the `--risk-*` tokens.
 
 ## Environment notes
 

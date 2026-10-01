@@ -39,7 +39,11 @@ export interface Translator {
   plural: (key: PluralKey, count: number, params?: Params) => string;
   number: (value: number) => string;
   currency: (amount: number, currency: string) => string;
+  /** A share from 0 to 1, as a whole percentage: « 42% », « 42 % ». */
+  percent: (ratio: number) => string;
   date: (value: Date) => string;
+  /** A calendar month, « September 2026 » (read in UTC: `2026-09-01` is September anywhere). */
+  month: (value: Date) => string;
   /** A moment: the date and the time, in the browser's time zone. */
   dateTime: (value: Date) => string;
   /** How long ago (or in how long): « 5 minutes ago », « il y a 2 heures », « hier ». */
@@ -60,7 +64,13 @@ export function createTranslator(locale: Locale): Translator {
   const messages = MESSAGES[locale];
   const plurals = new Intl.PluralRules(locale);
   const numbers = new Intl.NumberFormat(locale);
+  const percents = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
   const dates = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
+  const months = new Intl.DateTimeFormat(locale, {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
   const moments = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
   const relatives = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
 
@@ -83,7 +93,9 @@ export function createTranslator(locale: Locale): Translator {
     number: (value) => numbers.format(value),
     currency: (amount, currency) =>
       new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount),
+    percent: (ratio) => percents.format(ratio),
     date: (value) => dates.format(value),
+    month: (value) => months.format(value),
     dateTime: (value) => moments.format(value),
     relative: (value, now = new Date()) => {
       const elapsed = value.getTime() - now.getTime();

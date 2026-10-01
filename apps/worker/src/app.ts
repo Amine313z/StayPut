@@ -1,14 +1,19 @@
 import {
   CSRF_HEADER,
+  NICHE_PRESETS,
+  RISK_FACTORS,
   canOpenCreatorView,
   canOpenMemberView,
   isCompanyId,
   isExperienceId,
+  isNiche,
+  normalizeWeights,
   type AccessLevel,
   type CreatorSession,
   type DiscordChannelsUpdate,
   type HealthReport,
   type MemberSession,
+  type RiskSettingsView,
   type SignInMethod,
   type SyncRun,
 } from '@stayput/core';
@@ -48,7 +53,8 @@ import {
   readMemberTelegram,
   type LinkContext,
 } from './integrations';
-import { readMembers, readSyncStatus } from './members';
+import { readInsights, readMembers, readRiskSettings, readSyncStatus } from './members';
+import { REQUEST_RISK_BATCH, refreshDetection } from './risk';
 import { LATEST_MIGRATION } from './schema-version';
 import {
   LOGIN_COOKIE,
@@ -326,12 +332,15 @@ export function createApp(deps: AppDeps) {
         minIntervalSeconds,
         { retryFailed: true },
       );
-      if (!result) return;
-      console.info(summarize(result));
-      await db.query('select stayput.refresh_stats($1::timestamptz, $2)', [
-        now.toISOString(),
-        companyId,
-      ]);
+      if (result) {
+        console.info(summarize(result));
+        await db.query('select stayput.refresh_stats($1::timestamptz, $2)', [
+          now.toISOString(),
+          companyId,
+        ]);
+      }
+      // The scores due (on the first visit, every member's) now rather than at the next hour.
+      await refreshDetection(db, companyId, now, REQUEST_RISK_BATCH);
     });
   }
 
@@ -552,6 +561,7 @@ export function createApp(deps: AppDeps) {
         now.toISOString(),
         companyId,
       ]);
+      await refreshDetection(db, companyId, now, REQUEST_RISK_BATCH);
     }
     const run: SyncRun = {
       ...(await readSyncStatus(db, c.get('userId'), companyId)),
@@ -580,6 +590,63 @@ export function createApp(deps: AppDeps) {
       signingKey: config.apiKey ? await signingKey(config.apiKey) : null,
     };
   }
+
+  /** The weekly analyses: cohorts leaving faster than the others, lessons members stall after. */
+  app.get('/api/creator/:companyId/insights', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    return c.json(await readInsights(db, c.get('userId'), c.get('companyId')));
+  });
+
+  /** How the risk score is computed for this company (SPEC Phase 3: weights, thresholds). */
+  app.get(
+    '/api/creator/:companyId/settings/risk',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const settings = await readRiskSettings(db, c.get('userId'), c.get('companyId'));
+      return settings ? c.json(settings) : apiError('not_found', 'no settings for this company');
+    },
+  );
+
+  /**
+   * New settings: the weights are brought back to a sum of 1, every score is due again and the
+   * first ones are computed at once.
+   */
+  app.put(
+    '/api/creator/:companyId/settings/risk',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<Partial<RiskSettingsView>>().catch(() => null);
+      const settings = validRiskSettings(body);
+      if (!settings) return apiError('invalid_request', 'expected the risk settings');
+      const companyId = c.get('companyId');
+      const now = deps.now();
+      await db.query(
+        'select stayput.save_risk_settings($1, $2, $3::text::jsonb, $4, $5, $6, $7::timestamptz)',
+        [
+          companyId,
+          settings.niche,
+          JSON.stringify(settings.weights),
+          settings.recencyThresholdDays,
+          settings.mediumFrom,
+          settings.highFrom,
+          now.toISOString(),
+        ],
+      );
+      inBackground(c, 'Rescoring', async (work) => {
+        await refreshDetection(work, companyId, now, REQUEST_RISK_BATCH);
+      });
+      return c.json((await readRiskSettings(db, c.get('userId'), companyId)) ?? settings);
+    },
+  );
 
   /** Discord and Telegram: what is connected, and the links to connect more. */
   app.get(
@@ -953,6 +1020,41 @@ async function recordAdmin(db: ClosableDb, companyId: string, userId: string, no
       [companyId, userId, at],
     );
   });
+}
+
+/**
+ * Risk settings a creator sent, made safe: a known niche (else the weights alone), weights
+ * brought back to a sum of 1, a recency threshold of 1 to 90 days, levels 0 < medium < high <= 100.
+ */
+export function validRiskSettings(body: Partial<RiskSettingsView> | null): RiskSettingsView | null {
+  if (!body || !isNiche(body.niche)) return null;
+  const weights = body.weights ?? NICHE_PRESETS[body.niche].weights;
+  if (
+    typeof weights !== 'object' ||
+    !RISK_FACTORS.every(
+      (key) => typeof (weights as unknown as Record<string, unknown>)[key] === 'number',
+    )
+  ) {
+    return null;
+  }
+  const whole = (value: unknown, min: number, max: number) =>
+    typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
+  const { recencyThresholdDays, mediumFrom, highFrom } = body;
+  if (
+    !whole(recencyThresholdDays, 1, 90) ||
+    !whole(mediumFrom, 1, 99) ||
+    !whole(highFrom, 2, 100)
+  ) {
+    return null;
+  }
+  if ((mediumFrom as number) >= (highFrom as number)) return null;
+  return {
+    niche: body.niche,
+    weights: normalizeWeights(weights),
+    recencyThresholdDays: recencyThresholdDays as number,
+    mediumFrom: mediumFrom as number,
+    highFrom: highFrom as number,
+  };
 }
 
 /** The company a delivery concerns, when the payload names one. */

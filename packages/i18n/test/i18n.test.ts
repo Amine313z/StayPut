@@ -76,6 +76,14 @@ describe('createTranslator', () => {
     expect(createTranslator('en').date(new Date('2026-09-30T12:00:00Z'))).toBe('Sep 30, 2026');
   });
 
+  it('formats shares and calendar months', () => {
+    expect(createTranslator('en').percent(0.164)).toBe('16%');
+    expect(createTranslator('fr').percent(0.5)).toMatch(/^50\s%$/);
+    // Read in UTC: the first of a month is that month in every time zone.
+    expect(createTranslator('en').month(new Date('2026-09-01'))).toBe('September 2026');
+    expect(createTranslator('fr').month(new Date('2026-09-01'))).toBe('septembre 2026');
+  });
+
   it('says how long ago, in the largest unit that fits', () => {
     const now = new Date('2026-10-01T12:00:00Z');
     const ago = (ms: number) => new Date(now.getTime() - ms);

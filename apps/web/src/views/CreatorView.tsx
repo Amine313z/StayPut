@@ -1,5 +1,5 @@
 import type { CreatorSession, IntegrationsStatus, MembersPage } from '@stayput/core';
-import { LayoutDashboard, Plug, Users } from 'lucide-react';
+import { ChartColumn, LayoutDashboard, Plug, SlidersHorizontal, Users } from 'lucide-react';
 import { Outlet, useOutletContext, useParams } from 'react-router';
 import { useApi, useReloadOnReturn, type Loadable } from '../api';
 import { SignOut } from '../components/SignOut';
@@ -42,9 +42,10 @@ export function CreatorView() {
 
 /**
  * The sections of the dashboard (SPEC Phase 2, then Phase 6): an overview, the members, the
- * activity sources. The data is read once here and kept while the creator moves between them;
- * the members are read again each time a synchronization brings something new, the sources
- * each time the creator comes back to the page (after connecting one in another tab).
+ * analyses, the activity sources and the settings. The members and the sources are read once
+ * here and kept while the creator moves between sections; the members are read again each time
+ * a synchronization brings something new, the sources each time the creator comes back to the
+ * page (after connecting one in another tab).
  */
 function Dashboard({ session }: { session: CreatorSession }) {
   const { t } = useI18n();
@@ -83,9 +84,19 @@ function Dashboard({ session }: { session: CreatorSession }) {
             icon: <Users aria-hidden="true" className="size-4" />,
           },
           {
+            to: `${root}/insights`,
+            label: t('creator.tab.insights'),
+            icon: <ChartColumn aria-hidden="true" className="size-4" />,
+          },
+          {
             to: `${root}/sources`,
             label: t('creator.tab.sources'),
             icon: <Plug aria-hidden="true" className="size-4" />,
+          },
+          {
+            to: `${root}/settings`,
+            label: t('creator.tab.settings'),
+            icon: <SlidersHorizontal aria-hidden="true" className="size-4" />,
           },
         ]}
       />

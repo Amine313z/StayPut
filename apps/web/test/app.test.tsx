@@ -1,9 +1,13 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type {
   DiscordChannelChoice,
+  InsightsReport,
   IntegrationsStatus,
+  MemberRisk,
+  MemberRow,
   MemberTelegramStatus,
   MembersPage,
+  RiskSettingsView,
   SyncRun,
   SyncStatus,
 } from '@stayput/core';
@@ -78,50 +82,75 @@ const syncStatus = (over: Partial<SyncStatus> = {}) => ({
   } satisfies SyncStatus,
 });
 
+const SCORED_AT = '2026-10-01T11:00:00.000Z';
+
+/** A member who pays $49 a month and is fine, unless `over` says otherwise. */
+const memberRow = (over: Partial<MemberRow> & Pick<MemberRow, 'id' | 'name'>): MemberRow => ({
+  status: 'joined',
+  accessLevel: 'customer',
+  joinedAt: '2026-06-01T10:00:00.000Z',
+  lastActionAt: '2026-09-30T10:00:00.000Z',
+  lastActivityAt: '2026-09-30T10:00:00.000Z',
+  activity: { messages: 0, reactions: 0, posts: 0, lessons: 0 },
+  risk: null,
+  membership: {
+    status: 'active',
+    price: 49,
+    currency: 'usd',
+    billingPeriodDays: 30,
+    cancelAtPeriodEnd: false,
+    currentPeriodEnd: '2026-10-15T10:00:00.000Z',
+  },
+  lastPayment: {
+    status: 'succeeded',
+    amount: 49,
+    currency: 'usd',
+    at: '2026-09-15T10:00:00.000Z',
+    failureReason: null,
+  },
+  ...over,
+});
+
+const risk = (over: Partial<MemberRisk> & Pick<MemberRisk, 'score' | 'level'>): MemberRisk => ({
+  reasons: [],
+  inactiveNewcomer: false,
+  computedAt: SCORED_AT,
+  ...over,
+});
+
+/** As the Worker sends them: the most at risk first. */
 const MEMBERS: MembersPage = {
   summary: {
-    members: 2,
-    liveMemberships: 2,
+    members: 5,
+    liveMemberships: 5,
     scheduledCancellations: 1,
     failedPayments: 1,
     activity30d: 7,
+    risk: {
+      high: 1,
+      medium: 1,
+      low: 2,
+      scheduledDeparture: 1,
+      inactiveNewcomers: 1,
+      computedAt: SCORED_AT,
+    },
   },
   truncated: false,
   members: [
-    {
-      id: 'mber_1',
-      name: 'Alice Martin',
-      status: 'joined',
-      accessLevel: 'customer',
-      joinedAt: '2026-06-01T10:00:00.000Z',
-      lastActionAt: '2026-09-30T10:00:00.000Z',
-      lastActivityAt: '2026-09-30T10:00:00.000Z',
-      activity: { messages: 6, reactions: 1, posts: 0, lessons: 0 },
-      membership: {
-        status: 'active',
-        price: 49,
-        currency: 'usd',
-        billingPeriodDays: 30,
-        cancelAtPeriodEnd: false,
-        currentPeriodEnd: '2026-10-15T10:00:00.000Z',
-      },
-      lastPayment: {
-        status: 'succeeded',
-        amount: 49,
-        currency: 'usd',
-        at: '2026-09-15T10:00:00.000Z',
-        failureReason: null,
-      },
-    },
-    {
+    memberRow({
       id: 'mber_2',
       name: null,
-      status: 'joined',
-      accessLevel: 'customer',
       joinedAt: '2026-07-01T10:00:00.000Z',
       lastActionAt: null,
       lastActivityAt: null,
-      activity: { messages: 0, reactions: 0, posts: 0, lessons: 0 },
+      risk: risk({
+        score: 100,
+        level: 'scheduled_departure',
+        reasons: [
+          { code: 'cancel_scheduled', date: '2026-10-20T10:00:00.000Z' },
+          { code: 'never_active', days: 92 },
+        ],
+      }),
       membership: {
         status: 'active',
         price: 49,
@@ -137,7 +166,54 @@ const MEMBERS: MembersPage = {
         at: '2026-09-20T10:00:00.000Z',
         failureReason: 'Card declined',
       },
-    },
+    }),
+    memberRow({
+      id: 'mber_3',
+      name: 'Bruno Petit',
+      lastActivityAt: '2026-09-10T10:00:00.000Z',
+      risk: risk({
+        score: 78,
+        level: 'high',
+        reasons: [
+          { code: 'inactive', days: 21 },
+          { code: 'activity_drop', percent: 100 },
+        ],
+      }),
+    }),
+    memberRow({
+      id: 'mber_4',
+      name: 'Denis Moreau',
+      risk: risk({
+        score: 52,
+        level: 'medium',
+        reasons: [
+          { code: 'no_progress', days: 18, lesson: '4. Risk management' },
+          { code: 'ticket_open', days: 3 },
+        ],
+      }),
+    }),
+    memberRow({
+      id: 'mber_5',
+      name: 'Chloé Dubois',
+      joinedAt: '2026-09-27T10:00:00.000Z',
+      lastActionAt: null,
+      lastActivityAt: null,
+      risk: risk({
+        score: 12,
+        level: 'low',
+        inactiveNewcomer: true,
+        reasons: [
+          { code: 'never_active', days: 4 },
+          { code: 'no_progress', days: 4, lesson: null },
+        ],
+      }),
+    }),
+    memberRow({
+      id: 'mber_1',
+      name: 'Alice Martin',
+      activity: { messages: 6, reactions: 1, posts: 0, lessons: 0 },
+      risk: risk({ score: 3, level: 'low' }),
+    }),
   ],
 };
 
@@ -181,6 +257,14 @@ const NOBODY: MembersPage = {
     scheduledCancellations: 0,
     failedPayments: 0,
     activity30d: 0,
+    risk: {
+      high: 0,
+      medium: 0,
+      low: 0,
+      scheduledDeparture: 0,
+      inactiveNewcomers: 0,
+      computedAt: null,
+    },
   },
   truncated: false,
   members: [],
@@ -210,55 +294,159 @@ describe('creator view', () => {
     ]);
   });
 
-  it('shows the figures, and the members about to leave', async () => {
+  it('shows the figures, and who is about to leave with the reasons', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
     const figures = (await screen.findByText('Failed payments')).closest('dl')!;
+    expect(figures.textContent).toContain('High risk1');
     expect(figures.textContent).toContain('Cancellations scheduled1');
     expect(figures.textContent).toContain('Failed payments1');
     expect(figures.textContent).toContain('Activity, last 30 days7');
+
+    // The departures and the high risks, the highest score first, each with its reasons.
     const attention = screen.getByRole('heading', { name: 'Needs attention' }).closest('section')!;
-    expect(attention.textContent).toContain('Member without a name');
-    expect(attention.textContent).toContain('Payment failed');
-    expect(attention.textContent).toContain('Cancellation scheduled');
-    expect(attention.textContent).not.toContain('Alice Martin');
+    const text = attention.textContent ?? '';
+    expect(text).toContain('Member without a name');
+    expect(text).toContain('Leaves on Oct 20, 2026');
+    expect(text).toContain('No activity since joining, 92 days ago');
+    expect(text).toContain('High risk · 78');
+    expect(text).toContain('No activity for 21 days');
+    expect(text).toContain('Activity down 100% this week');
+    expect(text.indexOf('Member without a name')).toBeLessThan(text.indexOf('Bruno Petit'));
+    expect(text).not.toContain('Denis Moreau');
+    expect(text).not.toContain('Alice Martin');
+    expect(screen.getByRole('link', { name: 'All members, by risk' }).getAttribute('href')).toBe(
+      '/dashboard/biz_A1/members',
+    );
+
+    // The activation radar.
+    const radar = screen
+      .getByRole('heading', { name: 'New members who have not started' })
+      .closest('section')!;
+    expect(radar.textContent).toContain('Chloé Dubois');
     expect(screen.getByRole('link', { name: 'See all (1)' }).getAttribute('href')).toBe(
-      '/dashboard/biz_A1/members?filter=attention',
+      '/dashboard/biz_A1/members?filter=newcomers',
     );
   });
 
-  it('shows what StayPut collected about each member', async () => {
+  it('shows how the risk spreads, each level with its count, share and members', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1');
+    const levels = await screen.findByRole('list', { name: 'Members by risk level' });
+    const rows = Array.from(levels.querySelectorAll('a'));
+    expect(rows.map((a) => a.textContent)).toEqual([
+      'Leaving120%',
+      'High risk120%',
+      'Medium risk120%',
+      'Low risk240%',
+    ]);
+    expect(rows.map((a) => a.getAttribute('href'))).toEqual([
+      '/dashboard/biz_A1/members?filter=leaving',
+      '/dashboard/biz_A1/members?filter=high',
+      '/dashboard/biz_A1/members?filter=medium',
+      '/dashboard/biz_A1/members?filter=low',
+    ]);
+    expect(screen.getByText(/^Computed /)).toBeTruthy();
+  });
+
+  it('shows what StayPut collected about each member, and the risk with why', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1/members');
     const alice = (await screen.findByText('Alice Martin')).closest('li')!;
+    expect(alice.textContent).toContain('Low risk · 3');
     expect(alice.textContent).toContain('Active · $49.00 per month · renews on Oct 15, 2026');
     expect(alice.textContent).toContain('Last payment: $49.00 on Sep 15, 2026');
     expect(alice.textContent).toContain('Last 30 days: 6 messages, 1 reaction, 0 posts, 0 lessons');
     const unnamed = screen.getByText('Member without a name').closest('li')!;
+    expect(unnamed.textContent).toContain('Leaving');
     expect(unnamed.textContent).toContain('ends on Oct 20, 2026');
     expect(screen.getByText('Payment failed: $49.00 on Sep 20, 2026').className).toContain(
       'text-danger',
     );
     expect(unnamed.textContent).toContain('No activity recorded yet.');
+    const denis = screen.getByText('Denis Moreau').closest('li')!;
+    expect(denis.textContent).toContain('Medium risk · 52');
+    expect(denis.textContent).toContain('Last lesson completed: “4. Risk management”, 18 days ago');
+    expect(denis.textContent).toContain('Support ticket open for 3 days');
+    const chloe = screen.getByText('Chloé Dubois').closest('li')!;
+    expect(chloe.textContent).toContain('New, not started yet');
+    expect(chloe.textContent).toContain('No lesson for 4 days');
   });
 
-  it('filters the members and finds one by name, accents aside', async () => {
+  it('keeps every failed payment in « Needs attention », whatever the score', async () => {
+    mockApi(
+      dashboard({
+        ...MEMBERS,
+        members: MEMBERS.members.map((m) =>
+          m.id === 'mber_1' && m.lastPayment
+            ? { ...m, lastPayment: { ...m.lastPayment, status: 'failed' } }
+            : m,
+        ),
+      }),
+    );
+    renderAt('/dashboard/biz_A1');
+    const heading = await screen.findByRole('heading', { name: 'Needs attention' });
+    const text = heading.closest('section')!.textContent ?? '';
+    expect(text).toContain('Alice Martin');
+    expect(text).toContain('Low risk · 3');
+    expect(text).not.toContain('Denis Moreau');
+  });
+
+  it('keeps the facts of Whop before the first scores', async () => {
+    mockApi(
+      dashboard({
+        ...MEMBERS,
+        members: MEMBERS.members.map((m) => ({ ...m, risk: null })),
+      }),
+    );
+    renderAt('/dashboard/biz_A1');
+    const heading = await screen.findByRole('heading', { name: 'Needs attention' });
+    const attention = heading.closest('section')!;
+    expect(attention.textContent).toContain('Member without a name');
+    expect(attention.textContent).toContain('Payment failed');
+    expect(attention.textContent).toContain('Cancellation scheduled');
+    expect(attention.textContent).not.toContain('Bruno Petit');
+  });
+
+  it('filters the members by risk level and finds one by name, accents aside', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1/members');
     await screen.findByText('Alice Martin');
-    fireEvent.click(screen.getByRole('button', { name: /Needs attention/ }));
-    expect(screen.queryByText('Alice Martin')).toBeNull();
-    expect(screen.getByText('Member without a name')).toBeTruthy();
+    const names = () =>
+      [
+        'Member without a name',
+        'Bruno Petit',
+        'Denis Moreau',
+        'Chloé Dubois',
+        'Alice Martin',
+      ].filter((name) => screen.queryByText(name) !== null);
+    fireEvent.click(screen.getByRole('button', { name: /^Leaving/ }));
+    expect(names()).toEqual(['Member without a name']);
+    fireEvent.click(screen.getByRole('button', { name: /^High/ }));
+    expect(names()).toEqual(['Bruno Petit']);
+    fireEvent.click(screen.getByRole('button', { name: /^Low/ }));
+    expect(names()).toEqual(['Chloé Dubois', 'Alice Martin']);
+    fireEvent.click(screen.getByRole('button', { name: /^New, inactive/ }));
+    expect(names()).toEqual(['Chloé Dubois']);
     fireEvent.click(screen.getByRole('button', { name: /^All/ }));
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search a member' }), {
       target: { value: 'ALÎCE' },
     });
-    expect(screen.getByText('Alice Martin')).toBeTruthy();
-    expect(screen.queryByText('Member without a name')).toBeNull();
+    expect(names()).toEqual(['Alice Martin']);
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search a member' }), {
       target: { value: 'nobody' },
     });
     expect(screen.getByText('No member matches.')).toBeTruthy();
+  });
+
+  it('opens on the level a link asks for', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/members?filter=medium');
+    expect(await screen.findByText('Denis Moreau')).toBeTruthy();
+    expect(screen.queryByText('Alice Martin')).toBeNull();
+    expect(screen.getByRole('button', { name: /^Medium/ }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
   });
 
   it('says so when there is nobody yet, while the history is being imported', async () => {
@@ -369,6 +557,16 @@ describe('creator view', () => {
     expect(alice.textContent).toContain(
       '30 derniers jours : 6 messages, 1 réaction, 0 post, 0 leçon',
     );
+    const bruno = screen.getByText('Bruno Petit').closest('li')!;
+    expect(bruno.textContent).toContain('Risque élevé · 78');
+    expect(bruno.textContent).toContain('Aucune activité depuis 21 jours');
+    expect(bruno.textContent).toMatch(/Activité en baisse de 100\s% cette semaine/);
+    const unnamed = screen.getByText('Membre sans nom').closest('li')!;
+    expect(unnamed.textContent).toContain('Départ programmé');
+    expect(unnamed.textContent).toContain('Part le 20 oct. 2026');
+    expect(
+      screen.getByText('Dernière leçon terminée : « 4. Risk management », il y a 18 jours'),
+    ).toBeTruthy();
   });
 
   it('tells a non-admin the dashboard is for the team', async () => {
@@ -542,6 +740,193 @@ describe('activity sources', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Yes, disconnect' }));
     await vi.waitFor(() => expect(screen.queryByText('VIP')).toBeNull());
     expect(calls).toContain('DELETE /api/creator/biz_A1/telegram/-1009000000001');
+  });
+});
+
+describe('analyses', () => {
+  const lesson = (n: number, over: Partial<InsightsReport['lessons'][number]> = {}) => ({
+    lessonId: `lesn_${n}`,
+    courseId: 'cors_1',
+    title: `${n}. Lesson`,
+    reached: 20,
+    stalled: 3,
+    rate: 0.15,
+    courseAverage: 0.21,
+    flagged: false,
+    ...over,
+  });
+  const REPORT: InsightsReport = {
+    computedAt: '2026-09-28T07:30:00.000Z',
+    cohorts: [
+      {
+        month: '2026-09-01',
+        members: 12,
+        rates: { 30: null, 60: null, 90: null },
+        alertHorizon: null,
+      },
+      {
+        month: '2026-07-01',
+        members: 14,
+        rates: { 30: 0.36, 60: 0.43, 90: null },
+        alertHorizon: 30,
+      },
+      {
+        month: '2026-06-01',
+        members: 20,
+        rates: { 30: 0.1, 60: 0.15, 90: 0.2 },
+        alertHorizon: null,
+      },
+    ],
+    averages: { 30: 0.2, 60: 0.27, 90: 0.2 },
+    lessons: [
+      lesson(4, {
+        title: '4. Risk management',
+        reached: 12,
+        stalled: 7,
+        rate: 0.583,
+        flagged: true,
+      }),
+      ...[1, 2, 3, 5, 6, 7, 8, 9].map((n) => lesson(n)),
+      lesson(10, { title: null }),
+    ],
+  };
+
+  it('flags the months of arrival that leave faster, and the blocking lessons', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/insights': [{ status: 200, body: REPORT }],
+    });
+    renderAt('/dashboard/biz_A1/insights');
+    expect(
+      await screen.findByText(
+        'Members who joined in July 2026 left 1.8 times more than your average within 30 days.',
+      ),
+    ).toBeTruthy();
+    expect(calls).toContain('/api/creator/biz_A1/insights');
+    const july = screen.getByRole('rowheader', { name: 'July 2026' }).closest('tr')!;
+    expect(july.textContent).toContain('36%Above average');
+    const september = screen.getByRole('rowheader', { name: 'September 2026' }).closest('tr')!;
+    expect(september.textContent).toContain('Too early to tell');
+    const average = screen.getByRole('rowheader', { name: 'Your average' }).closest('tr')!;
+    expect(average.textContent).toBe('Your average20%27%20%');
+
+    const blocking = screen.getByRole('rowheader', { name: /4\. Risk management/ }).closest('tr')!;
+    expect(blocking.textContent).toBe('4. Risk managementBlocking7 of 1258%21%');
+    // The first 8 lessons, then all of them on demand.
+    expect(screen.queryByRole('rowheader', { name: 'Lesson without a title' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show all (10)' }));
+    expect(screen.getByRole('rowheader', { name: 'Lesson without a title' })).toBeTruthy();
+  });
+
+  it('says when the first analyses have not run yet', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/insights': [
+        {
+          status: 200,
+          body: { ...REPORT, computedAt: null, cohorts: [], lessons: [] },
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/insights', 'fr');
+    expect(
+      await screen.findByText(
+        "Les premières analyses tournent dans l'heure qui suit la première synchronisation.",
+      ),
+    ).toBeTruthy();
+  });
+});
+
+describe('risk settings', () => {
+  const DEFAULTS: RiskSettingsView = {
+    niche: 'other',
+    weights: { recency: 0.3, frequency: 0.25, progress: 0.2, payment: 0.15, friction: 0.1 },
+    recencyThresholdDays: 14,
+    mediumFrom: 40,
+    highFrom: 70,
+  };
+  const TRADING: RiskSettingsView = {
+    niche: 'trading',
+    weights: { recency: 0.35, frequency: 0.3, progress: 0.1, payment: 0.15, friction: 0.1 },
+    recencyThresholdDays: 7,
+    mediumFrom: 40,
+    highFrom: 70,
+  };
+  const settings = (answers: Record<string, Answer[]> = {}) =>
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/settings/risk': [{ status: 200, body: DEFAULTS }],
+      ...answers,
+    });
+  const share = (name: string) =>
+    screen.getByRole('slider', { name }).closest('div')!.querySelector('output')!.textContent;
+
+  it('applies a niche, shows what each sign weighs, then saves', async () => {
+    const calls = settings({
+      'PUT /api/creator/biz_A1/settings/risk': [{ status: 200, body: TRADING }],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    const save = await screen.findByRole('button', { name: 'Save' });
+    expect(save.hasAttribute('disabled')).toBe(true);
+    expect(share('Recency')).toBe('30%');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Your niche' }), {
+      target: { value: 'trading' },
+    });
+    expect(share('Recency')).toBe('35%');
+    expect(
+      screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Recency threshold' }).value,
+    ).toBe('7');
+    fireEvent.click(save);
+    expect(await screen.findByText('Saved. The scores are being recomputed.')).toBeTruthy();
+    expect(calls).toContain('PUT /api/creator/biz_A1/settings/risk');
+    expect(headersOf.get('PUT /api/creator/biz_A1/settings/risk')?.get('x-stayput-csrf')).toBe('1');
+    expect(bodies.get('PUT /api/creator/biz_A1/settings/risk')).toEqual(TRADING);
+    expect(save.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('brings the weights back to 100% as they move', async () => {
+    settings();
+    renderAt('/dashboard/biz_A1/settings');
+    const payment = await screen.findByRole('slider', { name: 'Payment' });
+    fireEvent.change(payment, { target: { value: '0' } });
+    // 30 + 25 + 20 + 0 + 10 = 85 points: recency weighs 30 / 85.
+    expect(share('Payment')).toBe('0%');
+    expect(share('Recency')).toBe('35%');
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false);
+  });
+
+  it('refuses levels in the wrong order, and a recency out of range', async () => {
+    settings();
+    renderAt('/dashboard/biz_A1/settings');
+    fireEvent.change(await screen.findByRole('spinbutton', { name: 'Medium risk from' }), {
+      target: { value: '80' },
+    });
+    expect(screen.getByText('High risk has to start above medium risk.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Medium risk from' }), {
+      target: { value: '30' },
+    });
+    expect(screen.getByText('Low risk: 0 to 29')).toBeTruthy();
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Recency threshold' }), {
+      target: { value: '120' },
+    });
+    expect(screen.getByText('A whole number of days, from 1 to 90.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('says when saving did not work', async () => {
+    settings({
+      'PUT /api/creator/biz_A1/settings/risk': [
+        { status: 500, body: { error: { code: 'internal', message: 'boom' } } },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/settings', 'fr');
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Votre niche' }), {
+      target: { value: 'fitness' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+    expect(await screen.findByText("Cela n'a pas marché. Réessayez.")).toBeTruthy();
   });
 });
 

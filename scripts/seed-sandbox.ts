@@ -1,16 +1,20 @@
 /**
  * SPEC Phase 2, 6: 25 fake members with 60 days of history in a sandbox company, or their
  * removal (scripts/seed/sandbox-members.ts says what they are and why they live in StayPut's
- * database rather than in Whop's).
+ * database rather than in Whop's). SPEC Phase 3: `report` lists them by risk score, with their
+ * reasons as the dashboard words them (they are made up: names and all).
  *
  *   DATABASE_URL=… npx tsx scripts/seed-sandbox.ts seed [biz_…]
  *   DATABASE_URL=… npx tsx scripts/seed-sandbox.ts remove [biz_…]
+ *   DATABASE_URL=… npx tsx scripts/seed-sandbox.ts report [biz_…]
  *
  * The « Seed sandbox » workflow runs it (GitHub → Actions → Seed sandbox → Run workflow). Refused
  * when WHOP_ENV is production, and for a company StayPut does not know.
  */
+import { appendFileSync } from 'node:fs';
 import postgres from 'postgres';
-import { removeSeed, runSeed } from './seed/sandbox-members';
+import { scoreCompany } from '../apps/worker/src/risk';
+import { removeSeed, riskReport, runSeed } from './seed/sandbox-members';
 
 /** « StayPut Test », the founder's sandbox account (not a secret). */
 const SANDBOX_COMPANY = 'biz_2whAzkbCRpcGqQ';
@@ -24,7 +28,9 @@ function fail(message: string): never {
 }
 
 if (!url) fail('Set DATABASE_URL.');
-if (!['seed', 'remove'].includes(action)) fail('Usage: seed-sandbox.ts seed|remove [biz_…]');
+if (!['seed', 'remove', 'report'].includes(action)) {
+  fail('Usage: seed-sandbox.ts seed|remove|report [biz_…]');
+}
 if ((process.env.WHOP_ENV || 'sandbox') !== 'sandbox') {
   fail('Refused: WHOP_ENV is not "sandbox". Fake members never go into production.');
 }
@@ -53,10 +59,18 @@ async function main() {
   const now = new Date();
   if (action === 'seed') {
     const result = await runSeed(db, companyId, now);
+    // Their scores at once, as the Worker would after its next synchronization.
+    const scored = await scoreCompany(db, companyId, now, 5_000);
     console.info(
       `Seeded ${companyId}: ${result.members} fake members, ${result.items} items (memberships, ` +
-        'payments, messages, reactions, lessons, posts).',
+        `payments, messages, reactions, lessons, posts); ${scored} risk scores computed.`,
     );
+  } else if (action === 'report') {
+    // Printed, and added to the run's summary on GitHub.
+    const lines = (await riskReport(db, companyId, now)).join('\n');
+    console.info(lines);
+    const summary = process.env.GITHUB_STEP_SUMMARY;
+    if (summary) appendFileSync(summary, `${lines}\n`);
   } else {
     const result = await removeSeed(db, companyId, now);
     console.info(

@@ -1,6 +1,7 @@
 import type {
   AccessLevel,
   DiscordChannelChoice,
+  InsightsReport,
   IntegrationsStatus,
   MemberTelegramStatus,
   MembersPage,
@@ -587,6 +588,15 @@ describe('GET /api/creator/:companyId/members', () => {
       scheduledCancellations: 1,
       failedPayments: 1,
       activity30d: 2,
+      // No score computed yet: the members arrived after the visit.
+      risk: {
+        high: 0,
+        medium: 0,
+        low: 0,
+        scheduledDeparture: 0,
+        inactiveNewcomers: 0,
+        computedAt: null,
+      },
     });
     expect(body.truncated).toBe(false);
     expect(body.members.map((m) => [m.id, m.status])).toEqual([
@@ -964,5 +974,143 @@ describe('Discord and Telegram', () => {
     const unlinked = await request('/api/member/exp_Int5/telegram', { method: 'DELETE', ...mo });
     expect(await unlinked.json()).toEqual({ removed: true });
     expect(await read()).toMatchObject({ linked: false });
+  });
+});
+
+describe('detection settings and analyses (SPEC Phase 3)', () => {
+  const settingsPath = '/api/creator/biz_Risk1/settings/risk';
+  const put = (init: RequestInit, body: unknown) => ({
+    ...init,
+    method: 'PUT',
+    headers: { ...init.headers, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  it('reads the settings, saves new ones brought back to a sum of 1, refuses nonsense', async () => {
+    const { request } = setup({ 'user_rita:biz_Risk1': 'admin', 'user_sam:biz_Risk1': 'customer' });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Risk1/session', init);
+    await settle();
+    expect(await (await request(settingsPath, init)).json()).toEqual({
+      niche: 'other',
+      weights: { recency: 0.3, frequency: 0.25, progress: 0.2, payment: 0.15, friction: 0.1 },
+      recencyThresholdDays: 14,
+      mediumFrom: 40,
+      highFrom: 70,
+    });
+
+    const saved = await request(
+      settingsPath,
+      put(init, {
+        niche: 'fitness',
+        weights: { recency: 1, frequency: 1, progress: 1, payment: 1, friction: 1 },
+        recencyThresholdDays: 10,
+        mediumFrom: 35,
+        highFrom: 65,
+      }),
+    );
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toEqual({
+      niche: 'fitness',
+      weights: { recency: 0.2, frequency: 0.2, progress: 0.2, payment: 0.2, friction: 0.2 },
+      recencyThresholdDays: 10,
+      mediumFrom: 35,
+      highFrom: 65,
+    });
+    await settle();
+
+    for (const body of [
+      { niche: 'poker', recencyThresholdDays: 10, mediumFrom: 40, highFrom: 70 },
+      { niche: 'fitness', recencyThresholdDays: 0, mediumFrom: 40, highFrom: 70 },
+      { niche: 'fitness', recencyThresholdDays: 10, mediumFrom: 70, highFrom: 40 },
+      {
+        niche: 'fitness',
+        weights: { recency: 'a' },
+        recencyThresholdDays: 10,
+        mediumFrom: 4,
+        highFrom: 7,
+      },
+    ]) {
+      expect((await request(settingsPath, put(init, body))).status, JSON.stringify(body)).toBe(400);
+    }
+    // Without weights, the niche's preset.
+    const preset = await request(
+      settingsPath,
+      put(init, { niche: 'trading', recencyThresholdDays: 7, mediumFrom: 40, highFrom: 70 }),
+    );
+    expect(((await preset.json()) as { weights: unknown }).weights).toEqual({
+      recency: 0.35,
+      frequency: 0.3,
+      progress: 0.1,
+      payment: 0.15,
+      friction: 0.1,
+    });
+    await settle();
+
+    const customer = await asUser('user_sam');
+    expect((await request(settingsPath, customer)).status).toBe(403);
+    expect((await request('/api/creator/biz_Risk1/insights', customer)).status).toBe(403);
+  });
+
+  it('reads the weekly analyses once they ran', async () => {
+    const { request } = setup({ 'user_rita:biz_Risk2': 'admin' });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Risk2/session', init);
+    await settle();
+    await t.db.query(
+      'select stayput.save_analyses($1, $2::text::jsonb, $3::text::jsonb, $4::timestamptz)',
+      [
+        'biz_Risk2',
+        JSON.stringify([
+          {
+            month: '2026-06-01',
+            members: 12,
+            eligible: { 30: 12, 60: 12, 90: 12 },
+            left: { 30: 6, 60: 6, 90: 6 },
+            alertHorizon: 30,
+          },
+        ]),
+        JSON.stringify([
+          {
+            lessonId: 'lesn_1',
+            courseId: 'cors_1',
+            title: 'Lesson 1',
+            reached: 12,
+            stalled: 6,
+            rate: 0.5,
+            courseAverage: 0.2,
+            flagged: true,
+          },
+        ]),
+        NOW.toISOString(),
+      ],
+    );
+    const insights = (await (
+      await request('/api/creator/biz_Risk2/insights', init)
+    ).json()) as InsightsReport;
+    expect(insights).toEqual({
+      computedAt: NOW.toISOString(),
+      averages: { 30: 0.5, 60: 0.5, 90: 0.5 },
+      cohorts: [
+        {
+          month: '2026-06-01',
+          members: 12,
+          rates: { 30: 0.5, 60: 0.5, 90: 0.5 },
+          alertHorizon: 30,
+        },
+      ],
+      lessons: [
+        {
+          lessonId: 'lesn_1',
+          courseId: 'cors_1',
+          title: 'Lesson 1',
+          reached: 12,
+          stalled: 6,
+          rate: 0.5,
+          courseAverage: 0.2,
+          flagged: true,
+        },
+      ],
+    });
   });
 });

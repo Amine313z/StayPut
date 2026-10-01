@@ -25,8 +25,19 @@
   --danger-soft: #fdeceb;
   --warning: #8a4b00;
   --warning-soft: #fdf1dc;
+  /* Between warning and danger: a high risk (danger is kept for a departure). */
+  --serious: #b4400f;
+  --serious-soft: #fdeee5;
   --info: #1d5aa6;
   --info-soft: #e7effa;
+  /*
+   * The bars of the risk levels: marks, never text. Distinct side by side, for colour-blind eyes
+   * too (checked with the dataviz validator: ΔE ≥ 15 normal, ≥ 8 simulated); each bar also has
+   * its level's name, icon and count. « Low » is the accent.
+   */
+  --risk-departure: #9a0029;
+  --risk-high: #dc631e;
+  --risk-medium: #e6a700;
   /* The brands' own colors, for their marks only (never text). */
   --brand-discord: #5865f2;
   --brand-telegram: #229ed9;
@@ -48,8 +59,13 @@
   --danger-soft: #3b1714;
   --warning: #f2b555;
   --warning-soft: #33260e;
+  --serious: #ff9b6a;
+  --serious-soft: #3a1f12;
   --info: #84b8ff;
   --info-soft: #13233a;
+  --risk-departure: #d93f5a;
+  --risk-high: #f3821d;
+  --risk-medium: #ffcf53;
   --brand-discord: #7983f5;
   --brand-telegram: #3fb0e6;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
@@ -69,8 +85,13 @@
   --color-danger-soft: var(--danger-soft);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-serious: var(--serious);
+  --color-serious-soft: var(--serious-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
+  --color-risk-departure: var(--risk-departure);
+  --color-risk-high: var(--risk-high);
+  --color-risk-medium: var(--risk-medium);
   --color-discord: var(--brand-discord);
   --color-telegram: var(--brand-telegram);
   --shadow-card: var(--shadow);

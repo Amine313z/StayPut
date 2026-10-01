@@ -1,15 +1,16 @@
 name: Seed sandbox
 
 # Started by hand (GitHub -> Actions -> Seed sandbox -> Run workflow) or by Claude through the
-# API: adds 25 fake members with 60 days of history to a sandbox company, or removes them
-# (scripts/seed-sandbox.ts). Refused when the repository variable WHOP_ENV is "production".
+# API: adds 25 fake members with 60 days of history to a sandbox company, removes them, or
+# reports them by risk score with their reasons (scripts/seed-sandbox.ts; the report is in the
+# run's summary). Refused when the repository variable WHOP_ENV is "production".
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: seed (add the fake members) or remove (take them away)
+        description: seed (add the fake members), remove (take them away) or report (by risk score)
         type: choice
-        options: [seed, remove]
+        options: [seed, remove, report]
         default: seed
       company:
         description: The sandbox company (biz_…)

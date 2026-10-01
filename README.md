@@ -12,11 +12,12 @@ il a sauvé.
 
 ## État
 
-| Phase                         | Statut                                                    |
-| ----------------------------- | --------------------------------------------------------- |
-| 0. Vérification de l'API Whop | Validée le 30/09/2026                                     |
-| 1. Fondations                 | Validée le 01/10/2026                                     |
-| 2. Collecte des données       | Faite (Whop, Discord, Telegram), en attente de validation |
+| Phase                          | Statut                                                    |
+| ------------------------------ | --------------------------------------------------------- |
+| 0. Vérification de l'API Whop  | Validée le 30/09/2026                                     |
+| 1. Fondations                  | Validée le 01/10/2026                                     |
+| 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation |
+| 3. Détection (score de risque) | Faite, en attente de validation                           |
 
 ## Architecture
 
@@ -152,11 +153,21 @@ tableau de bord ; chaque membre relie son Telegram depuis la vue membre.
   (version du schéma, flux de synchronisation et leurs erreurs, nombre de lignes par table,
   webhooks reçus par type). Aucun nom, aucune adresse, aucun contenu. Le rapport s'affiche dans
   le résumé de l'exécution.
-- **Seed sandbox** (**Actions → Seed sandbox → Run workflow**, `seed` ou `remove`) : 25 membres
-  fictifs avec 60 jours d'historique dans « StayPut Test » (8 actifs, 5 en déclin, 4 inactifs,
-  3 paiements échoués, 3 annulations programmées, 2 nouveaux). L'API de Whop ne sait pas créer
-  d'utilisateurs : ils vivent dans la base de StayPut, identifiants commençant par `seed`, et
-  `remove` les retire tous. Refusé en production.
+- **Seed sandbox** (**Actions → Seed sandbox → Run workflow**, `seed`, `remove` ou `report`) :
+  25 membres fictifs avec 60 jours d'historique dans « StayPut Test » (8 actifs, 5 en déclin,
+  4 inactifs, 3 paiements échoués, 3 annulations programmées, 2 nouveaux dont un qui n'a encore
+  rien fait). L'API de Whop ne sait pas créer d'utilisateurs : ils vivent dans la base de
+  StayPut, identifiants commençant par `seed`, et `remove` les retire tous. Refusé en
+  production. Leurs scores de risque sont calculés dès `seed` ; `report` les liste du score le
+  plus haut au plus bas, avec leurs raisons, dans le résumé de l'exécution.
+
+### Score de risque (Phase 3)
+
+Chaque membre a un score de 0 à 100, recalculé chaque heure, avec ses deux raisons en clair
+(« Aucune activité depuis 21 jours »). **Membres** les trie du plus à risque au moins à risque,
+**Analyses** montre les mois d'arrivée qui partent plus vite et les leçons bloquantes (une fois
+par semaine), **Réglages** choisit la niche, les poids et les seuils. Détails et raisons :
+`DECISIONS.md`, « Phase 3 ».
 
 ## Outils de la Phase 0
 

@@ -367,3 +367,101 @@ abonnement). Chaque module s'allume quand ses secrets existent (`DISCORD_BOT_TOK
   d'iframe de Whop, dont le protocole (postMessage) est reproduit en quelques lignes plutôt que
   d'ajouter `@whop/iframe` et sa dépendance zod ; si Whop ne répond pas, un lien simple est
   proposé.
+
+## 2026-10-01 — Phase 3 : détection (score de risque)
+
+### Qui calcule quoi
+
+- Postgres rassemble les chiffres de chaque membre en **un seul document JSON compact**
+  (`risk_features` : un tableau par membre, dates en millisecondes) ; les fonctions pures de
+  `packages/core` (`computeRisk`) décident ; Postgres garde le résultat (`save_risk_scores`).
+  Une lecture et une écriture JSON par lot : le plan gratuit donne 10 ms de CPU par invocation,
+  1 500 membres en prennent environ 2.
+- Le score courant vit dans `member_risk` (une ligne par membre) ; `risk_scores` garde **une
+  ligne par membre et par jour** (le dernier calcul de la journée), purgée après 400 jours :
+  c'est l'historique du graphique de la Phase 6.
+- Recalcul **chaque heure** (cron `0 * * * *`) : les membres dont le score a plus de 50 minutes,
+  les entreprises qui attendent depuis le plus longtemps d'abord, 1 500 membres par exécution
+  au plus ; et **juste après une synchronisation** (500 au plus, le reste à l'heure suivante),
+  pour que le premier tableau de bord ait déjà ses scores. Les membres de l'équipe et ceux qui
+  sont partis n'ont pas de score.
+
+### Les cinq sous-scores, tels que codés
+
+- **Récence** : depuis la dernière activité (événements de StayPut ou dernière action vue par
+  Whop, la plus récente), ou depuis l'arrivée pour un membre qui n'a jamais rien fait.
+- **Fréquence** : les 7 derniers jours contre la moyenne hebdomadaire des 28 jours d'avant ;
+  sans moyenne, 0 (le radar d'activation et la récence couvrent ces membres).
+- **Progression** : depuis la dernière leçon terminée (ou mise à jour d'objectif, Phase 5), ou
+  depuis l'arrivée ; 0 pour un créateur sans cours ni objectifs.
+- **Paiement** : 1 pour un dernier paiement échoué non résolu (ou une adhésion `past_due`) ou
+  une résiliation programmée ; 0,7 pour un paiement en attente avec lien de reprise
+  (`requires_action`, `pending`… : la vérification 3D Secure) ; sinon 0.
+- **Friction** : 1 pour une conversation de support dont le dernier mot est celui du membre
+  depuis plus de 48 h ; 0,5 si les réactions des 14 derniers jours font moins de la moitié des
+  14 jours d'avant (**au moins 2 réactions avant** : passer de 1 à 0 ne dit rien) ; sinon 0.
+- Niveaux 40 / 70 réglables ; une résiliation programmée vaut 100 et son propre statut,
+  « Départ programmé ».
+
+### Les raisons
+
+- Les deux raisons sont les facteurs qui pèsent le plus dans le score (poids × sous-score) ;
+  une résiliation programmée est toujours dite en premier.
+- Elles sont gardées **en codes avec leurs chiffres** (`{"code":"inactive","days":12}`) et
+  rédigées à l'affichage dans la langue du créateur : un même score se lit en français et en
+  anglais, et une tournure se corrige sans recalculer.
+- Un facteur qui ajoute moins de 3 points au score n'est pas une raison, ni « 0 jour » (vu sur
+  la liste du sandbox : « Aucune activité depuis 0 jour » pour un membre actif la veille).
+- Le titre de la leçon vient de la dernière leçon terminée, que Whop donne avec l'interaction
+  (le script des membres fictifs donne maintenant un titre à ses leçons). Tournure retenue :
+  « Dernière leçon terminée : « 4. … », il y a 23 jours » plutôt que l'exemple du cahier des
+  charges « A arrêté le cours à la leçon 4 », qui affirmait un abandon pour des membres encore
+  actifs (vu sur la liste du sandbox).
+
+### Radar d'activation, cohortes, leçons bloquantes
+
+- **Radar** : arrivé il y a 72 heures à 7 jours, et rien depuis. L'action d'accueil est la
+  Phase 4 ; en attendant, la vue d'ensemble les liste.
+- **Cohortes** (une fois par semaine) : par mois d'arrivée, la part des membres partis dans les
+  30, 60 et 90 jours, comptée **seulement parmi ceux arrivés assez tôt** pour l'horizon ; alerte
+  à 1,5 fois la moyenne du créateur, avec 10 membres au moins dans la cohorte **et** à
+  l'horizon (un taux sur 3 membres ne dit rien).
+- **Leçons bloquantes** (une fois par semaine) : pour chaque leçon, les membres dont c'est la
+  dernière leçon terminée et qui sont inactifs depuis 14 jours ou partis ; signalée au-delà de
+  2 fois la moyenne du cours, avec 10 membres concernés au moins.
+- Les analyses tournent quand elles sont dues (`company_sync.analyses_at`), dans le passage
+  horaire ou après une synchronisation ; la date affichée vient de `stayput.analyses_at`, lisible
+  par l'équipe seulement.
+
+### Réglages
+
+- Niche (les 7 préréglages du cahier des charges), 5 poids **ramenés à une somme de 1** (trois
+  décimales, par la page comme par le Worker), seuil de récence de 1 à 90 jours, niveaux
+  (moyen < élevé). Enregistrer rend tous les scores dus et lance le recalcul aussitôt, en
+  arrière-plan ; la page relit les membres quelques secondes après.
+- La niche se choisit dans **Réglages** pour l'instant ; l'onboarding de la Phase 6 la
+  demandera à l'installation.
+
+### Interface
+
+- Onglets : vue d'ensemble, membres, **analyses**, sources d'activité, **réglages**.
+- Vue d'ensemble : la tuile « Risque élevé » ; « À surveiller » = départs programmés, risques
+  élevés **et tout paiement échoué** quel que soit le score (avec les poids par défaut, un
+  paiement échoué seul ne vaut que 15 points, mais l'argent part maintenant), du score le plus
+  haut au plus bas, avec leurs raisons (avant les premiers scores, les faits de Whop comme en
+  Phase 2) ; « Nouveaux membres qui n'ont pas commencé » ; « Le risque
+  parmi vos membres » : une barre par niveau (part des membres notés), nom, icône, nombre et
+  part écrits à côté, chaque ligne ouvre les membres de ce niveau.
+- Membres : triés par score ; filtres sur le départ, élevé, moyen, faible, nouveaux inactifs,
+  partis ; chaque ligne porte le niveau, le score et les raisons.
+- Un niveau n'est **jamais dit par la couleur seule** : couleur, icône et nom. Faible = vert de
+  la marque, moyen = ambre, élevé = nouveau ton orange (« serious »), départ = rouge. Les textes
+  restent testés WCAG AA ; les barres ont leurs propres couleurs (des marques, pas du texte),
+  vérifiées distinctes pour les daltoniens avec le validateur de palettes.
+
+### Limites connues
+
+- L'inactivité « 14 jours » des leçons bloquantes et la récence ne voient que l'activité que
+  StayPut connaît (Whop, Discord, Telegram) : un membre qui ne fait que regarder des vidéos hors
+  des leçons suivies paraît inactif.
+- Pas encore d'historique du score à l'écran (Phase 6), ni d'action depuis la liste (Phase 4).

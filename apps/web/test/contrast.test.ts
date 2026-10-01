@@ -51,6 +51,10 @@ const PAIRS = [
   ['text', 'danger-soft'],
   ['warning', 'surface'],
   ['warning', 'warning-soft'],
+  ['serious', 'surface'],
+  ['serious', 'surface-2'],
+  ['serious', 'serious-soft'],
+  ['text', 'serious-soft'],
   ['info', 'surface'],
   ['info', 'info-soft'],
 ] as const;

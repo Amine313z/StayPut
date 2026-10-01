@@ -74,8 +74,11 @@ describe('the sandbox seed', () => {
       expect(await messages(m.memberId, 21, 0), m.name).toBe(0);
       expect(await messages(m.memberId, 60, 22), m.name).toBeGreaterThan(0);
     }
-    for (const m of ofProfile('newcomer')) {
+    for (const m of [...ofProfile('newcomer'), ...ofProfile('inactive_newcomer')]) {
       expect(m.joinedAt.getTime()).toBeGreaterThan(NOW.getTime() - 8 * DAY);
+    }
+    for (const m of ofProfile('inactive_newcomer')) {
+      expect(await messages(m.memberId, 8, 0), m.name).toBe(0);
     }
   });
 

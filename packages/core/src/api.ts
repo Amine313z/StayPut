@@ -1,4 +1,6 @@
 import type { AccessLevel } from './access';
+import type { CohortHorizon } from './analyses';
+import type { Niche, RiskLevel, RiskReason, RiskWeights } from './risk';
 
 /**
  * The shapes the Worker's API returns and the frontend reads. Both sides import them from here,
@@ -100,6 +102,29 @@ export interface MembersSummary {
   failedPayments: number;
   /** Activity recorded over the last 30 days: messages, reactions, posts, lessons, tickets. */
   activity30d: number;
+  /** How many members are at each risk level, and when the scores were last computed. */
+  risk: RiskSummary;
+}
+
+export interface RiskSummary {
+  high: number;
+  medium: number;
+  low: number;
+  scheduledDeparture: number;
+  /** Members of 3 to 7 days who did nothing yet (the activation radar). */
+  inactiveNewcomers: number;
+  /** The latest computation; null before the first one. */
+  computedAt: string | null;
+}
+
+/** A member's risk score (SPEC Phase 3), for the team only: never shown to the member. */
+export interface MemberRisk {
+  score: number;
+  level: RiskLevel;
+  /** The two main reasons, the first one weighing most. */
+  reasons: RiskReason[];
+  inactiveNewcomer: boolean;
+  computedAt: string;
 }
 
 export interface MemberRow {
@@ -114,6 +139,8 @@ export interface MemberRow {
   lastActivityAt: string | null;
   /** Last 30 days. */
   activity: { messages: number; reactions: number; posts: number; lessons: number };
+  /** Null until the first computation, and for the team. */
+  risk: MemberRisk | null;
   membership: {
     status: string;
     price: number | null;
@@ -228,6 +255,49 @@ export interface MemberTelegramStatus {
   /** The link to open in Telegram to link the account; null when not available. */
   link: ExpiringLink | null;
   whopAppId: string | null;
+}
+
+/** GET /api/creator/:companyId/insights: the weekly analyses (SPEC Phase 3). */
+export interface InsightsReport {
+  /** When the analyses last ran; null before the first time. */
+  computedAt: string | null;
+  cohorts: CohortRow[];
+  /** The creator's average departure rate per horizon (30, 60, 90 days). */
+  averages: Record<CohortHorizon, number | null>;
+  /** Lessons members stall after, the flagged ones first. */
+  lessons: LessonRow[];
+}
+
+export interface CohortRow {
+  /** First day of the month of arrival. */
+  month: string;
+  members: number;
+  /** Departure rate per horizon; null while no member is old enough. */
+  rates: Record<CohortHorizon, number | null>;
+  alertHorizon: CohortHorizon | null;
+}
+
+export interface LessonRow {
+  lessonId: string;
+  courseId: string;
+  title: string | null;
+  /** Members who completed the lesson. */
+  reached: number;
+  /** Of them, those who stalled right after it. */
+  stalled: number;
+  rate: number;
+  courseAverage: number;
+  flagged: boolean;
+}
+
+/** GET and PUT /api/creator/:companyId/settings/risk: how the score is computed. */
+export interface RiskSettingsView {
+  niche: Niche;
+  /** Summing to 1 (the server normalizes what it receives). */
+  weights: RiskWeights;
+  recencyThresholdDays: number;
+  mediumFrom: number;
+  highFrom: number;
 }
 
 /** GET /health */

@@ -2,12 +2,18 @@
  * Fake members for the sandbox (SPEC Phase 2, 6). Whop's API cannot create users (DECISIONS.md),
  * so the members are made in StayPut's database, attached to a sandbox company, with 60 days of
  * history and the profiles the next phases are tested on: active, declining, inactive, failed
- * payment, scheduled cancellation, and newcomers. They are written as Whop-shaped pages through
+ * payment, scheduled cancellation, a newcomer who started and one who did nothing yet (the
+ * activation radar of Phase 3). They are written as Whop-shaped pages through
  * the same SQL functions as Whop's own data (ingest_page), so they look exactly like it.
  *
  * Every id starts with `seed` (`mber_seed01`, `user_seed01`…): they never collide with Whop's,
  * and `removeSeed` takes them all away.
  */
+
+import type { RiskLevel, RiskReason } from '@stayput/core';
+import { createTranslator } from '@stayput/i18n';
+import { LEVEL_LABELS, reasonText } from '../../apps/web/src/risk-text';
+import { scoreCompany } from '../../apps/worker/src/risk';
 
 /** What the seed needs from a database: parameterised SQL in, rows out. */
 export interface SeedDb {
@@ -15,7 +21,13 @@ export interface SeedDb {
 }
 
 export type Profile =
-  'active' | 'declining' | 'inactive' | 'failed_payment' | 'scheduled_cancellation' | 'newcomer';
+  | 'active'
+  | 'declining'
+  | 'inactive'
+  | 'failed_payment'
+  | 'scheduled_cancellation'
+  | 'newcomer'
+  | 'inactive_newcomer';
 
 /** How many members of each profile (25 in all). */
 export const PROFILES: readonly [Profile, number][] = [
@@ -24,7 +36,8 @@ export const PROFILES: readonly [Profile, number][] = [
   ['inactive', 4],
   ['failed_payment', 3],
   ['scheduled_cancellation', 3],
-  ['newcomer', 2],
+  ['newcomer', 1],
+  ['inactive_newcomer', 1],
 ];
 
 const NAMES = [
@@ -80,7 +93,12 @@ export function seedMembers(now: Date): SeedMember[] {
       const index = members.length + 1;
       const tag = `seed${String(index).padStart(2, '0')}`;
       const random = generator(index);
-      const daysAgo = profile === 'newcomer' ? 5 + k : 70 + Math.floor(random() * 200);
+      const daysAgo =
+        profile === 'newcomer'
+          ? 5 + k
+          : profile === 'inactive_newcomer'
+            ? 4
+            : 70 + Math.floor(random() * 200);
       members.push({
         index,
         profile,
@@ -92,6 +110,27 @@ export function seedMembers(now: Date): SeedMember[] {
     }
   }
   return members;
+}
+
+/** The course of the sandbox: 12 lessons, as a creator would title them. */
+const LESSON_TITLES = [
+  'Bienvenue et objectifs',
+  'Les bases',
+  'Construire sa routine',
+  "Premier plan d'action",
+  'Analyser ses résultats',
+  'Éviter les erreurs courantes',
+  'Passer au niveau supérieur',
+  'Étude de cas',
+  'Outils avancés',
+  'Automatiser',
+  'Mesurer ses progrès',
+  'Bilan et suite',
+];
+
+function lessonOf(count: number): { id: string; title: string } {
+  const index = count % LESSON_TITLES.length;
+  return { id: `lesn_seed${index + 1}`, title: `${index + 1}. ${LESSON_TITLES[index] ?? ''}` };
 }
 
 /** Messages a day `daysAgo` days back, on average, for each profile. */
@@ -109,6 +148,8 @@ function messageRate(profile: Profile, daysAgo: number): number {
       return daysAgo > 20 ? 0.7 : 0.15;
     case 'newcomer':
       return daysAgo === 4 ? 1 : 0;
+    case 'inactive_newcomer':
+      return 0;
   }
 }
 
@@ -226,7 +267,7 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
             id: `crlsi_${id}`,
             completed: true,
             created_at: iso(at),
-            lesson: { id: `lesn_seed${(lessons.length % 12) + 1}`, title: null },
+            lesson: lessonOf(lessons.length),
             user: { id: m.userId },
           });
         }
@@ -250,6 +291,8 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
 
 /** When the member was last seen in the community, as Whop would report it. */
 function lastSeen(m: SeedMember, now: Date): Date {
+  // Opened the community once, right after joining, and never came back.
+  if (m.profile === 'inactive_newcomer') return new Date(m.joinedAt.getTime() + 600_000);
   const days =
     m.profile === 'inactive'
       ? 22 + (m.index % 9)
@@ -330,4 +373,64 @@ export async function removeSeed(db: SeedDb, companyId: string, now: Date) {
     companyId,
   ]);
   return { members, memberships, payments };
+}
+
+const PROFILE_NAMES: Record<Profile, string> = {
+  active: 'active',
+  declining: 'declining',
+  inactive: 'inactive',
+  failed_payment: 'failed payment',
+  scheduled_cancellation: 'scheduled cancellation',
+  newcomer: 'newcomer',
+  inactive_newcomer: 'newcomer, inactive',
+};
+
+/**
+ * SPEC Phase 3, « show me the sandbox members sorted by score, with their reasons »: the scores
+ * due are computed first, then the fake members come as a Markdown table, the reasons worded in
+ * French as the dashboard shows them.
+ */
+export async function riskReport(db: SeedDb, companyId: string, now: Date): Promise<string[]> {
+  const scored = await scoreCompany(db, companyId, now, 5_000);
+  const rows = await db.query<{
+    id: string;
+    name: string | null;
+    score: number;
+    level: RiskLevel;
+    reasons: RiskReason[] | string;
+    inactive_newcomer: boolean;
+  }>(
+    `select m.id, m.display_name as name, k.score, k.level, k.reasons, k.inactive_newcomer
+       from stayput.member_risk k
+       join stayput.members m on m.company_id = k.company_id and m.id = k.member_id
+      where k.company_id = $1 and m.id like 'mber\\_seed%'
+      order by k.score desc, m.display_name`,
+    [companyId],
+  );
+  const fr = createTranslator('fr');
+  const profileOf = new Map(seedMembers(now).map((m) => [m.memberId, m.profile]));
+  const cell = (text: string) => text.replaceAll('|', '/');
+  return [
+    `Fake members of ${companyId} by risk score (${scored} scores computed now):`,
+    '',
+    '| Score | Level | Member | Profile | Reasons |',
+    '| ---: | --- | --- | --- | --- |',
+    ...rows.map((r) => {
+      const reasons = (
+        typeof r.reasons === 'string' ? (JSON.parse(r.reasons) as RiskReason[]) : r.reasons
+      )
+        .map((reason) => reasonText(reason, fr))
+        .filter((text): text is string => text !== null);
+      if (r.inactive_newcomer) reasons.push(fr.t('risk.newcomer'));
+      const profile = profileOf.get(r.id);
+      const columns = [
+        String(r.score),
+        fr.t(LEVEL_LABELS[r.level]),
+        cell(r.name ?? r.id),
+        profile ? PROFILE_NAMES[profile] : '?',
+        cell(reasons.join(' ; ') || '—'),
+      ];
+      return `| ${columns.join(' | ')} |`;
+    }),
+  ];
 }

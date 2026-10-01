@@ -1,28 +1,42 @@
 import type { MemberRow } from '@stayput/core';
 import { Search, Users } from 'lucide-react';
 import { useSearchParams } from 'react-router';
-import { MemberList, attentionReasons } from '../../components/MemberRows';
+import { MemberList } from '../../components/MemberRows';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { useI18n } from '../../i18n';
 import { Card } from '../../ui/Card';
 import { EmptyState } from '../../ui/EmptyState';
 import { useCreatorData } from '../CreatorView';
 
-const FILTERS = ['all', 'active', 'attention', 'left'] as const;
+/** By risk level (SPEC Phase 3), the new members who did not start, and those who left. */
+const FILTERS = ['all', 'leaving', 'high', 'medium', 'low', 'newcomers', 'left'] as const;
 type Filter = (typeof FILTERS)[number];
 
 const FILTER_LABELS = {
   all: 'members.filter.all',
-  active: 'members.filter.active',
-  attention: 'members.filter.attention',
+  leaving: 'members.filter.leaving',
+  high: 'members.filter.high',
+  medium: 'members.filter.medium',
+  low: 'members.filter.low',
+  newcomers: 'members.filter.newcomers',
   left: 'members.filter.left',
 } as const;
 
 function keep(filter: Filter, member: MemberRow): boolean {
-  if (filter === 'active') return member.status === 'joined';
-  if (filter === 'left') return member.status === 'left';
-  if (filter === 'attention') return attentionReasons(member).length > 0;
-  return true;
+  switch (filter) {
+    case 'leaving':
+      return member.risk?.level === 'scheduled_departure';
+    case 'high':
+    case 'medium':
+    case 'low':
+      return member.risk?.level === filter;
+    case 'newcomers':
+      return member.risk?.inactiveNewcomer === true;
+    case 'left':
+      return member.status === 'left';
+    case 'all':
+      return true;
+  }
 }
 
 /** Search a name, accents and case aside: « Élodie » matches « elodie ». */
@@ -33,7 +47,10 @@ function fold(text: string): string {
     .toLowerCase();
 }
 
-/** Every member StayPut collected, to search and filter (the address keeps the choice). */
+/**
+ * Every member StayPut collected, the most at risk first, to search and filter (the address
+ * keeps the choice).
+ */
 export function MembersTab() {
   const { t, number } = useI18n();
   const { members } = useCreatorData();

@@ -5,6 +5,7 @@ const ICON_TONES: Record<Tone, string> = {
   neutral: 'bg-surface-2 text-muted',
   accent: 'bg-accent-soft text-accent',
   danger: 'bg-danger-soft text-danger',
+  serious: 'bg-serious-soft text-serious',
   warning: 'bg-warning-soft text-warning',
   info: 'bg-info-soft text-info',
 };

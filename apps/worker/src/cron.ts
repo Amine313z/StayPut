@@ -2,7 +2,7 @@ import type { WhopClient } from '@stayput/whop';
 import type { ClosableDb } from './db';
 import type { DiscordClient } from './discord';
 import type { Config } from './env';
-import { refreshStats, replayWebhooks, syncWithWhop } from './jobs';
+import { refreshStats, replayWebhooks, scoreMembers, syncWithWhop } from './jobs';
 
 /** Must match `triggers.crons` in wrangler.toml (runtime.test.ts checks it). */
 export const SYNC_CRON = '*/10 * * * *';
@@ -34,7 +34,7 @@ export interface CronJob {
  */
 export const SCHEDULE: Readonly<Record<string, readonly CronJob[]>> = {
   [SYNC_CRON]: [replayWebhooks, syncWithWhop, refreshStats],
-  [HOURLY_CRON]: [],
+  [HOURLY_CRON]: [scoreMembers],
   [WEEKLY_CRON]: [],
 };
 
