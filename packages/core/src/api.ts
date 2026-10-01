@@ -50,6 +50,8 @@ export interface CreatorSession {
   via: SignInMethod;
   /** Whether the company has its time zone; the dashboard sends the browser's when not. */
   timezoneSet: boolean;
+  /** The community's name, once read from Whop (null until then). */
+  companyName: string | null;
 }
 
 /** GET /api/member/:experienceId/session */

@@ -46,16 +46,16 @@ describe('matchLocale', () => {
 
 describe('createTranslator', () => {
   it('fills the placeholders', () => {
-    expect(createTranslator('en').t('creator.connected', { companyId: 'biz_1' })).toBe(
+    expect(createTranslator('en').t('creator.connected', { company: 'biz_1' })).toBe(
       'Connected as a team member of biz_1.',
     );
-    expect(createTranslator('fr').t('creator.connected', { companyId: 'biz_1' })).toBe(
+    expect(createTranslator('fr').t('creator.connected', { company: 'biz_1' })).toBe(
       "Connecté en tant que membre de l'équipe de biz_1.",
     );
   });
 
   it('leaves an unknown placeholder visible rather than guessing', () => {
-    expect(createTranslator('en').t('creator.connected')).toContain('{companyId}');
+    expect(createTranslator('en').t('creator.connected')).toContain('{company}');
   });
 
   it('picks the plural form of the language', () => {

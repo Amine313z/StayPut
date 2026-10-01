@@ -265,6 +265,8 @@ describe('GET /api/creator/:companyId/session', () => {
       accessLevel: 'admin',
       via: 'iframe',
       timezoneSet: false,
+      // Not read from Whop yet.
+      companyName: null,
     });
     const companies = await withUser(t.db, 'user_alice', (tx) =>
       tx.query<{ id: string; status: string }>('select id, status from stayput.companies'),

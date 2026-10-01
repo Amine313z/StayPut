@@ -20,7 +20,7 @@ export const fr: Messages = {
     'Ouvrez StayPut depuis votre tableau de bord Whop ou depuis votre communauté pour commencer.',
 
   'creator.title': 'Tableau de bord de rétention',
-  'creator.connected': "Connecté en tant que membre de l'équipe de {companyId}.",
+  'creator.connected': "Connecté en tant que membre de l'équipe de {company}.",
 
   'sync.title': 'Synchronisation des données',
   'sync.importing':

@@ -547,9 +547,12 @@ export function createApp(deps: AppDeps) {
     const companyId = c.get('companyId');
     const userId = c.get('userId');
     const db = c.get('db');
-    let timezoneSet = true;
+    let company: { timezoneSet: boolean; name: string | null } = {
+      timezoneSet: true,
+      name: null,
+    };
     if (db) {
-      timezoneSet = await recordAdmin(db, companyId, userId, deps.now());
+      company = await recordAdmin(db, companyId, userId, deps.now());
       // The first visit starts the backfill, later ones bring the data up to date (SPEC
       // Phase 2, 2).
       syncInBackground(c, companyId);
@@ -559,7 +562,8 @@ export function createApp(deps: AppDeps) {
       userId,
       accessLevel: c.get('accessLevel'),
       via: c.get('via'),
-      timezoneSet,
+      timezoneSet: company.timezoneSet,
+      companyName: company.name,
     };
     return c.json(session);
   });
@@ -1529,7 +1533,7 @@ async function recordAdmin(
   companyId: string,
   userId: string,
   now: Date,
-): Promise<boolean> {
+): Promise<{ timezoneSet: boolean; name: string | null }> {
   const at = now.toISOString();
   return db.transaction(async (tx) => {
     await tx.query(
@@ -1548,11 +1552,12 @@ async function recordAdmin(
        on conflict (company_id, user_id) do update set verified_at = excluded.verified_at`,
       [companyId, userId, at],
     );
-    const [company] = await tx.query<{ timezone_set: boolean }>(
-      'select timezone_set_at is not null as timezone_set from stayput.companies where id = $1',
+    const [company] = await tx.query<{ timezone_set: boolean; name: string | null }>(
+      `select timezone_set_at is not null as timezone_set, name
+         from stayput.companies where id = $1`,
       [companyId],
     );
-    return company?.timezone_set ?? true;
+    return { timezoneSet: company?.timezone_set ?? true, name: company?.name ?? null };
   });
 }
 

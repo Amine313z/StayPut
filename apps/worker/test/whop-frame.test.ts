@@ -13,7 +13,11 @@ interface FrameProxy {
   token: () => string | null;
 }
 interface FrameModule {
-  createFrameProxy: (options: { target: string; port: number }) => FrameProxy;
+  createFrameProxy: (options: {
+    target: string;
+    port: number;
+    log?: (line: string) => void;
+  }) => FrameProxy;
   userOf: (token: string) => string | null;
 }
 
@@ -138,10 +142,78 @@ describe('StayPut in the sandbox frame (whop-frame.mjs)', () => {
     });
     expect(stayput.seen[0]?.token).toBeUndefined();
 
-    const gone = createFrameProxy({ target: 'http://127.0.0.1:9', port: 0 });
+    const lines: string[] = [];
+    const gone = createFrameProxy({
+      target: 'http://127.0.0.1:9',
+      port: 0,
+      log: (line) => lines.push(line),
+    });
     const down = await listen(gone.server);
-    const answer = await fetch(`http://127.0.0.1:${down}/`);
+    const answer = await fetch(`http://127.0.0.1:${down}/api/actions`);
+    // In the API's own shape: the page says « no connection » rather than a bare error.
     expect(answer.status).toBe(502);
-    expect(await answer.text()).toMatch(/StayPut ne répond pas/);
+    expect(await answer.json()).toEqual({
+      error: { code: 'network', message: 'StayPut ne répond pas. Réessayez dans un instant.' },
+    });
+    expect(lines).toEqual([
+      expect.stringMatching(/^StayPut ne répond pas \(GET \/api\/actions\) : ECONNREFUSED$/),
+    ]);
+  });
+
+  it('keeps going when the browser gives up a request, and tries a closed connection again', async () => {
+    const { createFrameProxy } = await load();
+    // A StayPut slow to answer /slow, that drops the first connection of /flaky, and refuses
+    // every token.
+    let flaky = 0;
+    const port0 = await listen(
+      http.createServer((req, res) => {
+        if (req.url === '/slow') {
+          setTimeout(() => {
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ pad: 'x'.repeat(200_000) }));
+          }, 200);
+          return;
+        }
+        if (req.url === '/flaky' && flaky++ === 0) {
+          req.socket.destroy();
+          return;
+        }
+        if (req.url === '/who') {
+          res.writeHead(401, { 'content-type': 'application/json' });
+          res.end('{"error":{"code":"unauthenticated","message":"no"}}');
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'text/plain' });
+        res.end(`ok ${req.method ?? ''}`);
+      }),
+    );
+    const lines: string[] = [];
+    const { server } = createFrameProxy({
+      target: `http://127.0.0.1:${port0}`,
+      port: 0,
+      log: (line) => lines.push(line),
+    });
+    const port = await listen(server);
+    const at = (path: string, init?: RequestInit) => fetch(`http://127.0.0.1:${port}${path}`, init);
+
+    // The page changes tab: its request is given up halfway.
+    const gaveUp = new AbortController();
+    const slow = at('/slow', { signal: gaveUp.signal });
+    setTimeout(() => gaveUp.abort(), 50);
+    await expect(slow).rejects.toThrow();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    // The next requests go through.
+    expect(await (await at('/next')).text()).toBe('ok GET');
+    // A connection StayPut dropped: a reading is tried again, a change is not.
+    expect(await (await at('/flaky')).text()).toBe('ok GET');
+    flaky = 0;
+    expect((await at('/flaky', { method: 'POST', body: 'x' })).status).toBe(502);
+
+    // Whop's token refused: said once, with what to do.
+    await at(`/who?whop-dev-user-token=${TOKEN}`);
+    await at('/who');
+    expect(lines.filter((line) => line.includes('Reload'))).toEqual([
+      'StayPut ne reconnaît plus votre connexion Whop : cliquez sur Reload dans Whop.',
+    ]);
   });
 });

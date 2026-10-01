@@ -76,6 +76,7 @@ const creatorSession = {
     accessLevel: 'admin',
     via: 'iframe',
     timezoneSet: true,
+    companyName: 'Le Club',
   },
 };
 
@@ -320,7 +321,7 @@ describe('creator view', () => {
     const calls = mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
     expect(await screen.findByRole('heading', { name: 'Retention dashboard' })).toBeTruthy();
-    expect(screen.getByText('Connected as a team member of biz_A1.')).toBeTruthy();
+    expect(screen.getByText('Connected as a team member of Le Club.')).toBeTruthy();
     expect(await screen.findByText('Up to date.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe(
       'page',

@@ -20,7 +20,7 @@ export const en = {
   'home.body': 'Open StayPut from your Whop dashboard or from your community to get started.',
 
   'creator.title': 'Retention dashboard',
-  'creator.connected': 'Connected as a team member of {companyId}.',
+  'creator.connected': 'Connected as a team member of {company}.',
 
   'sync.title': 'Data sync',
   'sync.importing': 'Importing the last 90 days of your community. This can take a few minutes.',
