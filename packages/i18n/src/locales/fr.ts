@@ -140,6 +140,8 @@ export const fr: Messages = {
   'accounts.team': 'C’est moi / mon équipe',
   'accounts.teamHint':
     'Votre propre compte, ou celui d’un collaborateur ? Choisissez « C’est moi / mon équipe » : l’activité de l’équipe ne compte pas dans les scores.',
+  'accounts.notMemberHint':
+    'Seule une personne qui a rejoint votre communauté sur Whop peut être reliée : « Choisir un membre » liste vos membres Whop. Quelqu’un qui ne l’a pas encore rejointe ? Choisissez « Pas un membre », ou reliez-le quand il l’aura rejointe.',
   'accounts.dismissed': 'Mis de côté ({count})',
   'accounts.as.team': 'Équipe',
   'accounts.as.guest': 'Pas un membre',

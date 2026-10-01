@@ -110,7 +110,11 @@ function Accounts({
         {view.unlinked.length === 0 ? (
           <p className="mt-2 text-sm text-muted">{t('accounts.allLinked')}</p>
         ) : (
-          <p className="mt-1 text-sm text-muted">{t('accounts.teamHint')}</p>
+          <div className="mt-1 space-y-1 text-sm text-muted">
+            <p>{t('accounts.teamHint')}</p>
+            {/* The founder, 2026-10-01: someone invited to Discord only was « not recognized ». */}
+            <p>{t('accounts.notMemberHint')}</p>
+          </div>
         )}
         {view.unlinked.length === 0 ? null : (
           <ul className="mt-3 space-y-3">

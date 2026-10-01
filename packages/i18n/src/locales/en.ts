@@ -138,6 +138,8 @@ export const en = {
   'accounts.team': 'It’s me / my team',
   'accounts.teamHint':
     'Your own account, or a teammate’s? Choose « It’s me / my team »: the team’s activity does not count in the scores.',
+  'accounts.notMemberHint':
+    'Only someone who joined your community on Whop can be tied: « Choose a member » lists your Whop members. Someone who has not joined yet? Choose « Not a member », or tie them once they join.',
   'accounts.dismissed': 'Set aside ({count})',
   'accounts.as.team': 'Team',
   'accounts.as.guest': 'Not a member',

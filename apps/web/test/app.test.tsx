@@ -909,6 +909,8 @@ describe('activity sources', () => {
     });
     renderAt('/dashboard/biz_A1/sources');
     expect(await screen.findByText(/Your own account, or a teammate’s\?/)).toBeTruthy();
+    // Only Whop members can be tied: someone invited to Discord alone is not in the list.
+    expect(screen.getByText(/Only someone who joined your community on Whop/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'It’s me / my team' }));
     const setAside = await screen.findByText('Set aside (1)');
     expect(bodies.get('POST /api/creator/biz_A1/accounts/dismiss')).toEqual({
