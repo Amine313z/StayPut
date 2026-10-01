@@ -1,6 +1,7 @@
 /**
  * Which of the permissions StayPut asks for Whop really grants to the app's key on a company
- * (`GET /permissions`, answered for the calling key). A permission added to the app is granted
+ * (`GET /permissions`, answered for the calling key): reading (Phase 2), the actions (Phase 4)
+ * and the optional Alumni offer. A permission added to the app is granted
  * only once the company re-approves it (Dashboard → Settings → Authorized apps): until then the
  * sync gets 403. Never prints the key.
  *
@@ -35,6 +36,28 @@ export const PHASE_2_PERMISSIONS = [
   'webhook_receive:courses',
 ] as const;
 
+/** What the actions of Phase 4 write (section 10): pause, free days, consent, retries, codes. */
+export const PHASE_4_PERMISSIONS = [
+  'member:manage',
+  'payment:manage',
+  'promo_code:create',
+  'notification:create',
+] as const;
+
+/** The Alumni offer (SPEC 5.9, section 10), for the creators who turn it on. */
+export const ALUMNI_PERMISSIONS = [
+  'access_pass:create',
+  'plan:create',
+  'experience:create',
+  'experience:attach',
+] as const;
+
+const GROUPS: readonly { title: string; actions: readonly string[] }[] = [
+  { title: 'Phase 2, reading', actions: PHASE_2_PERMISSIONS },
+  { title: 'Phase 4, actions', actions: PHASE_4_PERMISSIONS },
+  { title: 'Alumni offer (optional)', actions: ALUMNI_PERMISSIONS },
+];
+
 /** « StayPut Test », the founder's sandbox account. */
 const SANDBOX_COMPANY = 'biz_2whAzkbCRpcGqQ';
 
@@ -50,7 +73,7 @@ async function main() {
   const companyId = process.argv[2] ?? SANDBOX_COMPANY;
   const url = new URL(`${WHOP_API_BASE_URL[env]}/permissions`);
   url.searchParams.set('resource_id', companyId);
-  url.searchParams.set('actions', PHASE_2_PERMISSIONS.join(','));
+  url.searchParams.set('actions', GROUPS.flatMap((g) => g.actions).join(','));
   const response = await fetch(url, {
     headers: { Authorization: `Bearer ${key}`, 'Api-Version-Date': WHOP_API_VERSION_DATE },
   });
@@ -61,15 +84,28 @@ async function main() {
   if (!response.ok || !Array.isArray(body?.data)) {
     lines.push(`Whop answered HTTP ${response.status}.`);
   } else {
-    const missing = body.data.filter((p) => !p.granted).map((p) => p.action);
+    const granted = new Map(body.data.map((p) => [p.action, p.granted]));
+    for (const group of GROUPS) {
+      const missing = group.actions.filter((action) => granted.get(action) !== true);
+      lines.push(
+        `**${group.title}**: ` +
+          (missing.length === 0
+            ? `all ${group.actions.length} granted.`
+            : `not granted (${missing.length} of ${group.actions.length}): ${missing.join(', ')}.`),
+        '',
+        '| permission | granted |',
+        '| --- | --- |',
+        ...group.actions.map((action) => {
+          const state = granted.get(action);
+          return `| ${action} | ${state === true ? 'yes' : state === false ? 'NO' : 'not answered'} |`;
+        }),
+        '',
+      );
+    }
     lines.push(
-      missing.length === 0
-        ? `All ${body.data.length} permissions granted.`
-        : `Not granted (${missing.length} of ${body.data.length}): ${missing.join(', ')}. ` +
-            'The company re-approves them in Whop: Dashboard → Settings → Authorized apps.',
+      'A permission added to the app is granted once the company re-approves it in Whop: ' +
+        'Dashboard → Settings → Authorized apps.',
     );
-    lines.push('', '| permission | granted |', '| --- | --- |');
-    for (const p of body.data) lines.push(`| ${p.action} | ${p.granted ? 'yes' : 'NO'} |`);
   }
   for (const line of lines) console.info(line);
   if (process.env.GITHUB_STEP_SUMMARY) {
