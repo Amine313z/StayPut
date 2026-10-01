@@ -190,8 +190,15 @@ l'ordinateur de celui qui regarde, `http://localhost:3000`, avec son jeton Whop 
 - StayPut le sert lui-même (`/whop-frame.mjs`, depuis `apps/web/public`) : une seule commande
   PowerShell le télécharge et le lance (README).
 - Côté StayPut, rien ne change : le jeton est vérifié comme celui du relais de Whop (clés du
-  sandbox, audience = l'app), et l'accès demandé à Whop. Reste à confirmer en vrai que le cadre
-  du sandbox donne bien ce jeton, signé par les clés du sandbox.
+  sandbox, audience = l'app), et l'accès demandé à Whop.
+- **Confirmé par le fondateur le 2 octobre (vers 0 h 50)** : StayPut s'affiche en entier dans le
+  cadre du sandbox. Le cadre donne bien un jeton signé par les clés du sandbox, que StayPut
+  accepte. La première version du relais laissait certaines cartes sur « Pas de connexion » (le
+  navigateur ne le joignait plus, sans erreur dans sa fenêtre) ; la seconde écoute aussi `::1`,
+  garde les connexions inactives ouvertes longtemps, retente une lecture sur une connexion
+  fermée et écrit chaque échec : tout s'affiche.
+- Sous Windows, la commande existe pour l'Invite de commandes (`curl … && node …`) et pour
+  PowerShell (`iwr …; node …`) : le fondateur a d'abord ouvert la première.
 
 ## 2026-10-01 — Phase 2 : collecte des données
 
