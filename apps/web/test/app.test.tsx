@@ -21,6 +21,7 @@ import type { Locale } from '@stayput/i18n';
 import { RouterProvider, createMemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '../src/App';
+import { LIVE_REFRESH_MS } from '../src/components/PlatformActivityCard';
 import { I18nProvider } from '../src/i18n';
 import { ThemeProvider, resolveTheme } from '../src/theme';
 
@@ -947,8 +948,8 @@ describe('activity sources', () => {
       expect(within(card).getByText('2 messages')).toBeTruthy();
       expect(screen.getByText('Live')).toBeTruthy();
 
-      // Half a minute later, a Telegram message: it shows, and what may have moved is read again.
-      await vi.advanceTimersByTimeAsync(30_000);
+      // Seconds later, a Telegram message: it shows, and what may have moved is read again.
+      await vi.advanceTimersByTimeAsync(LIVE_REFRESH_MS);
       expect(await within(card).findByText('3 messages')).toBeTruthy();
       const reads = (path: string) => calls.filter((call) => call === path).length;
       expect(reads('POST /api/creator/biz_A1/platform-activity/refresh')).toBe(2);

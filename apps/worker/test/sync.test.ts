@@ -254,7 +254,7 @@ describe('planPass', () => {
     const discord = stream({ source: 'discord', everyHours: 3 });
     const minutes = (n: number) => new Date(NOW.getTime() + n * 60_000);
     const lastHour = state({ lastPassAt: minutes(-60), highWater: minutes(-90) });
-    const asked = { refreshDiscordAfterMinutes: 10 };
+    const asked = { refreshDiscordAfterSeconds: 600 };
     // Not due before 3 hours…
     expect(planPass(discord, lastHour, NOW)).toBeNull();
     // …but « Sync now » reads back to what it already has.
@@ -459,7 +459,7 @@ describe('Discord', () => {
     expect(discord.calls).toEqual([channel]);
   });
 
-  it('reads the channels again each minute while the creator watches, Whop untouched', async () => {
+  it('reads the channels again within seconds while the creator watches, Whop untouched', async () => {
     const { id, u } = await company();
     const channel = `97000${companies}`;
     await followDiscord(id, `98000${companies}`, [channel]);
@@ -478,10 +478,10 @@ describe('Discord', () => {
     whop.calls.length = 0;
     discord.calls.length = 0;
 
-    // A minute later, a new message: read at once, and only Discord's channels.
-    messages.unshift(discordMessage(9_100_001, `99000${companies}`, -0.01));
+    // 20 seconds later, a new message: read at once, and only Discord's channels.
+    messages.unshift(discordMessage(9_100_001, `99000${companies}`, -0.003));
     const live = await refreshDiscordNow(
-      context(whop.client, new Date(NOW.getTime() + 61_000), 10, discord.client),
+      context(whop.client, new Date(NOW.getTime() + 20_000), 10, discord.client),
       id,
     );
     expect(live?.streams[`discord_messages:${channel}`]).toBe('caught_up');
@@ -489,10 +489,10 @@ describe('Discord', () => {
     expect(whop.calls).toEqual([]);
     // Whop's lists keep their cadence: the last synchronization did not move.
     expect(await synced()).toEqual(before);
-    // Within the minute, nothing is read again; without the bot, nothing at all.
+    // Within 15 seconds, nothing is read again; without the bot, nothing at all.
     discord.calls.length = 0;
     await refreshDiscordNow(
-      context(whop.client, new Date(NOW.getTime() + 90_000), 10, discord.client),
+      context(whop.client, new Date(NOW.getTime() + 30_000), 10, discord.client),
       id,
     );
     expect(discord.calls).toEqual([]);

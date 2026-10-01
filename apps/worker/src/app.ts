@@ -190,7 +190,7 @@ export const OPEN_SYNC_INTERVAL_SECONDS = 10 * 60;
 /** "Sync now" in the dashboard: at most once a minute. */
 export const MANUAL_SYNC_INTERVAL_SECONDS = 60;
 /** « Sync now » also reads the Discord channels not read for this long (their cadence is 3 h). */
-export const MANUAL_DISCORD_REFRESH_MINUTES = 10;
+export const MANUAL_DISCORD_REFRESH_SECONDS = 10 * 60;
 /** Actions run right after the creator approves some (the hourly cron runs the rest). */
 const REQUEST_ACTION_BATCH = 5;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -578,7 +578,7 @@ export function createApp(deps: AppDeps) {
       { db, whop, discord: deps.discord(config), now, budget: { left: REQUEST_SYNC_BUDGET } },
       companyId,
       MANUAL_SYNC_INTERVAL_SECONDS,
-      { retryFailed: true, refreshDiscordAfterMinutes: MANUAL_DISCORD_REFRESH_MINUTES },
+      { retryFailed: true, refreshDiscordAfterSeconds: MANUAL_DISCORD_REFRESH_SECONDS },
     );
     if (result) {
       console.info(summarize(result));

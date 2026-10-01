@@ -192,11 +192,11 @@ export interface PassOptions {
    */
   retryFailed?: boolean;
   /**
-   * « Sync now »: a Discord channel not read for this many minutes is read now, whatever its
+   * « Sync now »: a Discord channel not read for this many seconds is read now, whatever its
    * cadence. Nothing tells StayPut of a new Discord message (Whop and Telegram send theirs), so
    * a creator trying it out would otherwise wait up to 3 hours.
    */
-  refreshDiscordAfterMinutes?: number;
+  refreshDiscordAfterSeconds?: number;
   /** Only the Discord channels: the creator watches the activity (refreshDiscordNow). */
   onlyDiscord?: boolean;
 }
@@ -227,11 +227,11 @@ export function planPass(
     !since || now.getTime() - since.getTime() >= hours * 3_600_000 - DUE_MARGIN_MS;
   const failed = Boolean(state?.lastError);
   const retryNow = failed && options.retryFailed === true;
-  const refreshAfter = options.refreshDiscordAfterMinutes;
+  const refreshAfter = options.refreshDiscordAfterSeconds;
   const refreshNow =
     stream.source === 'discord' &&
     refreshAfter !== undefined &&
-    (!state?.lastPassAt || now.getTime() - state.lastPassAt.getTime() >= refreshAfter * 60_000);
+    (!state?.lastPassAt || now.getTime() - state.lastPassAt.getTime() >= refreshAfter * 1000);
   const every = failed ? Math.min(stream.everyHours, 1) : stream.everyHours;
   if (!retryNow && !refreshNow && !due(state?.lastPassAt, every)) return null;
   const complete =
@@ -518,13 +518,16 @@ export async function syncIfFree(
   }
 }
 
-/** While the creator watches the activity, a Discord channel is read again after this long. */
-export const LIVE_DISCORD_REFRESH_MINUTES = 1;
+/**
+ * While the creator watches the activity, a Discord channel is read again after this long (the
+ * founder, 2026-10-01: a new message should show within seconds).
+ */
+export const LIVE_DISCORD_REFRESH_SECONDS = 15;
 /** Discord calls such a read makes at most: a channel or two in a page, usually. */
 export const LIVE_DISCORD_BUDGET = 10;
 
 /**
- * The company's Discord channels read now when not read for a minute, while its creator watches
+ * The company's Discord channels read now when not read for 15 seconds, while its creator watches
  * what StayPut sees (nothing tells StayPut of a Discord message). Only Discord, and the company's
  * last synchronization is left as it was: Whop's lists keep their cadence. Null when a run holds
  * the company.
@@ -542,7 +545,7 @@ export async function refreshDiscordNow(
   try {
     return await syncCompany(ctx, companyId, {
       onlyDiscord: true,
-      refreshDiscordAfterMinutes: LIVE_DISCORD_REFRESH_MINUTES,
+      refreshDiscordAfterSeconds: LIVE_DISCORD_REFRESH_SECONDS,
     });
   } finally {
     await ctx.db.query('select stayput.release_lease($1)', [companyId]);

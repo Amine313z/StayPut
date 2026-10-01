@@ -509,6 +509,13 @@ suite quand on y revient (badge « En direct ») :
 - Quand de nouveaux messages arrivent, la liste des comptes à relier et les compteurs des
   sources se relisent aussi. Relier un compte relit l'activité (ses messages changent de case).
 - Un échec de relecture garde l'affichage : la suivante réessaie.
+- **Plus rapide** (même soir, retour du fondateur : « plus ou moins performant ») : la carte se
+  relit toutes les **10 secondes** et les salons Discord au plus toutes les **15 secondes**. Un
+  message Telegram apparaît en 10 secondes au plus, un message Discord en 25 secondes au plus.
+  Coût : environ 6 requêtes par minute et par onglet ouvert (le plan gratuit en permet 100 000
+  par jour), et rien quand l'onglet est caché ; Discord tolère largement 4 lectures par minute
+  et par salon. Un vrai temps réel (WebSocket, Durable Object) n'apporterait que quelques
+  secondes, et Discord n'envoie de toute façon rien sans une connexion permanente à sa passerelle.
 
 ### Interface : un vrai tableau de bord
 

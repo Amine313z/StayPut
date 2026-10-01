@@ -17,7 +17,7 @@ const BAR: Readonly<Record<AccountPlatform, string>> = {
 };
 
 /** While the page shows the activity, it is read again this often. */
-export const LIVE_REFRESH_MS = 30_000;
+export const LIVE_REFRESH_MS = 10_000;
 
 /**
  * What StayPut sees on Discord and Telegram over the last 30 days (the founder, 2026-10-01): the
@@ -73,7 +73,7 @@ export function PlatformActivityCard({
 
 /**
  * The activity kept current while the page is open: read at once (the server reads Discord's
- * channels first, Telegram sends its messages itself), then every half minute while the tab is
+ * channels first, Telegram sends its messages itself), then every 10 seconds while the tab is
  * visible, at once when the creator comes back to it, and when `refreshKey` changes. What is shown
  * stays when a read fails: the next one tries again.
  */
