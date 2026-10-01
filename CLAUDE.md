@@ -55,7 +55,10 @@ Guidance for Claude Code in this repository.
   view shows the sync status and the members. Deployed on 2026-10-01 (migrations 0005 and 0006;
   0006 ignores Whop's test deliveries, `biz_xxxxxxxxxxxxxx`, and syncs only companies whose team
   opened StayPut). 25 fake members (`seed…` ids) come from `scripts/seed-sandbox.ts` (workflow
-  « Seed sandbox »); « Inspect » reports the database as counts. Next: the Phase 2 stop report.
+  « Seed sandbox »); « Inspect » reports the database as counts and the app key's permissions.
+  The founder re-approved the 19 permissions on 2026-10-01 (they were 0 of 19 before: added
+  permissions need a re-approval per company); « Sync now » then read every list without error.
+  Phase 2 stop report sent; waiting for validation.
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;
   Whop's side: `GET /webhooks/{id}/deliveries` and `POST /webhooks/{id}/test` with

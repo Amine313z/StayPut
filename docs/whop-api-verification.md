@@ -298,6 +298,13 @@ personnel :
   `chat.message.created` et `chat.reaction.created`) ; `GET /webhooks/{id}/deliveries` liste les
   livraisons avec leur code de réponse, et `POST /webhooks/{id}/test` en envoie une d'essai :
   de quoi vérifier depuis l'API que le Worker reçoit bien.
+- **Permissions** : une permission ajoutée à l'app n'est accordée à une entreprise déjà
+  installée qu'après sa ré-approbation (Whop : « Settings → Authorized apps », ou le lien
+  d'installation de l'app) ; avant, l'API répond 403 « App API key is not authorized for the …
+  scope ». `GET /permissions?resource_id=biz_…&actions=…` dit, pour la clé qui appelle, quelles
+  actions sont accordées (`granted`) : 0 sur 19 avant l'approbation du fondateur, 19 sur 19
+  après (01/10/2026). Sans permission, `GET /memberships` répond 200 avec une liste vide au lieu
+  de 403.
 - **Contenu du sandbox « StayPut Test »** au 01/10/2026 : 2 membres (le fondateur, admin, et le
   compte technique de l'app), 1 adhésion (accès gratuit à l'app), 1 paiement de 0 $, 1 variante,
   1 forum vide, aucun salon de discussion, cours ni ticket.
