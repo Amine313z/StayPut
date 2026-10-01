@@ -42,7 +42,19 @@ export interface Translator {
   date: (value: Date) => string;
   /** A moment: the date and the time, in the browser's time zone. */
   dateTime: (value: Date) => string;
+  /** How long ago (or in how long): « 5 minutes ago », « il y a 2 heures », « hier ». */
+  relative: (value: Date, now?: Date) => string;
 }
+
+// From the largest unit down: the first one that fits gives « 3 days ago » rather than « 72 h ».
+const UNITS: readonly [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 365 * 86_400_000],
+  ['month', 30 * 86_400_000],
+  ['week', 7 * 86_400_000],
+  ['day', 86_400_000],
+  ['hour', 3_600_000],
+  ['minute', 60_000],
+];
 
 export function createTranslator(locale: Locale): Translator {
   const messages = MESSAGES[locale];
@@ -50,6 +62,7 @@ export function createTranslator(locale: Locale): Translator {
   const numbers = new Intl.NumberFormat(locale);
   const dates = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
   const moments = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+  const relatives = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
 
   const fill = (text: string, params?: Params) =>
     params
@@ -72,5 +85,12 @@ export function createTranslator(locale: Locale): Translator {
       new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount),
     date: (value) => dates.format(value),
     dateTime: (value) => moments.format(value),
+    relative: (value, now = new Date()) => {
+      const elapsed = value.getTime() - now.getTime();
+      for (const [unit, ms] of UNITS) {
+        if (Math.abs(elapsed) >= ms) return relatives.format(Math.round(elapsed / ms), unit);
+      }
+      return relatives.format(0, 'minute');
+    },
   };
 }

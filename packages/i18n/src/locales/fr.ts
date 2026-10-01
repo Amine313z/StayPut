@@ -101,6 +101,131 @@ export const fr: Messages = {
   'members.count.one': '{count} membre',
   'members.count.other': '{count} membres',
 
+  'common.cancel': 'Annuler',
+  'common.failed': "Cela n'a pas marché. Réessayez.",
+  'common.save': 'Enregistrer',
+  'external.fallback': "Rien ne s'est ouvert ? Ouvrez le lien ici.",
+  'creator.sections': 'Sections du tableau de bord',
+  'creator.tab.overview': "Vue d'ensemble",
+  'creator.tab.members': 'Membres',
+  'creator.tab.sources': "Sources d'activité",
+  'overview.figures': 'Votre communauté en chiffres',
+  'attention.title': 'À surveiller',
+  'attention.description':
+    'Les membres qu’un paiement échoué ou une annulation programmée va faire partir.',
+  'attention.seeAll': 'Tout voir ({count})',
+  'attention.none': 'Rien ne demande votre attention pour le moment.',
+  'attention.paymentFailed': 'Paiement échoué',
+  'attention.canceling': 'Annulation programmée',
+  'sources.title': "Sources d'activité",
+  'sources.manage': 'Gérer',
+  'sources.whop.name': 'Whop',
+  'sources.discord.name': 'Discord',
+  'sources.telegram.name': 'Telegram',
+  'sources.connected': 'Connecté',
+  'sources.notConnected': 'Non connecté',
+  'sources.unavailable': 'Pas encore disponible',
+  'sources.discord.servers.one': '{count} serveur',
+  'sources.discord.servers.other': '{count} serveurs',
+  'sources.telegram.groups.one': '{count} groupe',
+  'sources.telegram.groups.other': '{count} groupes',
+  'sources.since': 'connecté le {date}',
+  'sources.disconnect': 'Déconnecter',
+  'sources.disconnectConfirm': 'Oui, déconnecter',
+  'sources.linkedMembers.one': '{count} membre reconnu',
+  'sources.linkedMembers.other': '{count} membres reconnus',
+  'sources.unlinkedAuthors.one': '{count} auteur récent non relié à un membre',
+  'sources.unlinkedAuthors.other': '{count} auteurs récents non reliés à un membre',
+  'sources.privacy':
+    'StayPut ne lit jamais ce qui est écrit : seulement qui a écrit, et quand. Déconnecter une source fait partir son bot.',
+  'sync.badge.never': 'En attente',
+  'members.description':
+    'Tous les membres que StayPut a lus dans Whop, avec leur abonnement, leurs paiements et leur activité.',
+  'members.filter.label': 'Afficher',
+  'members.filter.all': 'Tous',
+  'members.filter.active': 'Dans la communauté',
+  'members.filter.attention': 'À surveiller',
+  'members.filter.left': 'Partis',
+  'members.search': 'Chercher un membre',
+  'members.noMatch': 'Aucun membre ne correspond.',
+  'discord.description':
+    'Comptez les messages des membres de votre serveur, dans les salons que vous choisissez.',
+  'discord.add': 'Ajouter le bot à mon serveur',
+  'discord.addAnother': 'Ajouter un autre serveur',
+  'discord.unavailable': "Discord n'est pas encore disponible sur ce StayPut.",
+  'discord.step.add':
+    "Ajoutez le bot StayPut à votre serveur (il faut pouvoir le gérer). Il ne demande qu'à lire l'historique.",
+  'discord.step.channels':
+    "StayPut suit tous les salons qu'il peut lire, sur les 90 derniers jours. Décochez ceux qui ne doivent pas compter.",
+  'discord.step.members': 'Un membre compte dès qu’il a relié son Discord à son profil Whop.',
+  'discord.linkHow':
+    'Un message compte pour le membre qui a relié son Discord à son profil Whop ; les autres attendent 7 jours au cas où il le ferait.',
+  'discord.unnamed': 'Serveur Discord',
+  'discord.channelsFollowed.one': '{count} salon suivi',
+  'discord.channelsFollowed.other': '{count} salons suivis',
+  'discord.noChannel': 'Aucun salon suivi',
+  'discord.reading': "Lecture de l'historique",
+  'discord.readAgo': 'Lu {when}',
+  'discord.waiting': 'Première lecture bientôt',
+  'discord.refused.one': '{count} salon que le bot ne peut pas lire',
+  'discord.refused.other': '{count} salons que le bot ne peut pas lire',
+  'discord.chooseChannels': 'Choisir les salons',
+  'discord.channelsUnavailable': "Discord n'a pas répondu. Réessayez dans un instant.",
+  'discord.noTextChannel': "Ce serveur n'a aucun salon textuel.",
+  'discord.noCategory': 'Sans catégorie',
+  'discord.hidden': 'Caché au bot',
+  'discord.hiddenHint':
+    'Pour compter un salon caché, donnez au rôle StayPut « Voir le salon » et « Voir les anciens messages » sur ce salon dans Discord.',
+  'discord.selectAll': 'Tout cocher (salons lisibles)',
+  'telegram.description':
+    'Comptez les messages de vos groupes Telegram, à partir du moment où le bot les rejoint.',
+  'telegram.add': 'Ajouter le bot à un groupe',
+  'telegram.addAnother': 'Ajouter un autre groupe',
+  'telegram.unavailable': "Telegram n'est pas encore disponible sur ce StayPut.",
+  'telegram.privacyMode':
+    'Le mode confidentialité du bot est activé : il ne voit que les commandes qui lui sont adressées, donc rien ne compte. Dans Telegram, @BotFather → /setprivacy → Disable, puis ajoutez de nouveau le bot au groupe.',
+  'telegram.step.add':
+    'Ouvrez le lien et choisissez votre groupe (il faut en être administrateur). Le lien est valable une heure.',
+  'telegram.step.confirm': "Le bot confirme dans le groupe qu'il est relié à StayPut.",
+  'telegram.step.members':
+    'Les membres relient leur Telegram depuis StayPut, dans votre communauté Whop (« Relier mon Telegram »).',
+  'telegram.linkHow':
+    'Whop ne partage pas le compte Telegram des membres : chacun relie le sien depuis StayPut, dans la communauté. Les messages des comptes non reliés attendent 7 jours.',
+  'telegram.unnamed': 'Groupe Telegram',
+  'telegram.lastMessage': 'Dernier message {when}',
+  'telegram.listening': "À l'écoute",
+  'telegram.removed': 'Bot retiré du groupe',
+  'connected.discord.title': 'Discord est connecté',
+  'connected.discord.body':
+    '« {name} » : {channels}. Les 90 derniers jours sont en cours de lecture.',
+  'connected.failed.title': "Discord n'est pas connecté",
+  'connected.reason.denied':
+    "Le bot n'a pas été ajouté : l'autorisation a été annulée sur Discord.",
+  'connected.reason.expired':
+    'Ce lien a expiré. Recommencez depuis StayPut, dans votre tableau de bord Whop.',
+  'connected.reason.unavailable': "Discord n'est pas encore disponible sur ce StayPut.",
+  'connected.reason.error': 'La connexion a échoué. Recommencez depuis StayPut dans un instant.',
+  'connected.back':
+    'Vous pouvez fermer cet onglet et revenir sur Whop : votre tableau de bord se met à jour tout seul.',
+  'member.goal.title': 'Votre objectif, bientôt',
+  'member.goal.body':
+    'Vous fixerez bientôt ici un objectif et suivrez vos progrès semaine après semaine.',
+  'member.telegram.title': 'Votre compte Telegram',
+  'member.telegram.body':
+    'Votre communauté compte son groupe Telegram : reliez votre compte pour que vos messages comptent aussi.',
+  'member.telegram.linkedBody':
+    'Vos messages dans les groupes Telegram de la communauté comptent pour vous.',
+  'member.telegram.linked': 'Relié',
+  'member.telegram.link': 'Relier mon Telegram',
+  'member.telegram.unlink': 'Délier',
+  'member.telegram.unlinkConfirm': 'Oui, délier',
+  'member.telegram.privacy':
+    "Le bot s'ouvre dans Telegram : touchez Démarrer. Seuls l’auteur et l’heure sont comptés, jamais ce que vous écrivez.",
+  'home.point.members': 'Chaque membre, son abonnement et ses paiements, lus dans Whop.',
+  'home.point.payments':
+    'Paiements échoués et annulations programmées, vus avant que le membre parte.',
+  'home.point.activity': "L'activité de Whop, Discord et Telegram, sans jamais lire un message.",
+
   'error.title': 'Un obstacle',
   'error.unauthenticated': 'Ouvrez StayPut depuis Whop pour vous connecter.',
   'error.unauthenticated.login':

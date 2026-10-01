@@ -1,17 +1,32 @@
-import type { CreatorSession, MembersPage } from '@stayput/core';
-import { useParams } from 'react-router';
-import { useApi } from '../api';
-import { MembersList } from '../components/MembersList';
+import type { CreatorSession, IntegrationsStatus, MembersPage } from '@stayput/core';
+import { LayoutDashboard, Plug, Users } from 'lucide-react';
+import { Outlet, useOutletContext, useParams } from 'react-router';
+import { useApi, useReloadOnReturn, type Loadable } from '../api';
 import { SignOut } from '../components/SignOut';
 import { ErrorPanel, Loading } from '../components/Status';
-import { SyncPanel } from '../components/SyncPanel';
 import { useI18n } from '../i18n';
-import { useSync } from '../sync';
+import { useSync, type SyncState } from '../sync';
+import { NavTabs } from '../ui/Tabs';
+
+/** What every section of the creator view reads, loaded once for all of them. */
+export interface CreatorData {
+  companyId: string;
+  /** `/dashboard/<company>`: the sections' links start here. */
+  root: string;
+  /** `/api/creator/<company>`. */
+  api: string;
+  members: { state: Loadable<MembersPage>; retry: () => void; reload: () => void };
+  sync: SyncState;
+  integrations: { state: Loadable<IntegrationsStatus>; retry: () => void; reload: () => void };
+}
+
+export function useCreatorData(): CreatorData {
+  return useOutletContext<CreatorData>();
+}
 
 /** The creator view (Whop "dashboard view", /dashboard/:companyId): the team only. */
 export function CreatorView() {
   const { companyId = '' } = useParams();
-  const { t } = useI18n();
   const { state, retry } = useApi<CreatorSession>(
     `/api/creator/${encodeURIComponent(companyId)}/session`,
   );
@@ -22,43 +37,59 @@ export function CreatorView() {
       <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
     );
   }
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t('creator.title')}</h1>
-        <p className="mt-2 text-muted">
-          {t('creator.connected', { companyId: state.data.companyId })}
-        </p>
-        <div className="mt-2">
-          <SignOut via={state.data.via} />
-        </div>
-      </div>
-      <Dashboard companyId={state.data.companyId} />
-    </div>
-  );
+  return <Dashboard session={state.data} />;
 }
 
 /**
- * What StayPut collected (SPEC Phase 2): where the reading of Whop stands, then the members. The
- * list is read again each time a synchronization brings something new.
+ * The sections of the dashboard (SPEC Phase 2, then Phase 6): an overview, the members, the
+ * activity sources. The data is read once here and kept while the creator moves between them;
+ * the members are read again each time a synchronization brings something new, the sources
+ * each time the creator comes back to the page (after connecting one in another tab).
  */
-function Dashboard({ companyId }: { companyId: string }) {
-  const members = useApi<MembersPage>(`/api/creator/${encodeURIComponent(companyId)}/members`);
+function Dashboard({ session }: { session: CreatorSession }) {
+  const { t } = useI18n();
+  const companyId = session.companyId;
+  const api = `/api/creator/${encodeURIComponent(companyId)}`;
+  const root = `/dashboard/${encodeURIComponent(companyId)}`;
+  const members = useApi<MembersPage>(`${api}/members`);
   const sync = useSync(companyId, members.reload);
+  const integrations = useApi<IntegrationsStatus>(`${api}/integrations`);
+  useReloadOnReturn(integrations.reload);
+  const data: CreatorData = { companyId, root, api, members, sync, integrations };
+
   return (
-    <>
-      <SyncPanel sync={sync} />
-      {members.state.status === 'loading' ? (
-        <Loading />
-      ) : members.state.status === 'error' ? (
-        <ErrorPanel
-          error={members.state.error}
-          forbiddenKey="error.forbidden.creator"
-          onRetry={members.retry}
-        />
-      ) : (
-        <MembersList page={members.state.data} />
-      )}
-    </>
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            {t('creator.title')}
+          </h1>
+          <p className="mt-1 text-sm text-muted">{t('creator.connected', { companyId })}</p>
+        </div>
+        <SignOut via={session.via} />
+      </div>
+      <NavTabs
+        label={t('creator.sections')}
+        items={[
+          {
+            to: root,
+            end: true,
+            label: t('creator.tab.overview'),
+            icon: <LayoutDashboard aria-hidden="true" className="size-4" />,
+          },
+          {
+            to: `${root}/members`,
+            label: t('creator.tab.members'),
+            icon: <Users aria-hidden="true" className="size-4" />,
+          },
+          {
+            to: `${root}/sources`,
+            label: t('creator.tab.sources'),
+            icon: <Plug aria-hidden="true" className="size-4" />,
+          },
+        ]}
+      />
+      <Outlet context={data} />
+    </div>
   );
 }

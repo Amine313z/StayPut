@@ -258,8 +258,8 @@ oubliée).
 - Réactions : par webhook seulement (voir plus haut).
 - Commentaires de forum : la liste des posts sans `parent_id` ne dit pas si elle inclut les
   commentaires ; à vérifier sur un vrai forum (celui du sandbox est vide).
-- Le module Discord (optionnel, désactivé par défaut) n'est pas fait : il attend que le
-  fondateur décide de l'activer.
+- Le module Discord (optionnel, désactivé par défaut) est fait le 01/10/2026, avec Telegram :
+  voir la section suivante.
 
 ### Membres fictifs du sandbox (script `seed-sandbox`)
 
@@ -298,3 +298,72 @@ fondateur, puis tout lu au premier « Synchroniser maintenant ». En conséquenc
 
 Chaque nouvelle permission (Phase 4 : actions) demandera donc la même ré-approbation aux
 créateurs déjà installés : à prévoir dans le message de mise à jour.
+
+## 2026-10-01 — Discord et Telegram, sources d'activité optionnelles
+
+Décision du fondateur : ajouter le module Discord du cahier des charges (Phase 2, point 5)
+**et Telegram**, puisque les deux sont gratuits (API REST de Discord, Bot API de Telegram, aucun
+abonnement). Chaque module s'allume quand ses secrets existent (`DISCORD_BOT_TOKEN` et
+`DISCORD_CLIENT_SECRET`, `TELEGRAM_BOT_TOKEN`) et reste invisible sinon.
+
+### À qui appartient un message : Discord par Whop, Telegram par le membre
+
+- `GET /users/{id}` avec la clé de l'app ne montre d'un membre que ce qui est **public sur
+  Whop : le Discord principal et le compte X** (documentation du SDK, « other profiles only what
+  is public »). Le Discord d'un membre vient donc de son profil Whop (relu chaque semaine, 10
+  profils par entreprise et par exécution, délié s'il l'a délié sur Whop).
+- Whop ne montre le Telegram de personne. Le membre relie le sien lui-même : bouton « Relier mon
+  Telegram » dans la vue membre → lien `t.me/<bot>?start=<jeton>` signé pour lui et sa
+  communauté (valable une heure) → Telegram dit au bot quel compte l'a ouvert. Un compte ne
+  compte que pour un membre par communauté ; « Délier » le retire.
+- Un message d'un compte inconnu attend 7 jours dans `pending_activity` sous le compte
+  (`discord:<id>`, `telegram:<id>`), rangé chez le membre dès qu'il est relié.
+
+### Discord : ajout du bot, salons, lecture
+
+- Le créateur ajoute le bot depuis la page d'autorisation de Discord (`bot identify`, code
+  grant) : Discord renvoie le serveur dans la réponse à l'échange du code, StayPut ne garde
+  aucun jeton d'utilisateur (révoqué aussitôt). Le `state` est signé (entreprise, membre de
+  l'équipe, 30 minutes). Adresse de retour à déclarer sur l'application Discord :
+  `https://stayput.chezbenz18.workers.dev/auth/discord/callback`.
+- Permissions du bot : voir les salons et lire l'historique (66560), rien d'autre ; l'intent
+  « Message Content » n'est pas demandé, seul l'auteur et l'heure sont lus.
+- À la première connexion, StayPut suit tous les salons textuels **que le bot peut lire**
+  (permissions des rôles et des salons calculées comme Discord), le créateur décoche ensuite.
+  Un salon supprimé (404) cesse d'être suivi ; un salon devenu illisible (403) est signalé.
+- Lecture : 90 jours d'historique puis le nouveau, 100 messages par appel, **toutes les 3
+  heures** (un serveur a beaucoup de salons ; les scores lisent l'activité du jour), dans le
+  même budget de 40 appels que Whop, après Whop. Un 401 ou un 429 de Discord laisse Discord pour
+  l'exécution suivante sans arrêter Whop.
+- Limites : les fils (threads) et les salons forum de Discord ne sont pas lus ; à ajouter si
+  les créateurs s'en servent. Piste d'économie si le budget se tend : lire `last_message_id`
+  des salons en un appel par serveur et ne lire que les salons qui ont bougé.
+
+### Telegram : groupes reliés par un lien signé
+
+- Le créateur ouvre « Ajouter le bot à un groupe » (`t.me/<bot>?startgroup=<jeton>`, signé pour
+  sa communauté, valable une heure) ; Telegram envoie `/start <jeton>` dans le groupe et le bot
+  confirme dans le groupe (transparence : il dit que seuls l'auteur et l'heure comptent). Un
+  lien expiré : le bot le dit et quitte le groupe.
+- Le webhook de Telegram est déclaré par le Worker lui-même à la première demande de lien,
+  avec l'adresse par laquelle il est joint (aucun réglage à garder à jour) ; le secret que
+  Telegram répète dans chaque requête est dérivé du jeton du bot.
+- Telegram ne laisse aucun bot lire le passé d'un groupe : l'activité compte à partir de
+  l'arrivée du bot. Le **mode confidentialité** du bot doit être désactivé (@BotFather →
+  /setprivacy → Disable) avant de l'ajouter aux groupes, sinon il ne voit que les commandes ;
+  l'écran le signale.
+
+### Interface : un vrai tableau de bord
+
+- Trois sections à onglets dans la vue créateur : vue d'ensemble (chiffres, « À surveiller »,
+  données de Whop, sources), membres (filtres et recherche), sources d'activité. Les données
+  sont lues une fois pour les trois ; les sources se relisent quand le créateur revient sur
+  la page (après avoir connecté Discord ou Telegram dans un autre onglet).
+- « À surveiller » ne montre que des faits de Whop (paiement échoué, annulation programmée),
+  jamais un score : le score de risque est la Phase 3.
+- Police Inter servie par StayPut (la CSP n'autorise aucune autre origine ; seuls les fichiers
+  latins sont chargés), icônes Lucide, jetons de couleur testés WCAG AA dans les deux thèmes.
+- Ouvrir Discord ou Telegram depuis le cadre de Whop passe par `openExternalUrl` du SDK
+  d'iframe de Whop, dont le protocole (postMessage) est reproduit en quelques lignes plutôt que
+  d'ajouter `@whop/iframe` et sa dépendance zod ; si Whop ne répond pas, un lien simple est
+  proposé.

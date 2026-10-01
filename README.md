@@ -12,11 +12,11 @@ il a sauvé.
 
 ## État
 
-| Phase                         | Statut                                                   |
-| ----------------------------- | -------------------------------------------------------- |
-| 0. Vérification de l'API Whop | Validée le 30/09/2026                                    |
-| 1. Fondations                 | Faite et déployée (30/09/2026), en attente de validation |
-| 2. Collecte des données       | À faire après validation de la Phase 1                   |
+| Phase                         | Statut                                                    |
+| ----------------------------- | --------------------------------------------------------- |
+| 0. Vérification de l'API Whop | Validée le 30/09/2026                                     |
+| 1. Fondations                 | Validée le 01/10/2026                                     |
+| 2. Collecte des données       | Faite (Whop, Discord, Telegram), en attente de validation |
 
 ## Architecture
 
@@ -83,6 +83,9 @@ Tout se range dans **Settings → Secrets and variables → Actions** du dépôt
 | `SUPABASE_DB_URL`       | secret   | URI « Session pooler » de Supabase, mot de passe compris                      | oui               |
 | `WHOP_API_KEY`          | secret   | clé API **de l'app** Whop (pas celle du compte)                               | pour l'API Whop   |
 | `WHOP_WEBHOOK_SECRET`   | secret   | secret `ws_…` du webhook de l'app                                             | pour les webhooks |
+| `DISCORD_BOT_TOKEN`     | secret   | jeton du bot de l'application Discord de StayPut                              | pour Discord      |
+| `DISCORD_CLIENT_SECRET` | secret   | « Client Secret » de la même application (onglet OAuth2)                      | pour Discord      |
+| `TELEGRAM_BOT_TOKEN`    | secret   | jeton du bot Telegram donné par @BotFather                                    | pour Telegram     |
 | `WHOP_ENV`              | variable | `production` au passage en production (sinon `sandbox`, dans `wrangler.toml`) | non               |
 | `WHOP_APP_ID`           | variable | l'app de production (`app_…`) ; celle du sandbox est dans `wrangler.toml`     | en production     |
 
@@ -123,6 +126,22 @@ StayPut s'ouvre dans un onglet normal, avec « Se connecter avec Whop » (sandbo
 
 Les accès sont vérifiés chez Whop comme dans l'iframe. Réglage de l'app (fait par l'API) :
 adresse de retour `https://stayput.chezbenz18.workers.dev/auth/callback`, client OAuth public.
+
+### Discord et Telegram (optionnels, gratuits)
+
+Chaque module s'allume au déploiement suivant dès que ses secrets existent, et reste invisible
+sinon. Réglages une fois pour toutes (détails et raisons : `DECISIONS.md`, 2026-10-01) :
+
+- **Discord** : une application sur https://discord.com/developers/applications, son bot (jeton
+  → `DISCORD_BOT_TOKEN`), son « Client Secret » (onglet OAuth2 → `DISCORD_CLIENT_SECRET`) et,
+  dans OAuth2 → Redirects, l'adresse `https://stayput.chezbenz18.workers.dev/auth/discord/callback`.
+  Aucun intent privilégié n'est nécessaire.
+- **Telegram** : un bot créé avec @BotFather (jeton → `TELEGRAM_BOT_TOKEN`), **mode
+  confidentialité désactivé** (@BotFather → `/setprivacy` → Disable) avant de l'ajouter à un
+  groupe. Le webhook se déclare tout seul à la première demande de lien.
+
+Le créateur connecte ensuite son serveur ou ses groupes depuis **Sources d'activité** dans le
+tableau de bord ; chaque membre relie son Telegram depuis la vue membre.
 
 ### Données du sandbox : synchronisation, inspection, membres fictifs
 

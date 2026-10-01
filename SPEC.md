@@ -70,7 +70,7 @@ Crée au minimum ces tables (adapte les types, ajoute index et clés étrangère
 - `members` : id Whop du membre et de l'utilisateur, nom affiché, date d'arrivée, cohorte (mois d'arrivée), identifiant Discord lié (si disponible), liste « ne jamais contacter ».
 - `memberships` : id, member, produit / variant, prix, devise, période de facturation, statut, `cancel_at_period_end`, fin de période, pause en cours.
 - `payments` : id, membership, montant, statut, date, raison d'échec, `recovery_url` 3D Secure si présente.
-- `activity_events` : member, type (`message`, `reaction`, `lesson_completed`, `forum_post`, `support_ticket_opened`, `support_ticket_resolved`, `stayput_open`, `goal_update`, `discord_message`), horodatage, métadonnées. Table volumineuse : index sur `(company_id, member_id, occurred_at)`.
+- `activity_events` : member, type (`message`, `reaction`, `lesson_completed`, `forum_post`, `support_ticket_opened`, `support_ticket_resolved`, `stayput_open`, `goal_update`, `discord_message`, `telegram_message` (décision du 01/10/2026)), horodatage, métadonnées. Table volumineuse : index sur `(company_id, member_id, occurred_at)`.
 - `member_stats_daily` : agrégats par membre et par jour (messages, réactions, leçons, actions StayPut), pour calculer vite les fréquences.
 - `activity_hours` : histogramme des heures d'activité par membre (24 cases), pour l'heure d'or.
 - `risk_scores` : member, score 0-100, niveau, sous-scores détaillés, raisons principales (texte court), date de calcul. Garder l'historique (une ligne par calcul horaire, purge après 90 jours sauf un point par jour).
@@ -129,6 +129,7 @@ Crée au minimum ces tables (adapte les types, ajoute index et clés étrangère
 3. **Synchronisation horaire** (cron) pour chaque créateur actif : nouveaux messages, réactions, posts de forum et tickets support depuis le dernier curseur enregistré. Découpe le travail par créateur pour rester sous les limites du Worker ; si un créateur a beaucoup de données, reprends au curseur au cron suivant.
 4. Mets à jour `member_stats_daily` et `activity_hours` après chaque synchronisation.
 5. **Module Discord (optionnel, désactivé par défaut)** : si le créateur l'active et ajoute le bot, le cron lit l'historique des messages des salons choisis par l'API REST Discord (sans passerelle permanente), relie l'auteur Discord au membre Whop via le Discord lié au profil, et crée des `activity_events` de type `discord_message`. Seules les métadonnées (auteur, date) sont stockées, jamais le contenu.
+   **Module Telegram (décision du 01/10/2026)** : même principe pour les groupes Telegram. Le créateur ajoute le bot à un groupe avec un lien signé pour sa communauté ; les messages arrivent par webhook à partir de l'arrivée du bot (Telegram ne donne pas l'historique aux bots) et créent des `activity_events` de type `telegram_message`. Whop ne montre pas le Telegram des membres : chaque membre relie le sien depuis la vue membre. Seules les métadonnées (auteur, date) sont stockées, jamais le contenu.
 6. Script `/scripts/seed-sandbox.ts` qui génère dans le sandbox des membres fictifs avec des profils variés (actif, en déclin, inactif, paiement échoué, annulation programmée) pour tester tout le reste.
 7. **Arrête-toi** : montre-moi les données collectées sur le sandbox.
 

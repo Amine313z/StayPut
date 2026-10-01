@@ -1,6 +1,10 @@
 import type { MessageKey } from '@stayput/i18n';
+import { CircleCheck, Clock, LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react';
 import { useI18n } from '../i18n';
 import type { SyncState } from '../sync';
+import { Notice } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
 
 const STREAM_LABELS: Record<string, MessageKey> = {
   plans: 'sync.stream.plans',
@@ -18,7 +22,7 @@ const STREAM_LABELS: Record<string, MessageKey> = {
 
 /** Where the reading of Whop's data stands, what could not be read, and "Sync now". */
 export function SyncPanel({ sync }: { sync: SyncState }) {
-  const { t, dateTime } = useI18n();
+  const { t, relative, dateTime } = useI18n();
   const { status, running, notice } = sync;
   // One line per kind of data (all chat channels together).
   const problems = new Map<string, string>();
@@ -36,54 +40,76 @@ export function SyncPanel({ sync }: { sync: SyncState }) {
       }),
     );
   }
+  const state = !status
+    ? null
+    : !status.lastSyncAt
+      ? 'never'
+      : status.backfillDone
+        ? 'upToDate'
+        : 'importing';
 
   return (
-    <section aria-labelledby="sync-title" className="rounded-2xl border border-line bg-surface p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 id="sync-title" className="font-semibold">
-            {t('sync.title')}
-          </h2>
-          <p className="mt-1 text-muted" role="status">
-            {!status
-              ? t('common.loading')
-              : !status.lastSyncAt
-                ? t('sync.never')
-                : status.backfillDone
-                  ? t('sync.upToDate')
-                  : t('sync.importing')}
-          </p>
-          {status?.lastSyncAt ? (
-            <p className="mt-1 text-sm text-muted">
-              {t('sync.last', { date: dateTime(new Date(status.lastSyncAt)) })}
-            </p>
-          ) : null}
-        </div>
-        <button
-          type="button"
+    <Card
+      icon={<RefreshCw aria-hidden="true" className="size-4" />}
+      title={t('sync.title')}
+      description={
+        <span role="status">
+          {state === null
+            ? t('common.loading')
+            : state === 'never'
+              ? t('sync.never')
+              : state === 'upToDate'
+                ? t('sync.upToDate')
+                : t('sync.importing')}
+        </span>
+      }
+      actions={
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={sync.syncNow}
-          disabled={running}
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          loading={running}
+          icon={<RefreshCw aria-hidden="true" className="size-4" />}
         >
           {running ? t('sync.running') : t('sync.now')}
-        </button>
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        {status?.lastSyncAt ? (
+          <p className="flex items-center gap-2 text-sm text-muted">
+            {state === 'importing' ? (
+              <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-info" />
+            ) : (
+              <CircleCheck aria-hidden="true" className="size-4 text-accent" />
+            )}
+            <span title={dateTime(new Date(status.lastSyncAt))}>
+              {t('sync.last', { date: relative(new Date(status.lastSyncAt)) })}
+            </span>
+          </p>
+        ) : (
+          <p className="flex items-center gap-2 text-sm text-muted">
+            <Clock aria-hidden="true" className="size-4" />
+            {t('sync.badge.never')}
+          </p>
+        )}
+        {notice ? (
+          <p className="text-sm" role="alert">
+            {t(notice === 'tooSoon' ? 'sync.tooSoon' : 'sync.failed')}
+          </p>
+        ) : null}
+        {problems.size > 0 ? (
+          <Notice tone="warning" icon={<TriangleAlert aria-hidden="true" className="size-4" />}>
+            <p className="font-medium">{t('sync.problems')}</p>
+            <ul className="mt-1 list-disc space-y-1 ps-5">
+              {[...problems].map(([kind, text]) => (
+                <li key={kind}>{text}</li>
+              ))}
+            </ul>
+            {permissionMissing ? <p className="mt-2">{t('sync.permissionHint')}</p> : null}
+          </Notice>
+        ) : null}
       </div>
-      {notice ? (
-        <p className="mt-3 text-sm" role="alert">
-          {t(notice === 'tooSoon' ? 'sync.tooSoon' : 'sync.failed')}
-        </p>
-      ) : null}
-      {problems.size > 0 ? (
-        <div className="mt-3 text-sm">
-          <p className="font-medium">{t('sync.problems')}</p>
-          <ul className="mt-1 list-disc space-y-1 ps-5 text-danger">
-            {[...problems].map(([kind, text]) => (
-              <li key={kind}>{text}</li>
-            ))}
-          </ul>
-          {permissionMissing ? <p className="mt-2">{t('sync.permissionHint')}</p> : null}
-        </div>
-      ) : null}
-    </section>
+    </Card>
   );
 }

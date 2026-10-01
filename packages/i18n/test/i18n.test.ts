@@ -75,4 +75,17 @@ describe('createTranslator', () => {
     expect(fr.number(0.5)).toBe('0,5');
     expect(createTranslator('en').date(new Date('2026-09-30T12:00:00Z'))).toBe('Sep 30, 2026');
   });
+
+  it('says how long ago, in the largest unit that fits', () => {
+    const now = new Date('2026-10-01T12:00:00Z');
+    const ago = (ms: number) => new Date(now.getTime() - ms);
+    const en = createTranslator('en');
+    expect(en.relative(ago(20_000), now)).toBe('this minute');
+    expect(en.relative(ago(5 * 60_000), now)).toBe('5 minutes ago');
+    expect(en.relative(ago(3 * 3_600_000), now)).toBe('3 hours ago');
+    expect(en.relative(ago(86_400_000), now)).toBe('yesterday');
+    const fr = createTranslator('fr');
+    expect(fr.relative(ago(2 * 3_600_000), now)).toBe('il y a 2 heures');
+    expect(fr.relative(ago(3 * 86_400_000), now)).toBe('il y a 3 jours');
+  });
 });

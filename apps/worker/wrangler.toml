@@ -19,7 +19,8 @@ WHOP_ENV = "sandbox"
 WHOP_APP_ID = "app_rjFkp2xKgjfPxY"
 
 # Secrets, never in this file: `npx wrangler secret put WHOP_API_KEY` and
-# `npx wrangler secret put WHOP_WEBHOOK_SECRET` (README.md, Deployment).
+# `npx wrangler secret put WHOP_WEBHOOK_SECRET` (README.md, Deployment). Optional modules:
+# DISCORD_BOT_TOKEN and DISCORD_CLIENT_SECRET (Discord), TELEGRAM_BOT_TOKEN (Telegram).
 
 # The database, through Hyperdrive: added at the first deployment, once the Hyperdrive
 # configuration exists (README.md). Without it the Worker runs, database features off.

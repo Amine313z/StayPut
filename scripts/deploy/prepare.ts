@@ -14,6 +14,12 @@ export const REQUIRED = ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'SUPAB
 export const WORKER_SECRETS = ['WHOP_API_KEY', 'WHOP_WEBHOOK_SECRET'];
 
 /**
+ * The optional modules (Discord, Telegram): uploaded when set, silently off otherwise. Adding
+ * Discord's bot to a server also needs the application's client secret.
+ */
+export const MODULE_SECRETS = ['DISCORD_BOT_TOKEN', 'DISCORD_CLIENT_SECRET', 'TELEGRAM_BOT_TOKEN'];
+
+/**
  * WHOP_ENV and WHOP_APP_ID default to wrangler.toml (the sandbox app); repository variables of
  * the same name replace them. Production needs its own app: WHOP_ENV=production alone would
  * check production tokens against the sandbox app.
@@ -81,6 +87,8 @@ export function prepare(env: Record<string, string | undefined>): {
   accountId: string | null;
   missingRequired: string[];
   missingOptional: string[];
+  /** Modules on (every secret of the module set) or off, for the logs. */
+  modules: { discord: boolean; telegram: boolean };
   /** Secrets whose pasted value needed cleaning (secretValue): names only. */
   cleaned: string[];
   /** Secrets that are not one single value once cleaned (spaces, several lines): never used. */
@@ -91,7 +99,7 @@ export function prepare(env: Record<string, string | undefined>): {
   const secrets: Record<string, string> = {};
   const cleaned: string[] = [];
   const malformed: { name: string; shape: string }[] = [];
-  for (const name of WORKER_SECRETS) {
+  for (const name of [...WORKER_SECRETS, ...MODULE_SECRETS]) {
     const value = secretValue(name, env[name]);
     if (!value) continue;
     if (!/^\S+$/.test(value)) {
@@ -115,6 +123,10 @@ export function prepare(env: Record<string, string | undefined>): {
     missingOptional: WORKER_SECRETS.filter(
       (name) => !present(name) && !malformed.some((bad) => bad.name === name),
     ),
+    modules: {
+      discord: 'DISCORD_BOT_TOKEN' in secrets && 'DISCORD_CLIENT_SECRET' in secrets,
+      telegram: 'TELEGRAM_BOT_TOKEN' in secrets,
+    },
     cleaned,
     malformed,
     secrets,
@@ -124,12 +136,16 @@ export function prepare(env: Record<string, string | undefined>): {
 function main() {
   const [secretsFile] = process.argv.slice(2);
   if (!secretsFile) throw new Error('usage: prepare.ts <secrets file>');
-  const { accountId, missingRequired, missingOptional, cleaned, malformed, secrets } = prepare(
-    process.env,
-  );
+  const { accountId, missingRequired, missingOptional, modules, cleaned, malformed, secrets } =
+    prepare(process.env);
   for (const name of missingOptional) {
     console.warn(`::warning::${name} is not set yet: the matching features stay off.`);
   }
+  console.info(
+    `Discord module: ${modules.discord ? 'on' : 'off'}; Telegram module: ${
+      modules.telegram ? 'on' : 'off'
+    }.`,
+  );
   for (const name of cleaned) {
     console.info(
       `::notice::${name}: kept only the value (dropped other pasted lines, "${name}=" or quotes).`,
@@ -141,7 +157,8 @@ function main() {
   if (malformed.length > 0) {
     throw new Error(
       `store ${malformed.map(({ name }) => name).join(' and ')} again: only the value itself, on` +
-        ' one line (apik_… for WHOP_API_KEY, ws_… for WHOP_WEBHOOK_SECRET).',
+        ' one line (apik_… for WHOP_API_KEY, ws_… for WHOP_WEBHOOK_SECRET, the bot token itself' +
+        ' for DISCORD_BOT_TOKEN and TELEGRAM_BOT_TOKEN).',
     );
   }
   if (missingRequired.length > 0) {

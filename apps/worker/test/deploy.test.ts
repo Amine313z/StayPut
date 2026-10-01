@@ -155,10 +155,34 @@ describe('prepare', () => {
       accountId: null,
       missingRequired: ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'SUPABASE_DB_URL'],
       missingOptional: ['WHOP_API_KEY', 'WHOP_WEBHOOK_SECRET'],
+      modules: { discord: false, telegram: false },
       cleaned: [],
       malformed: [],
       secrets: {},
     });
+  });
+
+  it('uploads the optional modules when set, and never warns about them', () => {
+    const result = prepare({
+      CLOUDFLARE_API_TOKEN: 't',
+      CLOUDFLARE_ACCOUNT_ID: ID,
+      SUPABASE_DB_URL: 'x',
+      DISCORD_BOT_TOKEN: 'MTIz.GAbc.def',
+      TELEGRAM_BOT_TOKEN: 'TELEGRAM_BOT_TOKEN=123456:AAbc-def',
+    });
+    expect(result.secrets).toEqual({
+      DISCORD_BOT_TOKEN: 'MTIz.GAbc.def',
+      TELEGRAM_BOT_TOKEN: '123456:AAbc-def',
+    });
+    // Discord also needs the client secret to add its bot to a server.
+    expect(result.modules).toEqual({ discord: false, telegram: true });
+    expect(result.missingOptional).toEqual(['WHOP_API_KEY', 'WHOP_WEBHOOK_SECRET']);
+    expect(prepare({ DISCORD_BOT_TOKEN: 'a', DISCORD_CLIENT_SECRET: 'b' }).modules.discord).toBe(
+      true,
+    );
+    expect(prepare({ TELEGRAM_BOT_TOKEN: '123:a b' }).malformed).toEqual([
+      { name: 'TELEGRAM_BOT_TOKEN', shape: '1 line: other text (7 characters)' },
+    ]);
   });
 
   it('refuses production without its own app id (the sandbox one is in wrangler.toml)', () => {

@@ -58,7 +58,11 @@ Guidance for Claude Code in this repository.
   « Seed sandbox »); « Inspect » reports the database as counts and the app key's permissions.
   The founder re-approved the 19 permissions on 2026-10-01 (they were 0 of 19 before: added
   permissions need a re-approval per company); « Sync now » then read every list without error.
-  Phase 2 stop report sent; waiting for validation.
+  Phase 2 stop report sent; waiting for validation. Then (founder's decision, 2026-10-01):
+  Discord **and Telegram** as optional activity sources (migration 0007, `src/discord.ts`,
+  `src/telegram.ts`, `src/integrations.ts`), each on once its secrets exist
+  (`DISCORD_BOT_TOKEN` + `DISCORD_CLIENT_SECRET`, `TELEGRAM_BOT_TOKEN`); and the dashboard
+  redesign (tabs Overview / Members / Activity sources, `apps/web/src/ui/*`).
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;
   Whop's side: `GET /webhooks/{id}/deliveries` and `POST /webhooks/{id}/test` with
@@ -115,11 +119,24 @@ npm run db:bundle    # after adding a migration: supabase/install.sql + schema-v
   Webhook deliveries are stored, answered, then filed in the background
   (`process_webhook_event`); the cron replays failures. Activity of an unknown user waits in
   `pending_activity`. Statistics: `refresh_stats` after new activity (`stats_dirty_since`).
+- **Discord / Telegram** (DECISIONS.md, 2026-10-01): Discord channels are scoped streams
+  (`discord_messages:<channel>`, `source: 'discord'`, read with `ctx.discord` every 3 hours, after
+  Whop, in the same budget); members are linked by the primary Discord of their Whop profile
+  (`link_member_discord`, 10 profiles per run). Telegram arrives by webhook
+  (`/webhooks/telegram`, secret derived from the bot token, webhook set by the Worker at the
+  first link request); groups are linked by a signed `startgroup` token, members link their own
+  Telegram from the member view (signed `start` token, `link_telegram_member`). Only author and
+  time are ever stored.
 - **Background work** in a request: `inBackground(c, label, work)` (own database client,
   `waitUntil`); tests pass an execution context and await it (`settle()` in app.test.ts).
 - **Frontend**: no text in components, everything through `t()` from `packages/i18n` (English
   reference, French typed on it; `no-hardcoded-text.test.ts`); colors only as tokens in
-  `apps/web/src/styles.css` (`contrast.test.ts` checks WCAG AA in both themes).
+  `apps/web/src/styles.css` (`contrast.test.ts` checks WCAG AA in both themes; a new token pair
+  goes into its `PAIRS`). Building blocks in `apps/web/src/ui/` (Button, Card, Badge/Notice,
+  Stat, NavTabs, EmptyState, Avatar, brand marks, ExternalButton); icons from `lucide-react`;
+  font Inter served by StayPut. The creator view loads its data once (`CreatorView`, read by
+  the sections with `useCreatorData()`). Links that leave StayPut (Discord, Telegram) go through
+  `ExternalButton`: inside Whop's frame it asks Whop to open them (`src/external.ts`).
 
 ## Environment notes
 

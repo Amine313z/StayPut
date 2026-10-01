@@ -1,52 +1,93 @@
 @import 'tailwindcss';
+/* Inter, served by StayPut itself (the CSP allows no other origin); only the Latin files load. */
+@import '@fontsource-variable/inter/wght.css';
 
 /* `dark:` follows the theme applied on <html> (theme-init.js, then src/theme.tsx). */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /*
  * Colors exist only here, as tokens. Every text / background pair used by the screens reaches
- * WCAG AA in both themes (test/contrast.test.ts computes it).
+ * WCAG AA in both themes (test/contrast.test.ts computes it). `-soft` tokens are the tinted
+ * backgrounds of badges and notices; their text is the token of the same name.
  */
 :root {
   color-scheme: light;
   --bg: #f6f7f9;
   --surface: #ffffff;
-  --text: #14171f;
-  --muted: #525a68;
-  --border: #dde1e7;
-  --accent: #1f6f5c;
+  --surface-2: #f2f4f7;
+  --text: #111827;
+  --muted: #4b5565;
+  --border: #e2e6ec;
+  --accent: #1d6b58;
+  --accent-soft: #e3f1ec;
   --on-accent: #ffffff;
   --danger: #b42318;
+  --danger-soft: #fdeceb;
+  --warning: #8a4b00;
+  --warning-soft: #fdf1dc;
+  --info: #1d5aa6;
+  --info-soft: #e7effa;
+  /* The brands' own colors, for their marks only (never text). */
+  --brand-discord: #5865f2;
+  --brand-telegram: #229ed9;
+  --shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.06);
 }
 
 [data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0e1116;
-  --surface: #161a22;
-  --text: #e8ebf0;
-  --muted: #a1a9b8;
-  --border: #2a303c;
-  --accent: #56c7a6;
-  --on-accent: #0e1116;
-  --danger: #ff8a7a;
+  --bg: #0b0e13;
+  --surface: #12161d;
+  --surface-2: #191e27;
+  --text: #e7eaf0;
+  --muted: #9aa3b2;
+  --border: #252b36;
+  --accent: #5cc9a8;
+  --accent-soft: #11302a;
+  --on-accent: #07120f;
+  --danger: #ff8b7c;
+  --danger-soft: #3b1714;
+  --warning: #f2b555;
+  --warning-soft: #33260e;
+  --info: #84b8ff;
+  --info-soft: #13233a;
+  --brand-discord: #7983f5;
+  --brand-telegram: #3fb0e6;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-fg: var(--text);
   --color-muted: var(--muted);
   --color-line: var(--border);
   --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
   --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-discord: var(--brand-discord);
+  --color-telegram: var(--brand-telegram);
+  --shadow-card: var(--shadow);
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
 }
 
 body {
   background-color: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
   -webkit-font-smoothing: antialiased;
+}
+
+/* Figures line up in columns and do not jump when they change. */
+.tabular {
+  font-variant-numeric: tabular-nums;
 }

@@ -36,11 +36,23 @@ function contrast(a: string, b: string): number {
 const PAIRS = [
   ['text', 'bg'],
   ['text', 'surface'],
+  ['text', 'surface-2'],
   ['muted', 'bg'],
   ['muted', 'surface'],
+  ['muted', 'surface-2'],
+  ['accent', 'bg'],
   ['accent', 'surface'],
+  ['accent', 'surface-2'],
   ['on-accent', 'accent'],
+  ['accent', 'accent-soft'],
+  ['text', 'accent-soft'],
   ['danger', 'surface'],
+  ['danger', 'danger-soft'],
+  ['text', 'danger-soft'],
+  ['warning', 'surface'],
+  ['warning', 'warning-soft'],
+  ['info', 'surface'],
+  ['info', 'info-soft'],
 ] as const;
 
 describe.each([

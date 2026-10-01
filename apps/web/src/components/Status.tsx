@@ -1,16 +1,15 @@
 import type { MessageKey } from '@stayput/i18n';
+import { CircleAlert, LoaderCircle, LogIn, RotateCw } from 'lucide-react';
 import { useLocation } from 'react-router';
 import type { ApiError } from '../api';
 import { useI18n } from '../i18n';
+import { Button, ButtonLink } from '../ui/Button';
 
 export function Loading() {
   const { t } = useI18n();
   return (
-    <p role="status" className="flex items-center gap-3 text-muted">
-      <span
-        aria-hidden="true"
-        className="size-4 animate-spin rounded-full border-2 border-line border-t-accent"
-      />
+    <p role="status" className="flex items-center gap-3 py-6 text-muted">
+      <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-accent" />
       {t('common.loading')}
     </p>
   );
@@ -43,26 +42,33 @@ export function ErrorPanel({
     error.code,
   );
   return (
-    <section role="alert" className="rounded-2xl border border-line bg-surface p-5">
-      <h1 className="text-lg font-semibold">{t('error.title')}</h1>
+    <section
+      role="alert"
+      className="mx-auto max-w-lg rounded-2xl border border-line bg-surface p-6 shadow-card"
+    >
+      <span className="flex size-10 items-center justify-center rounded-xl bg-danger-soft text-danger">
+        <CircleAlert aria-hidden="true" className="size-5" />
+      </span>
+      <h1 className="mt-4 text-lg font-semibold">{t('error.title')}</h1>
       {signIn && signInFailed ? <p className="mt-2 font-medium">{t('auth.failed')}</p> : null}
       <p className="mt-2 text-muted">{t(messageKey)}</p>
       {signIn ? (
-        <a
+        <ButtonLink
           href={signIn}
-          className="mt-4 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="mt-5"
+          icon={<LogIn aria-hidden="true" className="size-4" />}
         >
           {t('auth.signIn')}
-        </a>
+        </ButtonLink>
       ) : null}
       {retryable && onRetry ? (
-        <button
-          type="button"
+        <Button
           onClick={onRetry}
-          className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="mt-5"
+          icon={<RotateCw aria-hidden="true" className="size-4" />}
         >
           {t('common.retry')}
-        </button>
+        </Button>
       ) : null}
     </section>
   );

@@ -1,5 +1,5 @@
 import { CSRF_HEADER, type ApiErrorBody, type ApiErrorCode } from '@stayput/core';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /** A failed call: the Worker's error code, or "network" when it could not be reached. */
 export class ApiError extends Error {
@@ -28,10 +28,21 @@ export function postJson<T>(path: string, signal?: AbortSignal): Promise<T> {
   return requestJson<T>('POST', path, signal);
 }
 
+/** PUT a JSON body on the Worker (with the same header). */
+export function putJson<T>(path: string, body: unknown): Promise<T> {
+  return requestJson<T>('PUT', path, undefined, body);
+}
+
+/** DELETE on the Worker (with the same header). */
+export function deleteJson<T>(path: string): Promise<T> {
+  return requestJson<T>('DELETE', path);
+}
+
 async function requestJson<T>(
-  method: 'GET' | 'POST',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   signal?: AbortSignal,
+  body?: unknown,
 ): Promise<T> {
   let response: Response;
   try {
@@ -40,8 +51,10 @@ async function requestJson<T>(
       headers: {
         Accept: 'application/json',
         ...(method === 'GET' ? {} : { [CSRF_HEADER]: '1' }),
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       credentials: 'same-origin',
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       ...(signal ? { signal } : {}),
     });
   } catch (error) {
@@ -49,11 +62,11 @@ async function requestJson<T>(
     throw new ApiError('network', error instanceof Error ? error.message : String(error));
   }
   if (response.ok) return (await response.json()) as T;
-  const body = (await response.json().catch(() => null)) as Partial<ApiErrorBody> | null;
-  const login = body?.error?.login;
+  const failure = (await response.json().catch(() => null)) as Partial<ApiErrorBody> | null;
+  const login = failure?.error?.login;
   throw new ApiError(
-    body?.error?.code ?? codeForStatus(response.status),
-    body?.error?.message ?? response.statusText,
+    failure?.error?.code ?? codeForStatus(response.status),
+    failure?.error?.message ?? response.statusText,
     typeof login === 'string' && login.startsWith('/') ? login : null,
   );
 }
@@ -107,4 +120,35 @@ export function useApi<T>(path: string): {
     retry: () => setAttempt((a) => ({ n: a.n + 1, quiet: false })),
     reload: () => setAttempt((a) => ({ n: a.n + 1, quiet: true })),
   };
+}
+
+/**
+ * Runs `reload` when the user comes back to the page: after connecting Discord or Telegram in
+ * another tab, the screen shows it without a click.
+ */
+export function useReloadOnReturn(reload: () => void): void {
+  const latest = useRef(reload);
+  useEffect(() => {
+    latest.current = reload;
+  }, [reload]);
+  useEffect(() => {
+    // Coming back fires both events: one reload is enough.
+    let last = 0;
+    const run = () => {
+      const now = Date.now();
+      if (now - last < 1_000) return;
+      last = now;
+      latest.current();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') run();
+    };
+    const onFocus = run;
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 }

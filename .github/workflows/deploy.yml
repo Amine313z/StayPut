@@ -32,6 +32,10 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           WHOP_API_KEY: ${{ secrets.WHOP_API_KEY }}
           WHOP_WEBHOOK_SECRET: ${{ secrets.WHOP_WEBHOOK_SECRET }}
+          # Optional modules: Discord (both) and Telegram, each off until its secrets exist.
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           WHOP_ENV: ${{ vars.WHOP_ENV }}
           WHOP_APP_ID: ${{ vars.WHOP_APP_ID }}
         run: npx tsx scripts/deploy/prepare.ts "$RUNNER_TEMP/secrets.json"
