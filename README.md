@@ -131,7 +131,13 @@ adresse de retour `https://stayput.chezbenz18.workers.dev/auth/callback`, client
 
 **Dans le cadre de Whop du sandbox** (« App Base URL not set » sinon) : le mode localhost de
 Whop charge l'app depuis l'ordinateur de celui qui regarde, et un petit relais la va chercher en
-ligne. Sous Windows (Node.js 18 ou plus), dans PowerShell :
+ligne. Sous Windows (Node.js 18 ou plus), dans l'Invite de commandes :
+
+```bat
+curl -sSL -o "%TEMP%\whop-frame.mjs" https://stayput.chezbenz18.workers.dev/whop-frame.mjs && node "%TEMP%\whop-frame.mjs"
+```
+
+ou dans PowerShell :
 
 ```powershell
 iwr https://stayput.chezbenz18.workers.dev/whop-frame.mjs -UseBasicParsing -OutFile "$env:TEMP\whop-frame.mjs"; node "$env:TEMP\whop-frame.mjs"
