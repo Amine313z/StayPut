@@ -170,6 +170,29 @@ directe** : le script de déploiement la déduit de l'URI du pooler rangée dans
 Cloudflare joint) et met Hyperdrive à jour. Les migrations, lancées depuis les machines de
 GitHub (IPv4 seulement), gardent le pooler.
 
+### StayPut dans le cadre de Whop du sandbox (mode localhost, 1er octobre au soir)
+
+Le fondateur veut voir StayPut **dans** Whop, sur le sandbox. Whop n'y affiche aucune app : ses
+cadres passent par le relais de production (`https://dm4jquomz8hrsmrk6gb9.apps.whop.com`), qui ne
+connaît pas les apps du sandbox, d'où « App Base URL not set » (la configuration de l'app est
+bonne, relue chez Whop ; le guide du sandbox : « Don't use apps or messaging features in
+sandbox »). Mais le **mode localhost** du cadre (bouton `</>` en haut à droite) charge l'app depuis
+l'ordinateur de celui qui regarde, `http://localhost:3000`, avec son jeton Whop dans l'adresse
+(`?whop-dev-user-token=…`) : c'est le fonctionnement du proxy de développement de Whop
+(`@whop-apps/dev-proxy`, lu dans son code), qui garde ce jeton et le met dans l'en-tête
+`x-whop-user-token` de chaque requête, comme le relais de production.
+
+- **`whop-frame.mjs`** fait la même chose pour StayPut en ligne : un relais local, sans
+  dépendance (Node 18 ou plus), qui garde le dernier jeton reçu et transmet chaque requête au
+  Worker avec cet en-tête ; une redirection vers StayPut reste sur le relais (dans le cadre).
+  Il n'écoute que `127.0.0.1` : le jeton ne quitte pas l'ordinateur. L'en-tête envoyé par le
+  navigateur lui-même est toujours écarté.
+- StayPut le sert lui-même (`/whop-frame.mjs`, depuis `apps/web/public`) : une seule commande
+  PowerShell le télécharge et le lance (README).
+- Côté StayPut, rien ne change : le jeton est vérifié comme celui du relais de Whop (clés du
+  sandbox, audience = l'app), et l'accès demandé à Whop. Reste à confirmer en vrai que le cadre
+  du sandbox donne bien ce jeton, signé par les clés du sandbox.
+
 ## 2026-10-01 — Phase 2 : collecte des données
 
 ### Le Worker transporte les pages, Postgres les lit

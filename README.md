@@ -129,6 +129,18 @@ StayPut s'ouvre dans un onglet normal, avec « Se connecter avec Whop » (sandbo
 Les accès sont vérifiés chez Whop comme dans l'iframe. Réglage de l'app (fait par l'API) :
 adresse de retour `https://stayput.chezbenz18.workers.dev/auth/callback`, client OAuth public.
 
+**Dans le cadre de Whop du sandbox** (« App Base URL not set » sinon) : le mode localhost de
+Whop charge l'app depuis l'ordinateur de celui qui regarde, et un petit relais la va chercher en
+ligne. Sous Windows (Node.js 18 ou plus), dans PowerShell :
+
+```powershell
+iwr https://stayput.chezbenz18.workers.dev/whop-frame.mjs -UseBasicParsing -OutFile "$env:TEMP\whop-frame.mjs"; node "$env:TEMP\whop-frame.mjs"
+```
+
+puis, dans Whop, StayPut → bouton `</>` en haut à droite du cadre → mode **localhost**, port
+3000 (`--port 3001` si le 3000 est pris). Détails : `DECISIONS.md`, « StayPut dans le cadre de
+Whop du sandbox ».
+
 ### Discord et Telegram (optionnels, gratuits)
 
 Chaque module s'allume au déploiement suivant dès que ses secrets existent, et reste invisible
