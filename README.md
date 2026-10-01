@@ -102,14 +102,15 @@ la clé de compte `WHOP_SANDBOX_API_KEY` :
 - webhook **`hook_M3uOKxSzLzx8u`** de l'app vers `/webhooks/whop`, version épinglée
   `2026-09-29`, avec les 10 événements de `docs/whop-api-verification.md` (section 5)
   (`POST /webhooks`, `resource_id` = l'app) ;
-- restent au tableau de bord (`https://sandbox.whop.com/dashboard/developer` → StayPut) : la clé
-  API de l'app et le secret du webhook, à ranger dans les secrets GitHub ; les **permissions**
-  (l'API les refuse aux clés : il faut une session) ; l'installation, par
-  `https://sandbox.whop.com/apps/app_rjFkp2xKgjfPxY/install`.
+- faits au tableau de bord (`https://sandbox.whop.com/dashboard/developer` → StayPut) : la clé
+  API de l'app et le secret du webhook, rangés dans les secrets GitHub ; l'installation dans
+  « StayPut Test » (`https://sandbox.whop.com/apps/app_rjFkp2xKgjfPxY/install`). Restent les
+  **permissions** (l'API les refuse aux clés : il faut une session), au début de la Phase 2.
 
 Le guide sandbox de Whop déconseille les apps et la messagerie dans le sandbox (« Known
-limitations ») : si l'app ne s'y affiche pas, le fondateur décidera de la tester sur un compte
-Whop de production (la Phase 1 ne fait que lire).
+limitations »). Constaté le 30/09/2026 : l'app s'installe, mais Whop affiche « App Base URL not set »
+à la place de ses vues, alors que l'URL est bien enregistrée. L'affichage dans Whop se vérifiera sur
+un compte de production.
 
 ## Outils de la Phase 0
 

@@ -242,10 +242,16 @@ livraison des événements de chat aux webhooks d'app (Phase 2), et le déclench
 
 **Limite du sandbox** (guide « Test in the Sandbox », section « Known limitations », relu le
 30/09/2026) : Whop déconseille les **apps et la messagerie** dans le sandbox. L'API des apps y
-répond pourtant (`POST /apps`, `PATCH /apps/{id}`, `POST /webhooks` → 200 le 30/09/2026) ; reste à
-voir si l'app s'affiche dans l'iframe du sandbox (Phase 1), et si les notifications partent
-(Phases 3 et 4). À défaut, ces essais se feront sur un compte Whop de production, sur décision du
-fondateur.
+répond pourtant (`POST /apps`, `PATCH /apps/{id}`, `POST /webhooks` → 200 le 30/09/2026).
+
+**Constaté le 30/09/2026** : l'app s'installe dans « StayPut Test » et apparaît dans la barre du
+tableau de bord, mais son iframe affiche la page de Whop « App Base URL not set », alors que
+`GET /apps/app_rjFkp2xKgjfPxY` renvoie bien `base_url` = `https://stayput.chezbenz18.workers.dev`.
+L'iframe passe par le relais `https://dm4jquomz8hrsmrk6gb9.apps.whop.com` (domaine de production)
+et la requête n'atteint jamais le Worker. Même symptôme dans un signalement public
+([whopio/whop-public-cli#2](https://github.com/whopio/whop-public-cli/issues/2)). Conclusion :
+**les vues de l'app ne s'affichent pas dans le sandbox** ; l'API, elle, y fonctionne (clé de l'app
+acceptée, webhooks créés). Reste à voir si les notifications partent (Phases 3 et 4).
 
 ## 12. À trancher au début de la Phase 1
 

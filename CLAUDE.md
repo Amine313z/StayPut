@@ -40,11 +40,11 @@ Guidance for Claude Code in this repository.
   `https://stayput.chezbenz18.workers.dev` (Worker `stayput` on the founder's Cloudflare account,
   Hyperdrive `stayput-db`, migrations 0001–0004 applied to the Supabase project `stayput`);
   `/health` answers `ok`. Whop sandbox app `app_rjFkp2xKgjfPxY` and its webhook
-  `hook_M3uOKxSzLzx8u` created through the API (README.md, « L'app Whop du sandbox »). Next: the
-  founder stores the app's API key and the webhook secret as GitHub secrets, a redeploy, then
-  installs and opens the app in the sandbox, then validates. Whop's sandbox guide advises
-  against apps in the sandbox: if the app does not render there, the founder decides whether to
-  test on a production Whop account.
+  `hook_M3uOKxSzLzx8u` created through the API (README.md, « L'app Whop du sandbox »);
+  `WHOP_API_KEY` (accepted by Whop) and `WHOP_WEBHOOK_SECRET` are stored and deployed. The app is
+  installed in « StayPut Test », but Whop's sandbox cannot display app views (« App Base URL not
+  set », a known Whop defect): waiting for the founder's validation and two decisions (testing
+  the views on a production Whop account, and how to show sandbox data in Phases 2–5).
 - **Deploying**: the `Deploy` workflow (`.github/workflows/deploy.yml`, `workflow_dispatch`),
   started from GitHub's Actions tab or through the GitHub API (`actions_run_trigger`, workflow
   `deploy.yml`, ref `main`). It migrates the database, creates Hyperdrive if needed, publishes

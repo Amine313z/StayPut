@@ -120,6 +120,9 @@ quelles à Postgres (`jsonb`) plutôt qu'analysées dans le Worker.
   seront réglées au début de la Phase 2, avec la liste de `docs/whop-api-verification.md`
   (section 10).
 - Le guide sandbox de Whop dit de ne pas utiliser les apps ni la messagerie dans le sandbox
-  (« Known limitations »). On essaie quand même le sandbox d'abord (règle 4 du cahier des
-  charges) ; si l'iframe ne s'y affiche pas, le choix de tester sur un compte Whop de production
-  revient au fondateur.
+  (« Known limitations »). Essayé quand même (règle 4 du cahier des charges), le 30/09/2026 :
+  l'app s'installe, mais son iframe affiche « App Base URL not set » alors que l'URL est bien
+  enregistrée (défaut connu du relais de Whop, voir `docs/whop-api-verification.md`, section 11).
+  Conséquences : l'affichage dans Whop ne peut se vérifier que sur un compte de production, et les
+  démonstrations sur les données du sandbox (Phases 2 à 5) demanderont un autre accès à
+  l'interface. Les deux choix reviennent au fondateur.
