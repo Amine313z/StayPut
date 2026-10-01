@@ -585,3 +585,74 @@ pouvaient faire perdre confiance dans le score :
 Le Worker ne recalcule un score qu'une fois par heure et les analyses qu'une fois par semaine :
 les actions `seed` et `report` du workflow « Seed sandbox » recalculent tout de suite les scores
 et les analyses du sandbox avec les règles du code déployé.
+
+## 2026-10-01 — Phase 4 : actions (en cours)
+
+### Le moteur de garde-fous (`packages/core/src/actions.ts`)
+
+Une seule fonction pure, `checkGuardrails`, par laquelle passe toute action de tout
+déclencheur (SPEC 5.8), testée cas par cas. Dans l'ordre : l'interrupteur de toute l'app, celui
+du créateur, la liste « ne jamais contacter » (aucune action, de quelque type que ce soit),
+puis les plafonds propres à l'action, puis les messages.
+
+- **Relance ou message de service.** Le cahier des charges plafonne « les messages de
+  relance » (1 tous les 5 jours, 4 par mois). Une relance est ce que StayPut envoie de
+  lui-même (message à l'heure d'or, accueil, suivi Alumni). Un message de service répond à un
+  geste du membre ou de Whop : paiement à valider (3D Secure), paiement échoué, annulation
+  programmée (questionnaire). Il n'est **jamais retenu** par les plafonds, puisque l'accès du
+  membre est en jeu. Mais il compte dans son historique : aucune relance ne le suit dans les
+  5 jours. Les deux respectent la liste « ne jamais contacter », les interrupteurs et les heures
+  silencieuses.
+- **Fenêtres glissantes.** « 4 messages par mois » : sur 30 jours glissants (un mois civil
+  permettrait 4 messages le 31 puis 4 le 1er). « 14 jours offerts par trimestre » : sur
+  90 jours glissants. Le plafond de codes promo du créateur aussi, sur 30 jours.
+- **Heures silencieuses** dans le fuseau du créateur : Whop ne donne pas celui du membre. Un
+  message tombant entre 22 h et 8 h part à 8 h. Une opération Whop sans message (relance de
+  paiement) n'attend pas.
+- **Heure d'or** : l'heure la plus fréquente de l'activité du membre sur 30 jours (lue dans
+  `activity_events`, `activity_hours` couvrant 90 jours), **hors heures silencieuses** (un
+  membre actif surtout à 23 h reçoit son message à sa meilleure heure permise, pas à 8 h). À
+  égalité, l'heure la plus proche de l'heure par défaut du créateur (19 h) ; sans activité,
+  l'heure par défaut.
+- **Mode test** : l'action est calculée et passe tous les garde-fous, puis elle est marquée
+  `simulated` (nouveau statut) avec le message exact qu'elle aurait envoyé. Rien ne part, et
+  une action simulée ne comptera jamais comme sauvetage (Phase 6).
+
+### Les déclencheurs (`supabase/migrations/0009_actions.sql`)
+
+Ils lisent **l'état** que StayPut tient à jour (paiement à valider, paiement échoué, annulation
+programmée, score passé en élevé, nouveau membre qui n'a pas commencé), plutôt que des
+événements isolés : un webhook manqué ne fait rien perdre. Ils ne regardent que l'état
+**récent** (paiements des 3 derniers jours, score passé en élevé depuis moins de 2 jours) :
+installer StayPut n'agit jamais sur le mois dernier. Chaque action a une **clé d'unicité**
+(`payment_retry:pay_…:1`) : elle n'est créée qu'une fois. L'équipe et les membres partis ne
+sont jamais visés.
+
+- Relance de paiement : à 24 h puis 72 h de l'échec, seulement si Whop peut la relancer et
+  n'a pas prévu la sienne (décision du 30/09/2026). La seconde seulement après la première.
+- Mode `manual` (par défaut) : l'action reste proposée jusqu'au clic du créateur. Mode `auto` :
+  elle part après les garde-fous.
+- **Revérification au moment d'envoyer** : un membre qui a payé entre-temps ne reçoit pas
+  « ton paiement n'est pas passé » et sa relance est annulée ; un membre qui a retiré son
+  annulation ne reçoit pas le questionnaire ; un interrupteur actionné entre-temps bloque.
+- Envoi : notification Whop à travers l'expérience StayPut de la communauté (seuls ceux qui
+  peuvent l'ouvrir la reçoivent). StayPut l'apprend quand un membre ouvre l'app ; tant qu'il
+  ne la connaît pas, la notification attend. Une panne de Whop est réessayée une heure plus
+  tard, 3 tentatives en tout ; un refus (permission manquante) est définitif et noté.
+  `Idempotency-Key` = l'action : jamais deux envois.
+- Le cron horaire planifie, passe les garde-fous et exécute (20 actions par passage, dans la
+  limite des appels du plan gratuit de Cloudflare).
+
+### Les messages (`packages/core/src/templates.ts`)
+
+Modèles par défaut en français et en anglais pour chaque message, courts, chaleureux, jamais
+culpabilisants, **au tutoiement** (le ton des communautés Whop ; le créateur les modifie). Une
+partie entre `[[ ]]` n'apparaît que si toutes ses variables ont une valeur : un prénom inconnu
+ne laisse jamais « Salut , ». L'emplacement d'une IA de rédaction existe, éteint.
+
+### Reste à faire dans cette phase
+
+L'écran du créateur (file d'attente, validation, historique, réglages et modèles), la vue
+membre (questionnaire de départ et offres, liens de paiement), l'offre Alumni, et la
+démonstration de chaque déclencheur. Les défis de sauvetage et les binômes dépendent de la
+Phase 5 (espace membre).

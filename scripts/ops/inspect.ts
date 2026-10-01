@@ -151,6 +151,22 @@ async function main() {
            group by 1 order by 1`,
       );
     }
+    // The actions (migration 0009): how many of each type are at each step of their cycle,
+    // with the reasons the guardrails gave. Counts only.
+    const [actions] = await sql`
+      select exists (select 1 from information_schema.columns
+                      where table_schema = 'stayput' and table_name = 'actions'
+                        and column_name = 'dedupe_key') as present`;
+    if (actions?.present) {
+      out();
+      table(
+        await sql`
+          select type, status, coalesce(blocked_reason, '') as reason, count(*) as actions,
+                 min(send_at) as first_send_at, max(send_at) as last_send_at
+            from stayput.actions where company_id = ${id as string}
+           group by 1, 2, 3 order by 1, 2, 3`,
+      );
+    }
     // The risk score (migration 0008): members per level, when they were scored, the history
     // kept, and the weekly analyses. Counts only, like the rest.
     const [detection] = await sql`

@@ -895,7 +895,16 @@ export function createApp(deps: AppDeps) {
     if (!whop) return apiError('not_configured', 'WHOP_API_KEY is not set');
     try {
       const companyId = await companyOfExperience(whop, c.get('experienceId'));
-      return companyId ?? apiError('not_found', 'no community for this experience');
+      if (!companyId) return apiError('not_found', 'no community for this experience');
+      // Whop notifications to the company's members go through this experience (Phase 4).
+      const db = c.get('db');
+      if (db) {
+        await db.query('select stayput.remember_experience($1, $2)', [
+          companyId,
+          c.get('experienceId'),
+        ]);
+      }
+      return companyId;
     } catch (error) {
       console.error('Experience not read:', describe(error));
       return apiError('whop_unavailable', 'could not read the experience with Whop');

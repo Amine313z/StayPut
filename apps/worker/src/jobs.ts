@@ -1,3 +1,4 @@
+import { executeDueActions, prepareActions } from './actions';
 import type { CronJob } from './cron';
 import { scoreDueCompanies } from './risk';
 import { SYNC_REQUEST_BUDGET, summarize, syncDueCompanies } from './sync';
@@ -63,5 +64,29 @@ export const scoreMembers: CronJob = {
       );
     }
     await db.query('select stayput.purge_risk_history($1::timestamptz)', [now.toISOString()]);
+  },
+};
+
+/**
+ * SPEC Phase 4: after the scores, each company's actions are planned from its state and passed
+ * through the guardrails; then the actions whose time has come are run (simulated in test mode).
+ */
+export const runActions: CronJob = {
+  name: 'actions',
+  async run({ db, whop, now }) {
+    if (!db) return;
+    const companies = await db.query<{ id: string }>(
+      `select id from stayput.companies where status = 'active' and not is_demo order by id`,
+    );
+    for (const { id } of companies) {
+      const prepared = await prepareActions(db, id, now);
+      if (prepared.planned + prepared.scheduled + prepared.blocked > 0) {
+        console.info(
+          `Actions ${id}: ${prepared.planned} planned, ${prepared.scheduled} scheduled, ${prepared.blocked} blocked.`,
+        );
+      }
+    }
+    const ran = await executeDueActions(db, whop, now);
+    if (Object.keys(ran).length > 0) console.info(`Actions run: ${JSON.stringify(ran)}.`);
   },
 };
