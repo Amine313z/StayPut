@@ -18,6 +18,12 @@ export interface ApiErrorBody {
   };
 }
 
+/**
+ * Changing /api requests carry this header: a page of another site cannot set it, so a browser
+ * signed in with Whop (sandbox) cannot be made to send them (the Worker checks it).
+ */
+export const CSRF_HEADER = 'x-stayput-csrf';
+
 /** How the user reached StayPut: Whop's iframe token, or signing in with Whop outside it. */
 export type SignInMethod = 'iframe' | 'login';
 

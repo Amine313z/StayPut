@@ -1,4 +1,4 @@
-import type { ApiErrorBody, ApiErrorCode } from '@stayput/core';
+import { CSRF_HEADER, type ApiErrorBody, type ApiErrorCode } from '@stayput/core';
 import { useEffect, useState } from 'react';
 
 /** A failed call: the Worker's error code, or "network" when it could not be reached. */
@@ -19,11 +19,28 @@ export class ApiError extends Error {
  * GET on the Worker. Same origin, relative path: Whop's proxy adds the user token to these
  * requests only (docs/whop-api-verification.md, section 3).
  */
-export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+export function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return requestJson<T>('GET', path, signal);
+}
+
+/** POST on the Worker, with the header that tells the Worker the page itself sends it. */
+export function postJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return requestJson<T>('POST', path, signal);
+}
+
+async function requestJson<T>(
+  method: 'GET' | 'POST',
+  path: string,
+  signal?: AbortSignal,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
-      headers: { Accept: 'application/json' },
+      method,
+      headers: {
+        Accept: 'application/json',
+        ...(method === 'GET' ? {} : { [CSRF_HEADER]: '1' }),
+      },
       credentials: 'same-origin',
       ...(signal ? { signal } : {}),
     });
@@ -51,28 +68,43 @@ function codeForStatus(status: number): ApiErrorCode {
 export type Loadable<T> =
   { status: 'loading' } | { status: 'ready'; data: T } | { status: 'error'; error: ApiError };
 
-/** Loads `path`, with `retry()` to try again; a newer request always wins over an older one. */
-export function useApi<T>(path: string): { state: Loadable<T>; retry: () => void } {
-  const [attempt, setAttempt] = useState(0);
-  const key = `${attempt}:${path}`;
-  const [result, setResult] = useState<{ key: string; state: Loadable<T> } | null>(null);
+/**
+ * Loads `path`, with `retry()` to try again; a newer request always wins over an older one.
+ * `reload()` reads it again while the screen keeps showing what it has.
+ */
+export function useApi<T>(path: string): {
+  state: Loadable<T>;
+  retry: () => void;
+  reload: () => void;
+} {
+  const [attempt, setAttempt] = useState({ n: 0, quiet: false });
+  const key = `${attempt.n}:${path}`;
+  const [result, setResult] = useState<{ key: string; path: string; state: Loadable<T> } | null>(
+    null,
+  );
 
   useEffect(() => {
     const controller = new AbortController();
     getJson<T>(path, controller.signal).then(
-      (data) => setResult({ key, state: { status: 'ready', data } }),
+      (data) => setResult({ key, path, state: { status: 'ready', data } }),
       (error: unknown) => {
         if (controller.signal.aborted) return;
         const apiError =
           error instanceof ApiError ? error : new ApiError('internal', String(error));
-        setResult({ key, state: { status: 'error', error: apiError } });
+        setResult({ key, path, state: { status: 'error', error: apiError } });
       },
     );
     return () => controller.abort();
   }, [path, key]);
 
+  let state: Loadable<T> = { status: 'loading' };
+  if (result?.key === key) state = result.state;
+  else if (attempt.quiet && result?.path === path && result.state.status === 'ready') {
+    state = result.state;
+  }
   return {
-    state: result?.key === key ? result.state : { status: 'loading' },
-    retry: () => setAttempt((n) => n + 1),
+    state,
+    retry: () => setAttempt((a) => ({ n: a.n + 1, quiet: false })),
+    reload: () => setAttempt((a) => ({ n: a.n + 1, quiet: true })),
   };
 }

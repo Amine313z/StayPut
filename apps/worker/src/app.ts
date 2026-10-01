@@ -1,4 +1,5 @@
 import {
+  CSRF_HEADER,
   canOpenCreatorView,
   canOpenMemberView,
   isCompanyId,
@@ -623,8 +624,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Changing requests from a signed-in browser carry it (see the /api guard). */
-export const CSRF_HEADER = 'x-stayput-csrf';
+export { CSRF_HEADER };
 
 /** Where Whop sends the browser back; declared on the app (`redirect_uris`). */
 function callbackUrl(c: Context<AppEnv>): string {

@@ -40,6 +40,8 @@ export interface Translator {
   number: (value: number) => string;
   currency: (amount: number, currency: string) => string;
   date: (value: Date) => string;
+  /** A moment: the date and the time, in the browser's time zone. */
+  dateTime: (value: Date) => string;
 }
 
 export function createTranslator(locale: Locale): Translator {
@@ -47,6 +49,7 @@ export function createTranslator(locale: Locale): Translator {
   const plurals = new Intl.PluralRules(locale);
   const numbers = new Intl.NumberFormat(locale);
   const dates = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
+  const moments = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
 
   const fill = (text: string, params?: Params) =>
     params
@@ -68,5 +71,6 @@ export function createTranslator(locale: Locale): Translator {
     currency: (amount, currency) =>
       new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount),
     date: (value) => dates.format(value),
+    dateTime: (value) => moments.format(value),
   };
 }
