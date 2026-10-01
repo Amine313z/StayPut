@@ -4,3 +4,5 @@ export * from './ids';
 export * from './whop-status';
 export * from './analyses';
 export * from './risk';
+export * from './actions';
+export * from './templates';
