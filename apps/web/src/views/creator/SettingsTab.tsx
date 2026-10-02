@@ -18,7 +18,6 @@ import {
   Code,
   Copy,
   Languages,
-  Palette,
   RotateCcw,
   Save,
   SlidersHorizontal,
@@ -32,7 +31,6 @@ import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { LanguageSelect } from '../../ui/LanguageSelect';
-import { ThemeSelect } from '../../ui/ThemeSelect';
 import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { useCreatorData } from '../CreatorView';
 import { Announcements } from './Announcements';
@@ -81,8 +79,9 @@ function WithRiskSettings({ children }: { children: (settings: RiskSettingsView)
 }
 
 /**
- * Settings › General: the language (the only place it changes, English by default), the theme,
- * and what a developer or Whop's support asks for, the community's id.
+ * Settings › General: the language (the only place it changes, English by default) and what a
+ * developer or Whop's support asks for, the community's id. There is no theme to choose: dark is
+ * StayPut's only one.
  */
 export function GeneralSettingsTab() {
   const { t } = useI18n();
@@ -98,13 +97,6 @@ export function GeneralSettingsTab() {
       >
         <LanguageSelect labelledBy={languageId} />
         <p className="mt-3 text-sm">{t('settings.language.members')}</p>
-      </Card>
-      <Card
-        icon={<Palette aria-hidden="true" className="size-4" />}
-        title={t('settings.theme')}
-        description={t('settings.theme.hint')}
-      >
-        <ThemeSelect />
       </Card>
       <Card
         icon={<Code aria-hidden="true" className="size-4" />}

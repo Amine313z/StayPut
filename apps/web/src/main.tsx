@@ -4,7 +4,6 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider, createBrowserRouter } from 'react-router';
 import { routes } from './App';
 import { I18nProvider, detectLocale } from './i18n';
-import { ThemeProvider } from './theme';
 import { ToastProvider } from './ui/Toast';
 import './styles.css';
 
@@ -19,14 +18,12 @@ document.documentElement.lang = locale;
 createRoot(root).render(
   <StrictMode>
     <I18nProvider initialLocale={locale}>
-      <ThemeProvider>
-        {/* Less motion asked for by the device: fades stay, movement goes (MOTION.md). */}
-        <MotionConfig reducedMotion="user">
-          <ToastProvider>
-            <RouterProvider router={createBrowserRouter(routes)} />
-          </ToastProvider>
-        </MotionConfig>
-      </ThemeProvider>
+      {/* Less motion asked for by the device: fades stay, movement goes (MOTION.md). */}
+      <MotionConfig reducedMotion="user">
+        <ToastProvider>
+          <RouterProvider router={createBrowserRouter(routes)} />
+        </ToastProvider>
+      </MotionConfig>
     </I18nProvider>
   </StrictMode>,
 );

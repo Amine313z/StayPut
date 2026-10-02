@@ -29,16 +29,17 @@ export interface CardContent {
   join: string | null;
 }
 
+/** StayPut's palette (src/styles.css): black-900, black-700, white-100, white-300, turq-300, black-600. */
 const COLORS = {
-  background: '#0d1f1a',
-  panel: '#14302a',
-  text: '#f2f7f4',
-  muted: '#a7c2b8',
-  accent: '#4fd1a5',
-  track: '#24443b',
+  background: '#050607',
+  panel: '#11161b',
+  text: '#ffffff',
+  muted: '#d9dee3',
+  accent: '#5eead4',
+  track: '#1a2129',
 };
 
-const FONT = '"Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", sans-serif';
+const FONT = '"Geist Variable", Geist, system-ui, -apple-system, "Segoe UI", sans-serif';
 const PAD = 96;
 
 /** The QR code of an address, as rows of dark modules (medium error correction). */
@@ -257,7 +258,7 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardContent): void
   ctx.font = FONTS.by;
   ctx.fillText(by, PAD, y);
 
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = COLORS.text;
   roundRect(ctx, PAD, qrTop, square, square, 16);
   ctx.fill();
   ctx.fillStyle = COLORS.background;
@@ -330,14 +331,14 @@ export function cardContent(card: TestimonialCard, i18n: Translator): CardConten
   };
 }
 
-/** Inter, the page's font, loaded before the card is drawn with it: 3 seconds at most. */
+/** Geist, the page's font, loaded before the card is drawn with it: 3 seconds at most. */
 async function fontsLoaded(text: string): Promise<void> {
   const fonts = 'fonts' in document ? document.fonts : null;
   if (typeof fonts?.load !== 'function') return;
   try {
     await Promise.race([
       Promise.all(
-        [500, 600, 700, 800].map((weight) => fonts.load(`${weight} 40px "Inter Variable"`, text)),
+        [500, 600, 700, 800].map((weight) => fonts.load(`${weight} 40px "Geist Variable"`, text)),
       ),
       new Promise((resolve) => setTimeout(resolve, 3_000)),
     ]);

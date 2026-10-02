@@ -268,7 +268,7 @@ export function AreaChart({
                     height={H + 16}
                     initial={{ width: reduce ? W : 0 }}
                     animate={{ width: W }}
-                    transition={ease('count')}
+                    transition={ease('draw')}
                   />
                 </clipPath>
                 {geometry.paths.map((path) =>

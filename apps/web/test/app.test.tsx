@@ -40,7 +40,6 @@ import { readScreenshot } from '../src/ocr';
 import { LIVE_REFRESH_MS } from '../src/components/PlatformActivityCard';
 import { I18nProvider } from '../src/i18n';
 import { ErrorPanel } from '../src/components/Status';
-import { ThemeProvider, resolveTheme } from '../src/theme';
 import { ToastProvider } from '../src/ui/Toast';
 
 // Tesseract reads screenshots in a real browser only: the tests say what it read.
@@ -80,11 +79,9 @@ const bodies = new Map<string, unknown>();
 function renderAt(path: string, locale: Locale = 'en') {
   render(
     <I18nProvider initialLocale={locale}>
-      <ThemeProvider>
-        <ToastProvider>
-          <RouterProvider router={createMemoryRouter(routes, { initialEntries: [path] })} />
-        </ToastProvider>
-      </ThemeProvider>
+      <ToastProvider>
+        <RouterProvider router={createMemoryRouter(routes, { initialEntries: [path] })} />
+      </ToastProvider>
     </I18nProvider>,
   );
 }
@@ -403,7 +400,7 @@ describe('creator view', () => {
       'page',
     );
     // The top bar: the community by its name (never its id), the team's view, the guide; the
-    // language and the theme are in Settings only.
+    // language is in Settings only, and there is no theme to choose (dark is the only one).
     expect(screen.getByText('Le Club')).toBeTruthy();
     expect(screen.queryByText('biz_A1')).toBeNull();
     expect(screen.getByText('Team view')).toBeTruthy();
@@ -3476,12 +3473,6 @@ describe('shell', () => {
     expect(screen.queryByRole('combobox', { name: 'Theme' })).toBeNull();
   });
 
-  it('resolves "automatic" to the system theme', () => {
-    expect(resolveTheme('system', true)).toBe('dark');
-    expect(resolveTheme('system', false)).toBe('light');
-    expect(resolveTheme('light', true)).toBe('light');
-  });
-
   it('shows a not-found page for an unknown path', () => {
     renderAt('/nowhere');
     expect(screen.getByRole('heading', { name: 'Page not found' })).toBeTruthy();
@@ -3545,14 +3536,12 @@ describe('the creator’s frame', () => {
     expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeTruthy();
   });
 
-  it('switches the theme in Settings › General, and gives the company ID to copy', async () => {
+  it('has no theme to choose in Settings › General, and gives the company ID to copy', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1/settings');
-    const theme = await screen.findByRole('combobox', { name: 'Theme' });
-    fireEvent.change(theme, { target: { value: 'light' } });
-    expect(document.documentElement.dataset.theme).toBe('light');
-    fireEvent.change(theme, { target: { value: 'dark' } });
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    // Dark is StayPut's only theme (brief v3 §4).
+    await screen.findByRole('radiogroup', { name: 'Language' });
+    expect(screen.queryByRole('combobox', { name: 'Theme' })).toBeNull();
     // The raw ID only here, for Whop's support or an integration.
     const developer = screen.getByRole('heading', { name: 'Developer' }).closest('section')!;
     expect(within(developer).getByText('biz_A1')).toBeTruthy();

@@ -24,7 +24,7 @@ export function QrCode({ value, size, label }: { value: string; size: number; la
       className="shrink-0 rounded-lg"
     >
       <rect width={count} height={count} fill="#ffffff" />
-      <path d={path} fill="#0d1f1a" />
+      <path d={path} fill="#050607" />
     </svg>
   );
 }

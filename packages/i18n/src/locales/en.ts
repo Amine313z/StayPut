@@ -11,10 +11,6 @@ export const en = {
   'common.backHome': 'Back to the home page',
 
   'settings.language': 'Language',
-  'settings.theme': 'Theme',
-  'settings.theme.system': 'Automatic',
-  'settings.theme.light': 'Light',
-  'settings.theme.dark': 'Dark',
 
   'home.title': 'Retention for Whop communities',
   'home.body': 'Open StayPut from your Whop dashboard or from your community to get started.',
@@ -1141,8 +1137,6 @@ export const en = {
   'settings.language.hint': 'StayPut’s language on this device. Numbers, dates and amounts follow.',
   'settings.language.members':
     'Your members read StayPut in the language of your messages, set in Settings › Automations.',
-  'settings.theme.hint':
-    'Dark is StayPut’s own look. Light and your device’s setting are there too.',
   'settings.developer': 'Developer',
   'settings.developer.hint': 'What Whop’s support or an integration may ask you for.',
   'settings.developer.companyId': 'Company ID',

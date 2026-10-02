@@ -17,14 +17,16 @@ export const DURATION = {
   standard: 0.25,
   /** A page coming in. */
   page: 0.4,
-  /** A number counting to its value. */
-  count: 0.6,
+  /** A number counting to its value, a ring filling to it. */
+  count: 0.8,
+  /** A chart drawing its line. */
+  draw: 1.2,
   /** A chart's tooltip. */
   tooltip: 0.12,
 } as const;
 
-/** Between two cards of a group coming in. */
-export const STAGGER = 0.04;
+/** Between two sections (or rows) of a group coming in. */
+export const STAGGER = 0.06;
 
 /** How long a button keeps its check mark after it succeeded. */
 export const SUCCESS_MS = 1_200;

@@ -1,12 +1,14 @@
 /**
  * Deployment step (.github/workflows/deploy.yml): Satoshi, the face of StayPut's numbers and
- * titles (docs/design-tokens.md), is free for commercial use but it is not open source: the ITF
- * Free Font License lets anyone use it in their own product, not pass its files on. This
+ * titles (docs/design-tokens.md), is free for commercial use but it is not open source. Its
+ * license, the ITF Free Font License 2.0 (in Fontshare's package; Inspect prints it), allows
+ * self-hosting it with @font-face for our own application (§01), and forbids passing the files
+ * on, through a repository among others, as well as subsetting or converting them (§02). This
  * repository is public, so the files are never committed: the deployment downloads Fontshare's
- * own package, checks it is the file we reviewed, and serves the web font with the app,
- * unchanged. Self-hosted: the CSP allows no other origin, and no creator's browser has to ask a
- * third party for it. Without the file (local development, Fontshare down) the app falls back
- * to Geist, and the deployment says so.
+ * own package, checks it is the file reviewed, and serves the web font with the app, unchanged.
+ * Self-hosted: the CSP allows no other origin, and no creator's browser has to ask a third
+ * party for it. Without the file (local development, Fontshare down) the app falls back to
+ * Geist, and the deployment says so.
  *
  *   tsx scripts/deploy/satoshi.ts apps/web/public            fetch, check, copy
  *   tsx scripts/deploy/satoshi.ts <dir> --report             also print the package's license
@@ -23,10 +25,11 @@ export const SATOSHI_URL = 'https://api.fontshare.com/v2/fonts/download/satoshi'
 export const SATOSHI_FILE = 'Satoshi-Variable.woff2';
 
 /**
- * The SHA-256 of the file reviewed. Empty until the first download prints it: then any file is
- * taken, with a warning. A different file is left out (the app shows Geist) until checked.
+ * The SHA-256 of the file reviewed: Fontshare's package of 2 October 2026 (42,588 bytes, ITF Free
+ * Font License 2.0 of 17 August 2026). A different file is left out (the app shows Geist) until
+ * checked and pinned here; empty, any file would be taken, with a warning.
  */
-export const SATOSHI_SHA256 = '';
+export const SATOSHI_SHA256 = 'e739aff9b4d02c264341d6d4872edcda28e79373aeda936f659566a1cd3eb47f';
 
 /** A file of a zip archive, read when asked. */
 export interface ZipEntry {

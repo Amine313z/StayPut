@@ -82,7 +82,7 @@ export function Sparkline({
           className="stroke-accent-2"
           initial={{ pathLength: 0 }}
           animate={{ pathLength: 1 }}
-          transition={ease('count')}
+          transition={ease('draw')}
         />
         {at ? (
           <>

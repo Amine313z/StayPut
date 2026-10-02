@@ -10,10 +10,6 @@ export const fr: Messages = {
   'common.backHome': "Retour à l'accueil",
 
   'settings.language': 'Langue',
-  'settings.theme': 'Thème',
-  'settings.theme.system': 'Automatique',
-  'settings.theme.light': 'Clair',
-  'settings.theme.dark': 'Sombre',
 
   'home.title': 'La rétention pour les communautés Whop',
   'home.body':
@@ -1173,8 +1169,6 @@ export const fr: Messages = {
     'La langue de StayPut sur cet appareil. Les nombres, les dates et les montants suivent.',
   'settings.language.members':
     'Vos membres lisent StayPut dans la langue de vos messages, réglée dans Réglages › Automatisations.',
-  'settings.theme.hint':
-    'Le sombre est le style de StayPut. Le clair et le réglage de votre appareil sont là aussi.',
   'settings.developer': 'Développeur',
   'settings.developer.hint': 'Ce que le support de Whop ou une intégration peut vous demander.',
   'settings.developer.companyId': 'Identifiant de la communauté',

@@ -1,55 +1,97 @@
 @import 'tailwindcss';
-/* Fonts served by StayPut itself (the CSP allows no other origin); only the Latin files load. */
-@import '@fontsource-variable/inter/wght.css';
-@import '@fontsource/space-grotesk/latin-600.css';
+/*
+ * Fonts served by StayPut itself (the CSP allows no other origin). Geist (Vercel, SIL OFL), the
+ * UI's: only the Latin files load. Satoshi (Indian Type Foundry, ITF Free Font License), the
+ * numbers' and titles': downloaded from Fontshare at deployment and never committed, its license
+ * forbids passing the files on (scripts/deploy/satoshi.ts). Without it, Geist takes its place.
+ */
+@import '@fontsource-variable/geist/wght.css';
 
-/* `dark:` follows the theme applied on <html> (theme-init.js, then src/theme.tsx). */
-@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/fonts/Satoshi-Variable.woff2') format('woff2');
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 /*
- * The design tokens (docs/design-tokens.md, MOTION.md). Colors exist only here. Every text /
- * background pair the screens use reaches WCAG AA in both themes (test/contrast.test.ts
- * computes it). Dark is StayPut's own theme, sampled from the logo: one accent, mint on
- * near-black, text in silver. Red is kept for what is urgent (a member leaving within 48 hours, a
- * payment not recovered, an automation error, a destructive action), and then only as a small
- * dot or badge. There is no amber: the old warning and serious tones are silver now, risk is
- * said by the ring and its label, never by a color. Light keeps the same hierarchy.
+ * The design tokens (docs/design-tokens.md, MOTION.md). The palette is the brief's (v3 §4),
+ * exactly: black, light turquoise, white, and red for what is urgent. If a color is not here, it
+ * does not exist: everything else is one of these, at most with an alpha
+ * (test/contrast.test.ts checks every color written in this file, and that every text /
+ * background pair reaches WCAG AA). Dark is the brand and the only theme.
  */
 :root {
-  color-scheme: light;
-  --bg-deep: #e8eeec;
-  --bg: #f3f6f5;
-  --surface: #ffffff;
-  --surface-2: #eef3f1;
-  --glow: #cdefe2;
-  --text: #0b1512;
-  /* UI text (silver-300's place in light). */
-  --muted: #3f4b47;
-  /* Labels and placeholders: on bg and surface only. */
-  --subtle: #5c6864;
-  --border: rgb(23 105 79 / 0.14);
-  --border-strong: rgb(23 105 79 / 0.45);
-  --accent: #17694f;
-  --accent-2: #2e8a6c;
-  --accent-soft: #e0f2ea;
-  --on-accent: #ffffff;
-  --saved: #17694f;
-  /* Hero figures and the primary button's hover: the logo's gradient, top to bottom. */
-  --hero-from: #0b1512;
-  --hero-to: #17694f;
-  --danger: #c92a2a;
-  --danger-soft: #fdecec;
-  --warning: #3f4b47;
-  --warning-soft: #eef3f1;
-  --serious: #3f4b47;
-  --serious-soft: #eef3f1;
-  --info: #17694f;
-  --info-soft: #e0f2ea;
-  /* The brands' own colors, for their marks only (never text). */
-  --brand-discord: #5865f2;
-  --brand-telegram: #229ed9;
-  --shadow: 0 1px 2px rgb(11 21 18 / 0.05), 0 1px 3px rgb(11 21 18 / 0.06);
-  --shadow-lift: 0 8px 24px -12px rgb(11 21 18 / 0.25);
+  color-scheme: dark;
+
+  /* Page background. */
+  --black-900: #050607;
+  /* Main surface: the menu, a table. */
+  --black-800: #0a0d10;
+  /* Elevated surfaces: drawers, menus, tooltips. */
+  --black-700: #11161b;
+  /* Hover surfaces, and the 1 px dividers at 100 %. */
+  --black-600: #1a2129;
+  /* Light turquoise: highlights, the signature gradient's end. */
+  --turq-100: #9ff5ea;
+  /* The accent: active states, the chart line, focus rings. Full strength on thin things only. */
+  --turq-300: #5eead4;
+  /* Pressed states, the chart gradient's base. */
+  --turq-500: #2bc4b4;
+  /* The light behind the hero number. */
+  --turq-glow: rgb(94 234 212 / 0.18);
+  /* Hero numbers, primary text. */
+  --white-100: #ffffff;
+  /* Secondary text: the UI's. */
+  --white-300: #d9dee3;
+  /* Muted text, labels, placeholders. */
+  --white-500: #8a94a0;
+  /*
+   * Urgent only (leaving within 48 hours, a payment not recovered, an automation error, a
+   * destructive action): a small dot or badge at 70 %, never a number, a fill or a border.
+   */
+  --urgent: #ff5c5c;
+
+  /* The roles the components name (bg-surface, text-muted…): each one of the colors above. */
+  --bg: var(--black-900);
+  --surface: var(--black-800);
+  --surface-2: var(--black-700);
+  --surface-3: var(--black-600);
+  --text: var(--white-100);
+  --muted: var(--white-300);
+  --subtle: var(--white-500);
+  --border: var(--black-600);
+  /* The ghost button's outline: turquoise at 25 %. */
+  --border-strong: rgb(94 234 212 / 0.25);
+  --accent: var(--turq-300);
+  --accent-2: var(--turq-500);
+  /* No large turquoise fill: a tile behind an icon is an elevated surface. */
+  --accent-soft: var(--black-700);
+  --on-accent: var(--black-900);
+  --glow: var(--turq-glow);
+  --hero-from: var(--white-100);
+  --hero-to: var(--turq-100);
+  --danger: var(--urgent);
+  --danger-soft: var(--black-700);
+  /* Risk is said by the ring and its label, never by a color: no amber, no second accent. */
+  --warning: var(--white-300);
+  --warning-soft: var(--black-700);
+  --serious: var(--white-300);
+  --serious-soft: var(--black-700);
+  --info: var(--turq-300);
+  --info-soft: var(--black-700);
+  /* Discord and Telegram in the palette's two turquoises: never their blue or purple. */
+  --brand-discord: var(--turq-300);
+  --brand-telegram: var(--turq-100);
+  --shadow: none;
+  --shadow-lift: 0 12px 32px -16px rgb(5 6 7 / 0.9);
+
+  /* Spacing (brief §5): 32 px between sections, 20 px inside, 12 px corners. */
+  --space-section: 2rem;
+  --space-inner: 1.25rem;
+  --radius: 0.75rem;
+
   /* Motion (MOTION.md): one easing, three durations. */
   --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-micro: 150ms;
@@ -57,53 +99,25 @@
   --dur-page: 400ms;
 }
 
-[data-theme='dark'] {
-  color-scheme: dark;
-  /* bg-deep: the page's edges; bg: bg-core, the main surface. */
-  --bg-deep: #060908;
-  --bg: #0b1512;
-  /* bg-elevated: cards and panels, at 60 % over the page (`bg-surface/60`). */
-  --surface: #10201c;
-  --surface-2: #142823;
-  /* bg-glow: the light behind the money saved. */
-  --glow: #194a3b;
-  /* silver-100: names, amounts, titles. */
-  --text: #fbfcfb;
-  /* silver-300: UI text. */
-  --muted: #c0c7c4;
-  /* silver-500: labels, placeholders. */
-  --subtle: #7f8a86;
-  /* 1 px borders: mint at 12 %; brightened to 40 % on hover. */
-  --border: rgb(204 247 231 / 0.12);
-  --border-strong: rgb(204 247 231 / 0.4);
-  /* mint-100: the accent; mint-300: the second (chart lines, outlines). */
-  --accent: #ccf7e7;
-  --accent-2: #a7d7c4;
-  --accent-soft: #143a30;
-  --on-accent: #0b1512;
-  --saved: #ccf7e7;
-  --hero-from: #fbfcfb;
-  --hero-to: #ccf7e7;
-  /* Urgent only (a dot, a small badge), never a figure, a card or a border. */
-  --danger: #ff6b6b;
-  --danger-soft: #3b1a1c;
-  --warning: #c0c7c4;
-  --warning-soft: #142823;
-  --serious: #c0c7c4;
-  --serious-soft: #142823;
-  --info: #a7d7c4;
-  --info-soft: #143a30;
-  --brand-discord: #7983f5;
-  --brand-telegram: #3fb0e6;
-  --shadow: none;
-  --shadow-lift: 0 12px 32px -16px rgb(0 0 0 / 0.7);
-}
-
 @theme inline {
-  --color-bg-deep: var(--bg-deep);
+  /* Tailwind's own palette is gone: only StayPut's colors exist. */
+  --color-*: initial;
+  --color-black-900: var(--black-900);
+  --color-black-800: var(--black-800);
+  --color-black-700: var(--black-700);
+  --color-black-600: var(--black-600);
+  --color-turq-100: var(--turq-100);
+  --color-turq-300: var(--turq-300);
+  --color-turq-500: var(--turq-500);
+  --color-white-100: var(--white-100);
+  --color-white-300: var(--white-300);
+  --color-white-500: var(--white-500);
+  --color-urgent: var(--urgent);
+  --color-bg-deep: var(--bg);
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
   --color-glow: var(--glow);
   --color-fg: var(--text);
   --color-muted: var(--muted);
@@ -114,7 +128,6 @@
   --color-accent-2: var(--accent-2);
   --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
-  --color-saved: var(--saved);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-warning: var(--warning);
@@ -130,47 +143,43 @@
   --shadow-card: var(--shadow);
   --shadow-lift: var(--shadow-lift);
   --ease-brand: var(--ease-brand);
-  --font-sans:
-    'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, sans-serif;
-  --font-display:
-    'Space Grotesk', 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
-    sans-serif;
-  --radius-card: 0.75rem;
+  --font-sans: 'Geist Variable', 'Geist', -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Satoshi', 'Geist Variable', 'Geist', -apple-system, 'Segoe UI', sans-serif;
+  --radius-card: var(--radius);
 }
 
-/* UI text: Inter, 14 px, silver-300; names, amounts and titles say `text-fg` (silver-100). */
+/* UI text: Geist 400, 14 px, white-300; names, amounts and titles say `text-fg` (white-100). */
 body {
   background-color: var(--bg);
   color: var(--muted);
   font-family: var(--font-sans);
   font-size: 0.875rem;
-  font-feature-settings: 'cv11', 'ss01';
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  scrollbar-color: var(--black-600) transparent;
+}
+
+::selection {
+  background-color: rgb(94 234 212 / 0.25);
+  color: var(--white-100);
 }
 
 /*
- * The page: bg-core fading to bg-deep at its edges, and the logo's diagonal mint streak, the only
- * decoration. A fixed layer behind the page: it never moves with the content, and is too faint
- * to change the contrast of any text over it.
+ * The page's one decoration: a very light diagonal streak, turquoise at 6 %, the logo's. A fixed
+ * layer behind everything: it never moves with the content and cannot change any contrast.
  */
-[data-theme='dark'] body::before {
+body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background:
-    linear-gradient(
-      118deg,
-      transparent 0 64%,
-      rgb(204 247 231 / 0.035) 64% 65.2%,
-      transparent 65.2% 71%,
-      rgb(204 247 231 / 0.025) 71% 71.8%,
-      transparent 71.8%
-    ),
-    radial-gradient(120% 90% at 50% 0%, var(--bg) 40%, var(--bg-deep) 100%);
+  background: linear-gradient(
+    118deg,
+    transparent 0 66%,
+    rgb(94 234 212 / 0.06) 67.5%,
+    transparent 69%
+  );
 }
 
 /* Figures line up in columns and do not jump when they change. */
@@ -178,86 +187,138 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* A hero figure: 40 px, Space Grotesk 600 (never heavier), tabular. */
+/* The hero number, one per screen: Satoshi 500, 56 px, -0.03em. */
+.metric-lead {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 3.5rem;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A secondary hero number: Satoshi 500, 32 px. */
 .metric-hero {
   font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 2.5rem;
+  font-weight: 500;
+  font-size: 2rem;
   line-height: 1.1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
-/* The money saved: the largest figure of the page. */
-.metric-lead {
-  font-size: 3rem;
-}
-
-/* A figure of second rank, same face. */
+/* Any other figure: Satoshi 500, the size of its line. Never a monospace. */
 .metric {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 
-/* A figure that got better: a short mint light; worse: dimmed a moment (never red). */
+/* A page's title: Satoshi 700, 22 px. */
+.title-page {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.375rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+/* A section's title: Satoshi 600, 15 px. */
+.title-section {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+/* The small label above a figure or a block: 11 px, uppercase, white-500, 0.12em. */
+.label-caps {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--subtle);
+}
+
+/* The signature: white to light turquoise, on the hero number. */
+.text-hero {
+  background-image: linear-gradient(135deg, var(--hero-from) 25%, var(--hero-to) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* A figure that got better: a soft turquoise light; worse: dimmed a moment (never red). */
 .flash-good {
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 65%, transparent));
+  filter: drop-shadow(0 0 14px rgb(94 234 212 / 0.45));
 }
 
 .flash-dim {
   opacity: 0.55;
 }
 
-/* The logo's silver-to-mint gradient, top to bottom, on a hero figure. */
-.text-hero {
-  background-image: linear-gradient(180deg, var(--hero-from) 15%, var(--hero-to) 95%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-/* The small label above a figure or a block. */
-.label-caps {
-  font-size: 0.75rem;
-  line-height: 1rem;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--subtle);
-}
-
-/* The soft glow behind a key figure. Decoration: never strong enough to change the contrast. */
-.glow-behind {
-  background-image: radial-gradient(
-    120% 90% at 0% 0%,
-    color-mix(in srgb, var(--glow) 70%, transparent) 0%,
-    transparent 70%
+/*
+ * The light behind the hero number: turquoise at 18 % fading over 700 px. A gradient, not a
+ * blur filter: same look, nothing for the GPU to redo while the page scrolls.
+ */
+.hero-glow {
+  position: absolute;
+  width: 700px;
+  height: 700px;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    var(--turq-glow),
+    rgb(94 234 212 / 0.06) 55%,
+    transparent
   );
 }
 
 /* A list that scrolls fades at its end: there is more below (its last item scrolls clear of it). */
 .fade-end {
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent);
+  mask-image: linear-gradient(to bottom, var(--black-900) calc(100% - 2.5rem), transparent);
 }
 
-/* The primary button: mint; on hover, the logo's gradient. One per screen. */
+/* The primary button, one per screen: the signature gradient, black text. */
 .button-primary {
-  background-color: var(--accent);
+  background-image: linear-gradient(135deg, var(--white-100), var(--turq-100));
   color: var(--on-accent);
 }
 
 .button-primary:hover:not(:disabled) {
-  background-image: linear-gradient(180deg, var(--hero-from), var(--hero-to));
+  background-image: linear-gradient(135deg, var(--white-100), var(--turq-300));
 }
 
-/* A block still loading: its shape, and a light passing over it (transform only). */
+.button-primary:active:not(:disabled) {
+  background-image: linear-gradient(135deg, var(--turq-100), var(--turq-500));
+}
+
+/* Every other button: a ghost, 1 px turquoise at 25 %, white text. */
+.button-ghost {
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+
+.button-ghost:hover:not(:disabled) {
+  border-color: rgb(94 234 212 / 0.5);
+  background-color: var(--black-600);
+}
+
+.button-ghost:active:not(:disabled) {
+  border-color: var(--turq-500);
+}
+
+/* A block still loading: its shape on black-700, black-600 light passing over it. */
 .skeleton {
   position: relative;
   overflow: hidden;
   border-radius: 0.5rem;
-  background-color: var(--surface-2);
+  background-color: var(--black-700);
 }
 
 .skeleton::after {
@@ -265,12 +326,7 @@ body {
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--text) 7%, transparent),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, var(--black-600), transparent);
   animation: shimmer 1.4s var(--ease-brand) infinite;
 }
 
@@ -281,16 +337,12 @@ body {
 }
 
 /*
- * The dimmed page behind a window (ui/Dialog.tsx, ui/Drawer.tsx), frosted. Written in full: an
- * older browser's ::backdrop does not inherit the tokens.
+ * The dimmed page behind a window (ui/Dialog.tsx, ui/Drawer.tsx): black at 70 %, frosted. Written
+ * in full: an older browser's ::backdrop does not inherit the tokens.
  */
 dialog::backdrop {
-  background-color: rgb(11 21 18 / 0.45);
+  background-color: rgb(5 6 7 / 0.7);
   backdrop-filter: blur(6px);
-}
-
-[data-theme='dark'] dialog::backdrop {
-  background-color: rgb(6 9 8 / 0.65);
 }
 
 /* Less motion asked for: no light passing over loading blocks. */
