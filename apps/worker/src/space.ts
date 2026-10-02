@@ -10,6 +10,7 @@ import {
   proofJustifies,
   type BadgeCode,
   type EarnedBadge,
+  type EarnedDaysSettings,
   type GoalInput,
   type GoalProposal,
   type GoalProposalsView,
@@ -107,6 +108,7 @@ export async function readMemberSpace(
   );
   const space = row?.space;
   const proposals = proposalsOf(space?.niche ?? null, space?.proposals ?? null, options.locale);
+  const rewards = await readRewards(db, companyId, userId);
   // The team previews: what a member chooses from, nothing of their own.
   if (!space || options.preview) {
     return {
@@ -117,6 +119,8 @@ export async function readMemberSpace(
       badges: [],
       proposals,
       fresh: [],
+      // The team sees what members are offered, never anyone's days.
+      rewards: { offered: rewards.offered, received: [] },
     };
   }
   return {
@@ -141,7 +145,95 @@ export async function readMemberSpace(
       ),
     proposals,
     fresh: [...(options.fresh ?? [])],
+    rewards,
   };
+}
+
+/** The earned days the creator offers (null: none), and those the member received. */
+async function readRewards(
+  db: Db,
+  companyId: string,
+  userId: string,
+): Promise<MemberSpaceView['rewards']> {
+  const [row] = await db.query<{
+    rewards: {
+      offered: { at50: number; at100: number } | null;
+      received: { percent: number; days: number; at: string }[];
+    } | null;
+  }>('select stayput.member_rewards($1, $2) as rewards', [companyId, userId]);
+  const offered = row?.rewards?.offered ?? null;
+  return {
+    offered: offered ? { at50: Number(offered.at50), at100: Number(offered.at100) } : null,
+    received: (row?.rewards?.received ?? []).flatMap((r) =>
+      isMilestone(r.percent) ? [{ percent: r.percent, days: Number(r.days), at: iso(r.at) }] : [],
+    ),
+  };
+}
+
+/**
+ * The free days the milestones just reached bring the member (migration 0022), as actions to
+ * schedule: each with its days. None when the creator offers none, or the member had them.
+ */
+export async function planEarnedDays(
+  db: Db,
+  companyId: string,
+  userId: string,
+  goalId: string,
+  milestones: readonly Milestone[],
+  now: Date,
+): Promise<{ id: string; days: number }[]> {
+  const percents = milestones.filter((m) => m === 50 || m === 100);
+  if (percents.length === 0) return [];
+  const [row] = await db.query<{ actions: { id: string; days: number }[] | null }>(
+    `select stayput.plan_earned_days($1, $2, $3::uuid,
+                                     string_to_array($4, ',')::integer[], $5::timestamptz)
+              as actions`,
+    [companyId, userId, goalId, percents.join(','), now.toISOString()],
+  );
+  return (row?.actions ?? []).map((a) => ({ id: a.id, days: Number(a.days) }));
+}
+
+/** The earned days as the creator set them, read as the creator (under RLS). */
+export async function readEarnedDays(
+  db: TransactionalDb,
+  userId: string,
+  companyId: string,
+): Promise<EarnedDaysSettings | null> {
+  const [row] = await withUser(db, userId, (tx) =>
+    tx.query<{ enabled: boolean | null; at50: number; at100: number }>(
+      `select (s.options ->> 'earned_days')::boolean as enabled, s.earned_days_50 as at50,
+              s.earned_days_100 as at100
+         from stayput.company_settings s
+        where s.company_id = $1`,
+      [companyId],
+    ),
+  );
+  return row ? { enabled: row.enabled === true, at50: row.at50, at100: row.at100 } : null;
+}
+
+/** The earned days the creator sent: on or off, and 0 to 14 days at each milestone. */
+export function parseEarnedDays(value: unknown): EarnedDaysSettings | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const item = value as Record<string, unknown>;
+  const days = (n: unknown) =>
+    typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 14 ? n : null;
+  const at50 = days(item.at50);
+  const at100 = days(item.at100);
+  if (typeof item.enabled !== 'boolean' || at50 === null || at100 === null) return null;
+  return { enabled: item.enabled, at50, at100 };
+}
+
+export async function saveEarnedDays(
+  db: Db,
+  companyId: string,
+  settings: EarnedDaysSettings,
+): Promise<void> {
+  await db.query('select stayput.save_earned_days($1, $2, $3, $4)', [
+    companyId,
+    settings.enabled,
+    settings.at50,
+    settings.at100,
+  ]);
 }
 
 const badgesOf = (value: unknown): BadgeCode[] =>
@@ -190,7 +282,7 @@ export async function recordResult(
   userId: string,
   entry: ResultEntry,
   now: Date,
-): Promise<Omit<ResultAnswer, 'space'> | null> {
+): Promise<Omit<ResultAnswer, 'space' | 'earnedDays'> | null> {
   const proof = entry.proof && proofJustifies(entry.proof, entry.value) ? entry.proof : null;
   const [row] = await db.query<{
     result: { milestones?: unknown; badges?: unknown; achieved?: unknown; proof?: unknown } | null;

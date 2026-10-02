@@ -365,6 +365,8 @@ export interface ActionRow {
   offer: ActionOffer | null;
   /** An Alumni follow-up: the day after the departure it belongs to (7, 30 or 60). */
   alumniStep?: number;
+  /** Earned days: the milestone reached, in percent. */
+  milestone?: number;
 }
 
 /** An accepted offer, as the creator reviews it. */
@@ -515,6 +517,14 @@ export interface MemberSpaceView {
   proposals: GoalProposal[];
   /** The badges this opening of the space brought (coming back seven days in a row). */
   fresh: BadgeCode[];
+  /**
+   * The earned days (SPEC Phase 5, point 5): what the creator offers at 50 and 100 % (null:
+   * none), and the days the member received, once per milestone.
+   */
+  rewards: {
+    offered: { at50: number; at100: number } | null;
+    received: { percent: Milestone; days: number; at: string }[];
+  };
 }
 
 export interface MemberGoal {
@@ -562,6 +572,16 @@ export interface ResultAnswer {
    * none was sent.
    */
   proof: 'justified' | 'declared' | 'duplicate' | null;
+  /** Free days added to the member's access by this result now (earned days, automatic mode). */
+  earnedDays: number;
+}
+
+/** GET and PUT /api/creator/:companyId/earned-days: free days for the milestones reached. */
+export interface EarnedDaysSettings {
+  enabled: boolean;
+  /** Days at 50 % and at 100 %, 0 to 14 (0: none for that milestone). */
+  at50: number;
+  at100: number;
 }
 
 /** GET and PUT /api/creator/:companyId/goals: the goals proposed to members. */

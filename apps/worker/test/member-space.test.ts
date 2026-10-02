@@ -2,10 +2,12 @@ import { goalProgress } from '@stayput/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUser } from '../src/db';
 import {
+  planEarnedDays,
   readGoalProposals,
   readMemberSpace,
   recordOpen,
   recordResult,
+  saveEarnedDays,
   saveGoalProposals,
   setGoal,
 } from '../src/space';
@@ -307,6 +309,108 @@ describe('a screenshot backing a result (migration 0021)', () => {
       [c, user, goalId, at(1).toISOString()],
     );
     expect(row!.r).toMatchObject({ badges: ['first_result'], proof: null });
+  });
+});
+
+describe('the earned days (migration 0022)', () => {
+  /** A member paying for a membership that renews in 20 days. */
+  async function paying() {
+    const one = await community();
+    await t.db.query(
+      `insert into stayput.memberships (id, company_id, member_id, user_id, product_id, plan_id,
+                                        price, currency, status, current_period_end)
+       values ($1, $2, $3, $4, 'prod_Club', 'plan_Club', 49, 'eur', 'active',
+               $5::timestamptz + interval '20 days')`,
+      [`mem_${one.member.slice(5)}`, one.c, one.member, one.user, NOW.toISOString()],
+    );
+    await setGoal(t.db, one.c, one.user, CLIENTS, NOW);
+    const goalId = (await space(one.c, one.user)).goal!.id;
+    return { ...one, goalId, membership: `mem_${one.member.slice(5)}` };
+  }
+
+  it('gives nothing while the creator has not turned them on', async () => {
+    const { c, user, goalId } = await paying();
+    const reached = await recordResult(t.db, c, user, { goalId, value: 5 }, at(1));
+    expect(reached?.milestones).toEqual([25, 50]);
+    expect(await planEarnedDays(t.db, c, user, goalId, reached!.milestones, at(1))).toEqual([]);
+    expect((await space(c, user)).rewards).toEqual({ offered: null, received: [] });
+  });
+
+  it('plans the creator’s days at 50 and 100 %, once per member, on the membership paid', async () => {
+    const { c, user, member, goalId, membership } = await paying();
+    await saveEarnedDays(t.db, c, { enabled: true, at50: 3, at100: 7 });
+    expect((await space(c, user)).rewards.offered).toEqual({ at50: 3, at100: 7 });
+    const reached = await recordResult(t.db, c, user, { goalId, value: 10 }, at(1));
+    const planned = await planEarnedDays(t.db, c, user, goalId, reached!.milestones, at(1));
+    expect(planned.map((p) => p.days)).toEqual([3, 7]);
+    const actions = await t.db.query<{
+      type: string;
+      trigger: string;
+      subject_id: string;
+      status: string;
+      content: Record<string, unknown>;
+    }>(
+      `select type, trigger, subject_id, status, content from stayput.actions
+        where company_id = $1 and member_id = $2 order by (content ->> 'percent')::int`,
+      [c, member],
+    );
+    expect(actions).toEqual([
+      {
+        type: 'extend_offer',
+        trigger: 'milestone',
+        subject_id: membership,
+        status: 'proposed',
+        content: { days: 3, percent: 50, goal_id: goalId, membership_id: membership },
+      },
+      {
+        type: 'extend_offer',
+        trigger: 'milestone',
+        subject_id: membership,
+        status: 'proposed',
+        content: { days: 7, percent: 100, goal_id: goalId, membership_id: membership },
+      },
+    ]);
+    // A new goal reached: the milestones were rewarded already.
+    await setGoal(t.db, c, user, CLIENTS, at(2));
+    const second = (await space(c, user)).goal!.id;
+    const again = await recordResult(t.db, c, user, { goalId: second, value: 10 }, at(3));
+    expect(await planEarnedDays(t.db, c, user, second, again!.milestones, at(3))).toEqual([]);
+    // Days at 0: none at that milestone.
+    await saveEarnedDays(t.db, c, { enabled: true, at50: 0, at100: 7 });
+    expect((await space(c, user)).rewards.offered).toEqual({ at50: 0, at100: 7 });
+  });
+
+  it('needs a membership the member pays now, and a milestone of their own goal', async () => {
+    const { c, user, goalId } = await community().then(async (one) => {
+      await setGoal(t.db, one.c, one.user, CLIENTS, NOW);
+      return { ...one, goalId: (await space(one.c, one.user)).goal!.id };
+    });
+    await saveEarnedDays(t.db, c, { enabled: true, at50: 3, at100: 7 });
+    await recordResult(t.db, c, user, { goalId, value: 5 }, at(1));
+    expect(await planEarnedDays(t.db, c, user, goalId, [50], at(1))).toEqual([]);
+
+    const other = await paying();
+    await saveEarnedDays(t.db, other.c, { enabled: true, at50: 3, at100: 7 });
+    // 50 % not reached on this goal: nothing, whatever the Worker says.
+    expect(await planEarnedDays(t.db, other.c, other.user, other.goalId, [50], at(1))).toEqual([]);
+  });
+
+  it('shows the member the days they received, never the ones simulated', async () => {
+    const { c, user, member, goalId } = await paying();
+    await saveEarnedDays(t.db, c, { enabled: true, at50: 3, at100: 7 });
+    const reached = await recordResult(t.db, c, user, { goalId, value: 5 }, at(1));
+    const [planned] = await planEarnedDays(t.db, c, user, goalId, reached!.milestones, at(1));
+    await t.db.query(
+      `update stayput.actions set status = 'sent', sent_at = $2::timestamptz where id = $1`,
+      [planned!.id, at(1).toISOString()],
+    );
+    expect((await space(c, user)).rewards.received).toEqual([
+      { percent: 50, days: 3, at: at(1).toISOString() },
+    ]);
+    await t.db.query(`update stayput.actions set status = 'simulated' where member_id = $1`, [
+      member,
+    ]);
+    expect((await space(c, user)).rewards.received).toEqual([]);
   });
 });
 

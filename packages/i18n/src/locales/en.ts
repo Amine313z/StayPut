@@ -371,6 +371,12 @@ export const en = {
   'space.proof.duplicate':
     'This screenshot already backs another result: this one is recorded as declared.',
   'space.proof.label': 'Backed by a screenshot',
+  'space.rewards.ahead.one': '{count} free day at {percent}',
+  'space.rewards.ahead.other': '{count} free days at {percent}',
+  'space.rewards.received.one': '{count} free day received on {date} ({percent} reached)',
+  'space.rewards.received.other': '{count} free days received on {date} ({percent} reached)',
+  'space.celebrate.days.one': 'A gift: {count} free day added to your access!',
+  'space.celebrate.days.other': 'A gift: {count} free days added to your access!',
   'space.unknown.title': 'Your space is getting ready',
   'space.unknown.body':
     'StayPut is reading your membership from Whop. Come back in a few minutes to set your goal.',
@@ -571,6 +577,17 @@ export const en = {
   'lessons.empty': 'No lesson completed over the last 90 days.',
   'lessons.showAll': 'Show all ({count})',
 
+  'earnedDays.title': 'Earned days',
+  'earnedDays.body':
+    'Reward the milestones your members reach with free days on their membership: the first time each member reaches 50% and 100% of a goal.',
+  'earnedDays.enable': 'Offer free days at milestones',
+  'earnedDays.at50': 'Days at 50%',
+  'earnedDays.at100': 'Days at 100%',
+  'earnedDays.hint':
+    'Through the guardrails, like every action: within the free days allowed per quarter, simulated in test mode, approved by you in manual mode. 0: none at that milestone.',
+  'earnedDays.invalid': 'From 0 to 14 days.',
+  'earnedDays.saved': 'Saved',
+  'earnedDays.save': 'Save the earned days',
   'goals.title': 'Goals proposed to members',
   'goals.body':
     'At their first visit, your members choose their goal from this list, or create their own.',
@@ -590,6 +607,7 @@ export const en = {
   'goals.entry.add': 'What they add',
   'goals.invalid': 'Each goal needs a title and a unit.',
   'goals.saved': 'Saved',
+  'goals.save': 'Save the goals',
   'riskSettings.title': 'Risk score',
   'riskSettings.description':
     'How StayPut weighs each warning sign. Saving recomputes the score of every member.',
@@ -696,6 +714,7 @@ export const en = {
   'actions.trigger.score_high': 'Score turned high',
   'actions.trigger.activation_radar': 'New member who has not started',
   'actions.trigger.exit_survey': 'Answer to the departure survey',
+  'actions.trigger.milestone': '{percent} of a goal reached',
   'actions.trigger.alumni': '{days} days after leaving, in the Alumni',
   'actions.status.proposed': 'To approve',
   'actions.status.approved': 'Approved',

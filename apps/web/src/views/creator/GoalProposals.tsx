@@ -241,7 +241,7 @@ function GoalProposalsForm({ initial }: { initial: GoalProposalsView }) {
               loading={status === 'saving'}
               icon={<Save aria-hidden="true" className="size-4" />}
             >
-              {t('common.save')}
+              {t('goals.save')}
             </Button>
             <Button
               variant="ghost"

@@ -378,6 +378,12 @@ export const fr: Messages = {
   'space.proof.duplicate':
     'Cette capture appuie déjà un autre résultat : celui-ci est noté comme déclaré.',
   'space.proof.label': 'Appuyé par une capture',
+  'space.rewards.ahead.one': '{count} jour offert à {percent}',
+  'space.rewards.ahead.other': '{count} jours offerts à {percent}',
+  'space.rewards.received.one': '{count} jour offert reçu le {date} ({percent} atteints)',
+  'space.rewards.received.other': '{count} jours offerts reçus le {date} ({percent} atteints)',
+  'space.celebrate.days.one': 'Cadeau : {count} jour offert ajouté à votre accès !',
+  'space.celebrate.days.other': 'Cadeau : {count} jours offerts ajoutés à votre accès !',
   'space.unknown.title': 'Votre espace se prépare',
   'space.unknown.body':
     'StayPut lit votre adhésion sur Whop. Revenez dans quelques minutes pour fixer votre objectif.',
@@ -585,6 +591,17 @@ export const fr: Messages = {
   'lessons.empty': 'Aucune leçon terminée sur les 90 derniers jours.',
   'lessons.showAll': 'Tout afficher ({count})',
 
+  'earnedDays.title': 'Jours mérités',
+  'earnedDays.body':
+    'Récompensez les jalons que vos membres atteignent par des jours gratuits sur leur abonnement : la première fois que chaque membre atteint 50 % et 100 % d’un objectif.',
+  'earnedDays.enable': 'Offrir des jours aux jalons',
+  'earnedDays.at50': 'Jours à 50 %',
+  'earnedDays.at100': 'Jours à 100 %',
+  'earnedDays.hint':
+    'Par les garde-fous, comme toute action : dans la limite des jours offerts par trimestre, simulés en mode test, validés par vous en mode manuel. 0 : rien à ce jalon.',
+  'earnedDays.invalid': 'De 0 à 14 jours.',
+  'earnedDays.saved': 'Enregistré',
+  'earnedDays.save': 'Enregistrer les jours mérités',
   'goals.title': 'Objectifs proposés aux membres',
   'goals.body':
     'À leur première visite, vos membres choisissent leur objectif dans cette liste, ou créent le leur.',
@@ -604,6 +621,7 @@ export const fr: Messages = {
   'goals.entry.add': 'Ce qu’ils ajoutent',
   'goals.invalid': 'Chaque objectif a besoin d’un titre et d’une unité.',
   'goals.saved': 'Enregistré',
+  'goals.save': 'Enregistrer les objectifs',
   'riskSettings.title': 'Score de risque',
   'riskSettings.description':
     "Comment StayPut pèse chaque signe d'alerte. L'enregistrement recalcule le score de chaque membre.",
@@ -712,6 +730,7 @@ export const fr: Messages = {
   'actions.trigger.score_high': 'Score passé en risque élevé',
   'actions.trigger.activation_radar': 'Nouveau membre qui n’a pas commencé',
   'actions.trigger.exit_survey': 'Réponse au questionnaire de départ',
+  'actions.trigger.milestone': '{percent} d’un objectif atteints',
   'actions.trigger.alumni': '{days} jours après son départ, dans l’Alumni',
   'actions.status.proposed': 'À valider',
   'actions.status.approved': 'Validée',

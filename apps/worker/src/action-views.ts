@@ -106,7 +106,8 @@ export async function readActions(
     }>(
       `select a.id, a.type, a.status, a.trigger, a.member_id, m.display_name, a.send_at,
               a.sent_at, a.created_at, a.blocked_reason, a.result,
-              case when a.trigger in ('exit_survey', 'alumni') then a.content end as content,
+              case when a.trigger in ('exit_survey', 'alumni', 'milestone') then a.content end
+                as content,
               a.error_log -> -1 ->> 'error' as last_error,
               case when $3 <> 'history' and a.message_kind <> 'none'
                    then stayput.message_values(a.company_id, a.member_id, $4::timestamptz)
@@ -160,9 +161,15 @@ export async function readActions(
               : row.status === 'cancelled'
                 ? text(row.result?.reason)
                 : null,
+          // An accepted offer, or the free days a milestone earned.
           offer:
-            row.trigger === 'exit_survey' && row.content ? offerOf(row.content, row.result) : null,
+            (row.trigger === 'exit_survey' || row.trigger === 'milestone') && row.content
+              ? offerOf(row.content, row.result)
+              : null,
           ...(step > 0 ? { alumniStep: step } : {}),
+          ...(row.trigger === 'milestone' && Number(row.content?.percent) > 0
+            ? { milestone: Number(row.content?.percent) }
+            : {}),
         },
       ];
     });

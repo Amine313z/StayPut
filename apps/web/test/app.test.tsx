@@ -1352,6 +1352,9 @@ describe('risk settings', () => {
       '/api/creator/biz_A1/goals?lang=en&niche=other': [{ status: 200, body: OTHER_GOALS }],
       '/api/creator/biz_A1/goals?lang=fr&niche=other': [{ status: 200, body: OTHER_GOALS }],
       '/api/creator/biz_A1/goals?lang=en&niche=trading': [{ status: 200, body: TRADING_GOALS }],
+      '/api/creator/biz_A1/earned-days': [
+        { status: 200, body: { enabled: false, at50: 3, at100: 7 } },
+      ],
       ...answers,
     });
   const share = (name: string) =>
@@ -1393,7 +1396,7 @@ describe('risk settings', () => {
     const units = screen.getAllByRole('textbox', { name: 'Unit' });
     // A goal without a unit is refused.
     fireEvent.change(titles[1]!, { target: { value: 'Book 3 calls' } });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[1]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Save the goals' }));
     expect(await screen.findByText('Each goal needs a title and a unit.')).toBeTruthy();
     fireEvent.change(units[1]!, { target: { value: 'calls' } });
     fireEvent.change(screen.getAllByRole('combobox', { name: 'Kind' })[1]!, {
@@ -1402,7 +1405,7 @@ describe('risk settings', () => {
     fireEvent.change(screen.getAllByRole('combobox', { name: 'Results' })[1]!, {
       target: { value: 'add' },
     });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Save' })[1]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Save the goals' }));
     expect(await screen.findByText('Saved')).toBeTruthy();
     expect(bodies.get('PUT /api/creator/biz_A1/goals?lang=en')).toEqual({ proposals: own });
     expect(screen.getByText('Your own goals, as you wrote them.')).toBeTruthy();
@@ -1413,6 +1416,33 @@ describe('risk settings', () => {
     );
     expect(await screen.findByRole('button', { name: 'Write my own' })).toBeTruthy();
     expect(calls.filter((c) => c === 'PUT /api/creator/biz_A1/goals?lang=en')).toHaveLength(2);
+  });
+
+  it('turns the earned days on, with the creator’s numbers', async () => {
+    settings({
+      'PUT /api/creator/biz_A1/earned-days': [
+        { status: 200, body: { enabled: true, at50: 5, at100: 7 } },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    const save = await screen.findByRole('button', { name: 'Save the earned days' });
+    expect(save.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Offer free days at milestones' }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Days at 50%' }), {
+      target: { value: '15' },
+    });
+    expect(screen.getByText('From 0 to 14 days.')).toBeTruthy();
+    expect(save.hasAttribute('disabled')).toBe(true);
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Days at 50%' }), {
+      target: { value: '5' },
+    });
+    fireEvent.click(save);
+    expect(await screen.findByText('Saved', { selector: 'span' })).toBeTruthy();
+    expect(bodies.get('PUT /api/creator/biz_A1/earned-days')).toEqual({
+      enabled: true,
+      at50: 5,
+      at100: 7,
+    });
   });
 
   it('applies a niche, shows what each sign weighs, then saves', async () => {
@@ -1916,6 +1946,7 @@ describe('member space', () => {
     badges: [],
     proposals: PROPOSALS,
     fresh: [],
+    rewards: { offered: null, received: [] },
     ...over,
   });
   const open = (answers: Record<string, Answer[]>, locale: Locale = 'en') => {
@@ -1935,6 +1966,7 @@ describe('member space', () => {
       badges: ['first_result', 'milestone_25'],
       achieved: false,
       proof: null,
+      earnedDays: 0,
       space: space({
         goal: {
           ...WEIGHT,
@@ -2022,6 +2054,7 @@ describe('member space', () => {
               badges: [],
               achieved: false,
               proof: null,
+              earnedDays: 0,
               space: space({ goal: { ...sessions, start: 0, target: 20, current: 4 } }),
             } satisfies ResultAnswer,
           },
@@ -2032,6 +2065,7 @@ describe('member space', () => {
               badges: [],
               achieved: false,
               proof: null,
+              earnedDays: 0,
               space: space({ goal: { ...sessions, start: 0, target: 20, current: 5.5 } }),
             } satisfies ResultAnswer,
           },
@@ -2160,6 +2194,7 @@ describe('member space', () => {
             badges: ['first_result', 'first_proof', 'milestone_25'],
             achieved: false,
             proof: 'justified',
+            earnedDays: 0,
             space: space({
               goal: { ...WEIGHT, current: 90.25, progress: 25 },
               results: [
@@ -2214,6 +2249,48 @@ describe('member space', () => {
         'This screenshot could not be read. Try another one, or type your result.',
       ),
     ).toBeTruthy();
+  });
+
+  it('shows the free days ahead, and celebrates those a milestone brings', async () => {
+    const offered = { at50: 3, at100: 7 };
+    open({
+      '/api/member/exp_E1/space?lang=en': [
+        {
+          status: 200,
+          body: space({
+            goal: { ...WEIGHT, current: 89, progress: 42 },
+            rewards: { offered, received: [] },
+          }),
+        },
+      ],
+      'POST /api/member/exp_E1/space/result?lang=en': [
+        {
+          status: 200,
+          body: {
+            milestones: [50],
+            badges: ['milestone_50'],
+            achieved: false,
+            proof: null,
+            earnedDays: 3,
+            space: space({
+              goal: { ...WEIGHT, current: 88.5, progress: 50 },
+              rewards: {
+                offered,
+                received: [{ percent: 50, days: 3, at: '2026-10-01T09:00:00.000Z' }],
+              },
+            }),
+          } satisfies ResultAnswer,
+        },
+      ],
+    });
+    expect(await screen.findByText('3 free days at 50% · 7 free days at 100%')).toBeTruthy();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Where are you now?' }), {
+      target: { value: '88.5' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Record' }));
+    expect(await screen.findByText('A gift: 3 free days added to your access!')).toBeTruthy();
+    expect(screen.getByText('7 free days at 100%')).toBeTruthy();
+    expect(screen.getByText(/^3 free days received on .+ \(50% reached\)$/)).toBeTruthy();
   });
 
   it('tells a member not read yet that their space comes', async () => {

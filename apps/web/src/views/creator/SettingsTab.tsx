@@ -23,6 +23,7 @@ import { Card } from '../../ui/Card';
 import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { useCreatorData } from '../CreatorView';
 import { ActionSettings } from './ActionSettings';
+import { EarnedDays } from './EarnedDays';
 import { GoalProposals } from './GoalProposals';
 
 const NICHE_LABELS: Readonly<Record<Niche, MessageKey>> = {
@@ -48,7 +49,7 @@ const RELOAD_AFTER_MS = 4_000;
 
 /**
  * The creator's settings (SPEC Phase 6, point 12): how the score is computed (Phase 3), the goals
- * proposed to members (Phase 5), and how the actions leave (Phase 4).
+ * proposed to members and the earned days (Phase 5), and how the actions leave (Phase 4).
  */
 export function SettingsTab() {
   const { api } = useCreatorData();
@@ -69,6 +70,7 @@ function Settings({ initial }: { initial: RiskSettingsView }) {
     <div className="space-y-6">
       <RiskSettingsForm initial={initial} onSaved={(saved) => setNiche(saved.niche)} />
       <GoalProposals niche={niche} />
+      <EarnedDays />
       <ActionSettings />
     </div>
   );

@@ -27,6 +27,7 @@ import {
   Eye,
   Flag,
   Flame,
+  Gift,
   HeartHandshake,
   Hourglass,
   ImagePlus,
@@ -65,6 +66,8 @@ interface Celebration {
   recorded: boolean;
   /** What its screenshot came to (ResultAnswer). */
   proof: ResultAnswer['proof'];
+  /** Free days the milestones just added to the member's access. */
+  earnedDays: number;
 }
 
 /**
@@ -185,7 +188,14 @@ function Space({
   const celebration: Celebration | null = current
     ? current.celebration
     : view.fresh.length > 0
-      ? { milestones: [], badges: view.fresh, achieved: false, recorded: false, proof: null }
+      ? {
+          milestones: [],
+          badges: view.fresh,
+          achieved: false,
+          recorded: false,
+          proof: null,
+          earnedDays: 0,
+        }
       : null;
   const celebrationKey = current ? `answer:${current.n}` : `opening:${view.fresh.join()}`;
 
@@ -227,11 +237,12 @@ function Space({
               onSet={async (input) => answered(await backend.setGoal(input, shown), null)}
             />
           ) : goal.status === 'achieved' ? (
-            <GoalReached goal={goal} onNext={() => setChoosing(true)} />
+            <GoalReached goal={goal} rewards={shown.rewards} onNext={() => setChoosing(true)} />
           ) : (
             <GoalProgress
               goal={goal}
               results={shown.results}
+              rewards={shown.rewards}
               onResult={async (entry) => {
                 const result = await backend.recordResult(entry, shown);
                 answered(result.space, {
@@ -240,6 +251,7 @@ function Space({
                   achieved: result.achieved,
                   recorded: true,
                   proof: result.proof,
+                  earnedDays: result.earnedDays,
                 });
               }}
             />
@@ -583,10 +595,12 @@ function Field({
 function GoalProgress({
   goal,
   results,
+  rewards,
   onResult,
 }: {
   goal: MemberGoal;
   results: MemberSpaceView['results'];
+  rewards: MemberSpaceView['rewards'];
   onResult: (entry: ResultEntry) => Promise<void>;
 }) {
   const { t, percent, date, relative } = useI18n();
@@ -602,6 +616,7 @@ function GoalProgress({
           <span className="text-muted">→ {withUnit(goal.target, goal.unit)}</span>
         </p>
         <ProgressBar progress={goal.progress} reached={reached} />
+        <Rewards rewards={rewards} />
         <p className="mt-2 flex flex-wrap justify-between gap-x-4 gap-y-1 text-sm text-muted">
           <span>{t('space.goal.progress', { percent: percent(goal.progress / 100) })}</span>
           <span>
@@ -914,8 +929,58 @@ function ResultForm({
   );
 }
 
+/**
+ * The earned days: those still ahead (each milestone rewards a member once), and those received.
+ */
+function Rewards({ rewards }: { rewards: MemberSpaceView['rewards'] }) {
+  const { plural, percent, date } = useI18n();
+  const received = new Set(rewards.received.map((r) => r.percent));
+  const ahead = rewards.offered
+    ? (
+        [
+          [50, rewards.offered.at50],
+          [100, rewards.offered.at100],
+        ] as const
+      ).filter(([at, days]) => days > 0 && !received.has(at))
+    : [];
+  if (ahead.length === 0 && rewards.received.length === 0) return null;
+  return (
+    <ul className="mt-3 space-y-1 text-sm">
+      {ahead.length > 0 ? (
+        <li className="flex items-start gap-2">
+          <Gift aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent" />
+          <span>
+            {ahead
+              .map(([at, days]) =>
+                plural('space.rewards.ahead', days, { percent: percent(at / 100) }),
+              )
+              .join(' · ')}
+          </span>
+        </li>
+      ) : null}
+      {rewards.received.map((reward) => (
+        <li key={reward.percent} className="flex items-start gap-2 text-muted">
+          <Gift aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          {plural('space.rewards.received', reward.days, {
+            percent: percent(reward.percent / 100),
+            date: date(new Date(reward.at)),
+          })}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** The goal reached: well done, and the next one. */
-function GoalReached({ goal, onNext }: { goal: MemberGoal; onNext: () => void }) {
+function GoalReached({
+  goal,
+  rewards,
+  onNext,
+}: {
+  goal: MemberGoal;
+  rewards: MemberSpaceView['rewards'];
+  onNext: () => void;
+}) {
   const { t } = useI18n();
   const withUnit = useWithUnit();
   return (
@@ -927,6 +992,7 @@ function GoalReached({ goal, onNext }: { goal: MemberGoal; onNext: () => void })
         </p>
       </Notice>
       <ProgressBar progress={100} reached={new Set(goal.milestones.map((m) => m.percent))} />
+      <Rewards rewards={rewards} />
       <Button onClick={onNext} icon={<Flag aria-hidden="true" className="size-4" />}>
         {t('space.goal.next')}
       </Button>
@@ -1039,11 +1105,14 @@ function CelebrationNotice({
   celebration: Celebration;
   onClose: () => void;
 }) {
-  const { t, percent } = useI18n();
+  const { t, plural, percent } = useI18n();
   const highest = celebration.milestones.at(-1);
   const lines: string[] = [];
   if (celebration.achieved) lines.push(t('space.celebrate.achieved'));
   else if (highest) lines.push(t('space.celebrate.milestone', { percent: percent(highest / 100) }));
+  if (celebration.earnedDays > 0) {
+    lines.push(plural('space.celebrate.days', celebration.earnedDays));
+  }
   for (const badge of celebration.badges) {
     lines.push(t('space.celebrate.badge', { badge: t(BADGES[badge].name) }));
   }

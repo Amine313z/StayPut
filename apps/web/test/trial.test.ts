@@ -16,6 +16,7 @@ const preview: MemberSpaceView = {
   badges: [],
   proposals: [],
   fresh: [],
+  rewards: { offered: { at50: 3, at100: 7 }, received: [] },
 };
 
 describe('the trial', () => {
@@ -41,6 +42,8 @@ describe('the trial', () => {
       milestones: [25, 50],
       badges: ['first_result', 'first_proof', 'milestone_25', 'milestone_50'],
       proof: 'justified',
+      // The creator's 3 days at 50 %, as a member gets them in automatic mode.
+      earnedDays: 3,
     });
     view = first.space;
     expect(view.results[0]).toMatchObject({ value: 3250, proof: 'justified' });
@@ -55,7 +58,16 @@ describe('the trial', () => {
     });
     // Reached: no more results on it.
     const done = trialResult(view, { goalId, value: 5000 }, NOW, used)!;
-    expect(done).toMatchObject({ achieved: true, milestones: [75, 100], proof: null });
+    expect(done).toMatchObject({
+      achieved: true,
+      milestones: [75, 100],
+      proof: null,
+      earnedDays: 7,
+    });
+    expect(done.space.rewards.received.map((r) => [r.percent, r.days])).toEqual([
+      [50, 3],
+      [100, 7],
+    ]);
     expect(trialResult(done.space, { goalId, value: 5100 }, NOW, used)).toBeNull();
   });
 });

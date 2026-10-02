@@ -16,9 +16,17 @@ import {
  * creator sees the milestones and badges without anything recorded.
  */
 
-/** The space as a member starts it: no goal, no result, no badge. */
+/** The space as a member starts it: no goal, no result, no badge, no free day yet. */
 export function trialStart(preview: MemberSpaceView): MemberSpaceView {
-  return { ...preview, known: true, goal: null, results: [], badges: [], fresh: [] };
+  return {
+    ...preview,
+    known: true,
+    goal: null,
+    results: [],
+    badges: [],
+    fresh: [],
+    rewards: { offered: preview.rewards.offered, received: [] },
+  };
 }
 
 /** The goal set: the one under way ends, where the member stands is the start. */
@@ -81,11 +89,21 @@ export function trialResult(
     ] as BadgeCode[]
   ).filter((code) => !owned.has(code));
   const achieved = progress >= 100;
+  // The earned days, as a member gets them in automatic mode: once per milestone.
+  const offered = view.rewards.offered;
+  const had = new Set(view.rewards.received.map((r) => r.percent));
+  const earned = offered
+    ? milestones.flatMap((percent) => {
+        const days = percent === 50 ? offered.at50 : percent === 100 ? offered.at100 : 0;
+        return days > 0 && !had.has(percent) ? [{ percent, days, at }] : [];
+      })
+    : [];
   return {
     milestones,
     badges,
     achieved,
     proof,
+    earnedDays: earned.reduce((sum, r) => sum + r.days, 0),
     space: {
       ...view,
       goal: {
@@ -109,6 +127,7 @@ export function trialResult(
       ].slice(0, 10),
       badges: [...view.badges, ...badges.map((code) => ({ code, awardedAt: at }))],
       fresh: [],
+      rewards: { offered, received: [...view.rewards.received, ...earned] },
     },
   };
 }

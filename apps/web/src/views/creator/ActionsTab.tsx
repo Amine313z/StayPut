@@ -291,7 +291,7 @@ function ActionItem({
   api: string;
   onChange: () => void;
 }) {
-  const { t, relative, dateTime } = useI18n();
+  const { t, relative, dateTime, percent } = useI18n();
   const [step, setStep] = useState<'idle' | 'running' | 'failed'>('idle');
   const { label, Icon } = TYPES[action.type];
   // An offer is not sent: it is applied to the membership.
@@ -301,9 +301,11 @@ function ActionItem({
     : STATUSES[action.status];
   const trigger = action.alumniStep
     ? t('actions.trigger.alumni', { days: action.alumniStep })
-    : TRIGGERS[action.trigger]
-      ? t(TRIGGERS[action.trigger]!)
-      : null;
+    : action.milestone
+      ? t('actions.trigger.milestone', { percent: percent(action.milestone / 100) })
+      : TRIGGERS[action.trigger]
+        ? t(TRIGGERS[action.trigger]!)
+        : null;
   const waiting = ['proposed', 'approved', 'scheduled'].includes(action.status);
 
   const moment = (() => {

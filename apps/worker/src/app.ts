@@ -77,10 +77,14 @@ import { answerSurvey, decideOffer, readRetention, retentionView } from './reten
 import { REQUEST_RISK_BATCH, refreshDetection } from './risk';
 import { LATEST_MIGRATION } from './schema-version';
 import {
+  parseEarnedDays,
+  planEarnedDays,
+  readEarnedDays,
   readGoalProposals,
   readMemberSpace,
   recordOpen,
   recordResult,
+  saveEarnedDays,
   saveGoalProposals,
   setGoal,
   spaceLocale,
@@ -731,6 +735,38 @@ export function createApp(deps: AppDeps) {
     );
     return view ? c.json(view) : apiError('not_found', 'no settings for this company');
   });
+
+  /** The earned days (SPEC Phase 5, point 5): free days for the milestones members reach. */
+  app.get(
+    '/api/creator/:companyId/earned-days',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const settings = await readEarnedDays(db, c.get('userId'), c.get('companyId'));
+      return settings ? c.json(settings) : apiError('not_found', 'no settings for this company');
+    },
+  );
+
+  app.put(
+    '/api/creator/:companyId/earned-days',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const settings = parseEarnedDays(await c.req.json<unknown>().catch(() => null));
+      if (!settings) {
+        return apiError('invalid_request', 'expected { enabled, at50, at100 } (0 to 14 days)');
+      }
+      await saveEarnedDays(db, c.get('companyId'), settings);
+      const saved = await readEarnedDays(db, c.get('userId'), c.get('companyId'));
+      return saved ? c.json(saved) : apiError('not_found', 'no settings for this company');
+    },
+  );
 
   /** SPEC Phase 4: one list of actions (to approve, scheduled, done) and how many each holds. */
   app.get('/api/creator/:companyId/actions', authenticate, withDb, requireCreator, async (c) => {
@@ -1540,10 +1576,30 @@ export function createApp(deps: AppDeps) {
       const companyId = await memberCompany(c);
       if (companyId instanceof Response) return companyId;
       const userId = c.get('userId');
-      const brought = await recordResult(db, companyId, userId, entry, deps.now());
+      const now = deps.now();
+      const brought = await recordResult(db, companyId, userId, entry, now);
       if (!brought) return apiError('not_found', 'no such goal under way');
+      // The milestones' free days (SPEC Phase 5, point 5): through the guardrails like every
+      // action; in automatic mode they are added now, and the member sees them at once.
+      let earnedDays = 0;
+      const earned = await planEarnedDays(
+        db,
+        companyId,
+        userId,
+        entry.goalId,
+        brought.milestones,
+        now,
+      );
+      if (earned.length > 0) {
+        await prepareActions(db, companyId, now);
+        const whop = deps.whopClient(c.get('config'));
+        for (const action of earned) {
+          if ((await executeAction(db, whop, action.id, now)) === 'sent') earnedDays += action.days;
+        }
+      }
       const answer: ResultAnswer = {
         ...brought,
+        earnedDays,
         space: await readMemberSpace(db, companyId, userId, {
           locale: spaceLocale(c.req.query('lang')),
           preview: false,

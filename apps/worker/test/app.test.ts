@@ -2188,6 +2188,64 @@ describe('the member space (SPEC Phase 5)', () => {
     }
   });
 
+  it('adds the earned days at a milestone, through the guardrails, in automatic mode', async () => {
+    const { request, whop, company, lina, boss, base } = await community(5);
+    await t.db.query(`update stayput.companies set mode = 'auto' where id = $1`, [company]);
+    await t.db.query(
+      `insert into stayput.memberships (id, company_id, member_id, user_id, product_id, plan_id,
+                                        price, currency, status, current_period_end)
+       values ('mem_Spc5', $1, 'mber_Spc5', 'user_lina5', 'prod_Club', 'plan_Club', 49, 'eur',
+               'active', $2::timestamptz + interval '20 days')`,
+      [company, NOW.toISOString()],
+    );
+    const url = `/api/creator/${company}/earned-days`;
+    expect(await (await request(url, boss)).json()).toEqual({ enabled: false, at50: 3, at100: 7 });
+    expect(
+      (await request(url, json(boss, 'PUT', { enabled: true, at50: 15, at100: 7 }))).status,
+    ).toBe(400);
+    expect(
+      await (await request(url, json(boss, 'PUT', { enabled: true, at50: 3, at100: 7 }))).json(),
+    ).toEqual({ enabled: true, at50: 3, at100: 7 });
+    // A member is no creator.
+    expect((await request(url, lina)).status).toBe(403);
+
+    const goal = {
+      title: 'Signer de nouveaux clients',
+      unit: 'clients',
+      category: 'clients',
+      entry: 'add',
+      start: 0,
+      target: 10,
+      targetDate: new Date(NOW.getTime() + 90 * 86_400_000).toISOString().slice(0, 10),
+    };
+    const set = (await (
+      await request(`${base}/goal`, json(lina, 'POST', goal))
+    ).json()) as MemberSpaceView;
+    expect(set.rewards.offered).toEqual({ at50: 3, at100: 7 });
+    const answer = (await (
+      await request(`${base}/result`, json(lina, 'POST', { goalId: set.goal!.id, value: 5 }))
+    ).json()) as ResultAnswer;
+    expect(answer).toMatchObject({ milestones: [25, 50], earnedDays: 3 });
+    expect(answer.space.rewards.received).toEqual([
+      { percent: 50, days: 3, at: expect.any(String) as unknown },
+    ]);
+    expect(whop.writes).toContainEqual({
+      method: 'POST',
+      path: '/memberships/mem_Spc5/extend',
+      body: { days: 3 },
+      key: expect.stringMatching(/^stayput-action-.+-extend$/) as unknown,
+    });
+    const history = (await (
+      await request(`/api/creator/${company}/actions?view=history`, boss)
+    ).json()) as ActionsPage;
+    expect(history.actions.find((a) => a.trigger === 'milestone')).toMatchObject({
+      type: 'extend_offer',
+      status: 'sent',
+      milestone: 50,
+      offer: { reason: null, keep: false, days: 3 },
+    });
+  });
+
   it('shows the team a preview where nothing is recorded', async () => {
     const { request, company, boss, base } = await community(2);
     const preview = (await (await request(`${base}?lang=en`, boss)).json()) as MemberSpaceView;

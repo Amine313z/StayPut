@@ -1093,3 +1093,27 @@ nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en
   taper son résultat.
 - **L'essai de l'équipe** lit aussi les captures (dans le navigateur, rien n'est envoyé) et
   applique les mêmes règles : justifié, déclaré, une capture par résultat.
+
+### Les jours mérités (migration 0022)
+
+- **Éteints par défaut** : le créateur les allume dans Réglages → « Jours mérités » (le
+  commutateur est `company_settings.options.earned_days`, prévu dès 0001), avec ses nombres :
+  3 jours à 50 % et 7 jours à 100 % par défaut (SPEC), de 0 à 14 chacun (0 : rien à ce jalon).
+- **Une fois par membre et par jalon** : la première fois qu'il atteint 50 % (puis 100 %) d'un
+  objectif pendant que les jours mérités sont allumés. Sans cette règle, un objectif rendu facile
+  exprès (de 0 à 1) se répéterait pour des jours sans fin ; le plafond trimestriel des garde-fous
+  le limiterait, mais un membre de bonne foi n'en a pas besoin davantage.
+- **Une action comme les autres** : un `extend_offer` (le même que les jours offerts du
+  questionnaire de départ) avec le déclencheur `milestone`, sur l'adhésion que le membre paie
+  (active, en essai ou dont l'annulation est programmée) ; sans adhésion vivante, rien. Les
+  garde-fous le comptent avec les autres jours offerts (14 par membre et par trimestre au plus),
+  le mode test le simule, le mode manuel attend la validation du créateur, « ne jamais
+  contacter » le bloque. En mode automatique, il part dès le résultat noté : le membre voit
+  « Cadeau : 3 jours offerts ajoutés à votre accès ! ». L'onglet Actions le montre avec son
+  jalon (« 50 % d'un objectif atteints ») et ses jours.
+- **Le membre voit** les jours offerts à venir sous sa barre (« 3 jours offerts à 50 % · 7 jours
+  offerts à 100 % ») : une raison de plus d'avancer. Il voit ensuite ceux qu'il a reçus (jamais
+  ceux simulés en mode test, ni ceux en attente du créateur : un cadeau annoncé puis refusé
+  décevrait).
+- **L'essai de l'équipe** montre les jours mérités comme un membre les recevrait en mode
+  automatique.
