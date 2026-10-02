@@ -134,7 +134,12 @@ function fakeWhop(
       // A company: its name. Its account (/accounts/…) answers 403 to an app key, as live.
       const named = /^\/companies\/(biz_[A-Za-z0-9]+)$/.exec(path)?.[1];
       if (method === 'GET' && named) {
-        return Promise.resolve({ id: named, title: `Le Club ${named.slice(4)}` });
+        return Promise.resolve({
+          id: named,
+          title: `Le Club ${named.slice(4)}`,
+          // Whop's logo: an attachment, on its images' address.
+          logo: named === 'biz_Logo' ? { url: 'https://assets.whop.com/logos/biz_Logo.png' } : null,
+        });
       }
       if (/^\/accounts\//.test(path)) {
         return Promise.reject(new WhopApiError(403, 'forbidden', 'not allowed', { method, path }));
@@ -186,6 +191,8 @@ function setup(
     telegram?: TelegramClient;
     /** The company of each experience, as Whop answers GET /experiences/{id}. */
     experiences?: Record<string, string>;
+    /** What the address of an image answers (the community's logo). */
+    fetchImage?: (url: string) => Promise<Response>;
   } = {},
 ) {
   const db = options.db === undefined ? t.db : options.db;
@@ -205,6 +212,7 @@ function setup(
     discord: (config) => (config.discord ? (options.discord ?? null) : null),
     telegram: (config) => (config.telegram ? (options.telegram ?? null) : null),
     accessCache: new AccessCache(),
+    ...(options.fetchImage ? { fetchImage: options.fetchImage } : {}),
   };
   const app = createApp(deps);
   const request = (path: string, init: RequestInit = {}, env: Env = ENV) =>
@@ -295,6 +303,7 @@ describe('GET /api/creator/:companyId/session', () => {
       timezoneSet: false,
       // Not read from Whop yet.
       companyName: null,
+      companyLogo: false,
     });
     const companies = await withUser(t.db, 'user_alice', (tx) =>
       tx.query<{ id: string; status: string }>('select id, status from stayput.companies'),
@@ -356,6 +365,46 @@ describe('GET /api/creator/:companyId/session', () => {
       companyName: string | null;
     };
     expect(again.companyName).toBe('Le Club Named');
+  });
+
+  it('learns the community’s logo from Whop, and serves it from its own address', async () => {
+    const fetched: string[] = [];
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const answers: Response[] = [
+      new Response(png, { headers: { 'content-type': 'image/png' } }),
+      new Response('<html>', { headers: { 'content-type': 'text/html' } }),
+    ];
+    const { request } = setup(
+      { 'user_alice:biz_Logo': 'admin', 'user_alice:biz_Named': 'admin' },
+      {
+        fetchImage: (url) => {
+          fetched.push(url);
+          return Promise.resolve(answers.shift()!);
+        },
+      },
+    );
+    const init = await asUser('user_alice');
+    const session = async (company: string) =>
+      (await (await request(`/api/creator/${company}/session`, init)).json()) as {
+        companyLogo: boolean;
+      };
+    expect((await session('biz_Logo')).companyLogo).toBe(false);
+    await settle();
+    expect((await session('biz_Logo')).companyLogo).toBe(true);
+    const logo = await request('/api/creator/biz_Logo/logo', init);
+    expect(logo.status).toBe(200);
+    expect(logo.headers.get('content-type')).toBe('image/png');
+    expect(logo.headers.get('cache-control')).toBe('private, max-age=86400');
+    expect(new Uint8Array(await logo.arrayBuffer())).toEqual(png);
+    expect(fetched).toEqual(['https://assets.whop.com/logos/biz_Logo.png']);
+    // Not an image: nothing is passed on.
+    expect((await request('/api/creator/biz_Logo/logo', init)).status).toBe(404);
+    // A community without a logo: none, and nothing is fetched.
+    await session('biz_Named');
+    await settle();
+    expect((await session('biz_Named')).companyLogo).toBe(false);
+    expect((await request('/api/creator/biz_Named/logo', init)).status).toBe(404);
+    expect(fetched).toHaveLength(2);
   });
 
   it('treats an id Whop does not know as no access, and an outage as unavailable', async () => {

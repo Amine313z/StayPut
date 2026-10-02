@@ -63,6 +63,8 @@ export interface CreatorSession {
   timezoneSet: boolean;
   /** The community's name, once read from Whop (null until then). */
   companyName: string | null;
+  /** Whop gave the community a logo: served at /api/creator/:companyId/logo. */
+  companyLogo: boolean;
 }
 
 /** GET /api/member/:experienceId/session */

@@ -630,10 +630,11 @@ function describe(error: unknown): string {
 }
 
 /**
- * The community's name as Whop shows it (the company's `title`): the members' messages, cards
- * and pages say it. Read when StayPut has none yet, or with a sync; kept as it was when Whop does
- * not answer. `/companies/{id}` (company:basic:read): its account, `/accounts/{id}`, answers 403
- * to an app key (checked live by Inspect, 2 October).
+ * The community's name as Whop shows it (the company's `title`), and its logo: the members'
+ * messages, cards and pages say the name, the dashboard shows both. Read when StayPut has no
+ * name yet, or with a sync; kept as they were when Whop does not answer. `/companies/{id}`
+ * (company:basic:read): its account, `/accounts/{id}`, answers 403 to an app key (checked live
+ * by Inspect, 2 October).
  */
 export async function refreshCompanyName(
   db: Db,
@@ -641,19 +642,34 @@ export async function refreshCompanyName(
   companyId: string,
 ): Promise<string | null> {
   try {
-    const company = await whop.request<{ title?: unknown }>(
+    const company = await whop.request<{ title?: unknown; logo?: unknown }>(
       'GET',
       `/companies/${encodeURIComponent(companyId)}`,
     );
     const title = typeof company.title === 'string' ? company.title.trim().slice(0, 200) : '';
+    const logo = logoUrl(company.logo);
     if (!title) return null;
     await db.query(
-      `update stayput.companies set name = $2 where id = $1 and name is distinct from $2`,
-      [companyId, title],
+      `update stayput.companies set name = $2, logo_url = $3
+        where id = $1 and (name is distinct from $2 or logo_url is distinct from $3)`,
+      [companyId, title, logo],
     );
     return title;
   } catch (error) {
     console.error('Company name not read:', error instanceof Error ? error.message : error);
     return null;
   }
+}
+
+/** Whop gives a logo as an attachment ({ url }) or a link; StayPut keeps an https one only. */
+export function logoUrl(logo: unknown): string | null {
+  const url =
+    typeof logo === 'string'
+      ? logo
+      : typeof logo === 'object' &&
+          logo !== null &&
+          typeof (logo as { url?: unknown }).url === 'string'
+        ? (logo as { url: string }).url
+        : null;
+  return url && /^https:\/\//.test(url) && url.length <= 2000 ? url : null;
 }

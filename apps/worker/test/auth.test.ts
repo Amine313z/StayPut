@@ -135,6 +135,7 @@ describe('signing in with Whop outside the iframe (sandbox)', () => {
       // No database in these tests: nothing to ask the browser.
       timezoneSet: true,
       companyName: null,
+      companyLogo: false,
     });
   });
 

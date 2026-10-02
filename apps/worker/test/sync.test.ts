@@ -2,9 +2,10 @@ import { WhopApiError, type QueryValue, type WhopClient } from '@stayput/whop';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DiscordApiError, type DiscordClient } from '../src/discord';
 import {
-  STREAMS,
+  logoUrl,
   planPass,
   refreshDiscordNow,
+  STREAMS,
   summarize,
   syncDueCompanies,
   syncIfFree,
@@ -633,5 +634,20 @@ describe('Discord', () => {
     // Read again a week later, not before.
     const again = await syncIfFree(context(whop.client, hours(3), 40, discord.client), id, 0);
     expect(again?.profiles).toBe(0);
+  });
+});
+
+describe('logoUrl', () => {
+  it('keeps the https address of Whop’s logo, given as an attachment or a link', () => {
+    expect(logoUrl({ url: 'https://assets.whop.com/a.png' })).toBe('https://assets.whop.com/a.png');
+    expect(logoUrl('https://assets.whop.com/b.png')).toBe('https://assets.whop.com/b.png');
+  });
+
+  it('keeps nothing else', () => {
+    expect(logoUrl(null)).toBeNull();
+    expect(logoUrl({ url: 'http://assets.whop.com/a.png' })).toBeNull();
+    expect(logoUrl('javascript:alert(1)')).toBeNull();
+    expect(logoUrl(`https://a.com/${'x'.repeat(2000)}`)).toBeNull();
+    expect(logoUrl({ url: 42 })).toBeNull();
   });
 });

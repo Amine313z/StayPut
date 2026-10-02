@@ -173,6 +173,8 @@ export interface AppDeps {
   /** Telegram's Bot API with StayPut's bot, or null when the Telegram module is not set up. */
   telegram(config: Config): TelegramClient | null;
   accessCache: AccessCache;
+  /** Reads an image Whop links to (the community's logo); the global fetch by default. */
+  fetchImage?(url: string): Promise<Response>;
 }
 
 export function productionDeps(): AppDeps {
@@ -267,7 +269,10 @@ export function createApp(deps: AppDeps) {
   app.use('*', async (c, next) => {
     c.set('config', readConfig(c.env));
     await next();
-    for (const [name, value] of Object.entries(API_HEADERS)) c.res.headers.set(name, value);
+    // A response may keep its own caching (the community's logo); never cached otherwise.
+    for (const [name, value] of Object.entries(API_HEADERS)) {
+      if (name !== 'Cache-Control' || !c.res.headers.has(name)) c.res.headers.set(name, value);
+    }
   });
 
   /** Opens the request's database client, closed once the response is sent. */
@@ -609,9 +614,10 @@ export function createApp(deps: AppDeps) {
     const companyId = c.get('companyId');
     const userId = c.get('userId');
     const db = c.get('db');
-    let company: { timezoneSet: boolean; name: string | null } = {
+    let company: { timezoneSet: boolean; name: string | null; logo: boolean } = {
       timezoneSet: true,
       name: null,
+      logo: false,
     };
     if (db) {
       company = await recordAdmin(db, companyId, userId, deps.now());
@@ -626,8 +632,41 @@ export function createApp(deps: AppDeps) {
       via: c.get('via'),
       timezoneSet: company.timezoneSet,
       companyName: company.name,
+      companyLogo: company.logo,
     };
     return c.json(session);
+  });
+
+  /**
+   * The community's logo, served by StayPut: the dashboard's policy loads images from its own
+   * address only. Read from the address Whop gave (https), an image of 1 MB at most, kept a day
+   * by the browser.
+   */
+  app.get('/api/creator/:companyId/logo', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const [row] = await db.query<{ logo_url: string | null }>(
+      'select logo_url from stayput.companies where id = $1',
+      [c.get('companyId')],
+    );
+    if (!row?.logo_url) return apiError('not_found', 'no logo for this community');
+    const image = await (deps.fetchImage ?? ((url: string) => fetch(url)))(row.logo_url).catch(
+      () => null,
+    );
+    const type = image?.headers.get('content-type') ?? '';
+    const size = Number(image?.headers.get('content-length') ?? '0');
+    if (!image?.ok || !/^image\/(png|jpeg|webp|gif)$/.test(type) || size > 1_000_000) {
+      return apiError('not_found', 'the logo could not be read');
+    }
+    const bytes = await image.arrayBuffer();
+    if (bytes.byteLength > 1_000_000) return apiError('not_found', 'the logo is too large');
+    return new Response(bytes, {
+      headers: {
+        'Content-Type': type,
+        'Cache-Control': 'private, max-age=86400',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
   });
 
   /** Where the reading of the company's Whop data stands. */
@@ -2223,7 +2262,7 @@ async function recordAdmin(
   companyId: string,
   userId: string,
   now: Date,
-): Promise<{ timezoneSet: boolean; name: string | null }> {
+): Promise<{ timezoneSet: boolean; name: string | null; logo: boolean }> {
   const at = now.toISOString();
   return db.transaction(async (tx) => {
     await tx.query(
@@ -2242,12 +2281,20 @@ async function recordAdmin(
        on conflict (company_id, user_id) do update set verified_at = excluded.verified_at`,
       [companyId, userId, at],
     );
-    const [company] = await tx.query<{ timezone_set: boolean; name: string | null }>(
-      `select timezone_set_at is not null as timezone_set, name
+    const [company] = await tx.query<{
+      timezone_set: boolean;
+      name: string | null;
+      logo: boolean;
+    }>(
+      `select timezone_set_at is not null as timezone_set, name, logo_url is not null as logo
          from stayput.companies where id = $1`,
       [companyId],
     );
-    return { timezoneSet: company?.timezone_set ?? true, name: company?.name ?? null };
+    return {
+      timezoneSet: company?.timezone_set ?? true,
+      name: company?.name ?? null,
+      logo: company?.logo ?? false,
+    };
   });
 }
 

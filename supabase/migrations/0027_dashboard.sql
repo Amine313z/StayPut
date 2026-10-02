@@ -103,6 +103,11 @@ end
 $$;
 
 
+-- The community's logo, read from Whop with its name (refreshCompanyName): the dashboard shows
+-- it next to the name (served by StayPut, /api/creator/:companyId/logo).
+alter table stayput.companies
+  add column logo_url text check (logo_url ~ '^https://' and char_length(logo_url) <= 2000);
+
 -- 2. The creator's own actions from the dashboard (« Message », « Pause », « Offer »), through
 -- StayPut's pipeline like every other one: the guardrails, the test mode, the journal. A message
 -- is approved by the creator's click itself. An offer becomes the action that applies it only
