@@ -63,6 +63,7 @@ jobs:
             failed=1
           fi
           expect /experiences/exp_check 200 text/html
+          expect /demo 200 text/html
           expect /whop-frame.mjs 200 javascript
           expect /api/creator/biz_2whAzkbCRpcGqQ/session 401 json
           exit $failed
