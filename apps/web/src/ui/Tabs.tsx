@@ -7,6 +7,8 @@ export interface TabItem {
   icon?: ReactNode;
   /** Active only on this exact path (the first tab). */
   end?: boolean;
+  /** How many things the tab holds, when the screen knows it. */
+  count?: string;
 }
 
 /** The sections of a view, as links: the address says which one is open. */
@@ -29,6 +31,11 @@ export function NavTabs({ items, label }: { items: readonly TabItem[]; label: st
             >
               {item.icon}
               {item.label}
+              {item.count === undefined ? null : (
+                <span className="tabular rounded-full bg-surface-2 px-1.5 text-xs text-muted">
+                  {item.count}
+                </span>
+              )}
             </NavLink>
           </li>
         ))}

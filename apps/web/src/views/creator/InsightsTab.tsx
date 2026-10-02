@@ -5,7 +5,7 @@ import {
   type LessonRow,
 } from '@stayput/core';
 import { BookOpen, CalendarRange, ChartColumn, CircleCheck, TriangleAlert } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useApi } from '../../api';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { useI18n } from '../../i18n';
@@ -24,8 +24,11 @@ const TABLE_SCROLL = 'relative -mx-5 overflow-x-auto px-5';
 const HEAD_CELL = 'px-3 py-2 text-end text-xs font-medium text-muted';
 const CELL = 'tabular px-3 py-2.5 text-end';
 
-/** The weekly analyses (SPEC Phase 3): months of arrival that leave faster, blocking lessons. */
-export function InsightsTab() {
+/**
+ * The weekly analyses (SPEC Phase 3), once read: when they ran, then the tab's part. Before the
+ * first ones, what is coming.
+ */
+function WithReport({ children }: { children: (report: InsightsReport) => ReactNode }) {
   const { t, relative } = useI18n();
   const { api } = useCreatorData();
   const { state, retry } = useApi<InsightsReport>(`${api}/insights`);
@@ -50,10 +53,19 @@ export function InsightsTab() {
       <p className="text-sm text-muted">
         {t('insights.computed', { when: relative(new Date(report.computedAt)) })}
       </p>
-      <Cohorts report={report} />
-      <Lessons lessons={report.lessons} />
+      {children(report)}
     </div>
   );
+}
+
+/** Analytics › Cohorts: the months of arrival whose members leave faster. */
+export function CohortsTab() {
+  return <WithReport>{(report) => <Cohorts report={report} />}</WithReport>;
+}
+
+/** Analytics › Lessons: the lessons members stall after. */
+export function LessonsTab() {
+  return <WithReport>{(report) => <Lessons lessons={report.lessons} />}</WithReport>;
 }
 
 /** A departure rate; « — » while no member of the month is old enough. */

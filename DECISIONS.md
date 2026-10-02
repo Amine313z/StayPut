@@ -1310,6 +1310,38 @@ l'équipe :
   `/api/creator/:companyId/preview/retention` et `…/preview/space` : plus besoin de connaître
   l'expérience de StayPut dans la communauté pour les voir.
 
+### La structure du tableau de bord : un menu de rubriques, des onglets en haut (2 octobre)
+
+Demande du fondateur : un menu de rubriques dans StayPut (Tableau de bord, Espace membre, Membres,
+Actions, Analyses, Sources d'activité, Réglages), et dans chaque rubrique plusieurs onglets en
+haut, avec des mots anglais que tout créateur comprend ; garder le choix de la langue et du thème.
+
+- **Le menu** est une colonne à gauche de StayPut, juste à droite du menu de Whop, qu'elle
+  prolonge (lu ainsi : « à droite », c'est-à-dire dans le cadre de StayPut). Il porte en tête la
+  communauté et « Vue de l'équipe », et en bas « Se déconnecter » hors de Whop. Sur un téléphone,
+  il devient une rangée à faire défiler, au-dessus de la rubrique. La langue et le thème restent
+  dans la barre du haut, comme avant.
+- **Les mots anglais** (le français suit) : Dashboard, Member space, Members, **Automations**
+  (plutôt qu'« Actions », trop vague : ce que StayPut fait de lui-même, validé ou non),
+  **Analytics** (le mot des outils de créateurs), **Integrations** (plutôt que « Activity
+  sources » : on y connecte Discord et Telegram), Settings.
+- **Les onglets**, une seule chose chacun : Dashboard (Overview, Needs attention, New members),
+  Member space (Overview, Testimonials, Member view), Members (All members, Never contact :
+  nouvel onglet, la liste « ne jamais contacter » réunie), Automations (To approve, Scheduled,
+  History, Alumni offer), Analytics (Cohorts, Lessons), Integrations (Whop, Discord, Telegram,
+  Activity), Settings (Risk score, Automations, Member space). La vue d'ensemble garde les cinq
+  premiers membres à surveiller et nouveaux membres, avec « Tout voir » vers leur onglet.
+- **Les nombres** sur les onglets quand l'écran les connaît : membres (tous, ne jamais
+  contacter), actions (à valider, programmées, historique).
+- **Les adresses** : une par onglet (`/dashboard/<communauté>/<rubrique>/<onglet>`), la page
+  d'accueil d'une rubrique est son premier onglet ; une adresse inconnue y mène, et
+  `/actions?view=history` mène à l'onglet Historique. Le retour après l'ajout du bot Discord
+  ouvre Intégrations → Discord.
+- **La mise en page** suit la place laissée à côté du menu (requêtes de conteneur de Tailwind) et
+  non la largeur de la fenêtre : dans le cadre de Whop (environ 1 300 px), les six chiffres du
+  tableau de bord passent sur deux lignes de trois au lieu d'être serrés sur une. La page est
+  plus large (1 280 px au plus au lieu de 1 152).
+
 ### Reste à faire dans cette phase
 
 - Les permissions à ajouter dans Whop, avec celles de la phase 4 : `chat:read` et

@@ -24,6 +24,7 @@ import { DiscordIcon, TelegramIcon } from '../../ui/BrandIcons';
 import { SECTION_LINK_CLASS } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { Stat } from '../../ui/Stat';
+import type { Loadable } from '../../api';
 import { useCreatorData } from '../CreatorView';
 
 /** Members listed at most in « Needs attention » and in the activation radar. */
@@ -53,8 +54,8 @@ export function Overview() {
         <div className="min-w-0 space-y-6 lg:col-span-3">
           {page ? (
             <>
-              <Attention members={page.members} root={root} />
-              <Newcomers members={page.members} root={root} />
+              <Attention members={page.members} limit={LIST_LIMIT} seeAll={`${root}/attention`} />
+              <Newcomers members={page.members} limit={LIST_LIMIT} seeAll={`${root}/new-members`} />
             </>
           ) : null}
         </div>
@@ -71,6 +72,45 @@ export function Overview() {
   );
 }
 
+/** Dashboard › Needs attention: every member at risk of leaving soon, with the reasons. */
+export function AttentionTab() {
+  const { members } = useCreatorData();
+  return (
+    <MembersOr state={members.state} retry={members.retry}>
+      {(page) => <Attention members={page.members} />}
+    </MembersOr>
+  );
+}
+
+/** Dashboard › New members: every newcomer who has not started (the activation radar). */
+export function NewMembersTab() {
+  const { members } = useCreatorData();
+  return (
+    <MembersOr state={members.state} retry={members.retry}>
+      {(page) => <Newcomers members={page.members} />}
+    </MembersOr>
+  );
+}
+
+/** The members once read; meanwhile, the wait or what went wrong. */
+function MembersOr({
+  state,
+  retry,
+  children,
+}: {
+  state: Loadable<MembersPage>;
+  retry: () => void;
+  children: (page: MembersPage) => ReactNode;
+}) {
+  if (state.status === 'loading') return <Loading />;
+  if (state.status === 'error') {
+    return (
+      <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
+    );
+  }
+  return <>{children(state.data)}</>;
+}
+
 function Figures({ page }: { page: MembersPage }) {
   const { t, number } = useI18n();
   const { summary } = page;
@@ -79,7 +119,7 @@ function Figures({ page }: { page: MembersPage }) {
       <h2 id="figures-title" className="sr-only">
         {t('overview.figures')}
       </h2>
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <dl className="grid grid-cols-2 gap-3 @xl:grid-cols-3 @6xl:grid-cols-6">
         <Stat
           label={t('members.summary.members')}
           value={number(summary.members)}
@@ -154,9 +194,18 @@ function RevenueStat({ revenue }: { revenue: RevenueSummary | null }) {
  * departures scheduled and the high risks, a failed payment among them whatever the activity,
  * each with the reasons. Before the first scores, Whop's facts.
  */
-function Attention({ members, root }: { members: readonly MemberRow[]; root: string }) {
+function Attention({
+  members,
+  limit,
+  seeAll,
+}: {
+  members: readonly MemberRow[];
+  /** Only the first ones, with a link to all of them (the overview). */
+  limit?: number;
+  seeAll?: string;
+}) {
   const i18n = useI18n();
-  const { t, number } = i18n;
+  const { t } = i18n;
   const scored = members.some((m) => m.risk !== null);
   const flagged = scored
     ? members.filter((m) => m.risk?.level === 'scheduled_departure' || m.risk?.level === 'high')
@@ -167,9 +216,9 @@ function Attention({ members, root }: { members: readonly MemberRow[]; root: str
       title={t('attention.title')}
       description={t('attention.description')}
       actions={
-        flagged.length > 0 ? (
-          <Link to={`${root}/members`} className={SECTION_LINK_CLASS}>
-            {t('attention.byRisk')}
+        seeAll && flagged.length > 0 ? (
+          <Link to={seeAll} className={SECTION_LINK_CLASS}>
+            {t('attention.seeAll', { count: flagged.length })}
             <ArrowRight aria-hidden="true" className="size-4" />
           </Link>
         ) : null
@@ -182,7 +231,7 @@ function Attention({ members, root }: { members: readonly MemberRow[]; root: str
         </p>
       ) : (
         <ul className="divide-y divide-line">
-          {flagged.slice(0, LIST_LIMIT).map((member) => (
+          {flagged.slice(0, limit).map((member) => (
             <li key={member.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
               <Avatar name={member.name} />
               <div className="min-w-0 flex-1">
@@ -213,11 +262,6 @@ function Attention({ members, root }: { members: readonly MemberRow[]; root: str
           ))}
         </ul>
       )}
-      {flagged.length > LIST_LIMIT ? (
-        <p className="mt-3 border-t border-line pt-3 text-sm text-muted">
-          {t('attention.more', { count: number(flagged.length - LIST_LIMIT) })}
-        </p>
-      ) : null}
     </Card>
   );
 }
@@ -226,7 +270,15 @@ function Attention({ members, root }: { members: readonly MemberRow[]; root: str
  * The activation radar (SPEC Phase 3): joined 3 to 7 days ago and nothing since. The welcome
  * action of Phase 4 will start from here.
  */
-function Newcomers({ members, root }: { members: readonly MemberRow[]; root: string }) {
+function Newcomers({
+  members,
+  limit,
+  seeAll,
+}: {
+  members: readonly MemberRow[];
+  limit?: number;
+  seeAll?: string;
+}) {
   const { t, date } = useI18n();
   const newcomers = members.filter((m) => m.risk?.inactiveNewcomer === true);
   return (
@@ -235,8 +287,8 @@ function Newcomers({ members, root }: { members: readonly MemberRow[]; root: str
       title={t('newcomers.title')}
       description={t('newcomers.description')}
       actions={
-        newcomers.length > 0 ? (
-          <Link to={`${root}/members?filter=newcomers`} className={SECTION_LINK_CLASS}>
+        seeAll && newcomers.length > 0 ? (
+          <Link to={seeAll} className={SECTION_LINK_CLASS}>
             {t('attention.seeAll', { count: newcomers.length })}
             <ArrowRight aria-hidden="true" className="size-4" />
           </Link>
@@ -250,7 +302,7 @@ function Newcomers({ members, root }: { members: readonly MemberRow[]; root: str
         </p>
       ) : (
         <ul className="divide-y divide-line">
-          {newcomers.slice(0, LIST_LIMIT).map((member) => (
+          {newcomers.slice(0, limit).map((member) => (
             <li key={member.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
               <Avatar name={member.name} />
               <div className="min-w-0">

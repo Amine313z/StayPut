@@ -57,7 +57,7 @@ export function Connected() {
       {isCompanyId(company) ? (
         <div className="mt-6">
           <ButtonLink
-            href={`/dashboard/${company}/sources`}
+            href={`/dashboard/${company}/sources/discord`}
             icon={<ArrowLeft aria-hidden="true" className="size-4" />}
           >
             {t('connected.return')}

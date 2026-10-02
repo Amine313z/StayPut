@@ -38,6 +38,25 @@ de l'iframe n'est envoyé qu'à cette origine) :
 Base : Supabase (Postgres), schéma `stayput`, jamais exposé par l'API publique de Supabase, RLS
 sur chaque table. Le Worker s'y connecte par Hyperdrive. Budget : 0 €.
 
+### Le tableau de bord du créateur
+
+Un menu de rubriques sur le côté (une rangée à faire défiler sur un téléphone), et dans chaque
+rubrique ses onglets en haut. La langue (English, Français) et le thème restent en haut de page.
+
+| Rubrique (EN · FR)            | Onglets                                             |
+| ----------------------------- | --------------------------------------------------- |
+| Dashboard · Tableau de bord   | Vue d'ensemble · À surveiller · Nouveaux membres    |
+| Member space · Espace membre  | Vue d'ensemble · Témoignages · Vue membre           |
+| Members · Membres             | Tous les membres · Ne jamais contacter              |
+| Automations · Automatisations | À valider · Programmées · Historique · Offre Alumni |
+| Analytics · Analyses          | Cohortes · Leçons                                   |
+| Integrations · Intégrations   | Whop · Discord · Telegram · Activité                |
+| Settings · Réglages           | Score de risque · Automatisations · Espace membre   |
+
+Chaque onglet a son adresse (`/dashboard/<communauté>/<rubrique>/<onglet>`) ; une adresse
+inconnue ouvre le premier onglet de sa rubrique, et les anciennes (`/actions?view=history`)
+mènent au bon onglet.
+
 ```
 apps/worker      API, webhooks, crons (Hono)          packages/core   logique métier pure
 apps/web         vue créateur + vue membre (React)    packages/whop   client Whop typé
@@ -168,8 +187,8 @@ sinon. Réglages une fois pour toutes (détails et raisons : `DECISIONS.md`, 202
   par son groupe de discussion (les commentaires des membres) : activer les commentaires du
   canal (Gérer → Discussion), puis y ajouter le bot.
 
-Le créateur connecte ensuite son serveur ou ses groupes depuis **Sources d'activité** dans le
-tableau de bord ; chaque membre relie son Telegram depuis la vue membre.
+Le créateur connecte ensuite son serveur ou ses groupes depuis **Intégrations** (onglets Discord
+et Telegram) dans le tableau de bord ; chaque membre relie son Telegram depuis la vue membre.
 
 À chaque déploiement, la dernière étape demande à Discord et à Telegram s'ils **acceptent** ces
 secrets, et vérifie l'adresse de retour, le bot public, le Server Members Intent, le mode
@@ -213,7 +232,7 @@ est programmé et ce qui s'est passé ; tout passe par les garde-fous, et le mod
 sans rien envoyer. Dans la **vue membre**, un membre qui a programmé son annulation dit pourquoi
 en un clic et reçoit l'offre qui répond à sa raison (pause, code promo, aide, jours offerts) ;
 un membre dont le paiement attend voit le bouton pour le régler. L'équipe y voit un aperçu, où
-rien n'est enregistré. L'**offre Alumni** (onglet Actions) se crée en un clic sur Whop : une
+rien n'est enregistré. L'**offre Alumni** (Automatisations → Offre Alumni) se crée en un clic sur Whop : une
 offre gratuite et cachée où les anciens membres gardent le contact. 7, 30 et 60 jours après leur
 départ, ils y reçoivent des nouvelles de la communauté avec un code de retour à usage unique, et
 le retrouvent dans leur vue de l'espace Alumni avec le bouton pour revenir. Détails :
@@ -224,30 +243,30 @@ le retrouvent dans leur vue de l'espace Alumni avec le bouton pour revenir. Dét
 Dans la **vue membre**, le membre choisit son objectif parmi ceux du créateur (ou écrit le sien)
 avec une cible, une unité et une date, puis note ses résultats en un geste : où il en est, ou ce
 qu'il ajoute (« Ajouter 1 »). Il voit sa progression, les jalons de 25, 50, 75 et 100 % et ses
-badges (premier résultat, première preuve, 7 jours d'affilée, chaque jalon), avec une petite fête
-à chaque étape. Une capture d'écran peut appuyer un résultat : le navigateur du membre la lit
+badges (premier résultat, première preuve, 7 jours d'affilée, chaque jalon), avec une petite fête à
+chaque étape. Une capture d'écran peut appuyer un résultat : le navigateur du membre la lit
 (Tesseract.js) et propose les nombres qu'il y voit ; seuls l'empreinte de l'image et ces nombres
-partent, jamais l'image. Si le créateur les allume (Réglages → Jours mérités), un jalon atteint
-offre des jours gratuits sur l'abonnement (3 à 50 %, 7 à 100 % par défaut), une fois par membre
-et par jalon, par les garde-fous comme toute action. Si le créateur choisit un endroit
-(Réglages → Annonces des jalons : un chat Whop, un salon Discord, un groupe Telegram), le membre
-peut partager un jalon atteint avec la communauté, après avoir vu le texte exact (son prénom,
-son objectif et le jalon, jamais ses chiffres). Le membre crée aussi la **carte témoignage** d'un
-résultat : une image à télécharger (PNG), dessinée dans son navigateur, avec un QR code vers sa
-page publique `/v/…` (le résultat, son niveau de preuve, sa date ; son nom seulement s'il l'a
-coché ; son lien d'affiliation Whop s'il en a un). Il peut retirer la page à tout moment. Si le
-créateur les allume (Réglages → Binômes), chaque nouveau membre est associé à un vétéran engagé
-(même type d'objectif si possible, 3 nouveaux au plus) ; les deux reçoivent une présentation et
-se voient dans leur espace, et le vétéran gagne le badge Mentor si le nouveau est toujours là
-30 jours plus tard. Chacun peut refuser. Avec les **défis de sauvetage** (Réglages → Défis de
-sauvetage), un membre inactif depuis 14 jours devient un défi que les autres voient sans son nom,
-avec un lien vers son dernier message ; s'il revient, ceux qui s'en sont occupés gagnent le badge
-Sauveteur.
+partent, jamais l'image. Si le créateur les allume (Réglages → Espace membre → Jours mérités), un
+jalon atteint offre des jours gratuits sur l'abonnement (3 à 50 %, 7 à 100 % par défaut), une fois
+par membre et par jalon, par les garde-fous comme toute action. Si le créateur choisit un endroit
+(Réglages → Espace membre → Annonces des jalons : un chat Whop, un salon Discord, un groupe
+Telegram), le membre peut partager un jalon atteint avec la communauté, après avoir vu le texte
+exact (son prénom, son objectif et le jalon, jamais ses chiffres). Le membre crée aussi la **carte
+témoignage** d'un résultat : une image à télécharger (PNG), dessinée dans son navigateur, avec un QR
+code vers sa page publique `/v/…` (le résultat, son niveau de preuve, sa date ; son nom seulement
+s'il l'a coché ; son lien d'affiliation Whop s'il en a un). Il peut retirer la page à tout moment.
+Si le créateur les allume (Réglages → Espace membre → Binômes), chaque nouveau membre est associé à
+un vétéran engagé (même type d'objectif si possible, 3 nouveaux au plus) ; les deux reçoivent une
+présentation et se voient dans leur espace, et le vétéran gagne le badge Mentor si le nouveau est
+toujours là 30 jours plus tard. Chacun peut refuser. Avec les **défis de sauvetage** (Réglages →
+Espace membre → Défis de sauvetage), un membre inactif depuis 14 jours devient un défi que les
+autres voient sans son nom, avec un lien vers son dernier message ; s'il revient, ceux qui s'en sont
+occupés gagnent le badge Sauveteur.
 Chaque ouverture de l'espace et chaque résultat comptent comme de l'activité dans le score. Le
 créateur choisit les objectifs proposés dans **Réglages** (ceux de sa niche par défaut) ; dans
 la vue membre, l'équipe essaie l'espace sans rien enregistrer.
 
-Dans le **tableau de bord**, l'onglet **Espace membre** réunit tout cela au même endroit : les
+Dans le **tableau de bord**, la rubrique **Espace membre** réunit tout cela au même endroit : les
 chiffres sur 30 jours (objectifs en cours, résultats notés et appuyés par une capture, membres
 actifs dans leur espace, badges, cartes en ligne), les cartes témoignage publiées par les membres,
 dessinées avec leur QR code et le lien de leur page, l'état des binômes et des défis de

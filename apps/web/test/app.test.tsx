@@ -334,10 +334,36 @@ describe('creator view', () => {
   it('opens the dashboard of the company in the URL', async () => {
     const calls = mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
-    expect(await screen.findByRole('heading', { name: 'Retention dashboard' })).toBeTruthy();
-    expect(screen.getByText('Connected as a team member of Le Club.')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
+    // The side menu: the community, then the sections, the open one marked.
+    const menu = screen.getByRole('navigation', { name: 'Dashboard sections' });
+    expect(
+      within(menu)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual([
+      'Dashboard',
+      'Member space',
+      'Members',
+      'Automations',
+      'Analytics',
+      'Integrations',
+      'Settings',
+    ]);
+    expect(within(menu).getByRole('link', { name: 'Dashboard' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    expect(screen.getByText('Le Club')).toBeTruthy();
+    expect(screen.getByText('Team view')).toBeTruthy();
     expect(await screen.findByText('Up to date.')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe(
+    // The section's tabs on top, the first one open.
+    const tabs = screen.getByRole('navigation', { name: 'Dashboard tabs' });
+    expect(
+      within(tabs)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Overview', 'Needs attention', 'New members']);
+    expect(within(tabs).getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe(
       'page',
     );
     expect(calls.slice().sort()).toEqual([
@@ -373,8 +399,8 @@ describe('creator view', () => {
     expect(text.indexOf('Member without a name')).toBeLessThan(text.indexOf('Bruno Petit'));
     expect(text).not.toContain('Denis Moreau');
     expect(text).not.toContain('Alice Martin');
-    expect(screen.getByRole('link', { name: 'All members, by risk' }).getAttribute('href')).toBe(
-      '/dashboard/biz_A1/members',
+    expect(screen.getByRole('link', { name: 'See all (2)' }).getAttribute('href')).toBe(
+      '/dashboard/biz_A1/attention',
     );
 
     // The activation radar.
@@ -383,8 +409,24 @@ describe('creator view', () => {
       .closest('section')!;
     expect(radar.textContent).toContain('Chloé Dubois');
     expect(screen.getByRole('link', { name: 'See all (1)' }).getAttribute('href')).toBe(
-      '/dashboard/biz_A1/members?filter=newcomers',
+      '/dashboard/biz_A1/new-members',
     );
+  });
+
+  it('lists every member who needs attention, and every new member who has not started', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/attention');
+    const attention = (
+      await screen.findByRole('heading', { name: 'Needs attention', level: 2 })
+    ).closest('section')!;
+    expect(attention.textContent).toContain('Member without a name');
+    expect(attention.textContent).toContain('Bruno Petit');
+    expect(within(attention).queryByRole('link', { name: /See all/ })).toBeNull();
+    fireEvent.click(screen.getByRole('link', { name: 'New members' }));
+    const radar = (
+      await screen.findByRole('heading', { name: 'New members who have not started' })
+    ).closest('section')!;
+    expect(radar.textContent).toContain('Chloé Dubois');
   });
 
   it('shows how the risk spreads, each level with its count, share and members', async () => {
@@ -623,10 +665,31 @@ describe('creator view', () => {
   it('speaks French', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1/members', 'fr');
-    expect(
-      await screen.findByRole('heading', { name: 'Tableau de bord de rétention' }),
-    ).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Membres', level: 1 })).toBeTruthy();
     expect(document.documentElement.lang).toBe('fr');
+    // The sections and the tabs in French too.
+    const menu = screen.getByRole('navigation', { name: 'Rubriques du tableau de bord' });
+    expect(
+      within(menu)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual([
+      'Tableau de bord',
+      'Espace membre',
+      'Membres',
+      'Automatisations',
+      'Analyses',
+      'Intégrations',
+      'Réglages',
+    ]);
+    // Each tab with how many members it holds, once they are read.
+    await vi.waitFor(() =>
+      expect(
+        within(screen.getByRole('navigation', { name: 'Onglets : Membres' }))
+          .getAllByRole('link')
+          .map((link) => link.textContent),
+      ).toEqual(['Tous les membres5', 'Ne jamais contacter0']),
+    );
     const alice = (await screen.findByText('Alice Martin')).closest('li')!;
     expect(alice.textContent).toContain('Active · 49,00 $US par mois');
     expect(alice.textContent).toContain(
@@ -658,11 +721,48 @@ describe('creator view', () => {
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
 
+  it('lists the members on the « never contact » list in their own tab', async () => {
+    mockApi(
+      dashboard({
+        ...MEMBERS,
+        members: MEMBERS.members.map((m) =>
+          m.name === 'Alice Martin' ? { ...m, doNotContact: true } : m,
+        ),
+      }),
+    );
+    renderAt('/dashboard/biz_A1/members/never-contact');
+    const list = (await screen.findByRole('heading', { name: 'Never contact', level: 2 })).closest(
+      'section',
+    )!;
+    expect(within(list).getByText('Alice Martin')).toBeTruthy();
+    expect(within(list).queryByText('Bruno Petit')).toBeNull();
+    await vi.waitFor(() =>
+      expect(
+        within(screen.getByRole('navigation', { name: 'Members tabs' }))
+          .getAllByRole('link')
+          .map((link) => link.textContent),
+      ).toEqual(['All members5', 'Never contact1']),
+    );
+  });
+
+  it('opens a section’s first tab for an address it does not know', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/members/unknown');
+    expect(await screen.findByRole('heading', { name: 'Members', level: 1 })).toBeTruthy();
+    await vi.waitFor(() =>
+      expect(
+        within(screen.getByRole('navigation', { name: 'Members tabs' }))
+          .getByRole('link', { name: /^All members/ })
+          .getAttribute('aria-current'),
+      ).toBe('page'),
+    );
+  });
+
   it('offers to try again after a network failure, and succeeds', async () => {
     mockApi({ '/api/creator/biz_A1/session': [new TypeError('offline'), creatorSession] });
     renderAt('/dashboard/biz_A1');
     fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
-    expect(await screen.findByRole('heading', { name: 'Retention dashboard' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
   });
 });
 
@@ -778,7 +878,7 @@ describe('activity sources', () => {
       'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
       '/api/creator/biz_A1/accounts': [{ status: 200, body: NO_ACCOUNTS }],
     });
-    renderAt('/dashboard/biz_A1/sources');
+    renderAt('/dashboard/biz_A1/sources/activity');
     const places = (await screen.findByText('Servers and groups')).closest('section')!;
     const card = places.parentElement!.parentElement!;
     expect(within(card).getByText('12 messages')).toBeTruthy();
@@ -856,7 +956,7 @@ describe('activity sources', () => {
         { status: 200, body: MEMBERS },
       ],
     });
-    renderAt('/dashboard/biz_A1/sources');
+    renderAt('/dashboard/biz_A1/sources/activity');
     expect(await screen.findByText('To tie (1)')).toBeTruthy();
     expect(screen.getByText('@bruno_p')).toBeTruthy();
     expect(screen.getByText(/2 messages waiting/)).toBeTruthy();
@@ -922,7 +1022,7 @@ describe('activity sources', () => {
         body: MEMBERS,
       })),
     });
-    renderAt('/dashboard/biz_A1/sources');
+    renderAt('/dashboard/biz_A1/sources/activity');
     expect(await screen.findByText(/Your own account, or a teammate’s\?/)).toBeTruthy();
     // Only Whop members can be tied: someone invited to Discord alone is not in the list.
     expect(screen.getByText(/Only someone who joined your community on Whop/)).toBeTruthy();
@@ -972,7 +1072,7 @@ describe('activity sources', () => {
           { status: 200, body: connected },
         ],
       });
-      renderAt('/dashboard/biz_A1/sources');
+      renderAt('/dashboard/biz_A1/sources/activity');
       const places = (await screen.findByText('Servers and groups')).closest('section')!;
       const card = places.parentElement!.parentElement!;
       expect(within(card).getByText('2 messages')).toBeTruthy();
@@ -1059,7 +1159,7 @@ describe('activity sources', () => {
       'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(2),
       '/api/creator/biz_A1/accounts': [{ status: 200, body: NO_ACCOUNTS }],
     });
-    renderAt('/dashboard/biz_A1/sources');
+    renderAt('/dashboard/biz_A1/sources/activity');
     const card = (
       await screen.findByRole('heading', { name: 'Members on Discord and Telegram' })
     ).closest('section')!;
@@ -1097,14 +1197,16 @@ describe('activity sources', () => {
 
   it('offers to connect Discord and Telegram, with the steps', async () => {
     mockApi(dashboard());
-    renderAt('/dashboard/biz_A1/sources');
+    renderAt('/dashboard/biz_A1/sources/discord');
     const discord = await screen.findByRole('link', { name: /Add the bot to my server/ });
     expect(discord.getAttribute('href')).toBe(INTEGRATIONS.discord.install!.url);
     expect(discord.getAttribute('target')).toBe('_blank');
-    expect(screen.getByRole('link', { name: /Add the bot to a group/ }).getAttribute('href')).toBe(
-      INTEGRATIONS.telegram.addToGroup!.url,
-    );
     expect(screen.getByText(/StayPut follows every channel it can read/)).toBeTruthy();
+    // Telegram has its own tab.
+    fireEvent.click(screen.getByRole('link', { name: 'Telegram' }));
+    expect(
+      (await screen.findByRole('link', { name: /Add the bot to a group/ })).getAttribute('href'),
+    ).toBe(INTEGRATIONS.telegram.addToGroup!.url);
     expect(screen.getByText(/Members link their Telegram from StayPut/)).toBeTruthy();
   });
 
@@ -1115,7 +1217,7 @@ describe('activity sources', () => {
         telegram: { ...INTEGRATIONS.telegram, readsAllMessages: false },
       }),
     );
-    renderAt('/dashboard/biz_A1/sources');
+    renderAt('/dashboard/biz_A1/sources/telegram');
     expect(await screen.findByText(/privacy mode is on/)).toBeTruthy();
   });
 
@@ -1124,7 +1226,7 @@ describe('activity sources', () => {
       ...dashboard(),
       '/api/creator/biz_A1/integrations?lang=fr': [{ status: 200, body: INTEGRATIONS }],
     });
-    renderAt('/dashboard/biz_A1/sources', 'fr');
+    renderAt('/dashboard/biz_A1/sources/telegram', 'fr');
     expect(await screen.findByText(/Un canal \? Seuls ses administrateurs/)).toBeTruthy();
     expect(calls).toContain('/api/creator/biz_A1/integrations?lang=fr');
     expect(calls).not.toContain('/api/creator/biz_A1/integrations?lang=en');
@@ -1170,8 +1272,9 @@ describe('activity sources', () => {
         { status: 200, body: connected },
       ],
     });
-    renderAt('/dashboard/biz_A1/sources');
-    const server = (await screen.findByText('Le Club')).closest('li')!;
+    renderAt('/dashboard/biz_A1/sources/discord');
+    // The server's row (« Le Club » is also the community's name, in the side menu).
+    const server = (await screen.findByText(/2 channels followed/)).closest('li')!;
     expect(server.textContent).toContain('2 channels followed');
     expect(server.textContent).toContain('1 channel the bot cannot read');
     expect(screen.getByText('12 members recognized')).toBeTruthy();
@@ -1208,7 +1311,7 @@ describe('activity sources', () => {
         { status: 200, body: INTEGRATIONS },
       ],
     });
-    renderAt('/dashboard/biz_A1/sources');
+    renderAt('/dashboard/biz_A1/sources/telegram');
     const group = (await screen.findByText('VIP')).closest('li')!;
     expect(group.textContent).toContain('Listening');
     const disconnect = Array.from(group.querySelectorAll('button')).find(
@@ -1273,7 +1376,11 @@ describe('analyses', () => {
   it('flags the months of arrival that leave faster, and the blocking lessons', async () => {
     const calls = mockApi({
       ...dashboard(),
-      '/api/creator/biz_A1/insights': [{ status: 200, body: REPORT }],
+      // Read by each tab: the cohorts, then the lessons.
+      '/api/creator/biz_A1/insights': [
+        { status: 200, body: REPORT },
+        { status: 200, body: REPORT },
+      ],
     });
     renderAt('/dashboard/biz_A1/insights');
     expect(
@@ -1289,7 +1396,11 @@ describe('analyses', () => {
     const average = screen.getByRole('rowheader', { name: 'Your average' }).closest('tr')!;
     expect(average.textContent).toBe('Your average20%27%20%');
 
-    const blocking = screen.getByRole('rowheader', { name: /4\. Risk management/ }).closest('tr')!;
+    // The lessons have their tab.
+    fireEvent.click(screen.getByRole('link', { name: 'Lessons' }));
+    const blocking = (
+      await screen.findByRole('rowheader', { name: /4\. Risk management/ })
+    ).closest('tr')!;
     expect(blocking.textContent).toBe('4. Risk managementBlocking7 of 1258%21%');
     // The first 8 lessons, then all of them on demand.
     expect(screen.queryByRole('rowheader', { name: 'Lesson without a title' })).toBeNull();
@@ -1397,15 +1508,26 @@ describe('risk settings', () => {
 
   it('proposes the goals of the niche saved to members', async () => {
     const calls = settings({
+      // Read by each tab that needs it: the goals, the score, the goals again.
+      '/api/creator/biz_A1/settings/risk': [
+        { status: 200, body: DEFAULTS },
+        { status: 200, body: DEFAULTS },
+        { status: 200, body: TRADING },
+      ],
       'PUT /api/creator/biz_A1/settings/risk': [{ status: 200, body: TRADING }],
     });
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/space');
     expect(await screen.findByText('Finish the course')).toBeTruthy();
     expect(screen.getByText('StayPut’s goals for Other, in each member’s language.')).toBeTruthy();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Your niche' }), {
+    // The niche is saved in the Risk score tab; the Member space tab proposes its goals.
+    const tabs = screen.getByRole('navigation', { name: 'Settings tabs' });
+    fireEvent.click(within(tabs).getByRole('link', { name: 'Risk score' }));
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Your niche' }), {
       target: { value: 'trading' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(calls).toContain('PUT /api/creator/biz_A1/settings/risk'));
+    fireEvent.click(within(tabs).getByRole('link', { name: 'Member space' }));
     expect(await screen.findByText('Follow my trading plan')).toBeTruthy();
     expect(calls).toContain('/api/creator/biz_A1/goals?lang=en&niche=trading');
   });
@@ -1421,7 +1543,7 @@ describe('risk settings', () => {
         { status: 200, body: OTHER_GOALS },
       ],
     });
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/space');
     fireEvent.click(await screen.findByRole('button', { name: 'Write my own' }));
     // StayPut's three, to change: the second and third go, one of the creator's comes.
     fireEvent.click(screen.getByRole('button', { name: 'Remove Move forward every week' }));
@@ -1459,7 +1581,7 @@ describe('risk settings', () => {
         { status: 200, body: { enabled: true, at50: 5, at100: 7 } },
       ],
     });
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/space');
     const save = await screen.findByRole('button', { name: 'Save the earned days' });
     expect(save.hasAttribute('disabled')).toBe(true);
     fireEvent.click(screen.getByRole('checkbox', { name: 'Offer free days at milestones' }));
@@ -1495,7 +1617,7 @@ describe('risk settings', () => {
         },
       ],
     });
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/space');
     const save = await screen.findByRole('button', { name: 'Save the buddies' });
     expect(screen.getByText('2 newcomers waiting')).toBeTruthy();
     expect(screen.getByText('0 veterans available')).toBeTruthy();
@@ -1516,7 +1638,7 @@ describe('risk settings', () => {
         },
       ],
     });
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/space');
     const save = await screen.findByRole('button', { name: 'Save the challenges' });
     expect(screen.getByText('0 open challenges')).toBeTruthy();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Show rescue challenges to members' }));
@@ -1538,7 +1660,7 @@ describe('risk settings', () => {
         },
       ],
     });
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/space');
     const where = await screen.findByRole<HTMLSelectElement>('combobox', { name: 'Where' });
     expect([...where.options].map((o) => o.textContent)).toEqual([
       'Nowhere (off)',
@@ -1637,7 +1759,7 @@ describe('back from Discord', () => {
   it('offers the way back when signed in to StayPut outside Whop', () => {
     renderAt('/connected?source=discord&status=ok&name=Le%20Club&channels=2&company=biz_A1', 'fr');
     expect(screen.getByRole('link', { name: /Revenir à StayPut/ }).getAttribute('href')).toBe(
-      '/dashboard/biz_A1/sources',
+      '/dashboard/biz_A1/sources/discord',
     );
     expect(screen.getByText(/Ou fermez cet onglet/)).toBeTruthy();
     cleanup();
@@ -1702,7 +1824,7 @@ describe('signing in with Whop outside the iframe (sandbox)', () => {
     expect(signOut.getAttribute('href')).toBe('/auth/logout');
     cleanup();
     renderAt('/dashboard/biz_A1');
-    expect(await screen.findByRole('heading', { name: 'Retention dashboard' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Sign out' })).toBeNull();
   });
 });
@@ -1765,7 +1887,7 @@ describe('the member space in the dashboard', () => {
     alumni: null,
   };
 
-  it('gathers its figures, the cards online and the members’ space in one tab', async () => {
+  it('shows the member space in three tabs: its figures, the cards online, the member view', async () => {
     // A canvas that answers: the card is drawn as members shared it.
     const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
       () =>
@@ -1787,19 +1909,33 @@ describe('the member space in the dashboard', () => {
     try {
       const calls = mockApi({
         ...dashboard(),
-        '/api/creator/biz_A1/space': [{ status: 200, body: overview }],
+        // Read by each tab that shows it: the overview, then the cards.
+        '/api/creator/biz_A1/space': [
+          { status: 200, body: overview },
+          { status: 200, body: overview },
+        ],
         '/api/creator/biz_A1/preview/retention': [{ status: 200, body: survey }],
         '/api/creator/biz_A1/preview/space?lang=en': [{ status: 200, body: preview }],
       });
       renderAt('/dashboard/biz_A1/space');
       expect(await screen.findByText('Goals under way')).toBeTruthy();
-      expect(screen.getByRole('link', { name: 'Member space' }).getAttribute('aria-current')).toBe(
-        'page',
-      );
+      const menu = screen.getByRole('navigation', { name: 'Dashboard sections' });
+      expect(
+        within(menu).getByRole('link', { name: 'Member space' }).getAttribute('aria-current'),
+      ).toBe('page');
       expect(screen.getByText('1 goal reached')).toBeTruthy();
       expect(screen.getByText('4 backed by a screenshot')).toBeTruthy();
       expect(screen.getByText('3 noted a result')).toBeTruthy();
+      // Members helping members: the buddies on, the challenges off, and where to set them.
+      expect(screen.getByText('2 pairs under way')).toBeTruthy();
+      expect(screen.getByText('Off')).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'Set them in Settings' }).getAttribute('href')).toBe(
+        '/dashboard/biz_A1/settings/space',
+      );
+
       // The cards online, drawn with their QR code, and the way to their page.
+      const tabs = screen.getByRole('navigation', { name: 'Member space tabs' });
+      fireEvent.click(within(tabs).getByRole('link', { name: 'Testimonials' }));
       const image = await screen.findByRole('img', {
         name: 'Testimonial card: Reach 3,000 € a month, 55% of the goal',
       });
@@ -1819,13 +1955,9 @@ describe('the member space in the dashboard', () => {
       expect(screen.getByText('Scan it with your phone: the card’s page opens.')).toBeTruthy();
       // The team never takes a member’s card down.
       expect(screen.queryByRole('button', { name: /Take the page down/ })).toBeNull();
-      // Members helping members: the buddies on, the challenges off, and where to set them.
-      expect(screen.getByText('2 pairs under way')).toBeTruthy();
-      expect(screen.getByText('Off')).toBeTruthy();
-      expect(screen.getByRole('link', { name: 'Set them in Settings' }).getAttribute('href')).toBe(
-        '/dashboard/biz_A1/settings',
-      );
+
       // Their space, to try: the survey and the goals, nothing sent.
+      fireEvent.click(within(tabs).getByRole('link', { name: 'Member view' }));
       expect(await screen.findByText('What your members see')).toBeTruthy();
       expect(await screen.findByText('Train regularly')).toBeTruthy();
       expect(calls).toContain('/api/creator/biz_A1/preview/space?lang=en');
@@ -1845,7 +1977,7 @@ describe('the member space in the dashboard', () => {
       '/api/creator/biz_A1/preview/retention': [{ status: 200, body: survey }],
       '/api/creator/biz_A1/preview/space?lang=en': [{ status: 200, body: preview }],
     });
-    renderAt('/dashboard/biz_A1/space');
+    renderAt('/dashboard/biz_A1/space/cards');
     expect(
       await screen.findByText(
         'No card yet. A member makes theirs in their space, from one of their results.',
@@ -3075,7 +3207,7 @@ describe('the actions (SPEC Phase 4)', () => {
         'Test mode: every action is computed and kept, nothing is sent to your members.',
       ),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /History/ }));
+    fireEvent.click(screen.getByRole('link', { name: /History/ }));
     expect(await screen.findByText('Another message within 5 days')).toBeTruthy();
     expect(calls).toContain('/api/creator/biz_A1/actions?view=history');
     expect(screen.getByText('Simulated')).toBeTruthy();
@@ -3165,7 +3297,7 @@ describe('the actions (SPEC Phase 4)', () => {
         { status: 200, body: ready },
       ],
     });
-    renderAt('/dashboard/biz_A1/actions');
+    renderAt('/dashboard/biz_A1/actions/alumni');
     const name = await screen.findByRole<HTMLInputElement>('textbox', {
       name: 'Name of the offer',
     });
@@ -3204,7 +3336,7 @@ describe('the actions (SPEC Phase 4)', () => {
       '/api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
       'PUT /api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
     });
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/actions');
     const pause = await screen.findByRole('spinbutton', {
       name: 'Break, in days (“I don’t have the time”)',
     });
@@ -3267,7 +3399,7 @@ describe('the actions (SPEC Phase 4)', () => {
         { status: 200, body: { ...ACTION_SETTINGS, mode: 'auto', maxMessagesPerMonth: 2 } },
       ],
     });
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/actions');
     const automatic = await screen.findByRole('radio', { name: /Automatic/ });
     const save = () => screen.getByRole('button', { name: 'Save the action settings' });
     expect(save().hasAttribute('disabled')).toBe(true);
@@ -3333,7 +3465,7 @@ describe('the actions (SPEC Phase 4)', () => {
         { status: 200, body: { ...ACTION_SETTINGS, timezone: 'UTC' } },
       ],
     });
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/actions');
     const zone = await screen.findByRole<HTMLSelectElement>('combobox', { name: 'Time zone' });
     expect(zone.value).toBe('Europe/Paris');
     // The United States, the United Kingdom and France first; the zone in effect shows as such.

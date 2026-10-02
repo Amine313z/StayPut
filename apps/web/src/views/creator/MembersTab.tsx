@@ -1,5 +1,6 @@
 import type { MemberRow } from '@stayput/core';
-import { Search, Users } from 'lucide-react';
+import { BellOff, Search, Users } from 'lucide-react';
+import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { MemberList } from '../../components/MemberRows';
 import { ErrorPanel, Loading } from '../../components/Status';
@@ -47,6 +48,7 @@ function keep(filter: Filter, member: MemberRow): boolean {
 export function MembersTab() {
   const { t, number } = useI18n();
   const { members, api } = useCreatorData();
+  useMemberCounts();
   const [params, setParams] = useSearchParams();
   const filter = FILTERS.find((f) => f === params.get('filter')) ?? 'all';
   const query = params.get('q') ?? '';
@@ -140,6 +142,53 @@ export function MembersTab() {
           {t('members.truncated', { count: number(page.members.length) })}
         </p>
       ) : null}
+    </Card>
+  );
+}
+
+/** Members › how many in all, and on the « never contact » list: the section's tabs say it. */
+function useMemberCounts() {
+  const { members, tabCounts } = useCreatorData();
+  const page = members.state.status === 'ready' ? members.state.data : null;
+  const all = page?.members.length;
+  const never = page?.members.filter((m) => m.doNotContact).length;
+  useEffect(() => {
+    if (all !== undefined && never !== undefined) {
+      tabCounts?.({ '': all, 'never-contact': never });
+    }
+  }, [tabCounts, all, never]);
+}
+
+/** Members › Never contact: the members StayPut takes no action of any kind for. */
+export function NeverContactTab() {
+  const { t } = useI18n();
+  const { members, api } = useCreatorData();
+  useMemberCounts();
+  if (members.state.status === 'loading') return <Loading />;
+  if (members.state.status === 'error') {
+    return (
+      <ErrorPanel
+        error={members.state.error}
+        forbiddenKey="error.forbidden.creator"
+        onRetry={members.retry}
+      />
+    );
+  }
+  const listed = members.state.data.members.filter((m) => m.doNotContact);
+  return (
+    <Card
+      icon={<BellOff aria-hidden="true" className="size-4" />}
+      title={t('neverContact.title')}
+      description={t('neverContact.description')}
+    >
+      {listed.length === 0 ? (
+        <EmptyState
+          icon={<BellOff aria-hidden="true" className="size-5" />}
+          body={t('neverContact.none')}
+        />
+      ) : (
+        <MemberList members={listed} api={api} />
+      )}
     </Card>
   );
 }

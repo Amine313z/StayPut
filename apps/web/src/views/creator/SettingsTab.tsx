@@ -12,7 +12,7 @@ import {
 } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
 import { CircleAlert, CircleCheck, RotateCcw, Save, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { putJson, useApi } from '../../api';
 import { LEVELS } from '../../components/Risk';
 import { ErrorPanel, Loading } from '../../components/Status';
@@ -22,7 +22,6 @@ import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { useCreatorData } from '../CreatorView';
-import { ActionSettings } from './ActionSettings';
 import { Announcements } from './Announcements';
 import { Buddies } from './Buddies';
 import { Rescues } from './Rescues';
@@ -51,11 +50,12 @@ const FACTORS: Readonly<Record<keyof RiskWeights, { name: MessageKey; hint: Mess
 const RELOAD_AFTER_MS = 4_000;
 
 /**
- * The creator's settings (SPEC Phase 6, point 12): how the score is computed (Phase 3), the goals
- * proposed to members, the earned days, the buddies, the rescue challenges and the announcements
- * (Phase 5), and how the actions leave (Phase 4).
+ * The creator's settings (SPEC Phase 6, point 12), one tab each: how the score is computed
+ * (Phase 3), how the automations leave (Phase 4, ActionSettings), and the member space: the
+ * goals proposed to members, the earned days, the buddies, the rescue challenges and the
+ * announcements (Phase 5).
  */
-export function SettingsTab() {
+function WithRiskSettings({ children }: { children: (settings: RiskSettingsView) => ReactNode }) {
   const { api } = useCreatorData();
   const { state, retry } = useApi<RiskSettingsView>(`${api}/settings/risk`);
   if (state.status === 'loading') return <Loading />;
@@ -64,22 +64,30 @@ export function SettingsTab() {
       <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
     );
   }
-  return <Settings initial={state.data} />;
+  return <>{children(state.data)}</>;
 }
 
-/** The niche saved above decides the goals StayPut proposes to members below. */
-function Settings({ initial }: { initial: RiskSettingsView }) {
-  const [niche, setNiche] = useState(initial.niche);
+/** Settings › Risk score: the niche, the weight of each sign, the thresholds. */
+export function RiskSettingsTab() {
   return (
-    <div className="space-y-6">
-      <RiskSettingsForm initial={initial} onSaved={(saved) => setNiche(saved.niche)} />
-      <GoalProposals niche={niche} />
-      <EarnedDays />
-      <Buddies />
-      <Rescues />
-      <Announcements />
-      <ActionSettings />
-    </div>
+    <WithRiskSettings>{(settings) => <RiskSettingsForm initial={settings} />}</WithRiskSettings>
+  );
+}
+
+/** Settings › Member space: the niche saved in Risk score decides the goals proposed. */
+export function SpaceSettingsTab() {
+  return (
+    <WithRiskSettings>
+      {(settings) => (
+        <div className="space-y-6">
+          <GoalProposals niche={settings.niche} />
+          <EarnedDays />
+          <Buddies />
+          <Rescues />
+          <Announcements />
+        </div>
+      )}
+    </WithRiskSettings>
   );
 }
 
@@ -139,13 +147,7 @@ function sameSettings(a: RiskSettingsView, b: RiskSettingsView): boolean {
   );
 }
 
-function RiskSettingsForm({
-  initial,
-  onSaved,
-}: {
-  initial: RiskSettingsView;
-  onSaved: (saved: RiskSettingsView) => void;
-}) {
+function RiskSettingsForm({ initial }: { initial: RiskSettingsView }) {
   const { t, percent, number } = useI18n();
   const { api, members } = useCreatorData();
   const [saved, setSaved] = useState(initial);
@@ -196,7 +198,6 @@ function RiskSettingsForm({
     try {
       const next = await putJson<RiskSettingsView>(`${api}/settings/risk`, view);
       setSaved(next);
-      onSaved(next);
       setDraft(toDraft(next));
       setStatus('saved');
       setSaves((n) => n + 1);

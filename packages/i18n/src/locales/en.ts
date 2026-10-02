@@ -19,9 +19,6 @@ export const en = {
   'home.title': 'Retention for Whop communities',
   'home.body': 'Open StayPut from your Whop dashboard or from your community to get started.',
 
-  'creator.title': 'Retention dashboard',
-  'creator.connected': 'Connected as a team member of {company}.',
-
   'sync.title': 'Data sync',
   'sync.importing': 'Importing the last 90 days of your community. This can take a few minutes.',
   'sync.upToDate': 'Up to date.',
@@ -200,9 +197,6 @@ export const en = {
   'common.save': 'Save',
   'external.fallback': 'Nothing opened? Open the link here.',
   'creator.sections': 'Dashboard sections',
-  'creator.tab.overview': 'Overview',
-  'creator.tab.members': 'Members',
-  'creator.tab.sources': 'Activity sources',
   'overview.figures': 'Your community in figures',
   'attention.title': 'Needs attention',
   'attention.description': 'Who is most likely to leave soon, with the reasons.',
@@ -617,9 +611,6 @@ export const en = {
   'home.point.activity':
     'Activity from Whop, Discord and Telegram, without ever reading a message.',
 
-  'creator.tab.insights': 'Analyses',
-  'creator.tab.settings': 'Settings',
-
   'risk.level.low': 'Low risk',
   'risk.level.medium': 'Medium risk',
   'risk.level.high': 'High risk',
@@ -661,8 +652,6 @@ export const en = {
   'members.filter.medium': 'Medium',
   'members.filter.low': 'Low',
   'members.filter.newcomers': 'New, inactive',
-  'attention.byRisk': 'All members, by risk',
-  'attention.more': 'And {count} more in the members section.',
 
   'insights.computed': 'Analyzed {when}. The analyses run once a week.',
   'insights.pending': 'The first analyses run within the hour after the first synchronization.',
@@ -797,9 +786,43 @@ export const en = {
   'auth.failed': 'Signing in with Whop did not work. Try again.',
   'auth.signOut': 'Sign out',
 
-  'creator.tab.actions': 'Actions',
-
-  'creator.tab.space': 'Member space',
+  'nav.community': 'Community',
+  'nav.team': 'Team view',
+  'nav.tabs': '{section} tabs',
+  'nav.dashboard': 'Dashboard',
+  'nav.dashboard.description': 'Your community at a glance: who may leave, and why.',
+  'nav.space': 'Member space',
+  'nav.space.description':
+    'What your members do in their space: goals, results, testimonial cards.',
+  'nav.members': 'Members',
+  'nav.members.description': 'Every member StayPut reads in Whop, the most likely to leave first.',
+  'nav.actions': 'Automations',
+  'nav.actions.description':
+    'What StayPut does to keep your members, always through the guardrails.',
+  'nav.insights': 'Analytics',
+  'nav.insights.description': 'What makes members leave, analyzed every week.',
+  'nav.sources': 'Integrations',
+  'nav.sources.description':
+    'Where StayPut reads your members’ activity: Whop, Discord and Telegram.',
+  'nav.settings': 'Settings',
+  'nav.settings.description': 'How StayPut scores your members, acts and runs their space.',
+  'tab.overview': 'Overview',
+  'tab.attention': 'Needs attention',
+  'tab.newMembers': 'New members',
+  'tab.testimonials': 'Testimonials',
+  'tab.memberView': 'Member view',
+  'tab.allMembers': 'All members',
+  'tab.neverContact': 'Never contact',
+  'tab.cohorts': 'Cohorts',
+  'tab.lessons': 'Lessons',
+  'tab.activity': 'Activity',
+  'tab.riskScore': 'Risk score',
+  'neverContact.title': 'Never contact',
+  'neverContact.description':
+    'Members StayPut takes no action of any kind for. Turn it off for a member in their row.',
+  'neverContact.none': 'No member is on this list.',
+  'activity.connectFirst':
+    'Connect a Discord server or a Telegram group: their activity and the people in them show here.',
 
   'spaceTab.figures': 'Your member space in figures',
   'spaceTab.goals': 'Goals under way',
@@ -832,14 +855,9 @@ export const en = {
   'spaceTab.help.open.other': '{count} challenges open',
   'spaceTab.help.rescued.one': '{count} member back in 30 days',
   'spaceTab.help.rescued.other': '{count} members back in 30 days',
-  'spaceTab.preview.title': 'Your members’ space, to try',
   'spaceTab.preview.body':
     'Exactly what they see in Whop. Try it: nothing you do here is recorded or sent.',
 
-  'actions.title': 'Actions',
-  'actions.description':
-    'What StayPut does for your members, always through the guardrails: approve, read the message, see what happened.',
-  'actions.view.label': 'Show',
   'actions.view.queue': 'To approve',
   'actions.view.scheduled': 'Scheduled',
   'actions.view.history': 'History',

@@ -19,9 +19,6 @@ export const fr: Messages = {
   'home.body':
     'Ouvrez StayPut depuis votre tableau de bord Whop ou depuis votre communauté pour commencer.',
 
-  'creator.title': 'Tableau de bord de rétention',
-  'creator.connected': "Connecté en tant que membre de l'équipe de {company}.",
-
   'sync.title': 'Synchronisation des données',
   'sync.importing':
     'Import des 90 derniers jours de votre communauté. Cela peut prendre quelques minutes.',
@@ -203,10 +200,7 @@ export const fr: Messages = {
   'common.failed': "Cela n'a pas marché. Réessayez.",
   'common.save': 'Enregistrer',
   'external.fallback': "Rien ne s'est ouvert ? Ouvrez le lien ici.",
-  'creator.sections': 'Sections du tableau de bord',
-  'creator.tab.overview': "Vue d'ensemble",
-  'creator.tab.members': 'Membres',
-  'creator.tab.sources': "Sources d'activité",
+  'creator.sections': 'Rubriques du tableau de bord',
   'overview.figures': 'Votre communauté en chiffres',
   'attention.title': 'À surveiller',
   'attention.description': 'Ceux qui risquent le plus de partir bientôt, avec les raisons.',
@@ -632,9 +626,6 @@ export const fr: Messages = {
     'Paiements échoués et annulations programmées, vus avant que le membre parte.',
   'home.point.activity': "L'activité de Whop, Discord et Telegram, sans jamais lire un message.",
 
-  'creator.tab.insights': 'Analyses',
-  'creator.tab.settings': 'Réglages',
-
   'risk.level.low': 'Risque faible',
   'risk.level.medium': 'Risque moyen',
   'risk.level.high': 'Risque élevé',
@@ -677,8 +668,6 @@ export const fr: Messages = {
   'members.filter.medium': 'Moyen',
   'members.filter.low': 'Faible',
   'members.filter.newcomers': 'Nouveaux inactifs',
-  'attention.byRisk': 'Tous les membres, par risque',
-  'attention.more': 'Et {count} de plus dans la section Membres.',
 
   'insights.computed': 'Analysé {when}. Les analyses tournent une fois par semaine.',
   'insights.pending':
@@ -817,9 +806,45 @@ export const fr: Messages = {
   'auth.failed': "La connexion avec Whop n'a pas abouti. Réessayez.",
   'auth.signOut': 'Se déconnecter',
 
-  'creator.tab.actions': 'Actions',
-
-  'creator.tab.space': 'Espace membre',
+  'nav.community': 'Communauté',
+  'nav.team': 'Vue de l’équipe',
+  'nav.tabs': 'Onglets : {section}',
+  'nav.dashboard': 'Tableau de bord',
+  'nav.dashboard.description':
+    'Votre communauté en un coup d’œil : qui risque de partir, et pourquoi.',
+  'nav.space': 'Espace membre',
+  'nav.space.description':
+    'Ce que vos membres font dans leur espace : objectifs, résultats, cartes témoignage.',
+  'nav.members': 'Membres',
+  'nav.members.description':
+    'Tous les membres que StayPut lit dans Whop, les plus susceptibles de partir d’abord.',
+  'nav.actions': 'Automatisations',
+  'nav.actions.description':
+    'Ce que StayPut fait pour garder vos membres, toujours à travers les garde-fous.',
+  'nav.insights': 'Analyses',
+  'nav.insights.description': 'Ce qui fait partir vos membres, analysé chaque semaine.',
+  'nav.sources': 'Intégrations',
+  'nav.sources.description':
+    'Où StayPut lit l’activité de vos membres : Whop, Discord et Telegram.',
+  'nav.settings': 'Réglages',
+  'nav.settings.description': 'Comment StayPut note vos membres, agit et anime leur espace.',
+  'tab.overview': 'Vue d’ensemble',
+  'tab.attention': 'À surveiller',
+  'tab.newMembers': 'Nouveaux membres',
+  'tab.testimonials': 'Témoignages',
+  'tab.memberView': 'Vue membre',
+  'tab.allMembers': 'Tous les membres',
+  'tab.neverContact': 'Ne jamais contacter',
+  'tab.cohorts': 'Cohortes',
+  'tab.lessons': 'Leçons',
+  'tab.activity': 'Activité',
+  'tab.riskScore': 'Score de risque',
+  'neverContact.title': 'Ne jamais contacter',
+  'neverContact.description':
+    'Les membres pour qui StayPut ne fait rien, d’aucune sorte. Retirez un membre de la liste depuis sa ligne.',
+  'neverContact.none': 'Aucun membre sur cette liste.',
+  'activity.connectFirst':
+    'Connectez un serveur Discord ou un groupe Telegram : leur activité et les personnes qui y sont s’affichent ici.',
 
   'spaceTab.figures': 'Votre espace membre en chiffres',
   'spaceTab.goals': 'Objectifs en cours',
@@ -853,14 +878,9 @@ export const fr: Messages = {
   'spaceTab.help.open.other': '{count} défis ouverts',
   'spaceTab.help.rescued.one': '{count} membre revenu en 30 jours',
   'spaceTab.help.rescued.other': '{count} membres revenus en 30 jours',
-  'spaceTab.preview.title': 'L’espace de vos membres, à essayer',
   'spaceTab.preview.body':
     'Exactement ce qu’ils voient dans Whop. Essayez : rien de ce que vous faites ici n’est enregistré ni envoyé.',
 
-  'actions.title': 'Actions',
-  'actions.description':
-    'Ce que StayPut fait pour vos membres, toujours à travers les garde-fous : validez, relisez le message, voyez ce qui s’est passé.',
-  'actions.view.label': 'Afficher',
   'actions.view.queue': 'À valider',
   'actions.view.scheduled': 'Programmées',
   'actions.view.history': 'Historique',

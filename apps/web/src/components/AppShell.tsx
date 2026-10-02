@@ -44,7 +44,7 @@ export function AppShell() {
   return (
     <div className="min-h-dvh">
       <header className="sticky top-0 z-20 border-b border-line bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <Link
             to="/"
             className="flex items-center gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -89,7 +89,7 @@ export function AppShell() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
         <Outlet />
       </main>
     </div>

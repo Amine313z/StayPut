@@ -22,7 +22,7 @@ import { CardPicture, useCardImage } from '../../components/Testimonial';
 import { useApi } from '../../api';
 import { useI18n } from '../../i18n';
 import { useWithUnit } from '../../units';
-import { Badge } from '../../ui/Badge';
+import { Badge, Notice } from '../../ui/Badge';
 import { Button, SECTION_LINK_CLASS } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { ExternalButton } from '../../ui/ExternalLink';
@@ -30,49 +30,64 @@ import { Stat } from '../../ui/Stat';
 import { useCreatorData } from '../CreatorView';
 
 /**
- * The member space in the dashboard (SPEC Phase 5), every part of it in one place: what members
- * do with it, the testimonial cards they put online (drawn here with their QR code), the buddies
- * and the challenges, then their space as it shows to them, to try (nothing recorded).
+ * The member space in the dashboard (SPEC Phase 5), in three tabs: what members do with it (the
+ * figures, the buddies and the challenges), the testimonial cards they put online (drawn here,
+ * with a QR code to scan), and their space as it shows to them, to try (nothing recorded).
  */
-export function SpaceTab() {
-  const { api, root } = useCreatorData();
-  const { t } = useI18n();
-  const { state, retry } = useApi<SpaceOverview>(`${api}/space`);
+function useSpaceOverview() {
+  const { api } = useCreatorData();
+  return useApi<SpaceOverview>(`${api}/space`);
+}
+
+/** The overview once read; meanwhile, the wait or what went wrong. */
+function WithOverview({ children }: { children: (overview: SpaceOverview) => ReactNode }) {
+  const { state, retry } = useSpaceOverview();
+  if (state.status === 'loading') return <Loading />;
+  if (state.status === 'error') {
+    return (
+      <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
+    );
+  }
+  return <>{children(state.data)}</>;
+}
+
+/** Member space › Overview: the figures over 30 days, the buddies and the challenges. */
+export function SpaceOverviewTab() {
+  const { root } = useCreatorData();
   return (
-    <div className="space-y-6">
-      {state.status === 'loading' ? (
-        <Loading />
-      ) : state.status === 'error' ? (
-        <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
-      ) : (
-        <>
-          <Figures overview={state.data} />
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-            <div className="min-w-0 lg:col-span-3">
-              <PublishedCards cards={state.data.cards} whopAppId={state.data.whopAppId} />
-            </div>
-            <div className="min-w-0 lg:col-span-2">
-              <HelpingEachOther overview={state.data} root={root} />
-            </div>
+    <WithOverview>
+      {(overview) => (
+        <div className="space-y-6">
+          <Figures overview={overview} />
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <HelpingEachOther overview={overview} root={root} />
           </div>
-        </>
+        </div>
       )}
-      <section aria-labelledby="space-preview-title" className="space-y-4">
-        <div>
-          <h2
-            id="space-preview-title"
-            className="flex items-center gap-2 text-lg font-semibold tracking-tight"
-          >
-            <Eye aria-hidden="true" className="size-5 text-accent" />
-            {t('spaceTab.preview.title')}
-          </h2>
-          <p className="mt-1 text-sm text-muted">{t('spaceTab.preview.body')}</p>
-        </div>
-        <div className="mx-auto max-w-2xl space-y-6">
-          <MemberRetention api={`${api}/preview`} />
-          <MemberSpace api={`${api}/preview`} />
-        </div>
-      </section>
+    </WithOverview>
+  );
+}
+
+/** Member space › Testimonials: the cards online, each with a QR code to scan on the screen. */
+export function SpaceCardsTab() {
+  return (
+    <WithOverview>
+      {(overview) => <PublishedCards cards={overview.cards} whopAppId={overview.whopAppId} />}
+    </WithOverview>
+  );
+}
+
+/** Member space › Member view: their space as it shows to them, to try, nothing recorded. */
+export function SpacePreviewTab() {
+  const { api } = useCreatorData();
+  const { t } = useI18n();
+  return (
+    <div className="mx-auto max-w-2xl space-y-6">
+      <Notice tone="info" icon={<Eye aria-hidden="true" className="size-4" />}>
+        {t('spaceTab.preview.body')}
+      </Notice>
+      <MemberRetention api={`${api}/preview`} />
+      <MemberSpace api={`${api}/preview`} />
     </div>
   );
 }
@@ -84,7 +99,7 @@ function Figures({ overview }: { overview: SpaceOverview }) {
       <h2 id="space-figures-title" className="sr-only">
         {t('spaceTab.figures')}
       </h2>
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+      <dl className="grid grid-cols-2 gap-3 @xl:grid-cols-3 @5xl:grid-cols-5">
         <Stat
           label={t('spaceTab.goals')}
           value={number(overview.goals.active)}
@@ -228,7 +243,7 @@ function HelpingEachOther({ overview, root }: { overview: SpaceOverview; root: s
       title={t('spaceTab.help.title')}
       description={t('spaceTab.help.body')}
       actions={
-        <Link to={`${root}/settings`} className={SECTION_LINK_CLASS}>
+        <Link to={`${root}/settings/space`} className={SECTION_LINK_CLASS}>
           {t('spaceTab.help.settings')}
           <ArrowRight aria-hidden="true" className="size-4" />
         </Link>

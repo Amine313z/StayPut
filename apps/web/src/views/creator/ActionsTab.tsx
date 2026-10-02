@@ -35,11 +35,10 @@ import {
   Sparkles,
   UserRoundPlus,
   X,
-  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+import { Link, Navigate, useSearchParams } from 'react-router';
 import { postJson, useApi } from '../../api';
 import { AlumniCard } from '../../components/AlumniCard';
 import { ConfirmButton } from '../../components/ConfirmButton';
@@ -139,14 +138,17 @@ const NOTES: Readonly<Record<string, MessageKey>> = {
  * with the message exactly as the member will read it; the scheduled ones; and what happened,
  * sent, simulated in test mode, blocked by a guardrail with the reason, cancelled or failed.
  */
-export function ActionsTab() {
-  const { t, number } = useI18n();
-  const { api, root, integrations } = useCreatorData();
-  const whopAppId =
-    integrations.state.status === 'ready' ? integrations.state.data.whopAppId : null;
-  const [params, setParams] = useSearchParams();
-  const view = ACTION_VIEWS.find((v) => v === params.get('view')) ?? 'queue';
+export function ActionsTab({ view }: { view: ActionView }) {
+  const { t } = useI18n();
+  const { api, root, tabCounts } = useCreatorData();
   const { state, retry, reload } = useApi<ActionsPage>(`${api}/actions?view=${view}`);
+  // The section's tabs say how many actions each view holds.
+  const counts = state.status === 'ready' ? state.data.counts : null;
+  useEffect(() => {
+    if (counts) {
+      tabCounts?.({ '': counts.queue, scheduled: counts.scheduled, history: counts.history });
+    }
+  }, [tabCounts, counts]);
   const later = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
@@ -163,7 +165,7 @@ export function ActionsTab() {
 
   const settingsLink = (
     <Link
-      to={`${root}/settings`}
+      to={`${root}/settings/actions`}
       className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-accent hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
     >
       <SlidersHorizontal aria-hidden="true" className="size-4" />
@@ -174,9 +176,11 @@ export function ActionsTab() {
   return (
     <div className="space-y-6">
       <Card
-        icon={<Zap aria-hidden="true" className="size-4" />}
-        title={t('actions.title')}
-        description={t('actions.description')}
+        icon={(() => {
+          const Icon = VIEWS[view].Icon;
+          return <Icon aria-hidden="true" className="size-4" />;
+        })()}
+        title={t(VIEWS[view].label)}
         actions={settingsLink}
       >
         {state.status === 'loading' ? (
@@ -200,34 +204,7 @@ export function ActionsTab() {
                 {t(state.data.mode === 'auto' ? 'actions.mode.auto' : 'actions.mode.manual')}
               </p>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div
-                role="group"
-                aria-label={t('actions.view.label')}
-                className="flex flex-wrap gap-1 rounded-xl bg-surface-2 p-1"
-              >
-                {ACTION_VIEWS.map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    aria-pressed={view === v}
-                    onClick={() => {
-                      const search = new URLSearchParams(params);
-                      if (v === 'queue') search.delete('view');
-                      else search.set('view', v);
-                      setParams(search, { replace: true });
-                    }}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                      view === v ? 'bg-surface text-fg shadow-card' : 'text-muted hover:text-fg'
-                    }`}
-                  >
-                    {t(VIEWS[v].label)}
-                    <span className="tabular ms-1.5 text-xs text-muted">
-                      {number(state.data.counts[v])}
-                    </span>
-                  </button>
-                ))}
-              </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
               {view === 'queue' && state.data.actions.some((a) => a.status === 'proposed') ? (
                 <ApproveAll
                   api={api}
@@ -254,9 +231,27 @@ export function ActionsTab() {
           </div>
         )}
       </Card>
-      <AlumniCard api={api} whopAppId={whopAppId} />
     </div>
   );
+}
+
+/**
+ * Automations › To approve, at its address; an older link that named a view (`?view=history`)
+ * opens that view's tab.
+ */
+export function ActionsHome() {
+  const [params] = useSearchParams();
+  const view = ACTION_VIEWS.find((v) => v === params.get('view'));
+  if (view && view !== 'queue') return <Navigate to={view} replace />;
+  return <ActionsTab view="queue" />;
+}
+
+/** Automations › Alumni offer: former members keep in touch, and come back (SPEC 5.9). */
+export function AlumniTab() {
+  const { api, integrations } = useCreatorData();
+  const whopAppId =
+    integrations.state.status === 'ready' ? integrations.state.data.whopAppId : null;
+  return <AlumniCard api={api} whopAppId={whopAppId} />;
 }
 
 function ApproveAll({ api, count, onDone }: { api: string; count: number; onDone: () => void }) {
