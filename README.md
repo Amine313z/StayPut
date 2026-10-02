@@ -185,7 +185,9 @@ avertissement avec la correction à faire, jamais un échec du déploiement.
 - **Inspect** (**Actions → Inspect → Run workflow**) : l'état de la base en chiffres seulement
   (version du schéma, flux de synchronisation et leurs erreurs, nombre de lignes par table,
   actions par type et par statut, réglages des actions : mode, mode test, arrêts, fuseau et
-  heures, webhooks reçus par type). Aucun nom, aucune adresse, aucun contenu. Le rapport
+  heures, webhooks reçus par type). Aucun nom, aucune adresse, aucun contenu. Il demande aussi
+  au Worker en ligne ce qu'un navigateur reçoit (une page de chaque vue, son script, le relais
+  `whop-frame.mjs`, `/health`, et `/api` sans jeton, qui doit être refusé). Le rapport
   s'affiche dans le résumé de l'exécution.
 - **Seed sandbox** (**Actions → Seed sandbox → Run workflow**, `seed`, `remove` ou `report`) :
   25 membres fictifs avec 60 jours d'historique dans « StayPut Test » (8 actifs, 5 en déclin,
