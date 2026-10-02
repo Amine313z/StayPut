@@ -3,7 +3,9 @@ import {
   DEFAULT_OFFERS,
   checkGuardrails,
   exitOffer,
+  isCreatorOfferKind,
   type AlumniReturn,
+  type CreatorOfferView,
   type ExitOffer,
   type ExitReason,
   type MemberRetentionView,
@@ -73,6 +75,15 @@ export interface RetentionRow {
       error: string | null;
     } | null;
   } | null;
+  /** The latest offer the creator made them (stayput.member_creator_offer). */
+  creatorOffer?: {
+    id: string;
+    kind: string;
+    terms: Record<string, unknown>;
+    expiresAt: string;
+    outcome: 'open' | 'accepted' | 'declined' | 'expired';
+    action: { status: string; result: Record<string, unknown> | null; error: string | null } | null;
+  } | null;
 }
 
 export async function readRetention(
@@ -81,20 +92,79 @@ export async function readRetention(
   userId: string,
   now: Date,
 ): Promise<RetentionRow> {
-  const [row] = await db.query<{ retention: RetentionRow }>(
-    'select stayput.member_retention($1, $2, $3::timestamptz) as retention',
+  const [row] = await db.query<{
+    retention: RetentionRow;
+    creator_offer: RetentionRow['creatorOffer'];
+  }>(
+    `select stayput.member_retention($1, $2, $3::timestamptz) as retention,
+            stayput.member_creator_offer($1, $2, $3::timestamptz) as creator_offer`,
     [companyId, userId, now.toISOString()],
   );
-  return (
-    row?.retention ?? {
+  return {
+    ...(row?.retention ?? {
       member: null,
       company: null,
       history: null,
       payment: null,
       departure: null,
       survey: null,
-    }
+    }),
+    creatorOffer: row?.creator_offer ?? null,
+  };
+}
+
+/**
+ * Whether the member sees the creator's offer: one StayPut may contact, and the creator out of
+ * test mode (in test mode nothing reaches members, an offer included).
+ */
+function creatorOfferOpen(row: RetentionRow): boolean {
+  return Boolean(
+    row.creatorOffer &&
+    row.member?.joined &&
+    !row.member.doNotContact &&
+    row.company &&
+    !row.company.dryRun,
   );
+}
+
+function creatorOfferView(row: RetentionRow): CreatorOfferView | null {
+  const offer = row.creatorOffer;
+  if (!offer || !creatorOfferOpen(row) || !isCreatorOfferKind(offer.kind)) return null;
+  const terms = offer.terms;
+  return {
+    id: offer.id,
+    kind: offer.kind,
+    terms:
+      offer.kind === 'pause_offer'
+        ? { days: Number(terms.days) }
+        : { percentOff: Number(terms.percentOff), months: Number(terms.months) },
+    expiresAt: new Date(offer.expiresAt).toISOString(),
+    outcome: offer.outcome,
+    result: offer.action ? offerResult(offer.action) : null,
+  };
+}
+
+/**
+ * The member accepts the creator's offer, or declines it. Returns the action created when
+ * accepted (null when declined); `null` when there is no open offer of theirs to decide.
+ */
+export async function decideCreatorOffer(
+  db: Db,
+  companyId: string,
+  userId: string,
+  row: RetentionRow,
+  offerId: string,
+  accept: boolean,
+  now: Date,
+): Promise<{ actionId: string | null } | null> {
+  if (!creatorOfferOpen(row) || row.creatorOffer?.id !== offerId) return null;
+  const [decided] = await db.query<{ decision: { actionId?: string | null; error?: string } }>(
+    'select stayput.decide_creator_offer($1, $2, $3::uuid, $4, $5::timestamptz) as decision',
+    [companyId, userId, offerId, accept, now.toISOString()],
+  );
+  const decision = decided?.decision;
+  if (!decision || decision.error) return null;
+  return { actionId: decision.actionId ?? null };
 }
 
 /**
@@ -178,6 +248,7 @@ export function retentionView(
       payment: null,
       departure: null,
       alumni: null,
+      creatorOffer: null,
     };
   }
   const payment = row.payment;
@@ -216,13 +287,15 @@ export function retentionView(
         }
       : null,
     alumni: options.alumni ?? null,
+    creatorOffer: creatorOfferView(row),
   };
 }
 
 /** The accepted offer's action, as the member sees it. */
-function offerResult(
-  action: NonNullable<NonNullable<RetentionRow['survey']>['action']>,
-): OfferResult {
+function offerResult(action: {
+  status: string;
+  result: Record<string, unknown> | null;
+}): OfferResult {
   const result = action.result ?? {};
   const text = (key: string) => (typeof result[key] === 'string' ? result[key] : undefined);
   switch (action.status) {

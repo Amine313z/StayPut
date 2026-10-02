@@ -4,7 +4,13 @@ import type { CohortHorizon } from './analyses';
 import type { AnnounceTarget } from './announcements';
 import type { ProofLevel, TestimonialDisplay } from './testimonials';
 import type { BadgeCode, GoalCategory, GoalEntry, GoalProposal, Milestone } from './goals';
-import type { ExitOffer, ExitReason, OfferSettings } from './offers';
+import type {
+  CreatorOfferKind,
+  CreatorOfferTerms,
+  ExitOffer,
+  ExitReason,
+  OfferSettings,
+} from './offers';
 import type { Niche, RiskLevel, RiskReason, RiskWeights } from './risk';
 import type { MessageAction, MessageTemplate, TemplateLocale } from './templates';
 
@@ -40,6 +46,8 @@ export type ApiErrorCode =
   | 'forbidden'
   | 'invalid_request'
   | 'not_found'
+  /** The request clashes with the current state (an offer already open for this member). */
+  | 'conflict'
   | 'payload_too_large'
   | 'whop_unavailable'
   | 'not_configured'
@@ -552,6 +560,31 @@ export interface MemberRetentionView {
   } | null;
   /** A former member in the Alumni space (SPEC 5.9): their return code, and the way back. */
   alumni: AlumniReturn | null;
+  /** An offer the creator made from the dashboard (a pause, a code), to accept here. */
+  creatorOffer: CreatorOfferView | null;
+}
+
+/** An offer the creator made a member (« Pause », « Offer »), as the member sees it. */
+export interface CreatorOfferView {
+  id: string;
+  kind: CreatorOfferKind;
+  terms: CreatorOfferTerms;
+  expiresAt: string;
+  outcome: 'open' | 'accepted' | 'declined' | 'expired';
+  /** What came of it once accepted. */
+  result: OfferResult | null;
+}
+
+/** POST /api/creator/:companyId/members/message: the messages queued (a click approves them). */
+export interface CreatorMessagesResult {
+  queued: number;
+}
+
+/** POST /api/creator/:companyId/members/:memberId/offer */
+export interface CreatorOfferMade {
+  offerId: string;
+  kind: CreatorOfferKind;
+  terms: CreatorOfferTerms;
 }
 
 /** What a former member sees in StayPut's view of the Alumni space. */

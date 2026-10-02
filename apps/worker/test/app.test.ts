@@ -1,6 +1,8 @@
 import type {
   AccountsView,
   AlumniView,
+  DashboardView,
+  FeedView,
   AnnouncementsView,
   GoalProposalsView,
   MemberRetentionView,
@@ -1950,6 +1952,72 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     return { ...env, company, ana, read, answer, decide, boss: () => asUser(`user_boss${n}`) };
   }
 
+  it('lets the creator offer a pause from the dashboard, which the member accepts in their space', async () => {
+    const env = await departing(9);
+    const boss = await env.boss();
+    const offerOf = (body: unknown) =>
+      env.request(`/api/creator/${env.company}/members/mber_Ret9/offer`, json(boss, 'POST', body));
+    expect((await offerOf({ kind: 'free_lunch' })).status).toBe(400);
+    const made = await offerOf({ kind: 'pause_offer' });
+    expect(made.status).toBe(200);
+    const offer = (await made.json()) as { offerId: string; kind: string; terms: unknown };
+    expect(offer).toMatchObject({ kind: 'pause_offer', terms: { days: 30 } });
+    // One open offer at a time.
+    expect((await offerOf({ kind: 'promo_offer' })).status).toBe(409);
+    // Ana, a member, makes no offers.
+    const asAna = await env.request(
+      `/api/creator/${env.company}/members/mber_Ret9/offer`,
+      json(env.ana, 'POST', { kind: 'pause_offer' }),
+    );
+    expect(asAna.status).toBe(403);
+
+    expect((await env.read()).creatorOffer).toMatchObject({
+      id: offer.offerId,
+      kind: 'pause_offer',
+      terms: { days: 30 },
+      outcome: 'open',
+      result: null,
+    });
+    const decideCreator = (body: unknown) =>
+      env.request(`/api/member/exp_Ret9/retention/creator-offer`, json(env.ana, 'POST', body));
+    expect((await decideCreator({ offerId: offer.offerId })).status).toBe(400);
+    const accepted = (await (
+      await decideCreator({ offerId: offer.offerId, accept: true })
+    ).json()) as MemberRetentionView;
+    // Applied at once: the cancellation withdrawn, then the pause.
+    expect(accepted.creatorOffer).toMatchObject({
+      outcome: 'accepted',
+      result: { status: 'applied', kept: true },
+    });
+    expect((await decideCreator({ offerId: offer.offerId, accept: false })).status).toBe(404);
+  });
+
+  it('sends the creator’s word from the dashboard, and shows the home’s figures', async () => {
+    const env = await departing(10);
+    const boss = await env.boss();
+    const send = (body: unknown) =>
+      env.request(`/api/creator/${env.company}/members/message`, json(boss, 'POST', body));
+    expect((await send({ memberIds: [] })).status).toBe(400);
+    expect((await send({ memberIds: ['not-a-member'] })).status).toBe(400);
+    expect(await (await send({ memberIds: ['mber_Ret10'] })).json()).toEqual({ queued: 1 });
+    await settle();
+    const home = (await (
+      await env.request(`/api/creator/${env.company}/dashboard`, boss)
+    ).json()) as DashboardView;
+    expect(home).toMatchObject({
+      currency: 'EUR',
+      monthlyRevenue: 49,
+      members: { total: 1 },
+      mode: 'auto',
+      testMode: false,
+    });
+    const feed = (await (
+      await env.request(`/api/creator/${env.company}/feed`, boss)
+    ).json()) as FeedView;
+    expect(feed.items.some((i) => i.event === 'cancellation_scheduled')).toBe(true);
+    expect((await env.request(`/api/creator/${env.company}/dashboard`, env.ana)).status).toBe(403);
+  });
+
   it('asks why, makes the offer for the reason, and keeps the membership only with consent', async () => {
     const { read, answer, decide, whop, company, request, boss } = await departing(1);
     expect(await read()).toMatchObject({
@@ -2045,6 +2113,7 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
       payment: null,
       departure: null,
       alumni: null,
+      creatorOffer: null,
     });
   });
 

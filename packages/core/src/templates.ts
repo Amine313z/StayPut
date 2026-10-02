@@ -39,6 +39,8 @@ export type MessageAction = Extract<
   | 'alumni_followup'
   | 'buddy_intro'
   | 'mentor_intro'
+  | 'creator_message'
+  | 'creator_offer'
 >;
 
 export const MESSAGE_ACTIONS: readonly MessageAction[] = [
@@ -50,6 +52,8 @@ export const MESSAGE_ACTIONS: readonly MessageAction[] = [
   'alumni_followup',
   'buddy_intro',
   'mentor_intro',
+  'creator_message',
+  'creator_offer',
 ];
 
 export type TemplateLocale = 'en' | 'fr';
@@ -90,6 +94,14 @@ export const DEFAULT_TEMPLATES: Readonly<
       title: 'A newcomer to welcome[[, {first_name}]]',
       body: '{buddy_name} just joined[[ {creator_name}]]. You know the way: say hello and share your best first step. If your buddy is still here in 30 days, you earn the Mentor badge.',
     },
+    creator_message: {
+      title: 'A word[[ from {creator_name}]]',
+      body: 'Hi[[ {first_name}]], just checking in: how is it going? Your next step is waiting[[: {last_lesson}]]. Write in the community anytime, we read everything.',
+    },
+    creator_offer: {
+      title: 'Something for you[[ from {creator_name}]]',
+      body: 'Hi[[ {first_name}]], here is {offer}. Open your space to accept it: the offer stays open 7 days.',
+    },
   },
   fr: {
     payment_failed_notice: {
@@ -123,6 +135,14 @@ export const DEFAULT_TEMPLATES: Readonly<
     mentor_intro: {
       title: 'Un nouveau à accueillir[[, {first_name}]]',
       body: '{buddy_name} vient d’arriver[[ dans {creator_name}]]. Tu connais le chemin : dis-lui bonjour et partage ton meilleur premier pas. Si ton binôme est toujours là dans 30 jours, tu gagnes le badge Mentor.',
+    },
+    creator_message: {
+      title: 'Un petit mot[[ de {creator_name}]]',
+      body: 'Salut[[ {first_name}]], on prend de tes nouvelles : comment ça se passe ? Ta prochaine étape t’attend[[ : {last_lesson}]]. Écris dans la communauté quand tu veux, on lit tout.',
+    },
+    creator_offer: {
+      title: 'Quelque chose pour toi[[ de {creator_name}]]',
+      body: 'Salut[[ {first_name}]], voici {offer}. Ouvre ton espace pour l’accepter : l’offre reste valable 7 jours.',
     },
   },
 };

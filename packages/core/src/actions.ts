@@ -34,7 +34,11 @@ export type ActionType =
   /** A newcomer meets the veteran paired with them (SPEC Phase 5, buddies)… */
   | 'buddy_intro'
   /** …and the veteran meets the newcomer. */
-  | 'mentor_intro';
+  | 'mentor_intro'
+  /** A word the creator sent from the dashboard (« Message »), StayPut's wording. */
+  | 'creator_message'
+  /** An offer the creator made from the dashboard (« Pause », « Offer »): accept it in the space. */
+  | 'creator_offer';
 
 export const ACTION_TYPES: readonly ActionType[] = [
   'payment_retry',
@@ -52,6 +56,8 @@ export const ACTION_TYPES: readonly ActionType[] = [
   'milestone_announcement',
   'buddy_intro',
   'mentor_intro',
+  'creator_message',
+  'creator_offer',
 ];
 
 export function isActionType(value: unknown): value is ActionType {
@@ -86,6 +92,9 @@ export const MESSAGE_KINDS: Readonly<Record<ActionType, MessageKind>> = {
   // StayPut reaches out on its own: capped like any follow-up.
   buddy_intro: 'relance',
   mentor_intro: 'relance',
+  // The creator's own initiative: capped like StayPut's, the member is the same person.
+  creator_message: 'relance',
+  creator_offer: 'relance',
 };
 
 /** The creator's guardrails (company_settings), and the company's time zone. */

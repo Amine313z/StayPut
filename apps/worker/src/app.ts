@@ -6,8 +6,10 @@ import {
   canOpenMemberView,
   isCompanyId,
   isExperienceId,
+  isCreatorOfferKind,
   isExitReason,
   isNiche,
+  PRIORITY_MESSAGE_LIMIT,
   normalizeWeights,
   isProofId,
   parseAnnounceTarget,
@@ -18,6 +20,8 @@ import {
   timeZoneName,
   type AccessLevel,
   type AffiliateLinkView,
+  type CreatorMessagesResult,
+  type CreatorOfferMade,
   type CreatorSession,
   type DiscordChannelsUpdate,
   type HealthReport,
@@ -80,7 +84,13 @@ import {
   type LinkContext,
 } from './integrations';
 import { readInsights, readMembers, readRiskSettings, readSyncStatus } from './members';
-import { answerSurvey, decideOffer, readRetention, retentionView } from './retention';
+import {
+  answerSurvey,
+  decideCreatorOffer,
+  decideOffer,
+  readRetention,
+  retentionView,
+} from './retention';
 import { REQUEST_RISK_BATCH, refreshDetection } from './risk';
 import { LATEST_MIGRATION } from './schema-version';
 import { goneProofPage, proofPage } from './public-proof';
@@ -247,6 +257,7 @@ export const MANUAL_DISCORD_REFRESH_SECONDS = 10 * 60;
 /** Actions run right after the creator approves some (the hourly cron runs the rest). */
 const REQUEST_ACTION_BATCH = 5;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const MEMBER_ID = /^mber_[A-Za-z0-9]+$/;
 const REQUEST_SYNC_BUDGET = SYNC_REQUEST_BUDGET - 2;
 
 export function createApp(deps: AppDeps) {
@@ -1135,6 +1146,75 @@ export function createApp(deps: AppDeps) {
   );
 
   /**
+   * « Message » on the dashboard: a word from the creator to these members (25 at most at once),
+   * approved by the click, then through the guardrails like every action (a member reached in
+   * the last 5 days waits); in test mode, simulated.
+   */
+  app.post(
+    '/api/creator/:companyId/members/message',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ memberIds?: unknown }>().catch(() => null);
+      const ids = body?.memberIds;
+      if (
+        !Array.isArray(ids) ||
+        ids.length === 0 ||
+        ids.length > PRIORITY_MESSAGE_LIMIT ||
+        !ids.every((id) => typeof id === 'string' && MEMBER_ID.test(id))
+      ) {
+        return apiError('invalid_request', 'expected { memberIds: mber_…[] } (25 at most)');
+      }
+      const companyId = c.get('companyId');
+      const now = deps.now();
+      const [row] = await db.query<{ queued: number }>(
+        'select stayput.creator_messages($1, $2, $3, $4::timestamptz) as queued',
+        [companyId, (ids as string[]).join(','), c.get('userId'), now.toISOString()],
+      );
+      runActionsInBackground(c, companyId, now);
+      return c.json({ queued: row?.queued ?? 0 } satisfies CreatorMessagesResult);
+    },
+  );
+
+  /**
+   * « Pause » or « Offer » on the dashboard: an offer to one member, in the creator's offer
+   * settings; they hear of it, and accept it in their space within 7 days.
+   */
+  app.post(
+    '/api/creator/:companyId/members/:memberId/offer',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ kind?: unknown }>().catch(() => null);
+      const kind = body?.kind;
+      const memberId = c.req.param('memberId');
+      if (!isCreatorOfferKind(kind) || !MEMBER_ID.test(memberId)) {
+        return apiError('invalid_request', 'expected { kind: pause_offer | promo_offer }');
+      }
+      const companyId = c.get('companyId');
+      const now = deps.now();
+      const [row] = await db.query<{ made: { error?: string } & Partial<CreatorOfferMade> }>(
+        'select stayput.create_creator_offer($1, $2, $3, $4, $5::timestamptz) as made',
+        [companyId, memberId, kind, c.get('userId'), now.toISOString()],
+      );
+      const made = row?.made;
+      if (!made || made.error) {
+        return made?.error === 'not_a_member'
+          ? apiError('not_found', 'no such member here')
+          : apiError('conflict', made?.error ?? 'no offer made');
+      }
+      runActionsInBackground(c, companyId, now);
+      return c.json(made as CreatorOfferMade);
+    },
+  );
+
+  /**
    * After the creator acted: the company's actions go through the guardrails, and what is due
    * runs (a few, within the request's subrequests); the hourly cron does the rest.
    */
@@ -1652,6 +1732,43 @@ export function createApp(deps: AppDeps) {
       if (decided === 'invalid') {
         return apiError('invalid_request', 'this offer needs the consent to keep the membership');
       }
+      if (!decided) return apiError('not_found', 'no offer waiting for an answer');
+      if (decided.actionId) {
+        await prepareActions(db, companyId, now);
+        await executeAction(db, deps.whopClient(c.get('config')), decided.actionId, now);
+      }
+      return c.json(await retentionFor(c, db, companyId, now));
+    },
+  );
+
+  /** The member accepts the creator's offer, or declines it; accepted, it runs at once. */
+  app.post(
+    '/api/member/:experienceId/retention/creator-offer',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ offerId?: unknown; accept?: unknown }>().catch(() => null);
+      const offerId = body?.offerId;
+      if (typeof offerId !== 'string' || !UUID.test(offerId) || typeof body?.accept !== 'boolean') {
+        return apiError('invalid_request', 'expected { offerId, accept }');
+      }
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const now = deps.now();
+      const userId = c.get('userId');
+      const row = await readRetention(db, companyId, userId, now);
+      const decided = await decideCreatorOffer(
+        db,
+        companyId,
+        userId,
+        row,
+        offerId,
+        body.accept,
+        now,
+      );
       if (!decided) return apiError('not_found', 'no offer waiting for an answer');
       if (decided.actionId) {
         await prepareActions(db, companyId, now);

@@ -50,6 +50,8 @@ const MESSAGE_LABELS: Readonly<Record<MessageAction, MessageKey>> = {
   alumni_followup: 'actions.type.alumni_followup',
   buddy_intro: 'actions.type.buddy_intro',
   mentor_intro: 'actions.type.mentor_intro',
+  creator_message: 'actions.type.creator_message',
+  creator_offer: 'actions.type.creator_offer',
 };
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);

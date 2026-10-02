@@ -206,6 +206,19 @@ describe('the money StayPut saved (SPEC Phase 6.4)', () => {
     ).toEqual([]);
   });
 
+  it('counts the creator’s own word sent through StayPut like StayPut’s message', () => {
+    const word = action({ id: 'act_word', type: 'creator_message', membershipId: null });
+    expect(
+      attributeSaves(
+        facts({
+          actions: [word],
+          payments: [payment({ id: 'pay_renewal', paidAt: day(20) })],
+          firstActivityAfter: { act_word: day(3) },
+        }),
+      ),
+    ).toMatchObject([{ type: 'renewal_after_message', actionId: 'act_word' }]);
+  });
+
   it('lets a direct reason win over an influenced one for the same payment', () => {
     const saves = attributeSaves(
       facts({

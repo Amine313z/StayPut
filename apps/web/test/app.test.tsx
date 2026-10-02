@@ -1885,6 +1885,7 @@ describe('the member space in the dashboard', () => {
     payment: null,
     departure: null,
     alumni: null,
+    creatorOffer: null,
   };
 
   it('shows the member space in three tabs: its figures, the cards online, the member view', async () => {
@@ -2014,6 +2015,7 @@ describe('member view', () => {
       payment: null,
       departure: null,
       alumni: null,
+      creatorOffer: null,
       ...over,
     } satisfies MemberRetentionView,
   });
@@ -2357,6 +2359,7 @@ describe('member space', () => {
       payment: null,
       departure: null,
       alumni: null,
+      creatorOffer: null,
     } satisfies MemberRetentionView,
   };
   const noTelegram = {

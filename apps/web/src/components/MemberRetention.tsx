@@ -3,6 +3,7 @@ import {
   exitOffer,
   type AffiliateLinkView,
   type AlumniReturn,
+  type CreatorOfferView,
   type ExitOffer,
   type ExitReason,
   type MemberRetentionView,
@@ -69,6 +70,14 @@ export function MemberRetention({ api }: { api: string }) {
   return (
     <>
       {view.payment ? <PaymentCard payment={view.payment} whopAppId={view.whopAppId} /> : null}
+      {view.creatorOffer ? (
+        <CreatorOfferCard
+          api={api}
+          offer={view.creatorOffer}
+          creatorName={view.creatorName}
+          onAnswer={(next) => setAnswer({ base: loaded, view: next })}
+        />
+      ) : null}
       {view.departure ? (
         <DepartureCard
           api={api}
@@ -226,6 +235,129 @@ function DepartureCard({
         {/* Leaving all the same: the Alumni keeps them in touch (not once they kept it). */}
         {alumniUrl && !departure.result?.kept ? (
           <AlumniInvite url={alumniUrl} whopAppId={whopAppId} />
+        ) : null}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * An offer the creator made from their dashboard (a pause, a code): accepted here, it is applied
+ * through StayPut like the departure survey's; a pause keeps the membership, which resumes by
+ * itself.
+ */
+function CreatorOfferCard({
+  api,
+  offer,
+  creatorName,
+  onAnswer,
+}: {
+  api: string;
+  offer: CreatorOfferView;
+  creatorName: string | null;
+  onAnswer: (view: MemberRetentionView) => void;
+}) {
+  const { t, plural, percent, date } = useI18n();
+  const [busy, setBusy] = useState<'accept' | 'decline' | null>(null);
+  const [failed, setFailed] = useState(false);
+  // The departure survey's offer it matches, for its words and what came of it.
+  const asExit: ExitOffer =
+    'days' in offer.terms
+      ? { type: 'pause_offer', days: offer.terms.days, keep: 'required' }
+      : {
+          type: 'promo_offer',
+          percentOff: offer.terms.percentOff,
+          months: offer.terms.months,
+          validDays: 7,
+          keep: 'never',
+        };
+  const decide = async (accept: boolean) => {
+    setBusy(accept ? 'accept' : 'decline');
+    setFailed(false);
+    try {
+      onAnswer(
+        await postJson<MemberRetentionView>(`${api}/retention/creator-offer`, {
+          offerId: offer.id,
+          accept,
+        }),
+      );
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const until = date(new Date(offer.expiresAt));
+  const pause = 'days' in offer.terms;
+  return (
+    <Card
+      icon={<Gift aria-hidden="true" className="size-4" />}
+      title={t('member.creatorOffer.title')}
+      description={
+        offer.outcome === 'open'
+          ? creatorName
+            ? t('member.creatorOffer.from', { creator: creatorName, date: until })
+            : t('member.creatorOffer.until', { date: until })
+          : undefined
+      }
+    >
+      <div className="space-y-4">
+        {offer.outcome === 'open' ? (
+          <>
+            <div className="rounded-xl bg-accent-soft px-4 py-3">
+              <p className="flex items-start gap-2 font-semibold">
+                {pause ? (
+                  <CirclePause aria-hidden="true" className="mt-1 size-4 shrink-0 text-accent" />
+                ) : (
+                  <Percent aria-hidden="true" className="mt-1 size-4 shrink-0 text-accent" />
+                )}
+                {'days' in offer.terms
+                  ? t('member.creatorOffer.pause', { days: offer.terms.days })
+                  : plural('member.offer.promo.title', offer.terms.months, {
+                      discount: percent(offer.terms.percentOff / 100),
+                    })}
+              </p>
+              <p className="mt-1 text-sm">
+                {'days' in offer.terms
+                  ? t('member.offer.pause.body', { days: offer.terms.days })
+                  : t('member.offer.promo.body', { days: 7 })}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                icon={<Check aria-hidden="true" className="size-4" />}
+                loading={busy === 'accept'}
+                disabled={busy !== null}
+                onClick={() => void decide(true)}
+              >
+                {t(pause ? 'member.offer.pause.accept' : 'member.offer.promo.accept')}
+              </Button>
+              <Button
+                variant="ghost"
+                loading={busy === 'decline'}
+                disabled={busy !== null}
+                onClick={() => void decide(false)}
+              >
+                {t('member.offer.decline')}
+              </Button>
+            </div>
+          </>
+        ) : offer.outcome === 'accepted' ? (
+          <OfferOutcome api={api} offer={asExit} result={offer.result} />
+        ) : (
+          <p className="text-sm text-muted">
+            {t(
+              offer.outcome === 'declined'
+                ? 'member.creatorOffer.declined'
+                : 'member.creatorOffer.expired',
+            )}
+          </p>
+        )}
+        {failed ? (
+          <p role="alert" className="flex items-center gap-1.5 text-sm text-danger">
+            <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
+            {t('common.failed')}
+          </p>
         ) : null}
       </div>
     </Card>

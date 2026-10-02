@@ -156,3 +156,35 @@ export function returnOfferText(locale: 'en' | 'fr', offer: ReturnOffer): string
   const months = offer.months === 1 ? '1 month' : `${offer.months} months`;
   return `${offer.code} (${offer.percentOff}% off for ${months}, valid ${PROMO_VALID_DAYS} days)`;
 }
+
+/** The offers the creator makes from the dashboard: a pause, or a promo code. */
+export type CreatorOfferKind = 'pause_offer' | 'promo_offer';
+
+export function isCreatorOfferKind(value: unknown): value is CreatorOfferKind {
+  return value === 'pause_offer' || value === 'promo_offer';
+}
+
+/** What such an offer gives, fixed when it is made (the creator's offer settings). */
+export type CreatorOfferTerms = { days: number } | { percentOff: number; months: number };
+
+/** How long the member has to accept it. */
+export const CREATOR_OFFER_DAYS = 7;
+
+/** The offer in words, for `{offer}` in its message: « a 30-day pause… », « 20% off… ». */
+export function creatorOfferText(
+  locale: 'en' | 'fr',
+  kind: CreatorOfferKind,
+  terms: CreatorOfferTerms,
+): string {
+  if (kind === 'pause_offer' && 'days' in terms) {
+    return locale === 'fr'
+      ? `une pause de ${terms.days} jours : ton abonnement t’attend`
+      : `a ${terms.days}-day pause: your membership waits for you`;
+  }
+  if ('percentOff' in terms) {
+    if (locale === 'fr') return `-${terms.percentOff}\u00a0% pendant ${terms.months} mois`;
+    const months = terms.months === 1 ? '1 month' : `${terms.months} months`;
+    return `${terms.percentOff}% off for ${months}`;
+  }
+  return locale === 'fr' ? 'une offre' : 'an offer';
+}

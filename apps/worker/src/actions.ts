@@ -5,8 +5,10 @@ import {
   PROMO_VALID_DAYS,
   announcementText,
   checkGuardrails,
+  creatorOfferText,
   goldenHour,
   isActionType,
+  isCreatorOfferKind,
   isAnnouncePlatform,
   nextLocalHour,
   outOfQuietHours,
@@ -271,6 +273,23 @@ export function messageValues(
   values: TemplateValues,
   content: Record<string, unknown> | null,
 ): TemplateValues {
+  if (type === 'creator_offer') {
+    // The offer in words: « a 30-day pause… », « 20% off for 3 months ».
+    const kind = content?.kind;
+    const terms = content?.terms;
+    if (!isCreatorOfferKind(kind) || typeof terms !== 'object' || terms === null) return values;
+    const t = terms as Record<string, unknown>;
+    return {
+      ...values,
+      offer: creatorOfferText(
+        locale === 'fr' ? 'fr' : 'en',
+        kind,
+        kind === 'pause_offer'
+          ? { days: Number(t.days) }
+          : { percentOff: Number(t.percentOff), months: Number(t.months) },
+      ),
+    };
+  }
   if (type !== 'buddy_intro' && type !== 'mentor_intro') return values;
   const name = content?.buddy_name;
   return {

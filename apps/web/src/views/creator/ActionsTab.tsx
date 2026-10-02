@@ -26,6 +26,7 @@ import {
   Mail,
   Megaphone,
   MessageCircleHeart,
+  MessageSquareText,
   OctagonPause,
   OctagonX,
   Percent,
@@ -83,6 +84,8 @@ const TYPES: Readonly<Record<ActionType, { label: MessageKey; Icon: LucideIcon }
   milestone_announcement: { label: 'actions.type.milestone_announcement', Icon: Megaphone },
   buddy_intro: { label: 'actions.type.buddy_intro', Icon: Handshake },
   mentor_intro: { label: 'actions.type.mentor_intro', Icon: UserRoundPlus },
+  creator_message: { label: 'actions.type.creator_message', Icon: MessageSquareText },
+  creator_offer: { label: 'actions.type.creator_offer', Icon: Gift },
 };
 
 const TRIGGERS: Readonly<Record<string, MessageKey>> = {
@@ -94,6 +97,8 @@ const TRIGGERS: Readonly<Record<string, MessageKey>> = {
   exit_survey: 'actions.trigger.exit_survey',
   member_request: 'actions.trigger.member_request',
   buddy_pair: 'actions.trigger.buddy_pair',
+  creator: 'actions.trigger.creator',
+  creator_offer: 'actions.trigger.creator_offer',
 };
 
 const STATUSES: Readonly<Record<ActionStatus, { label: MessageKey; tone: Tone }>> = {

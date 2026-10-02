@@ -5,6 +5,7 @@ const STATUS: Record<ApiErrorCode, number> = {
   forbidden: 403,
   invalid_request: 400,
   not_found: 404,
+  conflict: 409,
   payload_too_large: 413,
   whop_unavailable: 503,
   not_configured: 503,

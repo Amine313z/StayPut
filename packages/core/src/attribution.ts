@@ -111,6 +111,9 @@ const OFFER_ACTIONS: ReadonlySet<ActionType> = new Set([
 
 const WINBACK_ACTIONS: ReadonlySet<ActionType> = new Set(['alumni_followup', 'promo_offer']);
 
+/** A message to a member at risk: StayPut's at the golden hour, or the creator's own word. */
+const REACHING_OUT: ReadonlySet<ActionType> = new Set(['high_risk_message', 'creator_message']);
+
 /**
  * Every save the facts prove. A payment is claimed once, by the first rule that holds, in the
  * SPEC's order (the direct ones first); an action saves one payment at most: the first one
@@ -200,10 +203,10 @@ export function attributeSaves(facts: AttributionFacts): Save[] {
     if (payment) claim('winback', action, payment, [action.id, payment.id]);
   }
 
-  // Influenced: a member at high risk got StayPut's message, was active again within 14 days,
-  // then renewed within their period.
+  // Influenced: a member at high risk got a message (StayPut's, or the creator's sent through
+  // StayPut), was active again within 14 days, then renewed within their period.
   for (const action of actions) {
-    if (action.type !== 'high_risk_message' || usedActions.has(action.id)) continue;
+    if (!REACHING_OUT.has(action.type) || usedActions.has(action.id)) continue;
     const back = facts.firstActivityAfter[action.id];
     if (back === undefined || back <= action.sentAt) continue;
     if (back - action.sentAt > REACTIVATION_DAYS * DAY_MS) continue;
