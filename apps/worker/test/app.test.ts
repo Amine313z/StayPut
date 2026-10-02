@@ -2455,7 +2455,7 @@ describe('the member space (SPEC Phase 5)', () => {
     expect(html).toContain('By Name user_lina6');
     expect(html).toContain('✓ Backed by a screenshot');
     expect(html).toContain(
-      '<a class="join" href="https://whop.com/le-club/?a=lina6" rel="noopener nofollow">',
+      '<a class="join" href="https://whop.com/le-club/?a=lina6" target="_blank" rel="noopener nofollow">',
     );
     expect(html).toContain('<span class="w65"></span>');
     expect(html).not.toContain('<script');

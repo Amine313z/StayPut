@@ -84,6 +84,9 @@ const STYLE = [
   '.note{margin:22px 0 0;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);',
   'font-size:13px}',
   'footer{margin-top:16px;color:var(--muted);font-size:12px}',
+  // A phone, or StayPut's window showing the page: smaller margins, the result on one line.
+  '@media (max-width:480px){body{padding:12px}main{padding:20px}h1{font-size:22px}',
+  '.value{font-size:28px}}',
   BAR_STYLE,
 ].join('');
 
@@ -170,8 +173,9 @@ export async function proofPage(proof: {
     `<p class="progress">${escape(w.progress(percent, withUnit(d.target, d.unit, locale)))}</p>`,
     `<p class="level">${escape(w.level[proof.level])}</p>`,
     `<p class="meta">${escape(`${w.by(d.name)} · ${w.on(date)}`)}</p>`,
+    // In a new tab: Whop's pages refuse to open inside another page, as in StayPut's preview.
     d.affiliateUrl
-      ? `<a class="join" href="${escape(d.affiliateUrl)}" rel="noopener nofollow">${escape(w.join(d.community))}</a>`
+      ? `<a class="join" href="${escape(d.affiliateUrl)}" target="_blank" rel="noopener nofollow">${escape(w.join(d.community))}</a>`
       : '',
     `<p class="note">${escape(w.note)}</p>`,
     `<footer>${escape(w.footer)}</footer>`,

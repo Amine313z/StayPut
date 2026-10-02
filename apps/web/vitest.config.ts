@@ -5,5 +5,9 @@ export default defineProject({
   plugins: [react()],
   test: {
     environment: 'happy-dom',
+    // A frame's page (the preview of a card's public page) is the Worker's: never loaded here.
+    environmentOptions: {
+      happyDOM: { settings: { navigation: { disableChildFrameNavigation: true } } },
+    },
   },
 });

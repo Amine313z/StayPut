@@ -16,6 +16,7 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { MemberRetention } from '../../components/MemberRetention';
 import { MemberSpace } from '../../components/MemberSpace';
+import { PagePreviewButton } from '../../components/PagePreview';
 import { QrCode } from '../../components/QrCode';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { CardPicture, useCardImage } from '../../components/Testimonial';
@@ -25,7 +26,6 @@ import { useWithUnit } from '../../units';
 import { Badge, Notice } from '../../ui/Badge';
 import { Button, SECTION_LINK_CLASS } from '../../ui/Button';
 import { Card } from '../../ui/Card';
-import { ExternalButton } from '../../ui/ExternalLink';
 import { Stat } from '../../ui/Stat';
 import { useCreatorData } from '../CreatorView';
 
@@ -195,7 +195,7 @@ function PublishedCard({ card, whopAppId }: { card: TestimonialCard; whopAppId: 
         <figure className="space-y-2">
           <QrCode
             value={card.url}
-            size={180}
+            size={220}
             label={t('spaceTab.cards.qr', { goal: card.display.goal })}
           />
           <figcaption className="flex items-center gap-1.5 text-sm text-muted">
@@ -204,9 +204,7 @@ function PublishedCard({ card, whopAppId }: { card: TestimonialCard; whopAppId: 
           </figcaption>
         </figure>
         <div className="flex flex-wrap items-center gap-2">
-          <ExternalButton href={card.url} whopAppId={whopAppId} variant="secondary" size="sm">
-            {t('card.open')}
-          </ExternalButton>
+          <PagePreviewButton url={card.url} goal={card.display.goal} whopAppId={whopAppId} />
           <Button
             variant="ghost"
             size="sm"

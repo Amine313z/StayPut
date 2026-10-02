@@ -1940,17 +1940,30 @@ describe('the member space in the dashboard', () => {
         name: 'Testimonial card: Reach 3,000 € a month, 55% of the goal',
       });
       expect(image.getAttribute('src')).toBe('data:image/png;base64,QUJD');
-      expect(screen.getByRole('link', { name: /Open its page/ }).getAttribute('href')).toBe(
-        card.url,
-      );
       expect(screen.getByText('And 7 more online.')).toBeTruthy();
+      // « See the page » shows the real public page inside StayPut, in a window that closes:
+      // looking at it never leaves Whop.
+      fireEvent.click(screen.getByRole('button', { name: 'See the page' }));
+      const pageWindow = screen.getByRole('dialog', { name: 'The card’s public page' });
+      expect(
+        within(pageWindow)
+          .getByTitle('Public page of the card: Reach 3,000 € a month')
+          .getAttribute('src'),
+      ).toBe('/v/7c9e6679-7425-40de-944b-e07fc1f90ae7');
+      expect(
+        within(pageWindow)
+          .getByRole('link', { name: /Open in a new tab/ })
+          .getAttribute('href'),
+      ).toBe(card.url);
+      fireEvent.click(within(pageWindow).getByRole('button', { name: 'Close' }));
+      expect(screen.queryByRole('dialog')).toBeNull();
       // Beside it, a QR code made to be scanned on the screen: whole pixels per module.
       const qr = screen.getByRole('img', {
         name: 'QR code of the card’s page: Reach 3,000 € a month',
       });
       const side = Number(qr.getAttribute('width'));
       const modules = Number(qr.getAttribute('viewBox')!.split(' ')[2]);
-      expect(side).toBeGreaterThanOrEqual(180);
+      expect(side).toBeGreaterThanOrEqual(220);
       expect(side % modules).toBe(0);
       expect(screen.getByText('Scan it with your phone: the card’s page opens.')).toBeTruthy();
       // The team never takes a member’s card down.
@@ -2819,7 +2832,7 @@ describe('member space', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText(card.url)).toBeTruthy();
-    expect(screen.getByRole('link', { name: /Open its page/ }).getAttribute('href')).toBe(card.url);
+    expect(screen.getByRole('button', { name: 'See the page' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Copy the link' }));
     expect(await screen.findByText('Link copied')).toBeTruthy();
     expect(clipboard.writeText).toHaveBeenCalledWith(card.url);
@@ -2894,7 +2907,7 @@ describe('member space', () => {
       expect(drawn.some((text) => text.startsWith('By Your name · '))).toBe(true);
       expect(screen.getByText('Trial: the card is drawn, its page is not published.')).toBeTruthy();
       // Nothing published, no page to open.
-      expect(screen.queryByRole('link', { name: /Open its page/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'See the page' })).toBeNull();
       expect(calls.filter((c) => !c.startsWith('/'))).toEqual([]);
     } finally {
       getContext.mockRestore();

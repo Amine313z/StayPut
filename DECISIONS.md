@@ -991,6 +991,34 @@ horaire suivant les simule (les messages attendent la fin des heures de silence)
   prélèvement pour eux. L'essai réel se fera sur un vrai membre de test (un second compte Whop
   qui rejoint la communauté du sandbox), une fois les permissions d'écriture accordées.
 
+### La page d'une carte s'ouvre dans StayPut (2 octobre, retour du fondateur)
+
+« Ouvrir sa page » ouvrait la page publique d'une carte dans un nouvel onglet (Whop l'ouvre
+ainsi, par `openExternalUrl`) : le fondateur s'y est retrouvé sans moyen de revenir. Le bouton
+devient **« Voir la page »** et montre la vraie page dans une fenêtre de StayPut, côté équipe
+(Espace membre → Témoignages) comme côté membre. La fenêtre (`ui/Dialog.tsx`) est le `<dialog>`
+modal du navigateur : Échap, « Fermer » ou un clic à côté la referment, et le focus revient au
+bouton.
+
+- **La vraie page, pas une copie** : un cadre (`iframe`) charge `/v/<id>` depuis l'adresse où
+  StayPut est affiché (le cadre de Whop, ou le relais), car la politique du tableau de bord
+  n'autorise que les cadres de sa propre origine ; le lien à partager garde l'adresse publique.
+  Le cadre est `sandbox` : aucun script (la page n'en a pas), seul le lien « Rejoindre » peut
+  s'ouvrir, dans un nouvel onglet. La page le marque `target="_blank"` : les pages de Whop
+  refusent de s'afficher dans une autre page.
+- **Le thème suit StayPut** : la page suit `prefers-color-scheme`, et le cadre hérite du
+  `color-scheme` du tableau de bord.
+- « Ouvrir dans un nouvel onglet » reste proposé sous la page, et dit où il mène.
+- **Sur téléphone**, la page publique resserre ses marges sous 480 px (pour un visiteur comme dans
+  la fenêtre) : le résultat tient sur une ligne.
+- **Le QR code à scanner passe de 180 à 220 pixels au moins** (225 pour l'adresse actuelle,
+  5 pixels par module). Essai avec deux décodeurs indépendants (ZXing, celui de beaucoup de
+  téléphones Android, et OpenCV) sur des photos simulées (inclinaison, flou, bruit, reflet, moiré
+  d'écran) : à la distance où 180 px passaient 52 fois sur 72, 225 px passent 69 fois sur 72 ;
+  de près, les deux passent toujours.
+- Les tests de l'interface ne chargent pas la page des cadres (`navigation.disableChildFrameNavigation`
+  de happy-dom) : c'est le Worker qui la sert, et elle est testée de son côté.
+
 ### Reste à faire dans cette phase
 
 Les permissions d'écriture à ajouter dans Whop :

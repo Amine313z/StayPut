@@ -14,8 +14,8 @@ import { useWithUnit } from '../units';
 import { Notice } from '../ui/Badge';
 import { Button, buttonClass } from '../ui/Button';
 import { Card } from '../ui/Card';
-import { ExternalButton } from '../ui/ExternalLink';
 import { ConfirmButton } from './ConfirmButton';
+import { PagePreviewButton } from './PagePreview';
 import { FIELD } from './SettingsParts';
 
 /** Where the cards are made: StayPut for a member, the browser for the team's trial. */
@@ -372,9 +372,7 @@ function CardView({
           {t('card.copy')}
         </Button>
         {trial ? null : (
-          <ExternalButton href={card.url} whopAppId={whopAppId} variant="secondary" size="sm">
-            {t('card.open')}
-          </ExternalButton>
+          <PagePreviewButton url={card.url} goal={card.display.goal} whopAppId={whopAppId} />
         )}
         <ConfirmButton
           label={t('card.remove')}

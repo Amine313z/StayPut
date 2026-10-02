@@ -112,3 +112,15 @@ body {
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/*
+ * The dimmed page behind a window (ui/Dialog.tsx). Written in full: an older browser's
+ * ::backdrop does not inherit the tokens.
+ */
+dialog::backdrop {
+  background-color: rgb(16 24 40 / 0.55);
+}
+
+[data-theme='dark'] dialog::backdrop {
+  background-color: rgb(0 0 0 / 0.7);
+}
