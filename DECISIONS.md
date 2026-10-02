@@ -1615,3 +1615,23 @@ de la communauté et la synchronisation (Intégrations › Whop).
   vidéos ; les réponses au questionnaire de départ dans la démo (pour Analyses).
 - Le JavaScript pèse toujours 265 Ko compressés : le découpage par rubrique est prévu avec les
   pages suivantes.
+
+### Correctif du 2 octobre : « Un obstacle » sur les pages de la démo
+
+- Le fondateur a vu « Un obstacle » sur toutes les pages : c'était le panneau d'erreur de la démo,
+  qui n'avait de données que pour le tableau de bord, Membres et une partie des Intégrations et des
+  Réglages. 8 pages sur 16 s'arrêtaient sur « Cette page n'a pas encore de données de démo ».
+- Chaque page a maintenant ses données, tirées des mêmes 56 membres (`apps/web/src/demo/pages.ts`) :
+  6 actions à approuver, 3 programmées et 11 passées (dont une arrêtée par un garde-fou), les
+  cohortes par mois d'arrivée (juillet signalé), deux leçons bloquantes, l'activité Discord et
+  Telegram sur 30 jours, les personnes et les comptes à relier, le score de risque de la niche
+  trading, l'offre Alumni et les salons Discord. Approuver, annuler, relier un compte, enregistrer
+  : tout marche jusqu'au rechargement de la page.
+- L'action du jour de la démo suit maintenant ces actions, comme le vrai calcul : « Approuver
+  6 actions » d'abord (mode manuel), puis le membre à haut risque que personne n'a joint.
+- Le test qui ouvre chaque page de la démo a trouvé un vrai bogue : après « Approuver », le bouton
+  de l'action suivante restait bloqué sur « fait ». Chaque nouvelle action du jour est maintenant
+  une nouvelle carte.
+- Le panneau d'erreur s'appelle « Cette page n'a pas pu s'ouvrir » (plus « Un obstacle »), en
+  argent et non en rouge ; une donnée de démo manquante s'affiche en état vide calme, jamais en
+  erreur.

@@ -751,7 +751,7 @@ export const en = {
   'factor.friction': 'Friction',
   'factor.friction.hint': 'A support ticket open over 48 hours, or reactions halved over 14 days.',
 
-  'error.title': 'Something is in the way',
+  'error.title': 'This page could not open',
   'error.unauthenticated': 'Open StayPut from Whop to sign in.',
   'error.unauthenticated.login':
     'You opened StayPut outside Whop: sign in with your Whop account to continue.',
@@ -788,7 +788,7 @@ export const en = {
   'nav.sources.description':
     'Where StayPut reads your members’ activity: Whop, Discord and Telegram.',
   'nav.settings': 'Settings',
-  'nav.settings.description': 'How StayPut scores your members, acts and runs their space.',
+  'nav.settings.description': 'Your language and theme, how StayPut scores your members and acts.',
   'tab.overview': 'Overview',
   'tab.testimonials': 'Testimonials',
   'tab.memberView': 'Member view',
@@ -1057,7 +1057,7 @@ export const en = {
   'demo.notice':
     'You are exploring an imaginary community. Nothing here is real, and nothing you do is sent.',
   'demo.leave': 'Leave the demo',
-  'error.demo': 'This page has no demo data yet.',
+  'error.demo': 'This screen fills in with your own community’s data.',
 
   'dash.money': 'Your money this month',
   'dash.saved': 'Revenue saved this month',

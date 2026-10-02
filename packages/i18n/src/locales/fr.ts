@@ -770,7 +770,7 @@ export const fr: Messages = {
   'factor.friction.hint':
     'Un ticket support ouvert depuis plus de 48\u00a0h, ou des réactions divisées par deux sur 14 jours.',
 
-  'error.title': 'Un obstacle',
+  'error.title': 'Cette page n’a pas pu s’ouvrir',
   'error.unauthenticated': 'Ouvrez StayPut depuis Whop pour vous connecter.',
   'error.unauthenticated.login':
     'Vous avez ouvert StayPut hors de Whop : connectez-vous avec votre compte Whop pour continuer.',
@@ -809,7 +809,8 @@ export const fr: Messages = {
   'nav.sources.description':
     'Où StayPut lit l’activité de vos membres : Whop, Discord et Telegram.',
   'nav.settings': 'Réglages',
-  'nav.settings.description': 'Comment StayPut note vos membres, agit et anime leur espace.',
+  'nav.settings.description':
+    'Votre langue et votre thème, comment StayPut note vos membres et agit.',
   'tab.overview': 'Vue d’ensemble',
   'tab.testimonials': 'Témoignages',
   'tab.memberView': 'Vue membre',
@@ -1083,7 +1084,7 @@ export const fr: Messages = {
   'demo.notice':
     'Vous explorez une communauté imaginaire. Rien ici n’est réel, et rien de ce que vous faites n’est envoyé.',
   'demo.leave': 'Quitter la démo',
-  'error.demo': 'Cette page n’a pas encore de données de démo.',
+  'error.demo': 'Cet écran se remplit avec les données de votre propre communauté.',
 
   'dash.money': 'Votre argent ce mois-ci',
   'dash.saved': 'Revenus sauvés ce mois-ci',

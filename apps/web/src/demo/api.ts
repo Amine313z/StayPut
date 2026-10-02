@@ -1,5 +1,10 @@
-import type { ActionSettingsView, CreatorMessagesResult, SyncRun } from '@stayput/core';
-import { isCreatorOfferKind } from '@stayput/core';
+import type {
+  ActionSettingsView,
+  CreatorMessagesResult,
+  RiskSettingsView,
+  SyncRun,
+} from '@stayput/core';
+import { ACTION_VIEWS, isCreatorOfferKind } from '@stayput/core';
 import { ApiError, DEMO_API } from '../api';
 import { createWorld, type DemoWorld } from './world';
 
@@ -31,8 +36,9 @@ export async function answerDemo(method: string, path: string, body: unknown): P
     setTimeout(resolve, method === 'GET' ? DEMO_READ_MS : DEMO_WRITE_MS),
   );
   const demo = current();
-  const route = path.slice(DEMO_API.length).split('?')[0] ?? '';
+  const [route = '', query = ''] = path.slice(DEMO_API.length).split('?');
   const answer = (value: unknown) => structuredClone(value);
+  const pages = demo.pages;
   if (method === 'GET') {
     switch (route) {
       case 'session':
@@ -49,9 +55,22 @@ export async function answerDemo(method: string, path: string, body: unknown): P
         return answer(demo.integrations);
       case 'settings/actions':
         return answer(demo.settings);
+      case 'settings/risk':
+        return answer(pages.riskSettings());
       case 'alumni':
-        return { offer: null, entered: 0, left: 0, returned: 0 };
+        return answer(pages.alumni());
+      case 'actions': {
+        const view = ACTION_VIEWS.find((v) => v === new URLSearchParams(query).get('view'));
+        return answer(pages.actions(view ?? 'queue'));
+      }
+      case 'insights':
+        return answer(pages.insights);
+      case 'people':
+        return answer(pages.people());
+      case 'accounts':
+        return answer(pages.accounts());
     }
+    if (/^discord\/[^/]+\/channels$/.test(route)) return answer(pages.discordChannels());
   }
   if (method === 'POST' && route === 'sync') {
     demo.syncNow();
@@ -62,7 +81,51 @@ export async function answerDemo(method: string, path: string, body: unknown): P
     const list = Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
     return { queued: demo.message(list) } satisfies CreatorMessagesResult;
   }
-  if (method === 'POST' && route === 'actions/approve') return { approved: 0 };
+  if (method === 'POST' && route === 'actions/approve') {
+    const ids = (body as { ids?: unknown } | null)?.ids;
+    const chosen = Array.isArray(ids)
+      ? ids.filter((id): id is string => typeof id === 'string')
+      : undefined;
+    return { approved: pages.approve(chosen) };
+  }
+  const cancel = /^actions\/([^/]+)\/cancel$/.exec(route);
+  if (method === 'POST' && cancel) {
+    if (!pages.cancel(decodeURIComponent(cancel[1]!))) {
+      throw new ApiError('conflict', 'this action can no longer be cancelled');
+    }
+    return { cancelled: true };
+  }
+  if (method === 'POST' && route === 'platform-activity/refresh') {
+    return answer(pages.platformActivity());
+  }
+  const account = /^accounts\/(link|unlink|dismiss|restore)$/.exec(route);
+  if (method === 'POST' && account) {
+    const next = pages.changeAccount(account[1]!, (body ?? {}) as Record<string, unknown>);
+    if (!next) throw new ApiError('not_found', 'no such account here');
+    return answer(next);
+  }
+  if (method === 'PUT' && route === 'settings/risk') {
+    return answer(pages.saveRiskSettings(body as RiskSettingsView));
+  }
+  if (method === 'POST' && route === 'alumni') return answer(pages.alumni());
+  if (method === 'PUT' && /^discord\/[^/]+\/channels$/.test(route)) {
+    const ids = (body as { channelIds?: unknown } | null)?.channelIds;
+    return answer(
+      pages.saveDiscordChannels(
+        Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [],
+      ),
+    );
+  }
+  const server = /^discord\/([^/]+)$/.exec(route);
+  if (method === 'DELETE' && server) {
+    demo.disconnect('discord', decodeURIComponent(server[1]!));
+    return { removed: true };
+  }
+  const group = /^telegram\/([^/]+)$/.exec(route);
+  if (method === 'DELETE' && group) {
+    demo.disconnect('telegram', decodeURIComponent(group[1]!));
+    return { removed: true };
+  }
   if (method === 'POST' && route === 'getting-started/reviewed') {
     demo.started('reviewed');
     return { done: true };

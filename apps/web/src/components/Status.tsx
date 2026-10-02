@@ -4,6 +4,7 @@ import { useLocation } from 'react-router';
 import type { ApiError } from '../api';
 import { useI18n } from '../i18n';
 import { Button, ButtonLink } from '../ui/Button';
+import { EmptyState } from '../ui/EmptyState';
 
 export function Loading() {
   const { t } = useI18n();
@@ -17,7 +18,9 @@ export function Loading() {
 
 /**
  * A failed call, in words the user can act on. `forbiddenKey` says who the screen is for: the
- * same 403 means "team only" on the dashboard and "no access" in the member space.
+ * same 403 means "team only" on the dashboard and "no access" in the member space. Silver, not
+ * red (red is for what is urgent about members). A screen the demo has no data for is not a
+ * failure: it says so calmly.
  */
 export function ErrorPanel({
   error,
@@ -30,6 +33,7 @@ export function ErrorPanel({
 }) {
   const { t } = useI18n();
   const location = useLocation();
+  if (error.code === 'demo') return <EmptyState body={t('error.demo')} />;
   const signIn = error.code === 'unauthenticated' ? signInHref(error.login, location) : null;
   const signInFailed = new URLSearchParams(location.search).get('login') === 'failed';
   const messageKey: MessageKey =
@@ -44,12 +48,12 @@ export function ErrorPanel({
   return (
     <section
       role="alert"
-      className="mx-auto max-w-lg rounded-2xl border border-line bg-surface p-6 shadow-card"
+      className="mx-auto max-w-lg rounded-xl border border-line bg-surface/60 p-6"
     >
-      <span className="flex size-10 items-center justify-center rounded-xl bg-danger-soft text-danger">
+      <span className="flex size-10 items-center justify-center rounded-xl bg-surface-2 text-muted">
         <CircleAlert aria-hidden="true" className="size-5" />
       </span>
-      <h1 className="mt-4 text-lg font-semibold">{t('error.title')}</h1>
+      <h1 className="mt-4 text-base font-semibold text-fg">{t('error.title')}</h1>
       {signIn && signInFailed ? <p className="mt-2 font-medium">{t('auth.failed')}</p> : null}
       <p className="mt-2 text-muted">{t(messageKey)}</p>
       {signIn ? (

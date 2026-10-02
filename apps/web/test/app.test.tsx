@@ -39,6 +39,7 @@ import { resetDemo } from '../src/demo/api';
 import { readScreenshot } from '../src/ocr';
 import { LIVE_REFRESH_MS } from '../src/components/PlatformActivityCard';
 import { I18nProvider } from '../src/i18n';
+import { ErrorPanel } from '../src/components/Status';
 import { ThemeProvider, resolveTheme } from '../src/theme';
 import { ToastProvider } from '../src/ui/Toast';
 
@@ -3613,19 +3614,22 @@ describe('the demo (/demo)', () => {
   it('runs the action of the day in the demo, and moves on', async () => {
     vi.stubGlobal('fetch', vi.fn());
     renderAt('/demo');
-    const button = await screen.findByRole(
-      'button',
-      { name: 'Message 6 high-risk members' },
-      { timeout: 3_000 },
+    // Manual mode: what waits for approval first, as on Automations.
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Approve 6 actions' }, { timeout: 3_000 }),
     );
-    fireEvent.click(button);
     expect(
-      await screen.findByText('6 messages queued', undefined, { timeout: 3_000 }),
+      await screen.findByText('6 actions approved', undefined, { timeout: 3_000 }),
     ).toBeTruthy();
+    // Then the member at high risk nobody reached.
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Message 1 high-risk member' }, { timeout: 3_000 }),
+    );
+    expect(await screen.findByText('1 message queued', undefined, { timeout: 3_000 })).toBeTruthy();
     expect(
       await screen.findByRole('heading', { name: 'Nothing urgent today' }, { timeout: 3_000 }),
     ).toBeTruthy();
-  });
+  }, 15_000);
 
   it('brings a creator back to their own dashboard', async () => {
     vi.stubGlobal('fetch', vi.fn());
@@ -3637,12 +3641,74 @@ describe('the demo (/demo)', () => {
     ).toBe('/dashboard/biz_A1');
   });
 
-  it('says plainly when a page has no demo data yet', async () => {
+  it('fills every page of the demo: none stops on an error', async () => {
     vi.stubGlobal('fetch', vi.fn());
+    for (const page of [
+      'members',
+      'members/never-contact',
+      'actions',
+      'actions/scheduled',
+      'actions/history',
+      'actions/alumni',
+      'insights',
+      'insights/lessons',
+      'sources',
+      'sources/discord',
+      'sources/telegram',
+      'sources/activity',
+      'settings',
+      'settings/risk',
+      'settings/actions',
+    ]) {
+      renderAt(`/demo/${page}`);
+      await screen.findByRole('heading', { level: 1 }, { timeout: 3_000 });
+      // Each page's own data, read by the demo (its loading done), and never an error panel.
+      await vi.waitFor(
+        () => {
+          expect(screen.queryByText('Loading…')).toBeNull();
+          expect(document.querySelector('.skeleton')).toBeNull();
+        },
+        { timeout: 3_000 },
+      );
+      expect(screen.queryByRole('alert'), page).toBeNull();
+      cleanup();
+    }
+    renderAt('/demo/actions');
+    expect(await screen.findByText('Margaux Picard', undefined, { timeout: 3_000 })).toBeTruthy();
+    expect(screen.getByText('Before you go')).toBeTruthy();
+    cleanup();
     renderAt('/demo/insights');
     expect(
-      await screen.findByText('This page has no demo data yet.', undefined, { timeout: 3_000 }),
+      await screen.findByText(/left 1\.\d times more than your average within 30 days/, undefined, {
+        timeout: 3_000,
+      }),
     ).toBeTruthy();
+  }, 40_000);
+
+  it('says calmly when a screen has no demo data, never as an error', async () => {
+    const { ApiError } = await import('../src/api');
+    render(
+      <I18nProvider initialLocale="fr">
+        <RouterProvider
+          router={createMemoryRouter([
+            {
+              path: '/',
+              element: (
+                <ErrorPanel
+                  error={new ApiError('demo', 'no demo data')}
+                  forbiddenKey="error.forbidden.creator"
+                />
+              ),
+            },
+          ])}
+        />
+      </I18nProvider>,
+    );
+    expect(
+      screen.getByText('Cet écran se remplit avec les données de votre propre communauté.'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Cette page n’a pas pu s’ouvrir')).toBeNull();
   });
 });
 

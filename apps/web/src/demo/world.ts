@@ -18,6 +18,7 @@ import {
   type SyncStatus,
 } from '@stayput/core';
 import { DEMO_COMPANY_ID } from '../api';
+import { createDemoPages, localDay, type DemoPages } from './pages';
 
 /**
  * The demo community (/demo): an imaginary trading community of 56 members, with what a real
@@ -264,6 +265,8 @@ function memberId(index: number): string {
 
 export interface DemoWorld {
   session: CreatorSession;
+  /** Automations, Analytics, Integrations › Activity, Settings › Risk score (pages.ts). */
+  pages: DemoPages;
   members: MembersPage;
   dashboard: () => DashboardView;
   feed: () => { items: FeedItem[] };
@@ -279,6 +282,8 @@ export interface DemoWorld {
   /** « Pause » or « Offer »: refused when one is open, when the member cannot be contacted. */
   offer: (memberId: string, kind: CreatorOfferKind) => CreatorOfferMade | { error: string };
   setContact: (memberId: string, doNotContact: boolean) => boolean | null;
+  /** A Discord server or a Telegram group taken off (Integrations). */
+  disconnect: (platform: 'discord' | 'telegram', id: string) => void;
   syncNow: () => void;
 }
 
@@ -468,6 +473,19 @@ export function createWorld(now: number): DemoWorld {
     guardrails: false,
   };
 
+  const DISCORD_GUILD = '1187420000000000001';
+  const TELEGRAM_CHAT = '-1002187400001';
+  const TELEGRAM_TITLE = 'Atlas · Signals';
+  const pages = createDemoPages({
+    now,
+    community: COMMUNITY,
+    rows,
+    monthly: price,
+    guildId: DISCORD_GUILD,
+    chatId: TELEGRAM_CHAT,
+    telegramTitle: TELEGRAM_TITLE,
+  });
+
   const byName = (name: string) => rows.find((m) => m.name === name)!;
   let feedSeq = 0;
   const item = (
@@ -581,7 +599,7 @@ export function createWorld(now: number): DemoWorld {
       install: null,
       servers: [
         {
-          guildId: '1187420000000000001',
+          guildId: DISCORD_GUILD,
           name: COMMUNITY,
           connectedAt: at(46 * DAY),
           channels: ['general', 'trade-ideas', 'wins', 'questions'].map((_, i) => ({
@@ -601,8 +619,8 @@ export function createWorld(now: number): DemoWorld {
       readsAllMessages: true,
       groups: [
         {
-          chatId: '-1002187400001',
-          title: 'Atlas · Signals',
+          chatId: TELEGRAM_CHAT,
+          title: TELEGRAM_TITLE,
           connectedAt: at(38 * DAY),
           active: true,
           lastMessageAt: at(6 * MINUTE),
@@ -627,13 +645,17 @@ export function createWorld(now: number): DemoWorld {
     sync,
     integrations,
     settings,
+    pages,
     dashboard: () => {
       const current = Date.now();
+      // Members at high risk no message reached (or will) within 5 days, as the Worker counts.
+      const planned = pages.reached();
       const unreached = joined
         .filter(
           (m) =>
             m.risk?.level === 'high' &&
             !m.doNotContact &&
+            !planned.has(m.id) &&
             current - (reached.get(m.id) ?? -Infinity) > 5 * DAY,
         )
         .map((m) => ({ memberId: m.id, monthly: price(m) }))
@@ -672,11 +694,7 @@ export function createWorld(now: number): DemoWorld {
         riskHistory,
         revenueHistory,
         gettingStarted: { ...gettingStarted },
-        priority: choosePriority({
-          mode: settings.mode,
-          pending: { actions: 0, members: 0, revenue: 0 },
-          unreached,
-        }),
+        priority: choosePriority({ mode: settings.mode, pending: pages.pending(), unreached }),
       };
     },
     feed: () => {
@@ -734,17 +752,19 @@ export function createWorld(now: number): DemoWorld {
       member.doNotContact = doNotContact;
       return doNotContact;
     },
+    disconnect: (platform, id) => {
+      if (platform === 'discord') {
+        integrations.discord.servers = integrations.discord.servers.filter((s) => s.guildId !== id);
+      } else {
+        integrations.telegram.groups = integrations.telegram.groups.map((g) =>
+          g.chatId === id ? { ...g, active: false } : g,
+        );
+      }
+    },
     syncNow: () => {
       const moment = new Date().toISOString();
       sync.lastSyncAt = moment;
       for (const stream of sync.streams) stream.lastPassAt = moment;
     },
   };
-}
-
-/** The calendar day of a moment where the demo is opened: `YYYY-MM-DD`. */
-function localDay(moment: Date): string {
-  const month = String(moment.getMonth() + 1).padStart(2, '0');
-  const day = String(moment.getDate()).padStart(2, '0');
-  return `${moment.getFullYear()}-${month}-${day}`;
 }

@@ -18,6 +18,7 @@ import {
   RotateCw,
   Send,
 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { postJson, useApi, useReloadOnChange, type Loadable } from '../../api';
@@ -26,6 +27,7 @@ import { attentionReasons } from '../../components/MemberRows';
 import { LEVELS, UrgentDot } from '../../components/Risk';
 import { ErrorPanel } from '../../components/Status';
 import { useI18n } from '../../i18n';
+import { ease } from '../../motion';
 import { reasonText } from '../../risk-text';
 import { ActionButton } from '../../ui/ActionButton';
 import { Avatar } from '../../ui/Avatar';
@@ -311,8 +313,19 @@ function Priority({
       title,
       body: t(view.testMode ? 'dash.toast.simulated' : 'dash.toast.messaged.body'),
     });
+  // A new action of the day is a new card (its button starts fresh), fading in.
+  const identity =
+    priority === null
+      ? 'none'
+      : priority.kind === 'message'
+        ? `message:${priority.memberIds.join(',')}`
+        : `approve:${priority.actions}`;
   return (
-    <section
+    <motion.section
+      key={identity}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={ease('standard')}
       aria-labelledby={titleId}
       className="flex flex-col gap-4 rounded-xl border border-line bg-surface/60 p-5 @3xl:flex-row @3xl:items-center @3xl:justify-between"
     >
@@ -390,7 +403,7 @@ function Priority({
           </ActionButton>
         </div>
       )}
-    </section>
+    </motion.section>
   );
 }
 
