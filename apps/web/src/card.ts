@@ -120,7 +120,6 @@ function roundRect(
 const FONTS = {
   from: `500 34px ${FONT}`,
   goal: `700 68px ${FONT}`,
-  value: `800 88px ${FONT}`,
   progress: `500 34px ${FONT}`,
   level: `600 34px ${FONT}`,
   by: `500 32px ${FONT}`,
@@ -133,6 +132,45 @@ const FONTS = {
 /** The QR code's square: at most this wide, whole pixels per module, a quiet zone of four. */
 const QR_MAX = 300;
 const QR_QUIET = 4;
+
+/**
+ * The result's line (« 0 sessions → 12 sessions »), never cut: as big as it fits on one line, down
+ * to VALUE_MIN; past that, on two lines split after the arrow, each as big as fits and as the room
+ * left on the card allows (`twoLinesMax`).
+ */
+export const VALUE_MAX = 88;
+const VALUE_MIN = 56;
+const VALUE_FLOOR = 36;
+const ARROW = ' → ';
+
+const valueFont = (size: number) => `800 ${size}px ${FONT}`;
+
+/** The size and lines of the result, for `measure(size, text)` and the card's width. */
+export function fitValue(
+  measure: (size: number, text: string) => number,
+  value: string,
+  width: number,
+  twoLinesMax = VALUE_MAX,
+): { size: number; lines: string[] } {
+  const fits = (size: number, lines: string[]) =>
+    lines.every((line) => measure(size, line) <= width);
+  const largest = (lines: string[], from: number) => {
+    let size = Math.max(VALUE_FLOOR, Math.floor(from));
+    while (size > VALUE_FLOOR && !fits(size, lines)) size -= 2;
+    return Math.max(VALUE_FLOOR, size);
+  };
+  const one = largest([value], VALUE_MAX);
+  if (one >= VALUE_MIN && fits(one, [value])) return { size: one, lines: [value] };
+  const at = value.indexOf(ARROW);
+  const halves =
+    at > 0 ? [value.slice(0, at + ARROW.length - 1), value.slice(at + ARROW.length)] : [value];
+  const two = largest(halves, Math.min(VALUE_MAX, twoLinesMax));
+  if (fits(one, [value]) && one >= two) return { size: one, lines: [value] };
+  return {
+    size: two,
+    lines: fits(two, halves) ? halves : wrapText((text) => measure(two, text), value, width, 2),
+  };
+}
 
 /** Draws the card on a 1080 × 1350 canvas. */
 export function drawCard(ctx: CanvasRenderingContext2D, card: CardContent): void {
@@ -153,11 +191,23 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardContent): void
   const square = cell * (modules.length + QR_QUIET * 2);
   const qrTop = CARD_HEIGHT - PAD - square;
 
-  // The result, centered in the space above it.
+  // The result, centered in the space above it. A smaller result keeps the same gap above its
+  // capitals (about 0.72 of its size); a second line adds its height (1.14 of its size), so two
+  // lines are as big as the room left allows.
   const from = wrapText(measureIn(FONTS.from), card.from, width, 2);
   const goal = wrapText(measureIn(FONTS.goal), card.goal, width, 3);
-  const block = 34 + from.length * 46 + goal.length * 82 + 414;
   const room = qrTop - 64 - PAD;
+  const base = 34 + from.length * 46 + goal.length * 82 + 414;
+  const twoLinesMax = Math.floor((room - base + VALUE_MAX * 0.72) / (1.14 + 0.72));
+  const value = fitValue(
+    (size, text) => measureIn(valueFont(size))(text),
+    card.value,
+    width,
+    twoLinesMax,
+  );
+  const valueLine = Math.round(value.size * 1.14);
+  const valueShift = Math.round((VALUE_MAX - value.size) * 0.72);
+  const block = base - valueShift + (value.lines.length - 1) * valueLine;
   let y = PAD + 34 + Math.max(0, Math.floor((room - block) / 2));
 
   ctx.fillStyle = COLORS.muted;
@@ -170,10 +220,11 @@ export function drawCard(ctx: CanvasRenderingContext2D, card: CardContent): void
   goal.forEach((line, i) => ctx.fillText(line, PAD, y + i * 82));
   y += goal.length * 82 + 70;
 
-  const value = wrapText(measureIn(FONTS.value), card.value, width, 1)[0] ?? '';
+  y -= valueShift;
   ctx.fillStyle = COLORS.accent;
-  ctx.font = FONTS.value;
-  ctx.fillText(value, PAD, y);
+  ctx.font = valueFont(value.size);
+  value.lines.forEach((line, i) => ctx.fillText(line, PAD, y + i * valueLine));
+  y += (value.lines.length - 1) * valueLine;
 
   y += 50;
   ctx.fillStyle = COLORS.track;

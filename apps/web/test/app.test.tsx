@@ -2552,10 +2552,14 @@ describe('member space', () => {
   });
 
   it('draws the team a card in the trial, with its QR code, and publishes nothing', async () => {
-    // A canvas that draws nothing but answers: the card's drawing runs to its end.
+    // A canvas that draws nothing but answers, its letters as wide as Inter's (about 0.6 of the
+    // font's size): the card's drawing runs to its end.
     const drawn: string[] = [];
     const context = {
-      measureText: (text: string) => ({ width: text.length * 18 }),
+      font: '',
+      measureText(text: string) {
+        return { width: text.length * Number(/(\d+)px/.exec(this.font)?.[1] ?? 16) * 0.6 };
+      },
       fillText: (text: string) => drawn.push(text),
       fillRect: vi.fn(),
       beginPath: vi.fn(),
