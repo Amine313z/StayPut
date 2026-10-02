@@ -1,13 +1,15 @@
 import type { CreatorSession, IntegrationsStatus, MembersPage } from '@stayput/core';
 import { useEffect } from 'react';
-import { Link, Outlet, useLocation, useOutletContext, useParams } from 'react-router';
-import { useApi, useReloadOnReturn, type Loadable } from '../api';
-import { SignOut } from '../components/SignOut';
-import { ErrorPanel, Loading } from '../components/Status';
+import { Outlet, useLocation, useOutletContext, useParams, useSearchParams } from 'react-router';
+import { DEMO_COMPANY_ID, useApi, useReloadOnReturn, type Loadable } from '../api';
+import { CreatorShell, ShellSkeleton, rememberDemoExit } from '../components/CreatorShell';
+import { ErrorPanel } from '../components/Status';
 import { useI18n } from '../i18n';
 import { useSync, type SyncState } from '../sync';
 import { shareTimeZone } from '../timezone';
-import { SECTIONS, sectionHref, sectionOf } from './creator/sections';
+import { StayPutMark } from '../ui/BrandIcons';
+import { Page } from '../ui/Motion';
+import { sectionOf } from './creator/sections';
 
 /** How many things each tab of a section holds, by the tab's path. */
 export type TabCounts = Record<string, number>;
@@ -15,10 +17,12 @@ export type TabCounts = Record<string, number>;
 /** What every section of the creator view reads, loaded once for all of them. */
 export interface CreatorData {
   companyId: string;
-  /** `/dashboard/<company>`: the sections' links start here. */
+  /** `/dashboard/<company>` (or `/demo`): the sections' links start here. */
   root: string;
   /** `/api/creator/<company>`. */
   api: string;
+  /** The imaginary community of /demo: nothing it shows is real, nothing it does is sent. */
+  demo: boolean;
   members: { state: Loadable<MembersPage>; retry: () => void; reload: () => void };
   sync: SyncState;
   integrations: { state: Loadable<IntegrationsStatus>; retry: () => void; reload: () => void };
@@ -30,34 +34,47 @@ export function useCreatorData(): CreatorData {
   return useOutletContext<CreatorData>();
 }
 
-/** The creator view (Whop "dashboard view", /dashboard/:companyId): the team only. */
-export function CreatorView() {
-  const { companyId = '' } = useParams();
+/**
+ * The creator view (Whop "dashboard view", /dashboard/:companyId): the team only. With `demo`
+ * (/demo), the same screens on an imaginary community, answered in the browser (demo/api.ts).
+ */
+export function CreatorView({ demo = false }: { demo?: boolean }) {
+  const params = useParams();
+  const [search] = useSearchParams();
+  const companyId = demo ? DEMO_COMPANY_ID : (params.companyId ?? '');
   const { state, retry } = useApi<CreatorSession>(
     `/api/creator/${encodeURIComponent(companyId)}/session`,
   );
+  // The dashboard the creator came from: « Leave the demo » brings them back to it.
+  const from = demo ? search.get('from') : null;
+  useEffect(() => {
+    if (from) rememberDemoExit(from);
+  }, [from]);
 
-  if (state.status === 'loading') return <Loading />;
+  if (state.status === 'loading') return <ShellSkeleton />;
   if (state.status === 'error') {
     return (
-      <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
+      <div className="mx-auto max-w-lg px-4 py-16">
+        <StayPutMark size={40} className="mx-auto mb-6" />
+        <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
+      </div>
     );
   }
-  return <Dashboard session={state.data} />;
+  return <Dashboard session={state.data} demo={demo} />;
 }
 
 /**
- * The dashboard (SPEC Phase 2, then Phase 6), as the founder laid it out on 2 October: the
- * sections in a side menu (a row on a phone), each with its tabs on top. The members and the
- * sources are read once here and kept while the creator moves between sections; both are read
- * again each time a synchronization brings something new, the sources also each time the
- * creator comes back to the page (after connecting one in another tab).
+ * The dashboard (the redesign): the frame (CreatorShell) around the open section. The members
+ * and the sources are read once here and kept while the creator moves between sections; both
+ * are read again each time a synchronization brings something new, the sources also each time
+ * the creator comes back to the page (after connecting one in another tab).
  */
-function Dashboard({ session }: { session: CreatorSession }) {
+function Dashboard({ session, demo }: { session: CreatorSession; demo: boolean }) {
   const { locale } = useI18n();
+  const { pathname } = useLocation();
   const companyId = session.companyId;
   const api = `/api/creator/${encodeURIComponent(companyId)}`;
-  const root = `/dashboard/${encodeURIComponent(companyId)}`;
+  const root = demo ? '/demo' : `/dashboard/${encodeURIComponent(companyId)}`;
   const members = useApi<MembersPage>(`${api}/members`);
   // The language goes along: the bot answers the creator's Telegram groups in it.
   const integrations = useApi<IntegrationsStatus>(`${api}/integrations?lang=${locale}`);
@@ -67,71 +84,28 @@ function Dashboard({ session }: { session: CreatorSession }) {
     members.reload();
     integrations.reload();
   });
-  const data: CreatorData = { companyId, root, api, members, sync, integrations };
+  const data: CreatorData = { companyId, root, api, demo, members, sync, integrations };
   // A company StayPut does not know the zone of yet: the creator's browser tells it.
   const timezoneSet = session.timezoneSet;
   useEffect(() => {
-    if (!timezoneSet) shareTimeZone(api);
-  }, [api, timezoneSet]);
+    if (!timezoneSet && !demo) shareTimeZone(api);
+  }, [api, timezoneSet, demo]);
+  const section = sectionOf(pathname, root);
 
   return (
-    <div className="lg:grid lg:grid-cols-[13.5rem_minmax(0,1fr)] lg:items-start lg:gap-10">
-      <SideMenu session={session} root={root} />
-      {/* A container: the sections lay out by the room left beside the menu, not the window's. */}
-      <div className="@container min-w-0">
-        <Outlet context={data} />
-      </div>
-    </div>
-  );
-}
-
-/**
- * The sections, one under the other beside the page (a row to scroll on a phone), with the
- * community the creator is in and, outside Whop, the way to sign out.
- */
-function SideMenu({ session, root }: { session: CreatorSession; root: string }) {
-  const { t } = useI18n();
-  const { pathname } = useLocation();
-  const current = sectionOf(pathname, root);
-  return (
-    <aside className="mb-6 lg:sticky lg:top-24 lg:mb-0">
-      <div className="mb-4 flex items-start justify-between gap-3 lg:block">
-        <div className="min-w-0">
-          <p className="text-xs font-medium tracking-wide text-muted uppercase">
-            {t('nav.community')}
-          </p>
-          <p className="truncate font-semibold" title={session.companyName ?? session.companyId}>
-            {session.companyName ?? session.companyId}
-          </p>
-          <p className="text-xs text-muted">{t('nav.team')}</p>
+    <CreatorShell
+      session={session}
+      root={root}
+      demo={demo}
+      members={members.state.status === 'ready' ? members.state.data.members : []}
+    >
+      {/* Each section comes in (MOTION.md); the frame around it never moves. */}
+      <Page key={section.id}>
+        {/* A container: the sections lay out by the room left beside the menu, not the window's. */}
+        <div className="@container min-w-0">
+          <Outlet context={data} />
         </div>
-        <div className="lg:mt-3">
-          <SignOut via={session.via} />
-        </div>
-      </div>
-      <nav aria-label={t('creator.sections')}>
-        <ul className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-col lg:overflow-visible lg:px-0 lg:pb-0">
-          {SECTIONS.map((section) => {
-            const active = section.id === current.id;
-            return (
-              <li key={section.id} className="shrink-0">
-                <Link
-                  to={sectionHref(root, section)}
-                  aria-current={active ? 'page' : undefined}
-                  className={`flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                    active
-                      ? 'bg-accent-soft text-accent'
-                      : 'text-muted hover:bg-surface-2 hover:text-fg'
-                  }`}
-                >
-                  <section.Icon aria-hidden="true" className="size-4 shrink-0" />
-                  {t(section.label)}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-    </aside>
+      </Page>
+    </CreatorShell>
   );
 }

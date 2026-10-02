@@ -20,6 +20,8 @@ il a sauvé.
 | 3. Détection (score de risque) | Faite, en attente de validation                           |
 | 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les droits |
 | 5. Espace membre               | Faite, en attente de validation                           |
+| 6. Preuve de valeur            | En cours : l'argent sauvé (6.4) et l'accueil (6.2) faits  |
+| Refonte du design              | Tableau de bord fait, en attente de validation            |
 
 ## Architecture
 
@@ -30,6 +32,7 @@ de l'iframe n'est envoyé qu'à cette origine) :
 | -------------------------------------- | ---------------------------------------------------- |
 | `/dashboard/:companyId` (vue créateur) | l'app React (`apps/web`)                             |
 | `/experiences/:experienceId` (membre)  | l'app React                                          |
+| `/demo` (communauté imaginaire)        | l'app React seule : aucun appel au Worker            |
 | `/api/*`                               | le Worker (`apps/worker`), jeton Whop vérifié        |
 | `/webhooks/whop`                       | le Worker : signature vérifiée, événement enregistré |
 | `/health`                              | le Worker : état de la base et de la configuration   |
@@ -40,18 +43,24 @@ sur chaque table. Le Worker s'y connecte par Hyperdrive. Budget : 0 €.
 
 ### Le tableau de bord du créateur
 
-Un menu de rubriques sur le côté (une rangée à faire défiler sur un téléphone), et dans chaque
-rubrique ses onglets en haut. La langue (English, Français) et le thème restent en haut de page.
+Un menu de rubriques sur le côté, qui se replie sur ses icônes ; en haut, la communauté (nom et
+logo lus chez Whop), la recherche d'un membre, la langue (English, Français), le thème et l'aide.
+Sur un téléphone, les rubriques passent dans une barre en bas de l'écran. Les couleurs, polices et
+animations suivent [`docs/design-tokens.md`](./docs/design-tokens.md) et [`MOTION.md`](./MOTION.md).
 
-| Rubrique (EN · FR)            | Onglets                                             |
-| ----------------------------- | --------------------------------------------------- |
-| Dashboard · Tableau de bord   | Vue d'ensemble · À surveiller · Nouveaux membres    |
-| Member space · Espace membre  | Vue d'ensemble · Témoignages · Vue membre           |
-| Members · Membres             | Tous les membres · Ne jamais contacter              |
-| Automations · Automatisations | À valider · Programmées · Historique · Offre Alumni |
-| Analytics · Analyses          | Cohortes · Leçons                                   |
-| Integrations · Intégrations   | Whop · Discord · Telegram · Activité                |
-| Settings · Réglages           | Score de risque · Automatisations · Espace membre   |
+| Rubrique (EN · FR)            | Onglets                                              |
+| ----------------------------- | ---------------------------------------------------- |
+| Dashboard · Tableau de bord   | une page (À surveiller et Nouveaux membres en liens) |
+| Members · Membres             | Tous les membres · Ne jamais contacter               |
+| Member space · Espace membre  | Vue d'ensemble · Témoignages · Vue membre            |
+| Automations · Automatisations | À valider · Programmées · Historique · Offre Alumni  |
+| Analytics · Analyses          | Cohortes · Leçons                                    |
+| Integrations · Intégrations   | Whop · Discord · Telegram · Activité                 |
+| Settings · Réglages           | Score de risque · Automatisations · Espace membre    |
+
+La page d'accueil met l'argent d'abord (sauvé ce mois-ci, à risque, membres à risque, rétention),
+puis l'action du jour en un bouton, les membres à surveiller avec Écrire / Pause / Offre,
+l'activité en direct, le risque sur 30 jours et les chiffres de la communauté.
 
 Chaque onglet a son adresse (`/dashboard/<communauté>/<rubrique>/<onglet>`) ; une adresse
 inconnue ouvre le premier onglet de sa rubrique, et les anciennes (`/actions?view=history`)
@@ -166,6 +175,13 @@ iwr https://stayput.chezbenz18.workers.dev/whop-frame.mjs -UseBasicParsing -OutF
 puis, dans Whop, StayPut → bouton `</>` en haut à droite du cadre → mode **localhost**, port
 3000 (`--port 3001` si le 3000 est pris). Détails : `DECISIONS.md`, « StayPut dans le cadre de
 Whop du sandbox ».
+
+### La démo
+
+`https://stayput.chezbenz18.workers.dev/demo` montre le tableau de bord sur une communauté
+imaginaire (« Atlas Trading Club ») : rien n'y est réel, rien n'est envoyé, aucun compte n'est
+nécessaire. Pour les captures de l'App Store et pour montrer StayPut ; dans l'app, l'aide (`?`)
+y mène par « Explorer avec des données de démo ».
 
 ### Discord et Telegram (optionnels, gratuits)
 

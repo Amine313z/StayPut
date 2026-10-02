@@ -1385,3 +1385,113 @@ haut, avec des mots anglais que tout créateur comprend ; garder le choix de la 
 - Un vrai membre de test (un second compte Whop dans la communauté du sandbox), pour les
   parcours qu'un membre fictif ne peut pas faire : ouvrir l'espace dans Whop, lire une vraie
   capture, recevoir les notifications.
+
+## 2026-10-02 — Refonte du design, étape 1 : fondations et tableau de bord
+
+La demande du fondateur (2 octobre) : faire de StayPut un produit haut de gamme, animé, sans rien
+retirer des fonctions ni des données ; appliquer les huit correctifs obligatoires ; avancer page
+par page (Tableau de bord → Membres → Intégrations → Automatisations → Analyses → Espace membre →
+Réglages), avec un arrêt et une validation après chacune. Cette étape livre les fondations et le
+tableau de bord.
+
+### Les choix techniques
+
+- **React + Vite restent** (SPEC §2), servis par le Worker sur la même origine : c'est ce qui
+  permet au jeton Whop de l'iframe d'arriver à l'API. Passer à Next.js ou à Cloudflare Pages ne
+  changerait rien à l'écran et casserait une architecture validée.
+- **Pas de Frosted UI comme base** : il n'en existe qu'une version d'essai (`0.0.1-canary.161`)
+  et son style n'est pas celui de la marque. Nos propres composants reprennent ce qui fait le
+  confort de Whop : fenêtres natives (`<dialog>`), clavier, anneaux de focus menthe.
+- **Ajouts** : `motion` (l'ex-Framer Motion, licence MIT) et les polices Space Grotesk et Inter,
+  servies par StayPut lui-même (la politique de sécurité n'autorise aucune autre origine).
+  Recharts arrivera avec les Analyses, chargé à la demande. Budget : 0 €.
+
+### Couleurs, polices, animation
+
+- Les couleurs sont prises sur le logo officiel ; le thème sombre est celui par défaut, le clair
+  garde la même hiérarchie. Un test calcule les contrastes (WCAG AA) de chaque paire texte/fond
+  dans les deux thèmes ; les couleurs des niveaux de risque sont vérifiées pour les daltoniens.
+- Les jetons sont décrits dans `docs/design-tokens.md`, l'animation dans `MOTION.md` : une seule
+  courbe, 150 / 250 / 400 ms, aucun rebond sur une donnée ; quand l'appareil demande moins de
+  mouvement, seuls les fondus restent et les chiffres s'affichent tout de suite.
+- Dans les tests, les animations se terminent aussitôt (`test/setup.ts`) : on vérifie ce que les
+  écrans disent, pas comment ils bougent.
+
+### L'argent sauvé (SPEC 6.4)
+
+- `packages/core/src/attribution.ts` applique les règles du cahier des charges dans l'ordre :
+  **direct** (paiement échoué rattrapé dans les 14 jours, annulation retirée dans les 7 jours
+  après une offre gardée, pause qui reprend, retour avec le code de StayPut) puis **influencé**
+  (renouvellement après un message, le membre ayant été actif dans les 14 jours). Un paiement ne
+  compte qu'une fois ; seules les actions vraiment envoyées comptent (rien en mode test).
+- Une tâche horaire (`countSaves`) enregistre les sauvetages ; migration 0027
+  (`attribution_facts`, `record_saves`).
+
+### Écrire, Pause, Offre depuis le tableau de bord (correctif 2)
+
+- **Écrire** part en un clic ; **Pause** et **Offre** demandent une confirmation qui montre ce que
+  le membre recevra exactement (les conditions réglées dans Réglages › Automatisations).
+- Tout passe par les garde-fous, comme les actions de StayPut : un message du créateur par membre
+  et par jour, une seule offre ouverte par membre (7 jours pour l'accepter dans son espace), rien
+  pour un membre « ne jamais contacter », pas de Pause ni d'Offre sans abonnement payant.
+- Table `creator_offers` et routes `/members/message`, `/members/:id/offer`,
+  `/retention/creator-offer` (migration 0027).
+
+### Le nom et le logo de la communauté (correctif 4)
+
+- Lus chez Whop (`/companies/{id}`, que la clé de l'app a le droit de lire). Le logo est servi
+  par StayPut (`/api/creator/:id/logo`) car la page n'affiche que des images de sa propre adresse :
+  seulement une adresse https donnée par Whop, une image de 1 Mo au plus, gardée un jour par le
+  navigateur. Sans logo : les initiales de la communauté sur le menthe de la marque.
+- L'identifiant `biz_…` n'apparaît plus dans l'en-tête ; il ira dans Réglages › Développeur.
+
+### Le cadre
+
+- Un menu latéral qui se replie sur ses icônes (le choix est gardé sur l'appareil), la rubrique
+  ouverte marquée d'une barre menthe qui glisse ; en haut, la communauté (nom et logo), la
+  recherche d'un membre (accents ignorés), la langue (EN / FR, immédiate), le thème et l'aide.
+- Sur un téléphone, une barre en bas : Tableau de bord, Membres, Automatisations, Analyses, et
+  « Plus » pour le reste.
+- Les rubriques suivent l'ordre du brief (Membres en deuxième). Une rubrique sans second onglet
+  n'affiche plus de rangée d'onglets. Chaque page arrive en fondu en montant de 8 px ; le cadre ne
+  bouge jamais.
+
+### La page d'accueil
+
+- **L'argent d'abord** (correctif 1) : revenus sauvés ce mois-ci (le plus grand, avec la lueur
+  menthe), revenus à risque, membres à risque, rétention à 30 jours. Chaque chiffre compte jusqu'à
+  sa valeur et s'éclaire quand il change (menthe s'il s'améliore, rouge s'il empire).
+- **L'action du jour** (correctif 2) : une seule, un seul bouton. « En jeu » est ce que paient ces
+  membres, jamais une promesse de ce qui sera sauvé. Le message part au nom du créateur, à la
+  meilleure heure du membre, dans les garde-fous.
+- **À surveiller** : les départs et les risques élevés, avec la raison principale, la date de
+  départ ou de renouvellement, ce que paie le membre, et Écrire / Pause / Offre sur place.
+- **Activité en direct** : relue toutes les 30 secondes ; une nouvelle ligne glisse du haut avec
+  un éclat menthe.
+- **Le risque** : une barre par niveau (chaque niveau mène à ses membres) et la tendance des
+  membres à risque sur 30 jours.
+- **Les chiffres secondaires** (correctif 3) : membres et nouveaux de la semaine, revenu mensuel,
+  « Activité des membres (30 j) » et, à part, « Actions de StayPut (30 j) ».
+- Le mode test est dit en haut de la page et sur la carte de l'action du jour.
+
+### Le mode démo
+
+- `/demo` ouvre le même tableau de bord sur une communauté imaginaire, « Atlas Trading Club » :
+  56 membres aux noms réalistes, des mois d'historique, 3 annulations programmées, 2 paiements
+  échoués, des sauvetages, un fil d'activité qui bouge. Tout est calculé dans le navigateur à
+  partir des membres, comme le Worker calcule les vrais chiffres : rien n'est réel, rien n'est
+  envoyé, aucun appel ne part vers StayPut. La même communauté à chaque visite (captures
+  identiques) ; ce que l'on y fait (écrire, offrir) la change jusqu'au rechargement.
+- Chaque écran de la démo le dit (« Données de démo ») et offre « Quitter la démo », qui ramène
+  au tableau de bord d'où l'on vient. On y entre par l'aide : « Explorer avec des données de
+  démo ». Elle est ouverte à tous : pratique pour les captures de l'App Store et pour montrer
+  StayPut, sans risque puisqu'elle ne contient rien de vrai.
+- Les autres rubriques n'ont pas encore leurs données de démo et le disent ; chacune les recevra
+  à son étape.
+
+### Limites connues
+
+- Le JavaScript de la page pèse 263 Ko compressés : à alléger en chargeant les rubriques à la
+  demande, prévu avec les pages suivantes.
+- Les autres pages gardent leur ancien style jusqu'à leur étape.
+- La recherche du haut cherche parmi les membres que le tableau de bord a lus.

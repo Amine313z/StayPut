@@ -5,6 +5,7 @@ import { RouterProvider, createBrowserRouter } from 'react-router';
 import { routes } from './App';
 import { I18nProvider, detectLocale } from './i18n';
 import { ThemeProvider } from './theme';
+import { ToastProvider } from './ui/Toast';
 import './styles.css';
 
 const root = document.getElementById('root');
@@ -21,7 +22,9 @@ createRoot(root).render(
       <ThemeProvider>
         {/* Less motion asked for by the device: fades stay, movement goes (MOTION.md). */}
         <MotionConfig reducedMotion="user">
-          <RouterProvider router={createBrowserRouter(routes)} />
+          <ToastProvider>
+            <RouterProvider router={createBrowserRouter(routes)} />
+          </ToastProvider>
         </MotionConfig>
       </ThemeProvider>
     </I18nProvider>

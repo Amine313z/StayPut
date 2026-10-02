@@ -1,6 +1,8 @@
+import { motion } from 'motion/react';
 import { useCallback, useState } from 'react';
-import { Navigate, Outlet } from 'react-router';
+import { Navigate, Outlet, useLocation } from 'react-router';
 import { useI18n } from '../../i18n';
+import { pageVariants } from '../../motion';
 import { NavTabs } from '../../ui/Tabs';
 import { useCreatorData, type CreatorData, type TabCounts } from '../CreatorView';
 import { SECTIONS, sectionHref, type SectionId } from './sections';
@@ -25,22 +27,34 @@ export function SectionLayout({ id }: { id: SectionId }) {
     [],
   );
   const context: CreatorData = { ...data, tabCounts };
+  // A new tab comes in like a page; the section's first one comes in with the section itself.
+  const location = useLocation();
+  const [arrival] = useState(location.key);
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{t(section.label)}</h1>
         <p className="mt-1 text-sm text-muted">{t(section.description)}</p>
       </header>
-      <NavTabs
-        label={t('nav.tabs', { section: t(section.label) })}
-        items={section.tabs.map((tab) => ({
-          to: sectionHref(data.root, section, tab.path),
-          end: tab.path === '',
-          label: t(tab.label),
-          ...(counts[tab.path] === undefined ? {} : { count: number(counts[tab.path]!) }),
-        }))}
-      />
-      <Outlet context={context} />
+      {section.tabs.length < 2 ? null : (
+        <NavTabs
+          label={t('nav.tabs', { section: t(section.label) })}
+          items={section.tabs.map((tab) => ({
+            to: sectionHref(data.root, section, tab.path),
+            end: tab.path === '',
+            label: t(tab.label),
+            ...(counts[tab.path] === undefined ? {} : { count: number(counts[tab.path]!) }),
+          }))}
+        />
+      )}
+      <motion.div
+        key={location.pathname}
+        variants={pageVariants}
+        initial={location.key === arrival ? false : 'initial'}
+        animate="enter"
+      >
+        <Outlet context={context} />
+      </motion.div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import type { MemberRisk, RiskLevel, RiskReason, RiskSummary } from '@stayput/core';
+import type { MemberRisk, RiskLevel, RiskReason } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
 import {
   BookOpen,
@@ -6,7 +6,6 @@ import {
   CircleAlert,
   Clock,
   CreditCard,
-  Gauge,
   LifeBuoy,
   LogOut,
   ShieldCheck,
@@ -15,11 +14,9 @@ import {
   TriangleAlert,
   type LucideIcon,
 } from 'lucide-react';
-import { Link } from 'react-router';
 import { useI18n } from '../i18n';
 import { LEVEL_LABELS, reasonText } from '../risk-text';
 import { Badge, type Tone } from '../ui/Badge';
-import { Card } from '../ui/Card';
 
 /**
  * The risk score of a member (SPEC Phase 3) as the team sees it: a level that always has an icon
@@ -62,7 +59,7 @@ export const LEVELS: Readonly<Record<RiskLevel, LevelLook>> = {
     label: LEVEL_LABELS.low,
     Icon: ShieldCheck,
     text: 'text-accent',
-    fill: 'bg-accent',
+    fill: 'bg-risk-low',
   },
 };
 
@@ -118,75 +115,9 @@ export function RiskReasons({ reasons }: { reasons: readonly RiskReason[] }) {
 }
 
 /** Where each level's row of the distribution leads in the members section. */
-const LEVEL_FILTERS: Readonly<Record<RiskLevel, string>> = {
+export const LEVEL_FILTERS: Readonly<Record<RiskLevel, string>> = {
   scheduled_departure: 'leaving',
   high: 'high',
   medium: 'medium',
   low: 'low',
 };
-
-/**
- * How many members at each level: one labelled bar per level, its length the share of all the
- * scored members (a part of a whole). Every bar carries its name, icon, count and share, so the
- * color is never read alone; a row opens the members of that level.
- */
-export function RiskDistribution({ summary, root }: { summary: RiskSummary; root: string }) {
-  const { t, number, percent, relative } = useI18n();
-  const counts: Record<RiskLevel, number> = {
-    scheduled_departure: summary.scheduledDeparture,
-    high: summary.high,
-    medium: summary.medium,
-    low: summary.low,
-  };
-  const total = LEVEL_ORDER.reduce((sum, level) => sum + counts[level], 0);
-  return (
-    <Card
-      icon={<Gauge aria-hidden="true" className="size-4" />}
-      title={t('distribution.title')}
-      description={t('distribution.description')}
-    >
-      {summary.computedAt === null ? (
-        <p className="text-sm text-muted">{t('distribution.pending')}</p>
-      ) : (
-        <>
-          <ul aria-label={t('distribution.label')} className="-mx-2 space-y-0.5">
-            {LEVEL_ORDER.map((level) => {
-              const { label, Icon, text, fill } = LEVELS[level];
-              const count = counts[level];
-              const share = total > 0 ? count / total : 0;
-              return (
-                <li key={level}>
-                  <Link
-                    to={`${root}/members?filter=${LEVEL_FILTERS[level]}`}
-                    className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_4.5rem] items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                  >
-                    <span className="flex min-w-0 items-center gap-2 text-sm">
-                      <Icon aria-hidden="true" className={`size-4 shrink-0 ${text}`} />
-                      <span className="truncate">{t(label)}</span>
-                    </span>
-                    <span
-                      aria-hidden="true"
-                      className="h-2 overflow-hidden rounded-full bg-surface-2"
-                    >
-                      <span
-                        className={`block h-full rounded-full ${fill}`}
-                        style={{ width: `${share * 100}%` }}
-                      />
-                    </span>
-                    <span className="tabular flex items-baseline justify-end gap-1.5 text-sm">
-                      <span className="font-semibold">{number(count)}</span>
-                      <span className="text-xs text-muted">{percent(share)}</span>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-          <p className="mt-3 text-xs text-muted">
-            {t('distribution.computed', { when: relative(new Date(summary.computedAt)) })}
-          </p>
-        </>
-      )}
-    </Card>
-  );
-}

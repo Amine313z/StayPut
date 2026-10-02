@@ -1,12 +1,15 @@
 import { CSRF_HEADER, type ApiErrorBody, type ApiErrorCode } from '@stayput/core';
 import { useEffect, useRef, useState } from 'react';
 
-/** A failed call: the Worker's error code, or "network" when it could not be reached. */
+/**
+ * A failed call: the Worker's error code, "network" when it could not be reached, or "demo" for a
+ * page the demo has no data for (demo/api.ts).
+ */
 export class ApiError extends Error {
   override readonly name = 'ApiError';
 
   constructor(
-    readonly code: ApiErrorCode | 'network',
+    readonly code: ApiErrorCode | 'network' | 'demo',
     message: string,
     /** With `unauthenticated` in the sandbox: where to sign in with Whop outside the iframe. */
     readonly login: string | null = null,
@@ -41,12 +44,23 @@ export function deleteJson<T>(path: string): Promise<T> {
   return requestJson<T>('DELETE', path);
 }
 
+/** The demo community's id (/demo): no Whop company has it (theirs start with `biz_`). */
+export const DEMO_COMPANY_ID = 'demo';
+
+/** Where the demo community's calls go: answered in the browser (demo/api.ts), never sent. */
+export const DEMO_API = `/api/creator/${DEMO_COMPANY_ID}/`;
+
 async function requestJson<T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   signal?: AbortSignal,
   body?: unknown,
 ): Promise<T> {
+  if (path.startsWith(DEMO_API)) {
+    // Loaded only when someone opens the demo: its data never weighs on the real dashboard.
+    const { answerDemo } = await import('./demo/api');
+    return (await answerDemo(method, path, body)) as T;
+  }
   let response: Response;
   try {
     response = await fetch(path, {
@@ -168,4 +182,21 @@ export function useReloadOnReturn(reload: () => void): void {
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
+}
+
+/**
+ * Runs `reload` each time `value` changes once it is known: new data arrived elsewhere (a
+ * synchronization), the screen reads its own again.
+ */
+export function useReloadOnChange(value: string | null | undefined, reload: () => void): void {
+  const latest = useRef(reload);
+  useEffect(() => {
+    latest.current = reload;
+  }, [reload]);
+  const seen = useRef(value);
+  useEffect(() => {
+    const before = seen.current;
+    seen.current = value;
+    if (before != null && value != null && before !== value) latest.current();
+  }, [value]);
 }

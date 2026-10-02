@@ -25,59 +25,62 @@ function section(id: SectionId, path: string | undefined, tabs: RouteObject[]): 
   };
 }
 
+/** The sections of the dashboard and their tabs: the same for a real community and the demo. */
+function creatorSections(): RouteObject[] {
+  return [
+    section('dashboard', undefined, [
+      { index: true, element: <Overview /> },
+      { path: 'attention', element: <AttentionTab /> },
+      { path: 'new-members', element: <NewMembersTab /> },
+    ]),
+    section('space', 'space', [
+      { index: true, element: <SpaceOverviewTab /> },
+      { path: 'cards', element: <SpaceCardsTab /> },
+      { path: 'preview', element: <SpacePreviewTab /> },
+    ]),
+    section('members', 'members', [
+      { index: true, element: <MembersTab /> },
+      { path: 'never-contact', element: <NeverContactTab /> },
+    ]),
+    section('actions', 'actions', [
+      { index: true, element: <ActionsHome /> },
+      { path: 'scheduled', element: <ActionsTab view="scheduled" /> },
+      { path: 'history', element: <ActionsTab view="history" /> },
+      { path: 'alumni', element: <AlumniTab /> },
+    ]),
+    section('insights', 'insights', [
+      { index: true, element: <CohortsTab /> },
+      { path: 'lessons', element: <LessonsTab /> },
+    ]),
+    section('sources', 'sources', [
+      { index: true, element: <WhopTab /> },
+      { path: 'discord', element: <DiscordTab /> },
+      { path: 'telegram', element: <TelegramTab /> },
+      { path: 'activity', element: <ActivityTab /> },
+    ]),
+    section('settings', 'settings', [
+      { index: true, element: <RiskSettingsTab /> },
+      { path: 'actions', element: <ActionSettings /> },
+      { path: 'space', element: <SpaceSettingsTab /> },
+    ]),
+  ];
+}
+
 /**
  * The two entries Whop opens (docs/whop-api-verification.md, section 4): the dashboard view
- * (`dashboard_path`) and the experience view (`experience_path`). The dashboard has sections,
- * each with its tabs (views/creator/sections.ts); any other sub-page (`[restPath]`, e.g. from a
- * notification) opens its overview. /connected is where Discord sends a creator back after
- * adding the bot.
+ * (`dashboard_path`) and the experience view (`experience_path`). The dashboard has its own
+ * frame (components/CreatorShell.tsx) and sections, each with its tabs (views/creator/
+ * sections.ts); any other sub-page (`[restPath]`, e.g. from a notification) opens its overview.
+ * /demo is the same dashboard on an imaginary community, for anyone (nothing real, nothing
+ * sent). /connected is where Discord sends a creator back after adding the bot.
  */
 export const routes: RouteObject[] = [
+  { path: 'dashboard/:companyId', element: <CreatorView />, children: creatorSections() },
+  { path: 'demo', element: <CreatorView demo />, children: creatorSections() },
   {
     element: <AppShell />,
     children: [
       { index: true, element: <Home /> },
-      {
-        path: 'dashboard/:companyId',
-        element: <CreatorView />,
-        children: [
-          section('dashboard', undefined, [
-            { index: true, element: <Overview /> },
-            { path: 'attention', element: <AttentionTab /> },
-            { path: 'new-members', element: <NewMembersTab /> },
-          ]),
-          section('space', 'space', [
-            { index: true, element: <SpaceOverviewTab /> },
-            { path: 'cards', element: <SpaceCardsTab /> },
-            { path: 'preview', element: <SpacePreviewTab /> },
-          ]),
-          section('members', 'members', [
-            { index: true, element: <MembersTab /> },
-            { path: 'never-contact', element: <NeverContactTab /> },
-          ]),
-          section('actions', 'actions', [
-            { index: true, element: <ActionsHome /> },
-            { path: 'scheduled', element: <ActionsTab view="scheduled" /> },
-            { path: 'history', element: <ActionsTab view="history" /> },
-            { path: 'alumni', element: <AlumniTab /> },
-          ]),
-          section('insights', 'insights', [
-            { index: true, element: <CohortsTab /> },
-            { path: 'lessons', element: <LessonsTab /> },
-          ]),
-          section('sources', 'sources', [
-            { index: true, element: <WhopTab /> },
-            { path: 'discord', element: <DiscordTab /> },
-            { path: 'telegram', element: <TelegramTab /> },
-            { path: 'activity', element: <ActivityTab /> },
-          ]),
-          section('settings', 'settings', [
-            { index: true, element: <RiskSettingsTab /> },
-            { path: 'actions', element: <ActionSettings /> },
-            { path: 'space', element: <SpaceSettingsTab /> },
-          ]),
-        ],
-      },
       { path: 'experiences/:experienceId/*', element: <MemberView /> },
       { path: 'connected', element: <Connected /> },
       { path: '*', element: <NotFound /> },

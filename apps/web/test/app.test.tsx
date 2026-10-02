@@ -16,7 +16,9 @@ import type {
   ActionRow,
   ActionSettingsView,
   ActionsPage,
+  DashboardView,
   DiscordChannelChoice,
+  FeedView,
   InsightsReport,
   IntegrationsStatus,
   MemberRetentionView,
@@ -33,10 +35,12 @@ import type { Locale } from '@stayput/i18n';
 import { RouterProvider, createMemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '../src/App';
+import { resetDemo } from '../src/demo/api';
 import { readScreenshot } from '../src/ocr';
 import { LIVE_REFRESH_MS } from '../src/components/PlatformActivityCard';
 import { I18nProvider } from '../src/i18n';
 import { ThemeProvider, resolveTheme } from '../src/theme';
+import { ToastProvider } from '../src/ui/Toast';
 
 // Tesseract reads screenshots in a real browser only: the tests say what it read.
 vi.mock('../src/ocr', () => ({ readScreenshot: vi.fn() }));
@@ -76,7 +80,9 @@ function renderAt(path: string, locale: Locale = 'en') {
   render(
     <I18nProvider initialLocale={locale}>
       <ThemeProvider>
-        <RouterProvider router={createMemoryRouter(routes, { initialEntries: [path] })} />
+        <ToastProvider>
+          <RouterProvider router={createMemoryRouter(routes, { initialEntries: [path] })} />
+        </ToastProvider>
       </ThemeProvider>
     </I18nProvider>,
   );
@@ -295,12 +301,85 @@ const ACTION_SETTINGS: ActionSettingsView = {
 
 const NO_ALUMNI: AlumniView = { offer: null, entered: 0, left: 0, returned: 0 };
 
-const dashboard = (members: MembersPage = MEMBERS, integrations = INTEGRATIONS) => ({
+/** The home's figures for MEMBERS: $245 a month, $98 of it at risk, Bruno to message. */
+const HOME: DashboardView = {
+  currency: 'USD',
+  saved: {
+    thisMonth: { direct: 98, influenced: 49, saves: 3 },
+    lastMonth: { direct: 49 },
+    otherCurrencies: false,
+  },
+  monthlyRevenue: 245,
+  atRisk: { revenue: 98, members: 2, departures: 1, high: 1 },
+  retention30: { rate: 0.8, kept: 4, base: 5 },
+  members: { total: 5, newLast7Days: 1 },
+  memberActivity30d: 7,
+  stayputActions30d: { total: 6, messages: 4, paymentRetries: 1, offers: 1 },
+  mode: 'manual',
+  testMode: false,
+  riskHistory: [
+    { day: '2026-09-29', departure: 0, high: 3, medium: 1, low: 1 },
+    { day: '2026-09-30', departure: 1, high: 2, medium: 1, low: 1 },
+    { day: '2026-10-01', departure: 1, high: 1, medium: 1, low: 2 },
+  ],
+  priority: { kind: 'message', memberIds: ['mber_3'], revenue: 49 },
+};
+
+const FEED: FeedView = {
+  items: [
+    {
+      id: 'action:1',
+      at: '2026-10-01T11:30:00.000Z',
+      by: 'stayput',
+      event: 'message_sent',
+      memberId: 'mber_3',
+      memberName: 'Bruno Petit',
+    },
+    {
+      id: 'payment:1',
+      at: '2026-10-01T10:00:00.000Z',
+      by: 'member',
+      event: 'payment_failed',
+      memberId: 'mber_2',
+      memberName: null,
+      amount: 49,
+      currency: 'USD',
+    },
+    {
+      id: 'save:1',
+      at: '2026-09-30T10:00:00.000Z',
+      by: 'stayput',
+      event: 'saved',
+      memberId: 'mber_1',
+      memberName: 'Alice Martin',
+      amount: 49,
+      currency: 'USD',
+    },
+    {
+      id: 'activity:1',
+      at: '2026-09-30T09:00:00.000Z',
+      by: 'member',
+      event: 'activity',
+      memberId: 'mber_1',
+      memberName: 'Alice Martin',
+      source: 'discord',
+      activity: 'message',
+    },
+  ],
+};
+
+const dashboard = (
+  members: MembersPage = MEMBERS,
+  integrations = INTEGRATIONS,
+  home: DashboardView = HOME,
+) => ({
   '/api/creator/biz_A1/session': [creatorSession],
   '/api/creator/biz_A1/members': [{ status: 200, body: members }],
   '/api/creator/biz_A1/sync': [syncStatus()],
   '/api/creator/biz_A1/integrations?lang=en': [{ status: 200, body: integrations }],
   '/api/creator/biz_A1/alumni': [{ status: 200, body: NO_ALUMNI }],
+  '/api/creator/biz_A1/dashboard': [{ status: 200, body: home }],
+  '/api/creator/biz_A1/feed': [{ status: 200, body: FEED }],
 });
 
 const NOBODY: MembersPage = {
@@ -328,6 +407,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   window.localStorage.clear();
+  resetDemo();
 });
 
 describe('creator view', () => {
@@ -335,7 +415,7 @@ describe('creator view', () => {
     const calls = mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
     expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
-    // The side menu: the community, then the sections, the open one marked.
+    // The side menu: the sections in the redesign's order, the open one marked.
     const menu = screen.getByRole('navigation', { name: 'Dashboard sections' });
     expect(
       within(menu)
@@ -343,8 +423,8 @@ describe('creator view', () => {
         .map((link) => link.textContent),
     ).toEqual([
       'Dashboard',
-      'Member space',
       'Members',
+      'Member space',
       'Automations',
       'Analytics',
       'Integrations',
@@ -353,20 +433,25 @@ describe('creator view', () => {
     expect(within(menu).getByRole('link', { name: 'Dashboard' }).getAttribute('aria-current')).toBe(
       'page',
     );
+    // The top bar: the community by its name (never its id), the team's view.
     expect(screen.getByText('Le Club')).toBeTruthy();
+    expect(screen.queryByText('biz_A1')).toBeNull();
     expect(screen.getByText('Team view')).toBeTruthy();
     expect(await screen.findByText('Up to date.')).toBeTruthy();
-    // The section's tabs on top, the first one open.
-    const tabs = screen.getByRole('navigation', { name: 'Dashboard tabs' });
+    // One page: no row of tabs.
+    expect(screen.queryByRole('navigation', { name: 'Dashboard tabs' })).toBeNull();
+    // On a phone, the main sections at the bottom, the others under « More ».
+    const phone = screen.getByRole('navigation', { name: 'Main sections' });
     expect(
-      within(tabs)
+      within(phone)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Overview', 'Needs attention', 'New members']);
-    expect(within(tabs).getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe(
-      'page',
-    );
+    ).toEqual(['Dashboard', 'Members', 'Automations', 'Analytics']);
+    expect(within(phone).getByRole('button', { name: 'More' })).toBeTruthy();
+    await screen.findByText('StayPut messaged Bruno Petit');
     expect(calls.slice().sort()).toEqual([
+      '/api/creator/biz_A1/dashboard',
+      '/api/creator/biz_A1/feed',
       '/api/creator/biz_A1/integrations?lang=en',
       '/api/creator/biz_A1/members',
       '/api/creator/biz_A1/session',
@@ -374,71 +459,226 @@ describe('creator view', () => {
     ]);
   });
 
-  it('shows the figures, and who is about to leave with the reasons', async () => {
+  it('puts the money first: saved this month, at risk, members at risk, retention', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
-    const figures = (await screen.findByText('Failed payments')).closest('dl')!;
-    expect(figures.textContent).toContain('Members5In the community, team aside');
-    expect(figures.textContent).toContain('Monthly revenue$245$98 at risk');
-    expect(figures.textContent).toContain('High risk1');
-    expect(figures.textContent).toContain('Cancellations scheduled1');
-    expect(figures.textContent).toContain('Failed payments1');
-    expect(figures.textContent).toContain(
-      'Actions, 30 days7Members’ messages, reactions, posts and lessons',
-    );
+    const money = (await screen.findByText('Revenue saved this month')).closest('dl')!;
+    await vi.waitFor(() => {
+      expect(money.textContent).toContain(
+        'Revenue saved this month$983 members kept · + $49 influenced$49 last month',
+      );
+      expect(money.textContent).toContain('Revenue at risk$98Per month, out of $245');
+      expect(money.textContent).toContain('Members at risk21 leaving · 1 at high risk');
+      expect(money.textContent).toContain('Retention, 30 days80%4 of 5 members still here');
+    });
+    // Second to the money: the members, the revenue, what members did, what StayPut did.
+    const community = (await screen.findByText('Member activity (30d)')).closest('dl')!;
+    await vi.waitFor(() => {
+      expect(community.textContent).toContain('Members51 new this week');
+      expect(community.textContent).toContain(
+        'Member activity (30d)7Messages, reactions, posts and lessons',
+      );
+      expect(community.textContent).toContain(
+        'StayPut actions (30d)64 messages · 1 payment retry · 1 offer',
+      );
+    });
+  });
 
-    // The departures and the high risks, the highest score first, each with its reasons.
+  it('shows the action of the day with the revenue at stake, and does it in one click', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/dashboard': [
+        { status: 200, body: HOME },
+        { status: 200, body: { ...HOME, priority: null } },
+      ],
+      '/api/creator/biz_A1/feed': [
+        { status: 200, body: FEED },
+        { status: 200, body: FEED },
+      ],
+      'POST /api/creator/biz_A1/members/message': [{ status: 200, body: { queued: 1 } }],
+    });
+    renderAt('/dashboard/biz_A1');
+    const card = (
+      await screen.findByRole('heading', {
+        name: '1 member at high risk has not heard from you in 5 days',
+      })
+    ).closest('section')!;
+    expect(card.textContent).toContain('At stake$49 a month');
+    expect(card.textContent).toContain('never a promise of what will be saved');
+    fireEvent.click(within(card).getByRole('button', { name: 'Message 1 high-risk member' }));
+    expect(await screen.findByText('1 message queued')).toBeTruthy();
+    expect(bodies.get('POST /api/creator/biz_A1/members/message')).toEqual({
+      memberIds: ['mber_3'],
+    });
+    expect(headersOf.get('POST /api/creator/biz_A1/members/message')?.get('x-stayput-csrf')).toBe(
+      '1',
+    );
+    // Read again: nothing urgent any more.
+    expect(await screen.findByRole('heading', { name: 'Nothing urgent today' })).toBeTruthy();
+  });
+
+  it('lists who needs attention with the reason, the date and what they pay', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1');
+    await screen.findByText('Bruno Petit');
     const attention = screen.getByRole('heading', { name: 'Needs attention' }).closest('section')!;
     const text = attention.textContent ?? '';
     expect(text).toContain('Member without a name');
-    expect(text).toContain('Leaves on Oct 20, 2026');
+    expect(text).toContain('Leaving');
     expect(text).toContain('No activity this week');
+    expect(text).toContain('Leaves on Oct 20, 2026');
     expect(text).toContain('High risk · 78');
     expect(text).toContain('No activity for 21 days');
-    expect(text).toContain('Last lesson completed: “3. Charts”, 25 days ago');
+    expect(text).toContain('Renews on Oct 15, 2026');
+    expect(text).toContain('$49/mo');
     expect(text.indexOf('Member without a name')).toBeLessThan(text.indexOf('Bruno Petit'));
     expect(text).not.toContain('Denis Moreau');
     expect(text).not.toContain('Alice Martin');
     expect(screen.getByRole('link', { name: 'See all (2)' }).getAttribute('href')).toBe(
       '/dashboard/biz_A1/attention',
     );
+    // Each one with the means to act: Message, Pause, Offer.
+    expect(within(attention).getByRole('button', { name: 'Message Bruno Petit' })).toBeTruthy();
+    expect(
+      within(attention).getByRole('button', { name: 'Offer Bruno Petit a pause' }),
+    ).toBeTruthy();
+    expect(
+      within(attention).getByRole('button', { name: 'Make Bruno Petit an offer' }),
+    ).toBeTruthy();
 
-    // The activation radar.
+    // The activation radar, with a word of welcome.
     const radar = screen
       .getByRole('heading', { name: 'New members who have not started' })
       .closest('section')!;
     expect(radar.textContent).toContain('Chloé Dubois');
+    expect(within(radar).getByRole('button', { name: 'Message Chloé Dubois' })).toBeTruthy();
+    expect(within(radar).queryByRole('button', { name: /pause/ })).toBeNull();
     expect(screen.getByRole('link', { name: 'See all (1)' }).getAttribute('href')).toBe(
       '/dashboard/biz_A1/new-members',
     );
   });
 
+  it('writes to a member in one click, and says it is queued', async () => {
+    mockApi({
+      ...dashboard(),
+      'POST /api/creator/biz_A1/members/message': [{ status: 200, body: { queued: 1 } }],
+    });
+    renderAt('/dashboard/biz_A1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Message Bruno Petit' }));
+    expect(await screen.findByText('1 message queued')).toBeTruthy();
+    expect(
+      screen.getByText('Each one passes your guardrails, then leaves at the member’s best hour.'),
+    ).toBeTruthy();
+    expect(bodies.get('POST /api/creator/biz_A1/members/message')).toEqual({
+      memberIds: ['mber_3'],
+    });
+    // Done stays done: the row says it.
+    expect(
+      (await screen.findByRole('button', { name: 'Message Bruno Petit' })).textContent,
+    ).toContain('Queued');
+  });
+
+  it('offers a pause after saying what the member gets, and says when one is open', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/settings/actions': [
+        { status: 200, body: ACTION_SETTINGS },
+        { status: 200, body: ACTION_SETTINGS },
+      ],
+      'POST /api/creator/biz_A1/members/mber_3/offer': [
+        { status: 200, body: { offerId: 'o1', kind: 'pause_offer', terms: { days: 30 } } },
+      ],
+      'POST /api/creator/biz_A1/members/mber_2/offer': [
+        { status: 409, body: { error: { code: 'conflict', message: 'offer_open' } } },
+      ],
+    });
+    renderAt('/dashboard/biz_A1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Offer Bruno Petit a pause' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Offer Bruno Petit a pause?' });
+    expect(
+      await within(dialog).findByText('A 30-day pause: their membership waits for them.'),
+    ).toBeTruthy();
+    expect(dialog.textContent).toContain('accepts it in their space within 7 days');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Offer the pause' }));
+    expect(await screen.findByText('Pause offered to Bruno Petit')).toBeTruthy();
+    expect(bodies.get('POST /api/creator/biz_A1/members/mber_3/offer')).toEqual({
+      kind: 'pause_offer',
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByText('Pause offered')).toBeTruthy();
+
+    // A member who already has an open offer: said in words, never a code.
+    fireEvent.click(screen.getByRole('button', { name: 'Make Member without a name an offer' }));
+    const second = await screen.findByRole('dialog', {
+      name: 'Make Member without a name an offer?',
+    });
+    expect(
+      await within(second).findByText('20% off for 3 months, with a promo code of their own.'),
+    ).toBeTruthy();
+    fireEvent.click(within(second).getByRole('button', { name: 'Make the offer' }));
+    expect(
+      await screen.findByText('Already under way: an offer is waiting for this member’s answer.'),
+    ).toBeTruthy();
+  });
+
+  it('shows what just happened, StayPut’s actions and the members’', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1');
+    const feed = await screen.findByRole('list', { name: 'Live activity' });
+    expect(
+      Array.from(feed.querySelectorAll('li')).map((li) => li.querySelector('p')?.textContent),
+    ).toEqual([
+      'StayPut messaged Bruno Petit',
+      'A member’s payment of $49 failed',
+      '$49 saved: Alice Martin stays',
+      'Alice Martin wrote on Discord',
+    ]);
+  });
+
+  it('says when test mode is on, on top of the page', async () => {
+    mockApi(dashboard(MEMBERS, INTEGRATIONS, { ...HOME, testMode: true }));
+    renderAt('/dashboard/biz_A1');
+    expect(
+      await screen.findByText('Test mode is on: StayPut computes everything and sends nothing.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Change it in Settings' }).getAttribute('href')).toBe(
+      '/dashboard/biz_A1/settings/actions',
+    );
+    expect(
+      screen.getByText('Test mode: the messages are simulated, nothing is sent.'),
+    ).toBeTruthy();
+  });
+
   it('lists every member who needs attention, and every new member who has not started', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1/attention');
-    const attention = (
-      await screen.findByRole('heading', { name: 'Needs attention', level: 2 })
-    ).closest('section')!;
+    await screen.findByText('Bruno Petit');
+    const attention = screen
+      .getByRole('heading', { name: 'Needs attention', level: 2 })
+      .closest('section')!;
     expect(attention.textContent).toContain('Member without a name');
-    expect(attention.textContent).toContain('Bruno Petit');
     expect(within(attention).queryByRole('link', { name: /See all/ })).toBeNull();
-    fireEvent.click(screen.getByRole('link', { name: 'New members' }));
-    const radar = (
-      await screen.findByRole('heading', { name: 'New members who have not started' })
-    ).closest('section')!;
+    cleanup();
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/new-members');
+    await screen.findByText('Chloé Dubois');
+    const radar = screen
+      .getByRole('heading', { name: 'New members who have not started' })
+      .closest('section')!;
     expect(radar.textContent).toContain('Chloé Dubois');
   });
 
   it('shows how the risk spreads, each level with its count, share and members', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
-    const levels = await screen.findByRole('list', { name: 'Members by risk level' });
-    const rows = Array.from(levels.querySelectorAll('a'));
+    const bar = await screen.findByRole('group', { name: 'Members by risk level' });
+    const legend = bar.parentElement!.querySelector('ul')!;
+    const rows = Array.from(legend.querySelectorAll('a'));
     expect(rows.map((a) => a.textContent)).toEqual([
-      'Leaving120%',
-      'High risk120%',
-      'Medium risk120%',
-      'Low risk240%',
+      'Leaving1 · 20%',
+      'High risk1 · 20%',
+      'Medium risk1 · 20%',
+      'Low risk2 · 40%',
     ]);
     expect(rows.map((a) => a.getAttribute('href'))).toEqual([
       '/dashboard/biz_A1/members?filter=leaving',
@@ -446,6 +686,13 @@ describe('creator view', () => {
       '/dashboard/biz_A1/members?filter=medium',
       '/dashboard/biz_A1/members?filter=low',
     ]);
+    // The members at risk over 30 days: a line, said in words too.
+    expect(
+      await screen.findByRole('img', {
+        name: 'Members at high risk or leaving, day by day: 3 on Sep 29, 2026, 2 on Oct 1, 2026.',
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText('1 fewer than 30 days ago')).toBeTruthy();
     expect(screen.getByText(/^Computed /)).toBeTruthy();
   });
 
@@ -483,9 +730,8 @@ describe('creator view', () => {
       }),
     );
     renderAt('/dashboard/biz_A1');
-    const heading = await screen.findByRole('heading', { name: 'Needs attention' });
-    const attention = heading.closest('section')!;
-    expect(attention.textContent).toContain('Member without a name');
+    await screen.findByText('Member without a name');
+    const attention = screen.getByRole('heading', { name: 'Needs attention' }).closest('section')!;
     expect(attention.textContent).toContain('Payment failed');
     expect(attention.textContent).toContain('Cancellation scheduled');
     expect(attention.textContent).not.toContain('Bruno Petit');
@@ -561,7 +807,23 @@ describe('creator view', () => {
 
   it('says so when there is nobody yet, while the history is being imported', async () => {
     mockApi({
-      ...dashboard(NOBODY),
+      ...dashboard(NOBODY, INTEGRATIONS, {
+        ...HOME,
+        currency: null,
+        saved: {
+          thisMonth: { direct: 0, influenced: 0, saves: 0 },
+          lastMonth: { direct: 0 },
+          otherCurrencies: false,
+        },
+        monthlyRevenue: null,
+        atRisk: { revenue: 0, members: 0, departures: 0, high: 0 },
+        retention30: { rate: null, kept: 0, base: 0 },
+        members: { total: 0, newLast7Days: 0 },
+        memberActivity30d: 0,
+        stayputActions30d: { total: 0, messages: 0, paymentRetries: 0, offers: 0 },
+        riskHistory: [],
+        priority: null,
+      }),
       '/api/creator/biz_A1/sync': [syncStatus({ backfillDone: false })],
     });
     renderAt('/dashboard/biz_A1');
@@ -571,8 +833,14 @@ describe('creator view', () => {
       ),
     ).toBeTruthy();
     expect(await screen.findByText('Nothing needs your attention right now.')).toBeTruthy();
-    expect(screen.getByText('No paying membership')).toBeTruthy();
-    fireEvent.click(screen.getByRole('link', { name: 'Members' }));
+    expect(await screen.findAllByText('No paying membership yet.')).toHaveLength(3);
+    expect(screen.getByText('Measured once members have been here 30 days.')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Nothing urgent today' })).toBeTruthy();
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: 'Dashboard sections' })).getByRole('link', {
+        name: 'Members',
+      }),
+    );
     expect(
       await screen.findByText(
         'No members yet. They appear here once StayPut has read them from Whop.',
@@ -600,6 +868,14 @@ describe('creator view', () => {
         { status: 200, body: INTEGRATIONS },
         { status: 200, body: INTEGRATIONS },
       ],
+      '/api/creator/biz_A1/dashboard': [
+        { status: 200, body: HOME },
+        { status: 200, body: HOME },
+      ],
+      '/api/creator/biz_A1/feed': [
+        { status: 200, body: FEED },
+        { status: 200, body: FEED },
+      ],
     });
     renderAt('/dashboard/biz_A1');
     const button = await screen.findByRole('button', { name: 'Sync now' });
@@ -614,6 +890,9 @@ describe('creator view', () => {
     expect(calls.filter((c) => c === '/api/creator/biz_A1/members')).toHaveLength(2);
     // « Sync now » reads Discord too: the sources are read again with the members.
     expect(calls.filter((c) => c === '/api/creator/biz_A1/integrations?lang=en')).toHaveLength(2);
+    // And the home its figures and its feed.
+    expect(calls.filter((c) => c === '/api/creator/biz_A1/dashboard')).toHaveLength(2);
+    expect(calls.filter((c) => c === '/api/creator/biz_A1/feed')).toHaveLength(2);
   });
 
   it('names the data StayPut could not read, and why', async () => {
@@ -675,8 +954,8 @@ describe('creator view', () => {
         .map((link) => link.textContent),
     ).toEqual([
       'Tableau de bord',
-      'Espace membre',
       'Membres',
+      'Espace membre',
       'Automatisations',
       'Analyses',
       'Intégrations',
@@ -3118,6 +3397,136 @@ describe('shell', () => {
   it('shows a not-found page for an unknown path', () => {
     renderAt('/nowhere');
     expect(screen.getByRole('heading', { name: 'Page not found' })).toBeTruthy();
+  });
+});
+
+describe('the creator’s frame', () => {
+  it('folds the menu to its icons, and remembers it', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Collapse the menu' }));
+    expect(window.localStorage.getItem('stayput.menu.collapsed')).toBe('1');
+    // The sections keep their names for screen readers, and their tooltip.
+    const menu = screen.getByRole('navigation', { name: 'Dashboard sections' });
+    expect(within(menu).getByRole('link', { name: 'Members' }).getAttribute('title')).toBe(
+      'Members',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Expand the menu' }));
+    expect(window.localStorage.getItem('stayput.menu.collapsed')).toBe('0');
+  });
+
+  it('finds a member from the top bar, accents aside, and opens them in Members', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1');
+    await screen.findByText('Bruno Petit');
+    const search = screen.getByRole('combobox', { name: 'Find a member' });
+    fireEvent.change(search, { target: { value: 'chloe' } });
+    const option = await screen.findByRole('option', { name: 'Chloé Dubois' });
+    fireEvent.click(within(option).getByRole('button'));
+    expect(await screen.findByRole('heading', { name: 'Members', level: 1 })).toBeTruthy();
+    expect(screen.getByPlaceholderText<HTMLInputElement>('Search a member').value).toBe(
+      'Chloé Dubois',
+    );
+    fireEvent.change(search, { target: { value: 'zzz' } });
+    expect(await screen.findByText('No member by that name.')).toBeTruthy();
+  });
+
+  it('switches the language from the top bar, at once', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/integrations?lang=fr': [{ status: 200, body: INTEGRATIONS }],
+    });
+    renderAt('/dashboard/biz_A1');
+    await screen.findByText('Revenue saved this month');
+    const languages = screen.getAllByRole('group', { name: 'Language' })[0]!;
+    fireEvent.click(within(languages).getByRole('button', { name: 'Français' }));
+    expect(await screen.findByText('Revenus sauvés ce mois-ci')).toBeTruthy();
+    expect(
+      within(languages).getByRole('button', { name: 'Français' }).getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+
+  it('explains how StayPut works, and leads to the demo', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1');
+    fireEvent.click(await screen.findByRole('button', { name: 'How StayPut works' }));
+    const help = await screen.findByRole('dialog', { name: 'How StayPut works' });
+    expect(help.textContent).toContain('The risk score');
+    expect(help.textContent).toContain('Each payment counts once.');
+    expect(
+      within(help).getByRole('link', { name: 'Explore with demo data' }).getAttribute('href'),
+    ).toBe('/demo?from=%2Fdashboard%2Fbiz_A1');
+  });
+
+  it('lists the other sections under « More » on a phone', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1');
+    const phone = await screen.findByRole('navigation', { name: 'Main sections' });
+    fireEvent.click(within(phone).getByRole('button', { name: 'More' }));
+    const more = await screen.findByRole('dialog', { name: 'More' });
+    expect(
+      within(more)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Member space', 'Integrations', 'Settings']);
+  });
+});
+
+describe('the demo (/demo)', () => {
+  it('shows an imaginary community, said as such, without calling StayPut', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    renderAt('/demo');
+    expect(await screen.findByText('Atlas Trading Club')).toBeTruthy();
+    expect(screen.getAllByText('Demo data').length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        'You are exploring an imaginary community. Nothing here is real, and nothing you do is sent.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Leave the demo' }).getAttribute('href')).toBe('/');
+    // Its figures, as a real community's: computed from its members.
+    const money = (await screen.findByText('Revenue saved this month')).closest('dl')!;
+    await vi.waitFor(() => expect(money.textContent).toContain('$345'));
+    expect(money.textContent).toContain('7 members kept');
+    expect(await screen.findByText('Hugo Bernard')).toBeTruthy();
+    expect(await screen.findByText('$49 saved: Clara Faure stays')).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('runs the action of the day in the demo, and moves on', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo');
+    const button = await screen.findByRole(
+      'button',
+      { name: 'Message 6 high-risk members' },
+      { timeout: 3_000 },
+    );
+    fireEvent.click(button);
+    expect(
+      await screen.findByText('6 messages queued', undefined, { timeout: 3_000 }),
+    ).toBeTruthy();
+    expect(
+      await screen.findByRole('heading', { name: 'Nothing urgent today' }, { timeout: 3_000 }),
+    ).toBeTruthy();
+  });
+
+  it('brings a creator back to their own dashboard', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo?from=%2Fdashboard%2Fbiz_A1');
+    expect(
+      (
+        await screen.findByRole('link', { name: 'Leave the demo' }, { timeout: 3_000 })
+      ).getAttribute('href'),
+    ).toBe('/dashboard/biz_A1');
+  });
+
+  it('says plainly when a page has no demo data yet', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo/insights');
+    expect(
+      await screen.findByText('This page has no demo data yet.', undefined, { timeout: 3_000 }),
+    ).toBeTruthy();
   });
 });
 

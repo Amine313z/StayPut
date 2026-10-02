@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 
 /**
- * The dashboard's structure (asked by the founder on 2 October): sections in a side menu, each
- * with its tabs on top. A section's path follows `/dashboard/<company>/` (none for the first);
+ * The dashboard's structure (the founder, 2 October; the redesign's order): sections in a side
+ * menu, each with its tabs on top when it has more than one page. A section's path follows `/dashboard/<company>/` (none for the first);
  * a tab's path follows its section's (none for the first, its home).
  */
 export interface Section {
@@ -34,10 +34,18 @@ export const SECTIONS: readonly Section[] = [
     label: 'nav.dashboard',
     description: 'nav.dashboard.description',
     Icon: LayoutDashboard,
+    // One page (the full lists « Needs attention » and « New members » open from it).
+    tabs: [{ path: '', label: 'tab.overview' }],
+  },
+  {
+    id: 'members',
+    path: 'members',
+    label: 'nav.members',
+    description: 'nav.members.description',
+    Icon: Users,
     tabs: [
-      { path: '', label: 'tab.overview' },
-      { path: 'attention', label: 'tab.attention' },
-      { path: 'new-members', label: 'tab.newMembers' },
+      { path: '', label: 'tab.allMembers' },
+      { path: 'never-contact', label: 'tab.neverContact' },
     ],
   },
   {
@@ -52,17 +60,7 @@ export const SECTIONS: readonly Section[] = [
       { path: 'preview', label: 'tab.memberView' },
     ],
   },
-  {
-    id: 'members',
-    path: 'members',
-    label: 'nav.members',
-    description: 'nav.members.description',
-    Icon: Users,
-    tabs: [
-      { path: '', label: 'tab.allMembers' },
-      { path: 'never-contact', label: 'tab.neverContact' },
-    ],
-  },
+
   {
     id: 'actions',
     path: 'actions',

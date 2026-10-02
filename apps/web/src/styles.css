@@ -186,6 +186,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* The one figure of a row that matters most (the money saved): a step larger. */
+.metric-lead {
+  font-size: clamp(2.5rem, 1.75rem + 2vw, 3.5rem);
+}
+
 /* A figure of second rank, same face. */
 .metric {
   font-family: var(--font-display);
@@ -211,6 +216,30 @@ body {
     color-mix(in srgb, var(--glow) 70%, transparent) 0%,
     transparent 70%
   );
+}
+
+/*
+ * The light of the card that says what to do today: the brand's glow in its corner and one thin
+ * streak, as on the logo. Decoration behind the text, never under it at full strength.
+ */
+.priority-light {
+  background:
+    radial-gradient(
+      55% 150% at 100% 0%,
+      color-mix(in srgb, var(--glow) 55%, transparent),
+      transparent 70%
+    ),
+    linear-gradient(
+      118deg,
+      transparent 0 70%,
+      color-mix(in srgb, var(--accent) 7%, transparent) 70% 71.2%,
+      transparent 71.2%
+    );
+}
+
+/* A list that scrolls fades at its end: there is more below (its last item scrolls clear of it). */
+.fade-end {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent);
 }
 
 /* A block still loading: its shape, and a light passing over it (transform only). */

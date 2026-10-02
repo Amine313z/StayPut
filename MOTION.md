@@ -59,3 +59,8 @@ show their value at once; the skeleton's light stops (`prefers-reduced-motion` i
 1. Wrap the page in `<Page>` (it applies `pageVariants`).
 2. Put its cards in a `<Stagger>` group; use `<MetricCard>`, `<ChartCard>`, `<Skeleton>`.
 3. Never write a duration or an easing by hand: take them from `motion.ts`.
+
+## Tests
+
+The tests read what the screens say, not how they move: `apps/web/test/setup.ts` sets
+`MotionGlobalConfig.skipAnimations`, so every animation lands on its end at once.
