@@ -280,10 +280,11 @@ describe('the rescue challenges (0026)', () => {
     const zoe = await member('Zoe', -60);
     await message(zoe.id, -20, 'discord');
     const act = await member('Act', -60);
+    // RLS checks the team's access against the database's own clock (is_company_admin).
     await t.db.query(
       `insert into stayput.company_admins (company_id, user_id, verified_at)
-       values ($1, 'user_owner', $2::timestamptz)`,
-      [c, NOW.toISOString()],
+       values ($1, 'user_owner', now())`,
+      [c],
     );
     await planRescues(t.db, c, NOW);
     const [challenge] = (await readRescues(t.db, c, act.user))!.challenges;

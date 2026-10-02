@@ -314,10 +314,11 @@ describe('the buddies as members and creators see them', () => {
     await member('Lea', -1);
     await member('Tom', -2);
     await member('Max', -3);
+    // RLS checks the team's access against the database's own clock (is_company_admin).
     await t.db.query(
       `insert into stayput.company_admins (company_id, user_id, verified_at)
-       values ($1, 'user_owner', $2::timestamptz)`,
-      [c, NOW.toISOString()],
+       values ($1, 'user_owner', now())`,
+      [c],
     );
     const view = () => readBuddiesView(t.db, 'user_owner', c, NOW);
     expect(await view()).toEqual({
