@@ -93,6 +93,90 @@ export interface SyncRun extends SyncStatus {
   calls: number;
 }
 
+/**
+ * GET /api/creator/:companyId/dashboard: the home of the dashboard (SPEC Phase 6.2), the money
+ * first. Money figures are in `currency`, the one the community is paid in most; the members of
+ * the team never count.
+ */
+export interface DashboardView {
+  currency: string | null;
+  /** Money StayPut saved (attribution, SPEC Phase 6.4), by month in the community's time zone. */
+  saved: {
+    thisMonth: { direct: number; influenced: number; saves: number };
+    lastMonth: { direct: number };
+    /** Saves in other currencies exist (and are not counted here). */
+    otherCurrencies: boolean;
+  };
+  /** What the memberships still paying bring each month; null when none pays. */
+  monthlyRevenue: number | null;
+  /** What the members at high risk or leaving pay each month, and how many they are. */
+  atRisk: { revenue: number; members: number; departures: number; high: number };
+  /** Of the members here 30 days ago, the share still here; null when nobody was. */
+  retention30: { rate: number | null; kept: number; base: number };
+  members: { total: number; newLast7Days: number };
+  /** What the members did over 30 days: messages, reactions, posts, lessons. */
+  memberActivity30d: number;
+  /** What StayPut did over 30 days (simulated ones included in test mode). */
+  stayputActions30d: { total: number; messages: number; paymentRetries: number; offers: number };
+  mode: 'auto' | 'manual';
+  /** Test mode: everything is computed, nothing is sent. */
+  testMode: boolean;
+  /** Members at each level, day by day over the last 30 days (the daily score history). */
+  riskHistory: RiskDay[];
+  /** The one action that protects the most revenue today; null when nothing is urgent. */
+  priority: PriorityAction | null;
+}
+
+export interface RiskDay {
+  /** YYYY-MM-DD, in the community's time zone. */
+  day: string;
+  departure: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
+/**
+ * The action of the day: approve what StayPut proposes (manual mode), or message the members at
+ * high risk nobody reached in 5 days. `revenue`: what those members pay each month, the money
+ * at stake (never a promise of what will be saved).
+ */
+export type PriorityAction =
+  | { kind: 'approve'; actions: number; members: number; revenue: number }
+  | { kind: 'message'; memberIds: string[]; revenue: number };
+
+/** GET /api/creator/:companyId/feed: what just happened, the newest first. */
+export interface FeedView {
+  items: FeedItem[];
+}
+
+export interface FeedItem {
+  /** Stable across reads: the list animates only what is new. */
+  id: string;
+  at: string;
+  /** What StayPut did, or what a member did. */
+  by: 'stayput' | 'member';
+  event:
+    | 'message_sent'
+    | 'message_simulated'
+    | 'payment_retry'
+    | 'offer_applied'
+    | 'saved'
+    | 'joined'
+    | 'payment_succeeded'
+    | 'payment_failed'
+    | 'cancellation_scheduled'
+    | 'activity';
+  memberId: string | null;
+  memberName: string | null;
+  /** A save or a payment. */
+  amount?: number;
+  currency?: string;
+  /** An activity: where (whop, discord, telegram) and what (message, lesson, post, result). */
+  source?: 'whop' | 'discord' | 'telegram';
+  activity?: 'message' | 'lesson' | 'post' | 'result';
+}
+
 /** GET /api/creator/:companyId/members */
 export interface MembersPage {
   summary: MembersSummary;

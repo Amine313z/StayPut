@@ -33,6 +33,22 @@ import { STREAMS } from './sync';
 export const MEMBERS_PAGE_LIMIT = 200;
 
 const live = LIVE_MEMBERSHIP_STATUSES.join(',');
+
+/**
+ * A membership's price brought back to a month (SQL, on the alias of a memberships row): a year
+ * counts for a twelfth, a week for 52 twelfths, any other period in proportion to 30 days.
+ */
+export function monthlyPrice(alias: string): string {
+  return `case
+    when ${alias}.billing_period_days between 28 and 31 then ${alias}.price
+    when ${alias}.billing_period_days = 7 then ${alias}.price * 52 / 12
+    when ${alias}.billing_period_days between 365 and 366 then ${alias}.price / 12
+    else ${alias}.price * 30 / ${alias}.billing_period_days
+  end`;
+}
+
+/** Memberships still paying: the ones a month of revenue counts. */
+export const PAYING_STATUSES_SQL = `('active', 'past_due', 'canceling')`;
 const failed = FAILED_PAYMENT_STATUSES.join(',');
 
 export async function readSyncStatus(
@@ -145,13 +161,7 @@ export async function readMembers(
                        where x.level in ('high', 'scheduled_departure')), 0), 2)::float8
                        as at_risk
                 from (
-                  select ms.currency, k.level,
-                         case
-                           when ms.billing_period_days between 28 and 31 then ms.price
-                           when ms.billing_period_days = 7 then ms.price * 52 / 12
-                           when ms.billing_period_days between 365 and 366 then ms.price / 12
-                           else ms.price * 30 / ms.billing_period_days
-                         end as monthly
+                  select ms.currency, k.level, ${monthlyPrice('ms')} as monthly
                     from stayput.memberships ms
                     join stayput.members m on m.company_id = ms.company_id and m.id = ms.member_id
                     left join stayput.member_risk k

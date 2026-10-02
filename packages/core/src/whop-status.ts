@@ -27,3 +27,13 @@ export function isLiveMembership(status: string | null | undefined): boolean {
 export function isFailedPayment(status: string | null | undefined): boolean {
   return status !== null && status !== undefined && FAILED_PAYMENT_STATUSES.includes(status);
 }
+
+/**
+ * Payment outcomes that brought the money in. A refunded, disputed or partly refunded payment is
+ * not one: StayPut never counts it as saved (SPEC Phase 6.4).
+ */
+export const PAID_PAYMENT_STATUSES: readonly string[] = ['succeeded', 'paid'];
+
+export function isPaidPayment(status: string | null | undefined): boolean {
+  return status !== null && status !== undefined && PAID_PAYMENT_STATUSES.includes(status);
+}

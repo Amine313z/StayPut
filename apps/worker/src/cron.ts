@@ -3,7 +3,14 @@ import type { ClosableDb } from './db';
 import type { DiscordClient } from './discord';
 import type { TelegramClient } from './telegram';
 import type { Config } from './env';
-import { refreshStats, replayWebhooks, runActions, scoreMembers, syncWithWhop } from './jobs';
+import {
+  countSaves,
+  refreshStats,
+  replayWebhooks,
+  runActions,
+  scoreMembers,
+  syncWithWhop,
+} from './jobs';
 
 /** Must match `triggers.crons` in wrangler.toml (runtime.test.ts checks it). */
 export const SYNC_CRON = '*/10 * * * *';
@@ -32,12 +39,12 @@ export interface CronJob {
 /**
  * What each trigger runs. Every 10 minutes, a slice of the synchronization with Whop (Phase 2):
  * each run reads the companies that waited longest, so that the free plan's 50 subrequests per
- * run still cover every company each hour (DECISIONS.md). Every hour, scores (3) and due actions
- * (4); every week, cohorts and blocking lessons (3).
+ * run still cover every company each hour (DECISIONS.md). Every hour, scores (3), due actions
+ * (4) and the money they saved (6); every week, cohorts and blocking lessons (3).
  */
 export const SCHEDULE: Readonly<Record<string, readonly CronJob[]>> = {
   [SYNC_CRON]: [replayWebhooks, syncWithWhop, refreshStats],
-  [HOURLY_CRON]: [scoreMembers, runActions],
+  [HOURLY_CRON]: [scoreMembers, runActions, countSaves],
   [WEEKLY_CRON]: [],
 };
 

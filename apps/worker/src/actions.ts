@@ -511,9 +511,10 @@ async function runOffer(
       }),
     );
   } else if (type === 'promo_offer') {
-    // Whop ties no code to a member: a random one, used once, for the creator's product.
-    calls.push(() =>
-      whop.request('POST', '/promo_codes', {
+    // Whop ties no code to a member: a random one, used once, for the creator's product. Its id
+    // is kept for the attribution: a payment with this code is a return (SPEC Phase 6.4).
+    calls.push(async () => {
+      const created = await whop.request<{ id?: unknown }>('POST', '/promo_codes', {
         body: {
           account_id: action.companyId,
           code: result.code,
@@ -528,8 +529,9 @@ async function runOffer(
           ...(membership.productId ? { product_id: membership.productId } : {}),
         },
         idempotencyKey: key('promo'),
-      }),
-    );
+      });
+      if (typeof created.id === 'string') result.promo_code_id = created.id;
+    });
   }
   for (const call of calls) {
     const outcome = await callWhop(action, call);

@@ -59,6 +59,7 @@ import {
 } from './accounts';
 import { isActionView, readActionSettings, readActions, validActionSettings } from './action-views';
 import { executeAction, executeDueActions, prepareActions } from './actions';
+import { readDashboard, readFeed } from './dashboard';
 import { createPostgresDb, type ClosableDb, type Db } from './db';
 import { createDiscordClient, type DiscordClient } from './discord';
 import { readConfig, type Config, type Env } from './env';
@@ -663,6 +664,22 @@ export function createApp(deps: AppDeps) {
     const db = c.get('db');
     if (!db) return apiError('not_configured', 'the database is not configured');
     return c.json(await readMembers(db, c.get('userId'), c.get('companyId'), deps.now()));
+  });
+
+  /** The home of the dashboard (SPEC Phase 6.2): the money first, the action of the day. */
+  app.get('/api/creator/:companyId/dashboard', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const view = await readDashboard(db, c.get('userId'), c.get('companyId'), deps.now());
+    if (!view) return apiError('not_found', 'no such company');
+    return c.json(view);
+  });
+
+  /** What just happened in the community, and what StayPut did: the live feed. */
+  app.get('/api/creator/:companyId/feed', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    return c.json(await readFeed(db, c.get('userId'), c.get('companyId'), deps.now()));
   });
 
   /** What links to connect Discord and Telegram need to know of this request. */

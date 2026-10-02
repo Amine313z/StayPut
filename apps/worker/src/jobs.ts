@@ -2,6 +2,7 @@ import { EXECUTE_BATCH, executeDueActions, prepareActions } from './actions';
 import { planRescues } from './space';
 import type { CronJob } from './cron';
 import { scoreDueCompanies } from './risk';
+import { recordSaves } from './saves';
 import { SYNC_REQUEST_BUDGET, summarize, syncDueCompanies } from './sync';
 
 /** Deliveries replayed per run at most: failed ones, or ones the background never finished. */
@@ -99,5 +100,23 @@ export const runActions: CronJob = {
     }
     const ran = await executeDueActions(db, whop, now, EXECUTE_BATCH, { discord, telegram });
     if (Object.keys(ran).length > 0) console.info(`Actions run: ${JSON.stringify(ran)}.`);
+  },
+};
+
+/**
+ * SPEC Phase 6.4: after the actions, the money they saved, company by company (attribution in
+ * packages/core). Test mode saves nothing: only an action that went out can.
+ */
+export const countSaves: CronJob = {
+  name: 'saves',
+  async run({ db, now }) {
+    if (!db) return;
+    const companies = await db.query<{ id: string }>(
+      `select id from stayput.companies where status = 'active' and not is_demo order by id`,
+    );
+    for (const { id } of companies) {
+      const saved = await recordSaves(db, id, now);
+      if (saved > 0) console.info(`Saves ${id}: ${saved} new.`);
+    }
   },
 };
