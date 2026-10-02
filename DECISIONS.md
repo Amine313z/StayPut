@@ -1300,6 +1300,13 @@ depuis le tableau de bord, et dès qu'il manque. Les modèles par défaut metten
 `{creator_name}` dans une partie facultative : sans nom, la phrase reste juste (« Content de
 t'avoir. »).
 
+**2 octobre** : le menu du tableau de bord affichait encore `biz_2whAzkbCRpcGqQ` au lieu du nom.
+`GET /accounts/{id}` répond **403** à la clé de l'app (la clé de compte du sandbox, elle, y a
+droit : d'où l'essai trompeur) ; `GET /companies/{id}` répond 200 avec le `title`
+(« StayPut Test »), avec la permission `company:basic:read` déjà accordée. StayPut lit donc
+`/companies/{id}`. Inspect le vérifie avec la clé de l'app (`scripts/ops/whop-permissions.ts`),
+et le faux Whop des tests répond 403 sur `/accounts/…`, comme en ligne.
+
 ### Le parcours d'un membre fictif (arrêt de la phase 5)
 
 Le 2 octobre, sur le sandbox, le workflow « Seed sandbox » (action `journey`) a fait faire tout le

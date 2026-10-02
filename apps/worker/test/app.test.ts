@@ -129,10 +129,13 @@ function fakeWhop(
       if (method !== 'GET' && (membership || path === '/promo_codes')) {
         return Promise.resolve({ id: 'promo_1' });
       }
-      // A company's account: its name.
-      const account = /^\/accounts\/(biz_[A-Za-z0-9]+)$/.exec(path)?.[1];
-      if (method === 'GET' && account) {
-        return Promise.resolve({ id: account, title: `Le Club ${account.slice(4)}` });
+      // A company: its name. Its account (/accounts/…) answers 403 to an app key, as live.
+      const named = /^\/companies\/(biz_[A-Za-z0-9]+)$/.exec(path)?.[1];
+      if (method === 'GET' && named) {
+        return Promise.resolve({ id: named, title: `Le Club ${named.slice(4)}` });
+      }
+      if (/^\/accounts\//.test(path)) {
+        return Promise.reject(new WhopApiError(403, 'forbidden', 'not allowed', { method, path }));
       }
       // A user's public profile: the username Whop searches affiliates by.
       const user = /^\/users\/(user_[A-Za-z0-9]+)$/.exec(path)?.[1];
@@ -346,7 +349,7 @@ describe('GET /api/creator/:companyId/session', () => {
     };
     expect(first.companyName).toBeNull();
     await settle();
-    expect(whop.calls).toContain('GET /accounts/biz_Named');
+    expect(whop.calls).toContain('GET /companies/biz_Named');
     const again = (await (await request('/api/creator/biz_Named/session', init)).json()) as {
       companyName: string | null;
     };

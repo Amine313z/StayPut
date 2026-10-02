@@ -630,9 +630,10 @@ function describe(error: unknown): string {
 }
 
 /**
- * The community's name as Whop shows it (the account's `title`): the members' messages, cards
+ * The community's name as Whop shows it (the company's `title`): the members' messages, cards
  * and pages say it. Read when StayPut has none yet, or with a sync; kept as it was when Whop does
- * not answer.
+ * not answer. `/companies/{id}` (company:basic:read): its account, `/accounts/{id}`, answers 403
+ * to an app key (checked live by Inspect, 2 October).
  */
 export async function refreshCompanyName(
   db: Db,
@@ -640,11 +641,11 @@ export async function refreshCompanyName(
   companyId: string,
 ): Promise<string | null> {
   try {
-    const account = await whop.request<{ title?: unknown }>(
+    const company = await whop.request<{ title?: unknown }>(
       'GET',
-      `/accounts/${encodeURIComponent(companyId)}`,
+      `/companies/${encodeURIComponent(companyId)}`,
     );
-    const title = typeof account.title === 'string' ? account.title.trim().slice(0, 200) : '';
+    const title = typeof company.title === 'string' ? company.title.trim().slice(0, 200) : '';
     if (!title) return null;
     await db.query(
       `update stayput.companies set name = $2 where id = $1 and name is distinct from $2`,
