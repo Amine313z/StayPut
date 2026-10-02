@@ -6,7 +6,9 @@ import {
   runSeed,
   seedMembers,
 } from '../../../scripts/seed/sandbox-members';
+import { runJourney } from '../../../scripts/seed/member-journey';
 import { readMembers } from '../src/members';
+import { readPublicProof } from '../src/space';
 import { createTestDb, type TestDb } from './helpers/db';
 
 /**
@@ -162,6 +164,31 @@ describe('the sandbox seed', () => {
     }
   });
 
+  it('walks a fake member from the goal to the testimonial card (SPEC Phase 5)', async () => {
+    const lines = await runJourney(t.db, COMPANY, NOW, 'https://stayput.test');
+    expect(lines.slice(0, 5)).toEqual([
+      '### Le parcours de Léa Moreau',
+      expect.stringMatching(/^1\. Objectif fixé : 0 € → 3 000 € d’ici le \d{4}-\d{2}-\d{2}\.$/),
+      '2. Résultat 800 € — jalons : 25 % — badges : first_result, milestone_25',
+      '3. Résultat 1650 € (capture : justified) — jalons : 50 % — badges : first_proof, milestone_50',
+      '4. Résultat 2400 € — jalons : 75 % — badges : milestone_75',
+    ]);
+    const url = /^5\. Carte témoignage créée : (https:\/\/stayput\.test\/v\/[0-9a-f-]{36})$/.exec(
+      lines[5] ?? '',
+    )?.[1];
+    expect(url).toBeDefined();
+    // Its public page, as anyone opening the card's QR code reads it.
+    expect(await readPublicProof(t.db, url!.slice(-36))).toMatchObject({
+      level: 'justified',
+      display: {
+        goal: 'Atteindre 3 000 € de chiffre d’affaires mensuel',
+        value: 1650,
+        progress: 55,
+        name: 'Léa Moreau',
+      },
+    });
+  });
+
   it('is the same members when run again, and leaves without a trace', async () => {
     await runSeed(t.db, COMPANY, NOW);
     const count = async (table: string) =>
@@ -187,6 +214,10 @@ describe('the sandbox seed', () => {
       'activity_hours',
       'pending_activity',
       'plans',
+      'goals',
+      'results',
+      'proofs',
+      'member_badges',
     ]) {
       expect(await count(table), table).toBe(0);
     }

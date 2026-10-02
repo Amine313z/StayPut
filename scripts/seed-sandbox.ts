@@ -7,6 +7,10 @@
  *   DATABASE_URL=… npx tsx scripts/seed-sandbox.ts seed [biz_…]
  *   DATABASE_URL=… npx tsx scripts/seed-sandbox.ts remove [biz_…]
  *   DATABASE_URL=… npx tsx scripts/seed-sandbox.ts report [biz_…]
+ *   DATABASE_URL=… npx tsx scripts/seed-sandbox.ts journey [biz_…]
+ *
+ * SPEC Phase 5: `journey` walks one fake member from the goal to the testimonial card
+ * (scripts/seed/member-journey.ts); its public page is on STAYPUT_URL (the Worker's address).
  *
  * The « Seed sandbox » workflow runs it (GitHub → Actions → Seed sandbox → Run workflow). Refused
  * when WHOP_ENV is production, and for a company StayPut does not know.
@@ -20,6 +24,7 @@ import {
   riskReport,
   runSeed,
 } from './seed/sandbox-members';
+import { runJourney } from './seed/member-journey';
 
 /** « StayPut Test », the founder's sandbox account (not a secret). */
 const SANDBOX_COMPANY = 'biz_2whAzkbCRpcGqQ';
@@ -33,8 +38,8 @@ function fail(message: string): never {
 }
 
 if (!url) fail('Set DATABASE_URL.');
-if (!['seed', 'remove', 'report'].includes(action)) {
-  fail('Usage: seed-sandbox.ts seed|remove|report [biz_…]');
+if (!['seed', 'remove', 'report', 'journey'].includes(action)) {
+  fail('Usage: seed-sandbox.ts seed|remove|report|journey [biz_…]');
 }
 if ((process.env.WHOP_ENV || 'sandbox') !== 'sandbox') {
   fail('Refused: WHOP_ENV is not "sandbox". Fake members never go into production.');
@@ -73,6 +78,12 @@ async function main() {
         `payments, messages, reactions, lessons, posts); ${scored} risk scores computed, ` +
         `weekly analyses run; ${planned} actions planned.`,
     );
+  } else if (action === 'journey') {
+    const origin = process.env.STAYPUT_URL || 'https://stayput.chezbenz18.workers.dev';
+    const lines = (await runJourney(db, companyId, now, origin)).join('\n');
+    console.info(lines);
+    const summary = process.env.GITHUB_STEP_SUMMARY;
+    if (summary) appendFileSync(summary, `${lines}\n`);
   } else if (action === 'report') {
     // Printed, and added to the run's summary on GitHub.
     const lines = (await riskReport(db, companyId, now)).join('\n');

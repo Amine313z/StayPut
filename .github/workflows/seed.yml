@@ -4,14 +4,15 @@ name: Seed sandbox
 # API: adds 25 fake members with 60 days of history to a sandbox company, removes them, or
 # reports them by risk score with their reasons (scripts/seed-sandbox.ts; seed and report compute
 # the scores and the weekly analyses again with the current rules; the report is in the run's
-# summary). Refused when the repository variable WHOP_ENV is "production".
+# summary). `journey` walks one fake member from the goal to the testimonial card (SPEC Phase 5),
+# its public page in the summary. Refused when the repository variable WHOP_ENV is "production".
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: seed (add the fake members), remove (take them away) or report (by risk score)
+        description: seed (add the fake members), remove (take them away), report (by risk score) or journey (goal to card)
         type: choice
-        options: [seed, remove, report]
+        options: [seed, remove, report, journey]
         default: seed
       company:
         description: The sandbox company (biz_…)
