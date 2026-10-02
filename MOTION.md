@@ -28,14 +28,20 @@ No springs with overshoot, no bounce on data: a figure lands where it is, once.
 - **Cards**: come in one after the other (`groupVariants` + `itemVariants`, 40 ms apart). On hover
   a card rises 2 px and its border brightens to mint (`--border-strong`).
 - **Numbers**: count up from the previous value in 600 ms (`useCountUp`). When the value gets
-  better it flashes mint, when it gets worse a soft red; which way is better belongs to the
-  figure (revenue at risk going down is good).
+  better it flashes mint, when it gets worse it dims to silver a moment (never red); which way is
+  better belongs to the figure (revenue at risk going down is good).
 - **Risk rings and gauges**: the stroke draws from 0 to the value.
-- **Charts**: lines draw in, bars grow from their baseline, tooltips fade in in 120 ms.
+- **Charts**: lines draw in from the left (one clip reveals the lines and their area together),
+  areas fade in, bars grow from their baseline. A new period (7, 30, 90 days) draws in again
+  while the old one fades out in 150 ms. Tooltips fade in in 120 ms; the crosshair and the
+  markers follow the pointer (or the arrow keys) at once.
+- **Choices side by side** (a period, a language): the chosen one's pill slides to it (250 ms).
+- **Progress** (« Getting started »): the bar grows from the left (`scaleX`).
 - **Lists**: a new item slides in from the top with a short mint highlight; a removed item
   folds away.
 - **Buttons**: press scales to 0.98; while working, a spinner takes the label's place without
-  changing the button's size; on success a check mark shows for 1.2 s.
+  changing the button's size (the label stays for screen readers); on success a check mark
+  shows for 1.2 s.
 - **Toasts**: slide in at the bottom right, stack, leave after 4 s.
 - **Loading**: every data block shows its own shape (skeleton) with a light passing over it;
   never an empty box, never a page-wide spinner.
@@ -49,15 +55,20 @@ show their value at once; the skeleton's light stops (`prefers-reduced-motion` i
 
 ## Performance
 
-- Animate only `transform` and `opacity` (and, for a number's flash, its color). Never width,
-  height, top or left on a list or a chart: use `scaleX`/`scaleY` from the baseline instead.
-- Heavy charts load when their card comes into view.
+- Animate only `transform` and `opacity` (and, for a number's flash, a filter). Never width,
+  height, top or left on a list or a chart: use `scaleX`/`scaleY` from the baseline instead. The
+  one exception is the width of the single clip rectangle that draws a chart in: one SVG
+  attribute, no layout.
+- Charts are drawn by StayPut itself in SVG (`ui/charts/`), a few kilobytes: no chart library
+  (Recharts weighed 109 KB compressed for one area chart, and animates every point in
+  JavaScript with its own easing).
 - 60 fps on a mid-range laptop inside Whop's frame is the bar.
 
 ## Adding a screen
 
 1. Wrap the page in `<Page>` (it applies `pageVariants`).
-2. Put its cards in a `<Stagger>` group; use `<MetricCard>`, `<ChartCard>`, `<Skeleton>`.
+2. Put its cards in a `<Stagger>` group; use `<MetricCard>`, `<Card>` with `<AreaChart>`,
+   `<Skeleton>`.
 3. Never write a duration or an easing by hand: take them from `motion.ts`.
 
 ## Tests

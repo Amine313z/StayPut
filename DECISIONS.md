@@ -1495,3 +1495,123 @@ tableau de bord.
   demande, prévu avec les pages suivantes.
 - Les autres pages gardent leur ancien style jusqu'à leur étape.
 - La recherche du haut cherche parmi les membres que le tableau de bord a lus.
+
+## 2026-10-02 — Refonte du design, révision : le nouveau brief
+
+Le fondateur a remplacé le premier brief par un brief complet (« StayPut — Full UI redesign
+prompt ») : moins de couleurs, une page d'accueil plus légère, l'espace membre hors de la V1,
+l'anglais par défaut avec la langue seulement dans les Réglages. Ordre de travail : jetons →
+composants → Tableau de bord → Membres → Intégrations → Automatisations → Analyses → Réglages →
+Prise en main et Guide, avec un arrêt après chaque page. Cette révision livre les jetons, les
+composants et le **Tableau de bord**, pour valider d'abord les couleurs et la typographie.
+
+### Ce qui ne change pas, et pourquoi
+
+- **React + Vite restent** (le brief cite Next.js, Frosted UI et Cloudflare Pages comme pile
+  « existante ») : la pile réelle est celle du SPEC §2, validée et en ligne ; les raisons de
+  l'étape 1 tiennent toujours (même origine pour le jeton de l'iframe, Frosted UI seulement en
+  version d'essai).
+- **Pas de Recharts** : mesuré pour ce seul graphique en aires, 109 Ko compressés (372 Ko
+  minifiés, avec Redux, Immer et d3), quand toute la page en pèse 265. Et son moteur anime chaque
+  point en JavaScript avec ses propres courbes, à l'inverse de la règle du brief (transform et
+  opacity seulement, une seule courbe). Le graphique est dessiné par StayPut en SVG (quelques Ko) :
+  courbe lissée qui ne dépasse jamais ses points, dégradé menthe qui s'efface, réticule et
+  infobulle, flèches du clavier, phrase et tableau pour les lecteurs d'écran.
+
+### Périmètre : l'espace membre hors de la V1
+
+- Tout le code reste, éteint par `MEMBER_SPACE_ENABLED = "false"` (Worker, `wrangler.toml`) et
+  `VITE_MEMBER_SPACE_ENABLED` (au build du site, absent donc éteint). Éteint : ni rubrique ni
+  onglet de réglages, ses routes répondent 404, les binômes et les défis de sauvetage ne sont plus
+  planifiés, la page publique d'une carte dit qu'elle n'existe plus.
+- Reste, car c'est le pilier « Agir » : le questionnaire de départ et l'offre de sa raison
+  (pause, jours offerts, code promo, aide, et l'invitation à recommander la communauté quand le
+  membre a atteint son objectif), le paiement à régler, l'Alumni et le lien Telegram. Le lien
+  d'affiliation de cette invitation a sa propre route, `/retention/affiliate`, pour ne pas
+  dépendre de l'espace membre (trouvé en relisant les tests).
+- Sans espace membre, la vue membre s'intitule « Votre abonnement » et dit simplement quand rien
+  n'attend le membre.
+
+### Navigation et langue
+
+- Six rubriques, dans l'ordre du brief : Tableau de bord · Membres · Automatisations · Analyses ·
+  Intégrations · Réglages. Le bouton **Guide** est dans la barre du haut.
+- **Anglais par défaut, jamais deviné** depuis le navigateur. La langue ne se change qu'à un
+  endroit : Réglages › Général (English / Français), tout de suite, chiffres, dates et montants
+  compris. Le thème y est aussi : la barre du haut ne garde que la communauté, la recherche et le
+  Guide. L'identifiant `biz_…` n'apparaît que dans Réglages › Général › Développeur.
+- **La vue membre parle la langue des messages de la communauté** (`companies.locale`, réglée
+  dans Automatisations) : le membre n'a pas choisi la langue de StayPut et le brief interdit de
+  deviner celle de son navigateur ; c'est aussi la langue de ce que StayPut lui écrit.
+
+### Discipline des couleurs et de la typographie
+
+- Un seul accent : le menthe sur le presque-noir. Plus d'ambre : les tons « avertissement » et
+  « sérieux » sont devenus de l'argent. Les niveaux de risque n'ont plus de couleur : l'anneau
+  menthe et le nom du niveau les disent.
+- Le rouge seulement pour l'urgent (départ dans les 48 heures, paiement échoué non rattrapé,
+  erreur d'automatisation, suppression), en point ou en petit badge, dit aussi en mots aux
+  lecteurs d'écran. Les revenus à risque sont en argent.
+- Cartes : `bg-elevated` à 60 %, bordure menthe à 12 %, rayon de 12 px. Le mode test est une
+  fine ligne bordée de menthe, texte discret.
+- Space Grotesk 600 seulement ; chiffres héros de 40 px, le **revenu sauvé** à 48 px et seul dans
+  le dégradé argent → menthe du logo (le brief veut le revenu à risque en argent : le dégradé
+  reste au chiffre à mettre en avant). Titres de page 24 px, étiquettes 12 px en capitales.
+- Deux tailles de texte par carte au plus : l'explication passe derrière un « i » (`InfoTip`).
+  Un seul bouton menthe par écran ; pendant une action, une roue remplace le texte du bouton sans
+  en changer la taille.
+
+### La page d'accueil : cinq choses seulement
+
+1. **Trois chiffres** qui comptent jusqu'à leur valeur : revenus sauvés ce mois-ci (avec sa
+   lueur), revenus à risque, membres à risque.
+2. **L'action prioritaire du jour** : une phrase, ce qui est en jeu (ce que paient ces membres,
+   jamais une promesse), le seul bouton menthe de la page.
+3. **Le graphique** revenus sauvés / revenus à risque sur 7, 30 ou 90 jours. « Sauvés » est
+   l'argent que StayPut a récupéré lui-même (sauvetages directs), **additionné** depuis le début
+   de la période ; « À risque » est, chaque jour, ce que payaient par mois les membres en départ
+   ou à risque élevé ce jour-là, dans la devise principale de la communauté. Un jour sans score
+   n'a pas de chiffre (pas un faux zéro) ; aujourd'hui reprend le chiffre en direct du haut de
+   la page.
+4. **À surveiller** : les 5 membres les plus urgents, dans cet ordre : départ dans les
+   48 heures ou paiement échoué (point rouge), puis les départs, puis les scores les plus hauts,
+   puis la fin la plus proche. Anneau du score, raison (le paiement échoué d'abord), date de
+   départ ou de renouvellement, ce que paie le membre, Écrire / Pause / Offre.
+5. **Les actions de StayPut (30 j)** : messages envoyés, paiements relancés, pauses proposées
+   (une réponse au questionnaire dont l'offre était une pause, ou une Pause du créateur), membres
+   sauvés (distincts).
+
+Quittent l'accueil : la rétention et l'activité des membres (vers Analyses), le fil en direct, la
+répartition du risque, les nouveaux membres inactifs (ce sera un filtre de Membres), les chiffres
+de la communauté et la synchronisation (Intégrations › Whop).
+
+### « Pour bien démarrer »
+
+- Au-dessus des chiffres tant qu'elle n'est pas finie, puis elle disparaît. Quatre étapes, chacune
+  mène à son écran : **Connecter Discord** (un serveur connecté), **Activer votre première
+  automatisation** (le mode automatique, ou une action validée ou faite à la main par le
+  créateur), **Passer en revue vos membres à risque** (la page Membres ouverte une fois),
+  **Régler les garde-fous** (Réglages › Automatisations enregistrés une fois).
+- Migration **0028** : deux dates dans `company_settings` (`guardrails_saved_at`,
+  `at_risk_reviewed_at`), posées une seule fois par `getting_started_done` ; la route
+  `POST /getting-started/reviewed`. Gardées sur le serveur, pour être les mêmes sur tous les
+  appareils de l'équipe.
+
+### La démo
+
+- 90 jours d'historique : un paiement sauvé tous les 3 à 6 jours (surtout des abonnements
+  mensuels, parfois un VIP, une fois un abonnement annuel), environ 15 à 20 % du revenu mensuel
+  sauvé : crédible, pas miraculeux. Les revenus à risque descendent de 1 180 $ à 641 $ en trois
+  mois, avec le bruit d'une vraie communauté. Le chiffre du mois est celui du calendrier : il est
+  petit en début de mois, comme pour une vraie communauté.
+- « Pour bien démarrer » à moitié faite (Discord et une automatisation) : elle se coche quand on
+  ouvre Membres et qu'on enregistre les garde-fous.
+
+### Reste à faire (pages suivantes)
+
+- Membres (tableau, filtres collants, tiroir du membre), Intégrations (tableaux de bord Discord et
+  Telegram), Automatisations (règles, modèles), Analyses (rétention, raisons de départ, prévision
+  à 90 jours), Réglages (le reste des onglets), Prise en main en 4 étapes et Guide à 5 sujets avec
+  vidéos ; les réponses au questionnaire de départ dans la démo (pour Analyses).
+- Le JavaScript pèse toujours 265 Ko compressés : le découpage par rubrique est prévu avec les
+  pages suivantes.

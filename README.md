@@ -19,9 +19,9 @@ il a sauvé.
 | 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation |
 | 3. Détection (score de risque) | Faite, en attente de validation                           |
 | 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les droits |
-| 5. Espace membre               | Faite, en attente de validation                           |
+| 5. Espace membre               | Faite, mise de côté pour la V1 (`MEMBER_SPACE_ENABLED`)   |
 | 6. Preuve de valeur            | En cours : l'argent sauvé (6.4) et l'accueil (6.2) faits  |
-| Refonte du design              | Tableau de bord fait, en attente de validation            |
+| Refonte du design              | Tableau de bord refait (brief du 2/10), à valider         |
 
 ## Architecture
 
@@ -44,23 +44,27 @@ sur chaque table. Le Worker s'y connecte par Hyperdrive. Budget : 0 €.
 ### Le tableau de bord du créateur
 
 Un menu de rubriques sur le côté, qui se replie sur ses icônes ; en haut, la communauté (nom et
-logo lus chez Whop), la recherche d'un membre, la langue (English, Français), le thème et l'aide.
-Sur un téléphone, les rubriques passent dans une barre en bas de l'écran. Les couleurs, polices et
-animations suivent [`docs/design-tokens.md`](./docs/design-tokens.md) et [`MOTION.md`](./MOTION.md).
+logo lus chez Whop), la recherche d'un membre et le **Guide**. La langue (English par défaut,
+Français) et le thème se changent **uniquement** dans Réglages › Général ; l'identifiant brut de
+la communauté (`biz_…`) n'apparaît que là, dans « Développeur ». Sur un téléphone, les rubriques
+passent dans une barre en bas de l'écran. Les couleurs, polices et animations suivent
+[`docs/design-tokens.md`](./docs/design-tokens.md) et [`MOTION.md`](./MOTION.md).
 
-| Rubrique (EN · FR)            | Onglets                                              |
-| ----------------------------- | ---------------------------------------------------- |
-| Dashboard · Tableau de bord   | une page (À surveiller et Nouveaux membres en liens) |
-| Members · Membres             | Tous les membres · Ne jamais contacter               |
-| Member space · Espace membre  | Vue d'ensemble · Témoignages · Vue membre            |
-| Automations · Automatisations | À valider · Programmées · Historique · Offre Alumni  |
-| Analytics · Analyses          | Cohortes · Leçons                                    |
-| Integrations · Intégrations   | Whop · Discord · Telegram · Activité                 |
-| Settings · Réglages           | Score de risque · Automatisations · Espace membre    |
+| Rubrique (EN · FR)            | Onglets                                             |
+| ----------------------------- | --------------------------------------------------- |
+| Dashboard · Tableau de bord   | une page                                            |
+| Members · Membres             | Tous les membres · Ne jamais contacter              |
+| Automations · Automatisations | À valider · Programmées · Historique · Offre Alumni |
+| Analytics · Analyses          | Cohortes · Leçons                                   |
+| Integrations · Intégrations   | Whop · Discord · Telegram · Activité                |
+| Settings · Réglages           | Général · Score de risque · Automatisations         |
 
-La page d'accueil met l'argent d'abord (sauvé ce mois-ci, à risque, membres à risque, rétention),
-puis l'action du jour en un bouton, les membres à surveiller avec Écrire / Pause / Offre,
-l'activité en direct, le risque sur 30 jours et les chiffres de la communauté.
+La page d'accueil répond à une seule question, « Est-ce que je perds de l'argent, et que faire
+aujourd'hui ? », en cinq blocs : l'argent (sauvé ce mois-ci, à risque, membres à risque), l'action
+prioritaire du jour en un bouton, la courbe de l'argent sauvé face à l'argent à risque (7, 30 ou
+90 jours), les cinq membres les plus urgents avec Écrire / Pause / Offre, et ce que StayPut a fait
+en 30 jours. Tant que la mise en route n'est pas finie, la carte « Pour bien démarrer » (Discord,
+première automatisation, membres à risque passés en revue, garde-fous) s'affiche au-dessus.
 
 Chaque onglet a son adresse (`/dashboard/<communauté>/<rubrique>/<onglet>`) ; une adresse
 inconnue ouvre le premier onglet de sa rubrique, et les anciennes (`/actions?view=history`)
@@ -180,7 +184,9 @@ Whop du sandbox ».
 
 `https://stayput.chezbenz18.workers.dev/demo` montre le tableau de bord sur une communauté
 imaginaire (« Atlas Trading Club ») : rien n'y est réel, rien n'est envoyé, aucun compte n'est
-nécessaire. Pour les captures de l'App Store et pour montrer StayPut ; dans l'app, l'aide (`?`)
+nécessaire. 56 membres, 90 jours d'historique, des annulations, des paiements échoués et la carte
+« Pour bien démarrer » à moitié faite (elle se coche quand on visite Membres et qu'on enregistre
+les garde-fous). Pour les captures de l'App Store et pour montrer StayPut ; dans l'app, le Guide
 y mène par « Explorer avec des données de démo ».
 
 ### Discord et Telegram (optionnels, gratuits)
@@ -215,8 +221,8 @@ avertissement avec la correction à faire, jamais un échec du déploiement.
 ### Données du sandbox : synchronisation, inspection, membres fictifs
 
 - **Synchronisation** : automatique toutes les 10 minutes, et en arrière-plan à l'ouverture du
-  tableau de bord ; le bouton **Synchroniser maintenant** du tableau de bord lit tout de suite ce
-  qui est dû (au plus une fois par minute). Détails : `DECISIONS.md`, « Phase 2 ».
+  tableau de bord ; le bouton **Synchroniser maintenant** (Intégrations › Whop) lit tout de suite
+  ce qui est dû (au plus une fois par minute). Détails : `DECISIONS.md`, « Phase 2 ».
 - **Inspect** (**Actions → Inspect → Run workflow**) : l'état de la base en chiffres seulement
   (version du schéma, flux de synchronisation et leurs erreurs, nombre de lignes par table,
   actions par type et par statut, réglages des actions : mode, mode test, arrêts, fuseau et
@@ -255,6 +261,14 @@ le retrouvent dans leur vue de l'espace Alumni avec le bouton pour revenir. Dét
 `DECISIONS.md`, « Phase 4 ».
 
 ### Espace membre (Phase 5)
+
+> **Mis de côté pour la V1** (décision du 2 octobre 2026). Le code reste dans le dépôt, éteint par
+> `MEMBER_SPACE_ENABLED = "false"` (Worker, `apps/worker/wrangler.toml`) et
+> `VITE_MEMBER_SPACE_ENABLED` (absent au build du site) : ni rubrique, ni onglet, ses routes
+> répondent 404 et les pages publiques des cartes disent qu'elles n'existent plus. La vue membre
+> garde l'abonnement : le questionnaire de départ et ses offres (pause, jours offerts, code promo,
+> aide, lien d'affiliation), le paiement à régler, l'Alumni et le lien Telegram. Pour le
+> rallumer : les deux variables à `true`, puis redéployer. Ce qui suit décrit l'espace allumé.
 
 Dans la **vue membre**, le membre choisit son objectif parmi ceux du créateur (ou écrit le sien)
 avec une cible, une unité et une date, puis note ses résultats en un geste : où il en est, ou ce
