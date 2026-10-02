@@ -628,3 +628,31 @@ function toDate(value: Date | string | null): Date | null {
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+/**
+ * The community's name as Whop shows it (the account's `title`): the members' messages, cards
+ * and pages say it. Read when StayPut has none yet, or with a sync; kept as it was when Whop does
+ * not answer.
+ */
+export async function refreshCompanyName(
+  db: Db,
+  whop: WhopClient,
+  companyId: string,
+): Promise<string | null> {
+  try {
+    const account = await whop.request<{ title?: unknown }>(
+      'GET',
+      `/accounts/${encodeURIComponent(companyId)}`,
+    );
+    const title = typeof account.title === 'string' ? account.title.trim().slice(0, 200) : '';
+    if (!title) return null;
+    await db.query(
+      `update stayput.companies set name = $2 where id = $1 and name is distinct from $2`,
+      [companyId, title],
+    );
+    return title;
+  } catch (error) {
+    console.error('Company name not read:', error instanceof Error ? error.message : error);
+    return null;
+  }
+}

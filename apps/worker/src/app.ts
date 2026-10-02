@@ -129,6 +129,7 @@ import {
 import {
   LIVE_DISCORD_BUDGET,
   SYNC_REQUEST_BUDGET,
+  refreshCompanyName,
   refreshDiscordNow,
   summarize,
   syncIfFree,
@@ -409,6 +410,12 @@ export function createApp(deps: AppDeps) {
           companyId,
         ]);
       }
+      // The community's name, for its messages and pages: with each sync, or as soon as missing.
+      const [company] = await db.query<{ name: string | null }>(
+        'select name from stayput.companies where id = $1',
+        [companyId],
+      );
+      if (result || !company?.name) await refreshCompanyName(db, whop, companyId);
       // The scores due (on the first visit, every member's) now rather than at the next hour.
       await refreshDetection(db, companyId, now, REQUEST_RISK_BATCH);
     });

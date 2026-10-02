@@ -61,6 +61,27 @@ describe('the default templates', () => {
       body: 'Glad to have you in Le Club. The best first step: say hello to the community, then start the first lesson.',
     });
   });
+
+  it('read naturally while StayPut does not know the community’s name yet', () => {
+    const values = { first_name: 'Ana', buddy_name: 'Sam', offer: 'RETOUR-20' };
+    expect(renderMessage(DEFAULT_TEMPLATES.fr.welcome_message, values).body).toBe(
+      'Content de t’avoir. Le meilleur premier pas : présente-toi à la communauté, puis lance la première leçon.',
+    );
+    expect(renderMessage(DEFAULT_TEMPLATES.fr.payment_failed_notice, values).body).toBe(
+      'Salut Ana, ton dernier paiement n’est pas passé. Mets à jour ton moyen de paiement pour garder ton accès : ça prend une minute.',
+    );
+    expect(renderMessage(DEFAULT_TEMPLATES.en.mentor_intro, values).body).toMatch(
+      /^Sam just joined\. You know the way/,
+    );
+    for (const locale of ['en', 'fr'] as const) {
+      for (const action of MESSAGE_ACTIONS) {
+        const { title, body } = renderMessage(DEFAULT_TEMPLATES[locale][action], values);
+        // Never a word left hanging before a full stop or a comma (French puts a space before
+        // « ! » and « : », rightly).
+        expect(`${title} ${body}`, `${locale} ${action}`).not.toMatch(/ [.,]|\s{2}|[a-z]$/);
+      }
+    }
+  });
 });
 
 describe('templateProblems', () => {

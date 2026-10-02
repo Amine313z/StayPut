@@ -1255,3 +1255,13 @@ nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en
   dernier message », et c'est pourquoi les défis restent éteints tant que le créateur ne les
   allume pas.
 - **L'essai de l'équipe** n'a pas de défi : ils portent sur des membres réels.
+
+### Le nom de la communauté (correctif)
+
+Le parcours du membre fictif a montré que StayPut ne connaissait pas le nom des communautés :
+`companies.name` n'était jamais rempli, et `{creator_name}` restait vide dans les messages
+(« Content de t'avoir dans . »), les cartes et leurs pages. StayPut le lit désormais chez Whop
+(`GET /accounts/{id}`, son `title`, avec `company:basic:read`) à chaque synchronisation lancée
+depuis le tableau de bord, et dès qu'il manque. Les modèles par défaut mettent aussi
+`{creator_name}` dans une partie facultative : sans nom, la phrase reste juste (« Content de
+t'avoir. »).
