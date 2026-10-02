@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, X } from 'lucide-react';
+import { CircleCheck, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   createContext,
@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useI18n } from '../i18n';
 import { TOAST_MS, ease } from '../motion';
+import { UrgentDot } from './UrgentDot';
 
 export interface ToastInput {
   tone?: 'success' | 'error';
@@ -60,15 +61,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               animate={{ opacity: 1, x: 0, transition: ease('standard') }}
               exit={{ opacity: 0, x: 24, transition: ease('micro') }}
               role={item.tone === 'error' ? 'alert' : 'status'}
-              className="pointer-events-auto flex w-full items-start gap-3 rounded-xl border border-line bg-surface/95 p-3.5 shadow-lift backdrop-blur"
+              className="pointer-events-auto flex w-full items-start gap-3 rounded-xl border border-line bg-surface-2 p-3.5 shadow-lift"
             >
               {item.tone === 'error' ? (
-                <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-danger" />
+                <span className="flex h-5 w-4 shrink-0 items-center justify-center">
+                  <UrgentDot />
+                </span>
               ) : (
                 <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent" />
               )}
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{item.title}</p>
+                <p className="text-sm font-medium text-fg">{item.title}</p>
                 {item.body ? <p className="mt-0.5 text-sm text-muted">{item.body}</p> : null}
               </div>
               <button

@@ -1,7 +1,7 @@
 import type { CreatorSession, IntegrationsStatus, MembersPage } from '@stayput/core';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useOutletContext, useParams, useSearchParams } from 'react-router';
-import { DEMO_COMPANY_ID, useApi, useReloadOnReturn, type Loadable } from '../api';
+import { DEMO_COMPANY_ID, postJson, useApi, useReloadOnReturn, type Loadable } from '../api';
 import { CreatorShell, ShellSkeleton, rememberDemoExit } from '../components/CreatorShell';
 import { ErrorPanel } from '../components/Status';
 import { useI18n } from '../i18n';
@@ -26,6 +26,8 @@ export interface CreatorData {
   members: { state: Loadable<MembersPage>; retry: () => void; reload: () => void };
   sync: SyncState;
   integrations: { state: Loadable<IntegrationsStatus>; retry: () => void; reload: () => void };
+  /** The test mode as the banner on top shows it; the action settings say when it changes. */
+  testMode: { on: boolean; set: (on: boolean) => void };
   /** Inside a section: says how many things its tabs hold (SectionLayout). */
   tabCounts?: (counts: TabCounts) => void;
 }
@@ -84,7 +86,23 @@ function Dashboard({ session, demo }: { session: CreatorSession; demo: boolean }
     members.reload();
     integrations.reload();
   });
-  const data: CreatorData = { companyId, root, api, demo, members, sync, integrations };
+  // The session says whether the test mode is on; the banner's « Turn off » and the action
+  // settings change it from there.
+  const [testMode, setTestMode] = useState(session.testMode);
+  const turnOffTestMode = async () => {
+    await postJson(`${api}/test-mode/off`);
+    setTestMode(false);
+  };
+  const data: CreatorData = {
+    companyId,
+    root,
+    api,
+    demo,
+    members,
+    sync,
+    integrations,
+    testMode: { on: testMode, set: setTestMode },
+  };
   // A company StayPut does not know the zone of yet: the creator's browser tells it.
   const timezoneSet = session.timezoneSet;
   useEffect(() => {
@@ -97,6 +115,8 @@ function Dashboard({ session, demo }: { session: CreatorSession; demo: boolean }
       session={session}
       root={root}
       demo={demo}
+      testMode={testMode}
+      onTurnOffTestMode={turnOffTestMode}
       members={members.state.status === 'ready' ? members.state.data.members : []}
     >
       {/* Each section comes in (MOTION.md); the frame around it never moves. */}

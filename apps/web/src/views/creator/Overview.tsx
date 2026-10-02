@@ -1,44 +1,42 @@
 import type {
   CreatorMessagesResult,
+  CreatorOffersResult,
+  CreatorRetryResult,
   DashboardView,
   GettingStarted,
   MemberRow,
   MembersPage,
+  PriorityAction,
   RevenueDay,
 } from '@stayput/core';
 import {
   ArrowRight,
   CheckCheck,
   CircleCheck,
-  FlaskConical,
   LoaderCircle,
-  MessageSquareText,
   PauseCircle,
-  PiggyBank,
   RotateCw,
   Send,
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { postJson, useApi, useReloadOnChange, type Loadable } from '../../api';
 import { MemberActions, failureText } from '../../components/MemberActions';
+import { MemberListRow } from '../../components/MemberListRow';
 import { attentionReasons } from '../../components/MemberRows';
-import { LEVELS, UrgentDot } from '../../components/Risk';
+import { LEVELS } from '../../components/Risk';
 import { ErrorPanel } from '../../components/Status';
 import { useI18n } from '../../i18n';
-import { ease } from '../../motion';
+import { STAGGER, ease, itemVariants } from '../../motion';
 import { reasonText } from '../../risk-text';
 import { ActionButton } from '../../ui/ActionButton';
-import { Avatar } from '../../ui/Avatar';
-import { SECTION_LINK_CLASS } from '../../ui/Button';
-import { Card } from '../../ui/Card';
-import { ChecklistCard } from '../../ui/ChecklistCard';
+import { SECTION_LINK_CLASS, buttonClass } from '../../ui/Button';
 import { EmptyState } from '../../ui/EmptyState';
-import { InfoTip } from '../../ui/InfoTip';
-import { MetricCard } from '../../ui/MetricCard';
+import { GettingStartedPill } from '../../ui/GettingStartedPill';
+import { LabelTip } from '../../ui/LabelTip';
+import { MetricHero, SecondaryMetric } from '../../ui/Metric';
 import { AnimatedNumber, Stagger, StaggerItem } from '../../ui/Motion';
-import { RiskRing } from '../../ui/RiskRing';
 import { Segmented } from '../../ui/Segmented';
 import { MetricSkeleton, RowsSkeleton, Skeleton } from '../../ui/Skeleton';
 import { useToast } from '../../ui/Toast';
@@ -56,81 +54,96 @@ const PERIODS = ['7', '30', '90'] as const;
 type Period = (typeof PERIODS)[number];
 
 /**
- * The home of the dashboard (the redesign, brief §6.2), one question: « Am I losing money, and
- * what do I do today? ». Five things only: the money (saved, at risk, members at risk), the one
- * action of the day, saved against at risk over time, the five members who need attention most,
- * and what StayPut did in 30 days. Until the setup is done, « Getting started » sits on top.
+ * The Dashboard (brief v3 §6.2), one question: « Am I losing money, and what do I do today? ».
+ * Top to bottom and nothing else: the « Getting started » pill under the title; one hero block
+ * (the revenue saved this month, the revenue and the members at risk, and beneath them the
+ * chart of saved against at risk); the one action of the day; the five members who need
+ * attention most; what StayPut did in 30 days. Sections 32 px apart, coming in 60 ms after one
+ * another; StayPut's mark at 3 % in the bottom right corner.
  */
 export function Overview() {
-  const { api, root, members, sync } = useCreatorData();
+  const { api, root, members, sync, testMode } = useCreatorData();
   const dashboard = useApi<DashboardView>(`${api}/dashboard`);
   // New data from Whop: the figures again.
   useReloadOnChange(sync.status?.lastSyncAt, dashboard.reload);
   const view = dashboard.state.status === 'ready' ? dashboard.state.data : null;
-  const testMode = view?.testMode ?? false;
   const importing = sync.status !== null && !sync.status.backfillDone;
+  const acted = () => {
+    dashboard.reload();
+    members.reload();
+  };
 
   return (
-    <div className="space-y-6">
-      {testMode ? <TestModeBar root={root} /> : null}
-      {importing ? <ImportingBar /> : null}
-      {dashboard.state.status === 'error' ? (
-        <ErrorPanel
-          error={dashboard.state.error}
-          forbiddenKey="error.forbidden.creator"
-          onRetry={dashboard.retry}
-        />
-      ) : (
-        <>
-          {view && !setupDone(view.gettingStarted) ? (
-            <Setup steps={view.gettingStarted} root={root} />
-          ) : null}
-          <HeroRow view={view} />
-          <Priority view={view} api={api} root={root} onDone={dashboard.reload} />
-          <RevenueChart view={view} />
-        </>
-      )}
-      <NeedsAttention
-        state={members.state}
-        retry={members.retry}
-        api={api}
-        root={root}
-        testMode={testMode}
-        onDone={dashboard.reload}
+    <div className="relative">
+      {view && !setupDone(view.gettingStarted) ? (
+        <div className="-mt-3 mb-8">
+          <Setup steps={view.gettingStarted} root={root} />
+        </div>
+      ) : null}
+      <Stagger className="space-y-8">
+        {importing ? (
+          <StaggerItem>
+            <ImportingBar />
+          </StaggerItem>
+        ) : null}
+        {dashboard.state.status === 'error' ? (
+          <StaggerItem>
+            <ErrorPanel
+              error={dashboard.state.error}
+              forbiddenKey="error.forbidden.creator"
+              onRetry={dashboard.retry}
+            />
+          </StaggerItem>
+        ) : (
+          <>
+            <StaggerItem>
+              <HeroBlock view={view} />
+            </StaggerItem>
+            <StaggerItem>
+              <Priority view={view} api={api} root={root} testMode={testMode.on} onDone={acted} />
+            </StaggerItem>
+          </>
+        )}
+        <StaggerItem>
+          <NeedsAttention
+            state={members.state}
+            retry={members.retry}
+            api={api}
+            root={root}
+            testMode={testMode.on}
+            onDone={dashboard.reload}
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <ActionsStrip view={view} />
+        </StaggerItem>
+      </Stagger>
+      {/*
+        StayPut's mark at 3 %, in the bottom right corner of the dashboard (brief v3 §4): after
+        the last block, in its own room, so it never shows through the chart or a row.
+      */}
+      <img
+        src="/logo-256.png"
+        alt=""
+        aria-hidden="true"
+        width={160}
+        height={160}
+        decoding="async"
+        className="pointer-events-none ms-auto mt-16 hidden size-40 opacity-[0.03] select-none md:block"
       />
-      {view ? <ActionsStrip view={view} /> : <Skeleton className="h-24 w-full rounded-xl" />}
     </div>
   );
 }
 
-/**
- * Test mode: everything computed, nothing sent. A thin mint-outlined line with muted words (the
- * brief: never an amber fill), and where to change it.
- */
-function TestModeBar({ root }: { root: string }) {
-  const { t } = useI18n();
-  return (
-    <p className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg border border-line-strong px-4 py-1.5 text-sm">
-      <span className="inline-flex items-center gap-2">
-        <FlaskConical aria-hidden="true" className="size-4 shrink-0 text-subtle" />
-        {t('dash.testMode')}
-      </span>
-      <Link to={`${root}/settings/actions`} className={SECTION_LINK_CLASS}>
-        {t('dash.testMode.settings')}
-      </Link>
-    </p>
-  );
-}
-
-/** While the history comes from Whop, the figures fill in: said in the same thin line. */
+/** While the history comes from Whop, the figures fill in: said in a slim line. */
 function ImportingBar() {
   const { t } = useI18n();
   return (
     <p
       role="status"
-      className="flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm"
+      className="flex items-center gap-2 rounded-lg border border-line px-4 py-1.5 text-[0.8125rem] text-subtle"
     >
-      <LoaderCircle aria-hidden="true" className="size-4 shrink-0 animate-spin text-subtle" />
+      <LoaderCircle aria-hidden="true" className="size-4 shrink-0 animate-spin" />
       {t('sync.importing')}
     </p>
   );
@@ -140,11 +153,11 @@ function setupDone(steps: GettingStarted): boolean {
   return steps.discord && steps.automation && steps.reviewed && steps.guardrails;
 }
 
-/** « Getting started » (brief §7): four steps, each leading to its screen, until all are done. */
+/** « Getting started » (brief v3 §7): four steps, each leading to its screen, until all are done. */
 function Setup({ steps, root }: { steps: GettingStarted; root: string }) {
   const { t } = useI18n();
   return (
-    <ChecklistCard
+    <GettingStartedPill
       title={t('start.title')}
       doneLabel={t('start.done')}
       progress={(done, total) => t('start.progress', { done, total })}
@@ -180,230 +193,84 @@ function useMoney(currency: string | null): (value: number) => string {
     currency ? i18n.currency(value, currency, { whole: true }) : i18n.number(Math.round(value));
 }
 
-/** The lines of an « i », one under the other. */
-function Lines({ lines }: { lines: readonly (string | null)[] }) {
-  return (
-    <>
-      {lines
-        .filter((line): line is string => line !== null)
-        .map((line) => (
-          <span key={line} className="block">
-            {line}
-          </span>
-        ))}
-    </>
-  );
-}
-
 /**
- * The money first (brief §6.2): the revenue saved this month, the largest, in the logo's
- * gradient with its soft glow; the revenue at risk, in silver (never red); the members at risk.
- * Each counts to its value and says what it means behind its « i ».
+ * The one hero block (brief v3 §6.2): no box inside it, thin dividers only. On the left the
+ * revenue saved this month, the screen's one giant number, in the signature gradient on the
+ * turquoise light; on the right, in white, the revenue at risk (never red) and the members at
+ * risk; beneath, in the same block, saved against at risk over time. What each counts is in its
+ * label's tooltip, never under the number.
  */
-function HeroRow({ view }: { view: DashboardView | null }) {
-  const { t, plural, number } = useI18n();
+function HeroBlock({ view }: { view: DashboardView | null }) {
+  const { t, number } = useI18n();
   const titleId = useId();
   const money = useMoney(view?.currency ?? null);
-  const grid = 'grid grid-cols-1 gap-6 @lg:grid-cols-2 @4xl:grid-cols-[1.4fr_1fr_1fr]';
-  if (!view) {
-    return (
-      <div className={grid} aria-hidden="true">
-        <MetricSkeleton hero />
-        <MetricSkeleton hero />
-        <MetricSkeleton hero />
-      </div>
-    );
-  }
-  const saved = view.saved;
-  const atRisk = view.atRisk;
+  const atRisk = view?.atRisk;
   return (
-    <section aria-labelledby={titleId}>
+    <section aria-labelledby={titleId} className="relative isolate rounded-xl border border-line">
       <h2 id={titleId} className="sr-only">
         {t('dash.money')}
       </h2>
-      <Stagger as="dl" className={grid}>
-        <StaggerItem className="@lg:col-span-2 @4xl:col-span-1">
-          <MetricCard
-            hero
-            lead
-            glow
-            better="up"
-            label={t('dash.saved')}
-            value={view.currency ? saved.thisMonth.direct : null}
-            format={money}
-            empty={t('dash.noRevenue')}
-            info={
-              <Lines
-                lines={[
-                  t('dash.saved.info'),
-                  saved.thisMonth.saves > 0
-                    ? plural('dash.saved.kept', saved.thisMonth.saves)
-                    : t('dash.saved.empty'),
-                  saved.thisMonth.influenced > 0
-                    ? t('dash.saved.influenced', { amount: money(saved.thisMonth.influenced) })
-                    : null,
-                  saved.lastMonth.direct > 0
-                    ? t('dash.saved.lastMonth', { amount: money(saved.lastMonth.direct) })
-                    : null,
-                  saved.otherCurrencies && view.currency
-                    ? t('dash.currencyOnly', { currency: view.currency })
-                    : null,
-                ]}
-              />
-            }
+      <div className="grid grid-cols-1 @3xl:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
+        <div className="relative flex flex-col justify-center p-5 @3xl:py-8">
+          <span
+            aria-hidden="true"
+            className="hero-glow -z-10"
+            style={{ left: -210, top: 'calc(50% - 350px)' }}
           />
-        </StaggerItem>
-        <StaggerItem>
-          <MetricCard
-            hero
-            better="down"
-            label={t('dash.atRisk')}
-            value={view.currency ? atRisk.revenue : null}
-            format={money}
-            empty={t('dash.noRevenue')}
-            info={
-              view.monthlyRevenue === null
-                ? null
-                : t('dash.atRisk.info', { total: money(view.monthlyRevenue) })
-            }
-          />
-        </StaggerItem>
-        <StaggerItem>
-          <MetricCard
-            hero
-            better="down"
-            label={t('dash.membersAtRisk')}
-            value={atRisk.members}
-            format={(value) => number(Math.round(value))}
-            info={t('dash.membersAtRisk.info', {
-              departures: number(atRisk.departures),
-              high: number(atRisk.high),
-            })}
-          />
-        </StaggerItem>
-      </Stagger>
-    </section>
-  );
-}
-
-/**
- * The one action of the day (brief §6.2): one sentence, the revenue it touches (what those
- * members pay, never a promise), and the page's only primary button. How it works is behind
- * the « i ».
- */
-function Priority({
-  view,
-  api,
-  root,
-  onDone,
-}: {
-  view: DashboardView | null;
-  api: string;
-  root: string;
-  onDone: () => void;
-}) {
-  const { t, plural } = useI18n();
-  const toast = useToast();
-  const titleId = useId();
-  const money = useMoney(view?.currency ?? null);
-  if (!view) return <Skeleton className="h-28 w-full rounded-xl" />;
-  const priority = view.priority;
-  const done = (title: string) =>
-    toast({
-      title,
-      body: t(view.testMode ? 'dash.toast.simulated' : 'dash.toast.messaged.body'),
-    });
-  // A new action of the day is a new card (its button starts fresh), fading in.
-  const identity =
-    priority === null
-      ? 'none'
-      : priority.kind === 'message'
-        ? `message:${priority.memberIds.join(',')}`
-        : `approve:${priority.actions}`;
-  return (
-    <motion.section
-      key={identity}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={ease('standard')}
-      aria-labelledby={titleId}
-      className="flex flex-col gap-4 rounded-xl border border-line bg-surface/60 p-5 @3xl:flex-row @3xl:items-center @3xl:justify-between"
-    >
-      <div className="min-w-0">
-        <p className="flex items-center gap-1.5">
-          <span className="label-caps">{t('dash.priority')}</span>
-          <InfoTip>
-            {priority === null ? (
-              t('dash.priority.none.body')
-            ) : (
-              <Lines
-                lines={[
-                  priority.kind === 'message'
-                    ? t('dash.priority.message.body')
-                    : plural('dash.priority.approve.body', priority.members),
-                  t('dash.priority.stakeHint'),
-                ]}
-              />
-            )}
-          </InfoTip>
-        </p>
-        <h2 id={titleId} className="mt-2 flex items-start gap-2 text-sm font-medium text-fg">
-          {priority === null ? (
-            <>
-              <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent" />
-              {t('dash.priority.none.title')}
-            </>
-          ) : priority.kind === 'message' ? (
-            plural('dash.priority.message.title', priority.memberIds.length)
+          {view ? (
+            <MetricHero
+              better="up"
+              label={t('dash.saved')}
+              tip={t('dash.saved.info')}
+              value={view.currency ? view.saved.thisMonth.direct : null}
+              format={money}
+              empty={t('dash.noRevenue')}
+            />
           ) : (
-            plural('dash.priority.approve.title', priority.actions)
+            <MetricSkeleton hero />
           )}
-        </h2>
-      </div>
-      {priority === null ? null : (
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-3 @3xl:shrink-0">
-          <p className="text-sm">
-            {t('dash.priority.stake')}{' '}
-            <span className="tabular font-semibold text-fg">
-              {t('dash.priority.perMonth', { amount: money(priority.revenue) })}
-            </span>
-          </p>
-          {priority.kind === 'approve' ? (
-            <Link to={`${root}/actions`} className={SECTION_LINK_CLASS}>
-              {t('dash.priority.review')}
-            </Link>
-          ) : null}
-          <ActionButton
-            stayDone
-            run={async () => {
-              if (priority.kind === 'message') {
-                const result = await postJson<CreatorMessagesResult>(`${api}/members/message`, {
-                  memberIds: priority.memberIds,
-                });
-                if (result.queued > 0) done(plural('dash.toast.messaged', result.queued));
-                else toast({ title: t('dash.toast.nothingNew') });
-              } else {
-                const result = await postJson<{ approved: number }>(`${api}/actions/approve`);
-                done(plural('dash.toast.approved', result.approved));
-              }
-              onDone();
-            }}
-            onError={(error) => toast({ tone: 'error', title: failureText(error, t) })}
-            icon={
-              priority.kind === 'message' ? (
-                <Send aria-hidden="true" className="size-4" />
-              ) : (
-                <CheckCheck aria-hidden="true" className="size-4" />
-              )
-            }
-          >
-            {priority.kind === 'message'
-              ? plural('dash.priority.message.button', priority.memberIds.length)
-              : plural('dash.priority.approve.button', priority.actions)}
-          </ActionButton>
         </div>
-      )}
-    </motion.section>
+        <div className="grid grid-cols-2 border-t border-line @3xl:grid-cols-1 @3xl:border-s @3xl:border-t-0">
+          <div className="p-5">
+            {view && atRisk ? (
+              <SecondaryMetric
+                better="down"
+                label={t('dash.atRisk')}
+                tip={
+                  view.monthlyRevenue === null
+                    ? undefined
+                    : t('dash.atRisk.info', { total: money(view.monthlyRevenue) })
+                }
+                value={view.currency ? atRisk.revenue : null}
+                format={money}
+                empty={t('dash.noRevenue')}
+              />
+            ) : (
+              <MetricSkeleton />
+            )}
+          </div>
+          <div className="border-s border-line p-5 @3xl:border-s-0 @3xl:border-t">
+            {view && atRisk ? (
+              <SecondaryMetric
+                better="down"
+                label={t('dash.membersAtRisk')}
+                tip={t('dash.membersAtRisk.info', {
+                  departures: number(atRisk.departures),
+                  high: number(atRisk.high),
+                })}
+                value={atRisk.members}
+                format={(value) => number(Math.round(value))}
+              />
+            ) : (
+              <MetricSkeleton />
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="border-t border-line p-5">
+        <RevenueChart view={view} />
+      </div>
+    </section>
   );
 }
 
@@ -421,9 +288,9 @@ export function chartWindow(history: readonly RevenueDay[], days: number) {
 }
 
 /**
- * Saved against at risk (brief §6.2): what StayPut saved, added up over the period (the mint
- * area), and what the members at risk paid each month, day by day (the dashed silver line);
- * over 7, 30 or 90 days, each period drawing in.
+ * Saved against at risk, inside the hero block: what StayPut saved, added up over the period
+ * (the turquoise line over its area), and what the members at risk paid each month, day by day
+ * (the dashed white line); over 7, 30 or 90 days, each period drawing in.
  */
 function RevenueChart({ view }: { view: DashboardView | null }) {
   const i18n = useI18n();
@@ -436,22 +303,28 @@ function RevenueChart({ view }: { view: DashboardView | null }) {
     [view, period],
   );
   const title = t('dash.chart.title');
-  const toggle = (
-    <Segmented
-      label={t('dash.chart.period')}
-      value={period}
-      onChange={setPeriod}
-      options={PERIODS.map((value) => ({
-        value,
-        label: plural('dash.chart.days', Number(value)),
-      }))}
-    />
+  const header = (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <h3 className="title-section">
+        <LabelTip tip={t('dash.chart.info')}>{title}</LabelTip>
+      </h3>
+      <Segmented
+        label={t('dash.chart.period')}
+        value={period}
+        onChange={setPeriod}
+        options={PERIODS.map((value) => ({
+          value,
+          label: plural('dash.chart.days', Number(value)),
+        }))}
+      />
+    </div>
   );
   if (!view || !data) {
     return (
-      <Card title={title} info={t('dash.chart.info')} actions={toggle}>
+      <>
+        {header}
         <Skeleton className="h-64 w-full" />
-      </Card>
+      </>
     );
   }
   const empty = view.revenueHistory.every((d) => d.atRisk === null && d.saved === 0);
@@ -468,7 +341,8 @@ function RevenueChart({ view }: { view: DashboardView | null }) {
         })
       : t('dash.chart.summaryNoRisk', { days: period, saved: money(savedTotal) });
   return (
-    <Card title={title} info={t('dash.chart.info')} actions={toggle}>
+    <>
+      {header}
       {empty ? (
         <EmptyState inset body={t('dash.chart.empty')} />
       ) : (
@@ -487,7 +361,197 @@ function RevenueChart({ view }: { view: DashboardView | null }) {
           }
         />
       )}
-    </Card>
+    </>
+  );
+}
+
+/** What changes with each action of the day: a new one is a new section (its button fresh). */
+function identityOf(priority: PriorityAction | null): string {
+  if (priority === null) return 'none';
+  switch (priority.kind) {
+    case 'approve':
+      return `approve:${priority.actions}`;
+    case 'retry':
+      return `retry:${priority.payments}`;
+    case 'review':
+      return `review:${priority.filter}:${priority.members}`;
+    default:
+      return `${priority.kind}:${priority.memberIds.join(',')}`;
+  }
+}
+
+/**
+ * The one action of the day (brief v3 §6.2): one sentence with the revenue it touches (what
+ * those payments or members bring each month, never a promise) and the page's only primary
+ * button. Computed from the data: while a payment stays failed or a member is leaving it never
+ * says « nothing urgent ».
+ */
+function Priority({
+  view,
+  api,
+  root,
+  testMode,
+  onDone,
+}: {
+  view: DashboardView | null;
+  api: string;
+  root: string;
+  testMode: boolean;
+  onDone: () => void;
+}) {
+  const { t, plural } = useI18n();
+  const toast = useToast();
+  const titleId = useId();
+  const money = useMoney(view?.currency ?? null);
+  if (!view) return <Skeleton className="h-24 w-full rounded-xl" />;
+  const priority = view.priority;
+  const sent = (title: string, body: string) =>
+    toast({ title, body: testMode ? t('dash.toast.simulated') : body });
+  const fail = (error: unknown) => toast({ tone: 'error', title: failureText(error, t) });
+
+  let sentence: string;
+  let button: ReactNode = null;
+  let aside: ReactNode = null;
+  if (priority === null) {
+    sentence = t('dash.priority.none.title');
+  } else {
+    const amount = money(priority.revenue);
+    switch (priority.kind) {
+      case 'approve':
+        sentence = plural('dash.priority.approve.sentence', priority.actions, { amount });
+        aside = (
+          <Link to={`${root}/actions`} className={SECTION_LINK_CLASS}>
+            {t('dash.priority.reviewFirst')}
+          </Link>
+        );
+        button = (
+          <ActionButton
+            stayDone
+            icon={<CheckCheck aria-hidden="true" className="size-4" />}
+            run={async () => {
+              const result = await postJson<{ approved: number }>(`${api}/actions/approve`);
+              sent(plural('dash.toast.approved', result.approved), t('dash.toast.messaged.body'));
+              onDone();
+            }}
+            onError={fail}
+          >
+            {t('dash.priority.approve.button')}
+          </ActionButton>
+        );
+        break;
+      case 'retry':
+        sentence = plural('dash.priority.retry.sentence', priority.payments, { amount });
+        button = (
+          <ActionButton
+            stayDone
+            icon={<RotateCw aria-hidden="true" className="size-4" />}
+            run={async () => {
+              const result = await postJson<CreatorRetryResult>(`${api}/payments/retry`);
+              if (result.queued > 0) {
+                sent(plural('dash.toast.retried', result.queued), t('dash.toast.retried.body'));
+              } else toast({ title: t('dash.toast.nothingToRetry') });
+              onDone();
+            }}
+            onError={fail}
+          >
+            {t('dash.priority.retry.button')}
+          </ActionButton>
+        );
+        break;
+      case 'pause':
+        sentence = plural('dash.priority.pause.sentence', priority.memberIds.length, { amount });
+        button = (
+          <ActionButton
+            stayDone
+            icon={<PauseCircle aria-hidden="true" className="size-4" />}
+            run={async () => {
+              const result = await postJson<CreatorOffersResult>(`${api}/members/offers`, {
+                memberIds: priority.memberIds,
+                kind: 'pause_offer',
+              });
+              if (result.made > 0) {
+                sent(plural('dash.toast.paused', result.made), t('dash.toast.paused.body'));
+              } else toast({ title: t('dash.toast.noPause') });
+              onDone();
+            }}
+            onError={fail}
+          >
+            {t('dash.priority.pause.button')}
+          </ActionButton>
+        );
+        break;
+      case 'message':
+        sentence = plural('dash.priority.message.sentence', priority.memberIds.length, {
+          amount,
+        });
+        button = (
+          <ActionButton
+            stayDone
+            icon={<Send aria-hidden="true" className="size-4" />}
+            run={async () => {
+              const result = await postJson<CreatorMessagesResult>(`${api}/members/message`, {
+                memberIds: priority.memberIds,
+              });
+              if (result.queued > 0) {
+                sent(plural('dash.toast.messaged', result.queued), t('dash.toast.messaged.body'));
+              } else toast({ title: t('dash.toast.nothingNew') });
+              onDone();
+            }}
+            onError={fail}
+          >
+            {t('dash.priority.message.button')}
+          </ActionButton>
+        );
+        break;
+      case 'review':
+        sentence = plural(
+          priority.filter === 'failed'
+            ? 'dash.priority.review.failed'
+            : 'dash.priority.review.cancelling',
+          priority.members,
+          { amount },
+        );
+        button = (
+          <Link
+            to={`${root}/members?filter=${priority.filter === 'failed' ? 'high' : 'leaving'}`}
+            className={buttonClass('primary')}
+          >
+            {t('dash.priority.review.button')}
+            <ArrowRight aria-hidden="true" className="size-4" />
+          </Link>
+        );
+        break;
+    }
+  }
+  return (
+    <motion.section
+      key={identityOf(priority)}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={ease('standard')}
+      aria-labelledby={titleId}
+      className="flex flex-col gap-4 border-y border-line py-5 @3xl:flex-row @3xl:items-center @3xl:justify-between"
+    >
+      <div className="min-w-0">
+        <p>
+          <LabelTip tip={t('dash.priority.info')} className="label-caps">
+            {t('dash.priority')}
+          </LabelTip>
+        </p>
+        <h2 id={titleId} className="mt-2 flex items-start gap-2 text-base font-medium text-fg">
+          {priority === null ? (
+            <CircleCheck aria-hidden="true" className="mt-1 size-4 shrink-0 text-accent" />
+          ) : null}
+          {sentence}
+        </h2>
+      </div>
+      {button ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 @3xl:shrink-0">
+          {aside}
+          {button}
+        </div>
+      ) : null}
+    </motion.section>
   );
 }
 
@@ -559,8 +623,9 @@ export function mostUrgent(members: readonly MemberRow[], now: number): Urgency[
 }
 
 /**
- * « Needs attention » (brief §6.2): the five most urgent members, each with their risk ring, the
- * main reason, when they leave, and Message / Pause / Offer on the spot; the others in Members.
+ * « Needs attention » (brief v3 §6.2): the five most urgent members, each with the main reason,
+ * their risk ring drawing in, when they leave or renew, and Message / Pause / Offer on the spot;
+ * « See all » leads to Members. Not a box: a title, then the rows between thin dividers.
  */
 function NeedsAttention({
   state,
@@ -578,57 +643,96 @@ function NeedsAttention({
   onDone: () => void;
 }) {
   const { t } = useI18n();
+  const titleId = useId();
   // The moment the page opened: the order does not shift while the creator reads it.
   const [now] = useState(() => Date.now());
   const flagged = useMemo(
     () => (state.status === 'ready' ? mostUrgent(state.data.members, now) : []),
     [state, now],
   );
+  const shown = flagged.slice(0, ATTENTION_LIMIT);
+  // Who was there when the list first showed: anyone else is new.
+  const [firstIds, setFirstIds] = useState<ReadonlySet<string> | null>(null);
+  if (firstIds === null && state.status === 'ready') {
+    setFirstIds(new Set(shown.map((item) => item.member.id)));
+  }
   if (state.status === 'error') {
     return (
       <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
     );
   }
   return (
-    <Card
-      title={t('attention.title')}
-      actions={
-        flagged.length > 0 ? (
+    <section aria-labelledby={titleId}>
+      <header className="flex items-center justify-between gap-3">
+        <h2 id={titleId} className="title-section">
+          {t('attention.title')}
+        </h2>
+        {flagged.length > 0 ? (
           <Link to={`${root}/members`} className={SECTION_LINK_CLASS}>
             {t('attention.seeAll', { count: flagged.length })}
             <ArrowRight aria-hidden="true" className="size-4" />
           </Link>
-        ) : null
-      }
-    >
-      {state.status === 'loading' ? (
-        <RowsSkeleton rows={5} />
-      ) : flagged.length === 0 ? (
-        <EmptyState inset body={t('attention.none')} />
-      ) : (
-        <Stagger as="ul" className="@container/list divide-y divide-line">
-          {flagged.slice(0, ATTENTION_LIMIT).map((item) => (
-            <StaggerItem as="li" key={item.member.id} className="py-3 first:pt-0 last:pb-0">
-              <AttentionRow item={item} api={api} testMode={testMode} onDone={onDone} />
-            </StaggerItem>
-          ))}
-        </Stagger>
-      )}
-    </Card>
+        ) : null}
+      </header>
+      <div className="mt-2">
+        {state.status === 'loading' ? (
+          <div className="py-3">
+            <RowsSkeleton rows={5} />
+          </div>
+        ) : flagged.length === 0 ? (
+          <EmptyState inset body={t('attention.none')} />
+        ) : (
+          <Stagger as="ul" className="@container/list divide-y divide-line">
+            {/* The first rows come in with the page; one that shows up later slides in with a
+                turquoise pulse, one that goes folds away while the others move up (MOTION.md). */}
+            <AnimatePresence initial={false} mode="popLayout">
+              {shown.map((item, index) => (
+                <motion.li
+                  key={item.member.id}
+                  layout
+                  variants={itemVariants}
+                  exit={{ opacity: 0, scale: 0.98, transition: ease('micro') }}
+                  className="relative"
+                >
+                  {firstIds !== null && !firstIds.has(item.member.id) ? (
+                    <motion.span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 rounded-xl bg-turq-300/10"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: [0, 1, 0] }}
+                      transition={ease('draw')}
+                    />
+                  ) : null}
+                  <AttentionRow
+                    item={item}
+                    api={api}
+                    testMode={testMode}
+                    onDone={onDone}
+                    delay={0.15 + index * STAGGER}
+                  />
+                </motion.li>
+              ))}
+            </AnimatePresence>
+          </Stagger>
+        )}
+      </div>
+    </section>
   );
 }
 
-/** A member who needs attention, on two lines at most. */
+/** A member who needs attention: the dashboard's words for them, in the list's row. */
 function AttentionRow({
   item,
   api,
   testMode,
   onDone,
+  delay,
 }: {
   item: Urgency;
   api: string;
   testMode: boolean;
   onDone: () => void;
+  delay: number;
 }) {
   const i18n = useI18n();
   const { t, day, currency, number } = i18n;
@@ -640,129 +744,90 @@ function AttentionRow({
     : ((main ? reasonText(main, i18n) : null) ?? (leaving ? t('attention.canceling') : null));
   const membership = member.membership;
   const monthly = monthlyOf(membership);
-  const paid =
-    monthly !== null && membership?.currency
-      ? t('dash.row.perMonth', {
-          amount: currency(monthly, membership.currency.toUpperCase(), { whole: true }),
-        })
-      : null;
-  const when =
-    end === null
-      ? null
-      : t(leaving ? 'risk.reason.cancel_scheduled' : 'dash.row.renews', {
-          date: day(new Date(end)),
-        });
   const risk = member.risk;
   return (
-    <div className="flex flex-col gap-2 @2xl/list:flex-row @2xl/list:items-center @2xl/list:gap-4">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <Avatar name={member.name} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold text-fg">{member.name ?? t('members.unnamed')}</p>
-          {reason ? (
-            <p className="flex items-center gap-1.5 text-xs">
-              {paymentFailed ? <Urgent /> : null}
-              <span className="truncate">{reason}</span>
-            </p>
-          ) : null}
-        </div>
-        {risk ? (
-          <RiskRing
-            score={risk.score}
-            size={36}
-            label={
-              risk.level === 'scheduled_departure'
-                ? t(LEVELS[risk.level].label)
-                : t('risk.badge', { level: t(LEVELS[risk.level].label), score: number(risk.score) })
+    <MemberListRow
+      name={member.name ?? t('members.unnamed')}
+      reason={reason}
+      reasonUrgent={paymentFailed}
+      risk={
+        risk
+          ? {
+              score: risk.score,
+              label:
+                risk.level === 'scheduled_departure'
+                  ? t(LEVELS[risk.level].label)
+                  : t('risk.badge', {
+                      level: t(LEVELS[risk.level].label),
+                      score: number(risk.score),
+                    }),
             }
-          />
-        ) : null}
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 ps-12 @2xl/list:ps-0">
-        <div className="tabular text-xs @2xl/list:w-44">
-          {when ? (
-            <p className="flex items-center gap-1.5">
-              {leavingSoon ? <Urgent /> : null}
-              {when}
-            </p>
-          ) : null}
-          {paid ? <p className="text-subtle">{paid}</p> : null}
-        </div>
-        <MemberActions member={member} api={api} testMode={testMode} onDone={onDone} />
-      </div>
-    </div>
+          : null
+      }
+      when={
+        end === null
+          ? null
+          : t(leaving ? 'risk.reason.cancel_scheduled' : 'dash.row.renews', {
+              date: day(new Date(end)),
+            })
+      }
+      whenUrgent={leavingSoon}
+      paid={
+        monthly !== null && membership?.currency
+          ? t('dash.row.perMonth', {
+              amount: currency(monthly, membership.currency.toUpperCase(), { whole: true }),
+            })
+          : null
+      }
+      actions={<MemberActions member={member} api={api} testMode={testMode} onDone={onDone} />}
+      delay={delay}
+    />
   );
 }
 
-/** The red dot of what is urgent, said to screen readers too. */
-function Urgent() {
-  const { t } = useI18n();
-  return (
-    <>
-      <UrgentDot />
-      <span className="sr-only">{t('dash.row.urgent')}</span>
-    </>
-  );
-}
+/** The strip's cells: two a row on a narrow screen, four in a row; a thin divider between. */
+const STRIP_CELLS = [
+  '',
+  'border-s border-line ps-6',
+  '@3xl:border-s @3xl:border-line @3xl:ps-6',
+  'border-s border-line ps-6',
+];
 
 /**
- * What StayPut did in 30 days (brief §6.2), in one compact strip: messages sent, payments
- * retried, pauses offered, members saved. « Actions » only ever means what StayPut did.
+ * What StayPut did in 30 days (brief v3 §6.2), one strip under a thin divider: messages sent,
+ * payments retried, pauses offered, members saved. No icon: each number says it with its words.
  */
-function ActionsStrip({ view }: { view: DashboardView }) {
+function ActionsStrip({ view }: { view: DashboardView | null }) {
   const { t, plural, number } = useI18n();
   const titleId = useId();
+  if (!view) return <Skeleton className="h-20 w-full rounded-xl" />;
   const done = view.stayputActions30d;
-  const stats: { key: string; value: number; label: string; icon: ReactNode }[] = [
-    {
-      key: 'messages',
-      value: done.messages,
-      label: plural('dash.strip.messages', done.messages),
-      icon: <MessageSquareText aria-hidden="true" className="size-4" />,
-    },
+  const stats = [
+    { key: 'messages', value: done.messages, label: plural('dash.strip.messages', done.messages) },
     {
       key: 'retries',
       value: done.paymentRetries,
       label: plural('dash.strip.retries', done.paymentRetries),
-      icon: <RotateCw aria-hidden="true" className="size-4" />,
     },
-    {
-      key: 'pauses',
-      value: done.pauses,
-      label: plural('dash.strip.pauses', done.pauses),
-      icon: <PauseCircle aria-hidden="true" className="size-4" />,
-    },
-    {
-      key: 'saved',
-      value: done.saved,
-      label: plural('dash.strip.saved', done.saved),
-      icon: <PiggyBank aria-hidden="true" className="size-4" />,
-    },
+    { key: 'pauses', value: done.pauses, label: plural('dash.strip.pauses', done.pauses) },
+    { key: 'saved', value: done.saved, label: plural('dash.strip.saved', done.saved) },
   ];
   return (
-    <section
-      aria-labelledby={titleId}
-      className="flex flex-col gap-4 rounded-xl border border-line bg-surface/60 p-5 @4xl:flex-row @4xl:items-center"
-    >
-      <h2 id={titleId} className="label-caps whitespace-nowrap @4xl:shrink-0">
+    <section aria-labelledby={titleId} className="border-t border-line pt-6">
+      <h2 id={titleId} className="label-caps">
         {t('dash.stayputActions')}
       </h2>
-      <dl className="grid flex-1 grid-cols-2 gap-x-6 gap-y-4 @3xl:grid-cols-4">
-        {stats.map((stat) => (
-          <div key={stat.key} className="flex items-center gap-3">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-accent">
-              {stat.icon}
-            </span>
-            <div className="flex min-w-0 flex-col-reverse">
-              <dt className="truncate text-xs">{stat.label}</dt>
-              <dd className="metric text-xl text-fg">
-                <AnimatedNumber
-                  value={stat.value}
-                  format={(value) => number(Math.round(value))}
-                  better="up"
-                />
-              </dd>
-            </div>
+      <dl className="mt-4 grid grid-cols-2 gap-y-6 @3xl:grid-cols-4">
+        {stats.map((stat, index) => (
+          <div key={stat.key} className={`flex flex-col-reverse gap-1 ${STRIP_CELLS[index]}`}>
+            <dt className="text-[0.8125rem] text-subtle">{stat.label}</dt>
+            <dd className="metric text-2xl text-fg">
+              <AnimatedNumber
+                value={stat.value}
+                format={(value) => number(Math.round(value))}
+                better="up"
+              />
+            </dd>
           </div>
         ))}
       </dl>

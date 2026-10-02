@@ -6,10 +6,10 @@ import { ease } from '../motion';
 import { buttonClass } from './Button';
 
 /**
- * A panel that slides in from the side (MOTION.md: 250 ms, the brand's easing): the browser's own
- * modal <dialog>, so the page behind is out of reach and Escape closes it, like its « Close »
- * button and a click beside it. It exists only while open: the parent shows it, and removes it
- * on `onClose`.
+ * A panel that slides in from the right (MOTION.md: 250 ms, the brand's easing), 420 px on an
+ * elevated surface: the browser's own modal <dialog>, so the page behind is out of reach and
+ * Escape closes it, like its « Close » button and a click beside it. It exists only while open:
+ * the parent shows it, and removes it on `onClose`.
  */
 export function Drawer({
   title,
@@ -40,17 +40,17 @@ export function Drawer({
       onClick={(event) => {
         if (event.target === event.currentTarget) close();
       }}
-      className="ms-auto me-0 my-0 h-dvh max-h-dvh w-[min(26rem,100vw)] max-w-none overflow-hidden border-0 border-s border-line bg-transparent p-0 text-fg"
+      className="ms-auto me-0 my-0 h-dvh max-h-dvh w-[min(420px,100vw)] max-w-none overflow-hidden border-0 border-s border-line bg-transparent p-0 text-fg"
     >
       <motion.div
-        initial={{ x: 24, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
         transition={ease('standard')}
-        className="flex h-full flex-col bg-surface"
+        className="flex h-full flex-col bg-surface-2"
       >
         <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
           <div className="min-w-0">
-            <h2 id={titleId} className="text-base font-semibold text-fg">
+            <h2 id={titleId} className="title-section">
               {title}
             </h2>
             {description ? (

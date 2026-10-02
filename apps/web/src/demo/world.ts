@@ -21,7 +21,8 @@ import { DEMO_COMPANY_ID } from '../api';
 import { createDemoPages, localDay, type DemoPages } from './pages';
 
 /**
- * The demo community (/demo): an imaginary trading community of 56 members, with what a real
+ * The demo community (/demo): an imaginary trading community of 36 members (39 with those who
+ * left, the brief asks for 25 to 40), with what a real
  * one has after a few months of StayPut: members drifting away, cancellations scheduled, failed
  * payments, money saved, a feed that moves. Every figure is computed from the members below the
  * way the Worker computes the real ones, so the screens tell one consistent story. Dates are
@@ -115,7 +116,7 @@ const PEOPLE: readonly Person[] = [
   ),
   person(
     'Kevin Nguyen',
-    'monthly',
+    'annual',
     'scheduled_departure',
     100,
     143,
@@ -135,7 +136,9 @@ const PEOPLE: readonly Person[] = [
     19,
     reasons(inactive(19), stalled(23, 'Module 3 · Risk management')),
   ),
-  person('Maxime Vidal', 'monthly', 'high', 81, 166, 24, reasons(inactive(24), ticket(6))),
+  person('Maxime Vidal', 'vip', 'high', 81, 166, 24, reasons(paymentFailed(), inactive(24)), {
+    failed: 'Card expired',
+  }),
   person('Elena Novak', 'monthly', 'high', 79, 76, 15, reasons(paymentFailed(), inactive(15)), {
     failed: 'Insufficient funds',
   }),
@@ -153,50 +156,22 @@ const PEOPLE: readonly Person[] = [
   person('Rose Gauthier', 'monthly', 'medium', 58, 205, 5, reasons(ticket(4), drop(41))),
   person('Victor Leclerc', 'annual', 'medium', 55, 251, 7, reasons(stalled(14), drop(38))),
   person('Nora Chabane', 'monthly', 'medium', 53, 47, 5, reasons(drop(47), quiet(50))),
-  person('Adam Chevalier', 'monthly', 'medium', 51, 112, 8, reasons(inactive(8), drop(36))),
   person('Juliette Caron', 'vip', 'medium', 49, 178, 6, reasons(quiet(75), drop(35))),
-  person(
-    'Bastien Colin',
-    'monthly',
-    'medium',
-    47,
-    64,
-    7,
-    reasons(stalled(16, 'Module 4 · Position sizing'), drop(33)),
-  ),
-  person('Yasmine Kaci', 'monthly', 'medium', 46, 39, 5, reasons(drop(44), ticket(3))),
   person('Tom Barbier', 'monthly', 'medium', 45, 154, 9, reasons(inactive(9), quiet(58))),
   person('Laura Weber', 'monthly', 'medium', 43, 71, 4, reasons(drop(39), quiet(52))),
   person('Ethan Brooks', 'monthly', 'medium', 41, 5, null, reasons(never(5), stalled(5))),
   person('Maya Fernandes', 'monthly', 'low', 28, 4, null, reasons(never(4), stalled(4))),
-  person('Malik Traoré', 'monthly', 'low', 24, 33, 3, reasons(drop(24))),
-  person('Alice Perrin', 'monthly', 'low', 22, 80, 3, reasons(drop(26))),
-  person('Eva Rey', 'monthly', 'low', 20, 44, 2, reasons(quiet(28))),
-  person('Manon Dupuis', 'monthly', 'low', 19, 127, 2, reasons(drop(22))),
-  person('Lina Bouaziz', 'monthly', 'low', 18, 6, 1),
-  person('Louis Garnier', 'monthly', 'low', 17, 95, 2, reasons(quiet(30))),
   person('Paul Henry', null, 'low', 16, 29, 2),
-  person('Noah Blanc', 'monthly', 'low', 15, 84, 1),
-  person('David Okafor', 'monthly', 'low', 15, 14, 2),
   person('Emma Rousseau', 'monthly', 'low', 14, 175, 1, reasons(quiet(25))),
-  person('Enzo Morel', 'monthly', 'low', 13, 61, 2),
   person('Clara Faure', 'monthly', 'low', 12, 91, 0),
   person('Sofia Ricci', 'monthly', 'low', 12, 36, 1),
-  person('Mila André', 'monthly', 'low', 12, 18, 1),
   person('Nathan Girard', 'monthly', 'low', 11, 160, 2),
   person('Arthur Lemoine', 'monthly', 'low', 11, 48, 1),
-  person('Rayan Mansouri', 'monthly', 'low', 10, 117, 1),
   person('Anaïs Robin', 'vip', 'low', 10, 56, 1),
   person('Pauline Giraud', 'monthly', 'low', 10, 0.4, 0),
   person('Lucas Petit', 'annual', 'low', 9, 290, 1),
-  person('Samuel Diallo', 'monthly', 'low', 9, 73, 1),
-  person('Antoine Brun', 'monthly', 'low', 9, 26, 1),
-  person('Chloé Lefèvre', 'monthly', 'low', 8, 149, 1),
-  person('Julia Martins', 'monthly', 'low', 8, 67, 0),
-  person('Amira Hamdi', 'monthly', 'low', 8, 22, 0),
   person('Inès Haddad', 'monthly', 'low', 7, 233, 0),
   person('Gabriel Roux', 'vip', 'low', 7, 101, 1),
-  person('Ilyes Saidi', 'monthly', 'low', 7, 41, 0),
   person('Léa Moreau', 'monthly', 'low', 6, 267, 0),
   person('Jade Mercier', 'monthly', 'low', 6, 138, 0),
   person('Karim Belkacem', 'monthly', 'low', 6, 52, 0),
@@ -275,10 +250,14 @@ export interface DemoWorld {
   settings: ActionSettingsView;
   /** « Message » on the dashboard: queued for the members not on the never-contact list. */
   message: (memberIds: readonly string[]) => number;
+  /** « Retry now »: the failed payments StayPut may retry, charged again (simulated here). */
+  retry: () => number;
   /** « Getting started »: a step done (the members reviewed, the guardrails saved). */
   started: (step: 'reviewed' | 'guardrails') => void;
   /** The action settings saved (Settings › Automations). */
   saveSettings: (next: ActionSettingsView) => ActionSettingsView;
+  /** « Turn off » on the test-mode banner: the test mode only, the limits untouched. */
+  testModeOff: () => ActionSettingsView;
   /** « Pause » or « Offer »: refused when one is open, when the member cannot be contacted. */
   offer: (memberId: string, kind: CreatorOfferKind) => CreatorOfferMade | { error: string };
   setContact: (memberId: string, doNotContact: boolean) => boolean | null;
@@ -412,10 +391,10 @@ export function createWorld(now: number): DemoWorld {
     const atRisk = last
       ? atRiskMembers.length
       : Math.round(13.5 - (4 * i) / 29 + (random() - 0.5) * 2);
-    const medium = last ? levelCount('medium') : 11 + Math.round(random() * 3);
+    const medium = last ? levelCount('medium') : 7 + Math.round(random() * 2);
     const total = last
       ? atRiskMembers.length + levelCount('medium') + levelCount('low')
-      : 49 + Math.floor(i / 5);
+      : 30 + Math.floor(i / 5);
     return {
       day: localDay(day),
       departure: departures,
@@ -433,11 +412,11 @@ export function createWorld(now: number): DemoWorld {
     { ago: 26 * HOUR, amount: 149 },
     { ago: 41 * HOUR, amount: 49 },
   ];
-  // Every three to six days, as payments fall due.
-  for (let day = 3; day < 90; day += 3 + Math.floor(random() * 4)) {
+  // Every five to nine days, as payments fall due.
+  for (let day = 5; day < 90; day += 5 + Math.floor(random() * 5)) {
     savesMade.push({
       ago: day * DAY + between([1, 20]) * HOUR,
-      amount: day >= 50 && day <= 54 ? 470 : random() < 0.18 ? 149 : 49,
+      amount: day >= 50 && day <= 56 ? 470 : random() < 0.15 ? 149 : 49,
     });
   }
   const monthOf = (moment: Date) => moment.getFullYear() * 12 + moment.getMonth();
@@ -552,7 +531,12 @@ export function createWorld(now: number): DemoWorld {
 
   const reached = new Map<string, number>();
   const offers = new Map<string, CreatorOfferKind>();
+  /** The failed payments being retried now: nothing more to do about them but wait. */
+  const retried = new Set<string>();
   const memberOf = (id: string) => joined.find((m) => m.id === id);
+  const failedNow = () => joined.filter((m) => m.lastPayment?.status === 'failed');
+  const leavingNow = () => joined.filter((m) => m.membership?.cancelAtPeriodEnd);
+  const sum = (values: readonly number[]) => round(values.reduce((t, v) => t + v, 0));
 
   const settings: ActionSettingsView = {
     mode: 'manual',
@@ -610,7 +594,7 @@ export function createWorld(now: number): DemoWorld {
           })),
         },
       ],
-      linkedMembers: 41,
+      linkedMembers: 28,
       unlinkedAuthors: 3,
     },
     telegram: {
@@ -626,7 +610,7 @@ export function createWorld(now: number): DemoWorld {
           lastMessageAt: at(6 * MINUTE),
         },
       ],
-      linkedMembers: 27,
+      linkedMembers: 19,
       unlinkedAuthors: 2,
     },
   };
@@ -640,6 +624,7 @@ export function createWorld(now: number): DemoWorld {
       timezoneSet: true,
       companyName: COMMUNITY,
       companyLogo: false,
+      testMode: false,
     },
     members,
     sync,
@@ -682,9 +667,9 @@ export function createWorld(now: number): DemoWorld {
         },
         memberActivity30d: activity30d,
         stayputActions30d: {
-          total: 52,
-          messages: 38,
-          paymentRetries: 9,
+          total: 43,
+          messages: 31,
+          paymentRetries: 7,
           offers: 5,
           pauses: 6,
           saved: savesMade.filter((save) => save.ago < 30 * DAY).length,
@@ -694,7 +679,32 @@ export function createWorld(now: number): DemoWorld {
         riskHistory,
         revenueHistory,
         gettingStarted: { ...gettingStarted },
-        priority: choosePriority({ mode: settings.mode, pending: pages.pending(), unreached }),
+        priority: choosePriority({
+          mode: settings.mode,
+          pending: pages.pending(),
+          retryable: (() => {
+            const due = failedNow().filter((m) => !m.doNotContact && !retried.has(m.id));
+            return {
+              payments: due.length,
+              revenue: sum(due.map((m) => m.lastPayment!.amount)),
+            };
+          })(),
+          leaving: leavingNow()
+            .filter((m) => !m.doNotContact && !offers.has(m.id) && price(m) > 0)
+            .map((m) => ({ memberId: m.id, monthly: price(m) }))
+            .sort((a, b) => b.monthly - a.monthly),
+          unreached,
+          unresolved: {
+            failed: {
+              members: failedNow().length,
+              revenue: sum(failedNow().map((m) => m.lastPayment!.amount)),
+            },
+            leaving: {
+              members: leavingNow().length,
+              revenue: sum(leavingNow().map(price)),
+            },
+          },
+        }),
       };
     },
     feed: () => {
@@ -721,6 +731,11 @@ export function createWorld(now: number): DemoWorld {
       }
       return queued;
     },
+    retry: () => {
+      const due = failedNow().filter((m) => !m.doNotContact && !retried.has(m.id));
+      for (const member of due) retried.add(member.id);
+      return due.length;
+    },
     offer: (id, kind) => {
       const member = memberOf(id);
       if (!member) return { error: 'not_a_member' };
@@ -744,6 +759,10 @@ export function createWorld(now: number): DemoWorld {
     saveSettings: (next) => {
       Object.assign(settings, next);
       gettingStarted.guardrails = true;
+      return settings;
+    },
+    testModeOff: () => {
+      settings.dryRun = false;
       return settings;
     },
     setContact: (id, doNotContact) => {

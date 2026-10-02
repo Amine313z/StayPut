@@ -103,9 +103,9 @@ export function MemberActions({
         </Badge>
       ) : (
         <>
-          {/* Their words show when the list has room; their icon and tooltip otherwise. */}
+          {/* Ghosts all three (brief v3 §6.2); their words when the list has room, else the icon. */}
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
             onClick={() => setAsking('pause_offer')}
             aria-label={t('dash.act.pauseLabel', { name })}
@@ -115,7 +115,7 @@ export function MemberActions({
             <span className="sr-only @2xl/list:not-sr-only">{t('dash.act.pause')}</span>
           </Button>
           <Button
-            variant="ghost"
+            variant="secondary"
             size="sm"
             onClick={() => setAsking('promo_offer')}
             aria-label={t('dash.act.offerLabel', { name })}

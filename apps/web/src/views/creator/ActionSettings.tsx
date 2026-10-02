@@ -171,7 +171,7 @@ export function ActionSettings() {
 
 function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
   const { t } = useI18n();
-  const { api } = useCreatorData();
+  const { api, testMode } = useCreatorData();
   const [draft, setDraft] = useState(() => toDraft(initial));
   const [saved, setSaved] = useState(() => canonical(initial));
   // The zone goes along only when the creator changed it: the one their browser told may have
@@ -224,6 +224,8 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
       setSaved(canonical(next));
       setSavedZone(next.timezone);
       setDraft(toDraft(next));
+      // The banner on top of every screen follows the test mode.
+      testMode.set(next.dryRun);
       setStatus('saved');
     } catch {
       setStatus('failed');

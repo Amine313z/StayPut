@@ -8,6 +8,9 @@ name: Inspect
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   inspect:
     runs-on: ubuntu-latest
@@ -73,3 +76,54 @@ jobs:
           expect /whop-frame.mjs 200 javascript
           expect /api/creator/biz_2whAzkbCRpcGqQ/session 401 json
           exit $failed
+
+  # The deployed demo in a real browser (scripts/ops/look.mjs): whether StayPut's fonts loaded
+  # (Satoshi, Geist) and the chart drew its data, and screenshots of the Dashboard. No secret
+  # here; its only write is the `screenshots` branch, replaced at each run, where the latest
+  # screenshots can be opened on GitHub.
+  look:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: Look at the deployed demo in Chrome
+        env:
+          STAYPUT_URL: ${{ vars.STAYPUT_URL || 'https://stayput.chezbenz18.workers.dev' }}
+        run: |
+          work="$RUNNER_TEMP/look"
+          mkdir -p "$work/out"
+          cp scripts/ops/look.mjs "$work/"
+          cd "$work"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund playwright-core@1.63.0 > /dev/null
+          status=0
+          node look.mjs "$STAYPUT_URL" out || status=$?
+          {
+            echo "### The deployed demo in Chrome"
+            echo ""
+            echo '```json'
+            cat out/report.json 2>/dev/null || echo '{ "error": "no report: see the log" }'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Keep the screenshots on the screenshots branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$RUNNER_TEMP/look/out" || exit 0
+          printf '%s\n' "# Screenshots of the deployed demo" "" \
+            "Taken by the Inspect workflow (scripts/ops/look.mjs) from commit $GITHUB_SHA." \
+            "Replaced at each run." > README.md
+          git init -q
+          git checkout -q -b screenshots
+          git add .
+          git -c user.name='StayPut Inspect' -c user.email='inspect@users.noreply.github.com' \
+            commit -q -m "Screenshots of the deployed demo ($GITHUB_SHA)"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            screenshots

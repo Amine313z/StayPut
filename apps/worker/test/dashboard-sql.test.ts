@@ -279,13 +279,63 @@ describe('the home of the dashboard', () => {
     await t.db.query(`delete from stayput.exit_surveys where company_id = $1`, [C]);
   });
 
-  it('turns to the members at high risk nobody reached once nothing waits', async () => {
+  it('offers a pause to the members leaving, then turns to those nobody reached', async () => {
     await t.db.query(
       `update stayput.actions set status = 'cancelled' where company_id = $1 and status = 'proposed'`,
       [C],
     );
+    // Paul leaves at the end of his period: a pause protects his 99 a month.
     const view = await readDashboard(t.db, 'user_Owner', C, NOW);
-    expect(view?.priority).toEqual({ kind: 'message', memberIds: ['mber_Lea'], revenue: 49 });
+    expect(view?.priority).toEqual({ kind: 'pause', memberIds: ['mber_Paul'], revenue: 99 });
+    // Offered one already: nothing more to offer him; Lea, at high risk, nobody reached.
+    await t.db.query(
+      `insert into stayput.creator_offers (company_id, member_id, membership_id, kind, terms,
+                                           created_by, created_at, expires_at)
+       values ($1, 'mber_Paul', 'mem_Paul', 'pause_offer', '{"days": 30}', 'user_Owner',
+               $2::timestamptz, $2::timestamptz + interval '7 days')`,
+      [C, days(-1)],
+    );
+    expect((await readDashboard(t.db, 'user_Owner', C, NOW))?.priority).toEqual({
+      kind: 'message',
+      memberIds: ['mber_Lea'],
+      revenue: 49,
+    });
+  });
+
+  it('retries the failed payments, and is never calm while one stays unpaid', async () => {
+    // Lea was written to yesterday: nobody left to reach.
+    await action('mber_Lea', 'high_risk_message', 'sent', -1, 'relance');
+    // Zoe's last payment failed yesterday; Whop can retry it and plans nothing itself.
+    await t.db.query(
+      `insert into stayput.payments (id, company_id, member_id, amount, currency, status,
+                                     retryable, whop_created_at)
+       values ('pay_Zoe1', $1, 'mber_Zoe', 29, 'eur', 'failed', true, $2::timestamptz)`,
+      [C, days(-1)],
+    );
+    const read = async () => (await readDashboard(t.db, 'user_Owner', C, NOW))?.priority;
+    expect(await read()).toEqual({ kind: 'retry', payments: 1, revenue: 29 });
+    // A retry under way: nothing to do but look at her, still unpaid.
+    await t.db.query(
+      `insert into stayput.actions (company_id, member_id, type, status, trigger, subject_id,
+                                    send_at)
+       values ($1, 'mber_Zoe', 'payment_retry', 'scheduled', 'payment_failed', 'pay_Zoe1',
+               $2::timestamptz)`,
+      [C, NOW.toISOString()],
+    );
+    expect(await read()).toEqual({ kind: 'review', filter: 'failed', members: 1, revenue: 29 });
+    // She paid: Paul, who leaves with his offer open, is what is left to look at.
+    await t.db.query(
+      `insert into stayput.payments (id, company_id, member_id, amount, currency, status,
+                                     whop_created_at, paid_at)
+       values ('pay_Zoe2', $1, 'mber_Zoe', 29, 'eur', 'paid', $2::timestamptz, $2::timestamptz)`,
+      [C, days(-0.5)],
+    );
+    expect(await read()).toEqual({
+      kind: 'review',
+      filter: 'cancelling',
+      members: 1,
+      revenue: 99,
+    });
   });
 
   it('is the team’s only', async () => {

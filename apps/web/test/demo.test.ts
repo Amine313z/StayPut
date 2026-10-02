@@ -21,7 +21,9 @@ describe('the demo community', () => {
       expect(name.toLowerCase()).not.toMatch(/test|demo|lorem|foo|user/);
     }
     expect(world.session.companyName).not.toMatch(/test|demo/i);
-    expect(joined.length).toBe(56);
+    // 25 to 40 members (brief v3 §11): 36 here, and three who left.
+    expect(joined.length).toBe(36);
+    expect(world.members.members.length).toBeLessThanOrEqual(40);
   });
 
   it('adds up: the home says what the members are', () => {
@@ -45,7 +47,7 @@ describe('the demo community', () => {
     });
     expect(home.monthlyRevenue).toBe(summary.revenue!.monthly);
     expect(summary.scheduledCancellations).toBe(3);
-    expect(summary.failedPayments).toBe(2);
+    expect(summary.failedPayments).toBe(3);
     // Today's line of the history is today's count.
     const today = home.riskHistory.at(-1)!;
     expect(home.riskHistory).toHaveLength(30);
@@ -91,33 +93,52 @@ describe('the demo community', () => {
     });
   });
 
-  it('asks to approve what waits first, as Automations shows it, then to message', () => {
+  it('goes through the actions of the day the way the Worker chooses them, never calm', () => {
     const demo = createWorld(NOW);
     const queue = demo.pages.actions('queue');
     expect(queue.counts).toEqual({ queue: 6, scheduled: 3, history: 11 });
+    // What StayPut prepared first (Kevin's annual plan counts a twelfth a month).
     expect(demo.dashboard().priority).toEqual({
       kind: 'approve',
       actions: 6,
       members: 6,
-      revenue: 294,
+      revenue: 384.17,
     });
-    // Approved, they leave at their hour; the member at high risk nobody reached comes next.
+    // Approved, they leave at their hour; the three failed payments come next (brief v3 §6.2).
     expect(demo.pages.approve()).toBe(6);
     expect(demo.pages.actions('scheduled').counts).toEqual({ queue: 0, scheduled: 9, history: 11 });
-    const next = demo.dashboard().priority;
-    expect(next?.kind).toBe('message');
-    const ids = next?.kind === 'message' ? next.memberIds : [];
+    expect(demo.dashboard().priority).toEqual({ kind: 'retry', payments: 3, revenue: 347 });
+    expect(demo.retry()).toBe(3);
+    expect(demo.retry()).toBe(0);
+    // Then a pause for the three members leaving.
+    const pause = demo.dashboard().priority;
+    expect(pause).toMatchObject({ kind: 'pause', revenue: 237.17 });
+    const leaving = pause?.kind === 'pause' ? pause.memberIds : [];
+    expect(leaving.map((id) => joined.find((m) => m.id === id)?.name)).toEqual([
+      'Hugo Bernard',
+      'Margaux Picard',
+      'Kevin Nguyen',
+    ]);
+    for (const id of leaving)
+      expect(demo.offer(id, 'pause_offer')).toMatchObject({ kind: 'pause_offer' });
+    // Then the member at high risk nobody reached.
+    const message = demo.dashboard().priority;
+    const ids = message?.kind === 'message' ? message.memberIds : [];
     expect(ids.map((id) => joined.find((m) => m.id === id)?.name)).toEqual(['Théo Fontaine']);
+    expect(demo.message(ids)).toBe(1);
+    // Nothing left to do, but three payments are still unpaid: never « nothing urgent ».
+    expect(demo.dashboard().priority).toEqual({
+      kind: 'review',
+      filter: 'failed',
+      members: 3,
+      revenue: 347,
+    });
   });
 
   it('remembers what the creator did until the page is reloaded', () => {
     const demo = createWorld(NOW);
-    demo.pages.approve();
-    const home = demo.dashboard();
-    const ids = home.priority?.kind === 'message' ? home.priority.memberIds : [];
-    expect(demo.message(ids)).toBe(1);
-    expect(demo.dashboard().priority).toBeNull();
-    const target = ids[0]!;
+    const target = joined.find((m) => m.name === 'Théo Fontaine')!.id;
+    expect(demo.message([target])).toBe(1);
     expect(demo.offer(target, 'pause_offer')).toMatchObject({
       kind: 'pause_offer',
       terms: { days: 30 },

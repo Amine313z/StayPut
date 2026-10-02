@@ -2,6 +2,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useId, useMemo, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useI18n } from '../../i18n';
 import { ease } from '../../motion';
+import { CHART } from './theme';
 
 export interface ChartPoint {
   /** The point in full, for the tooltip and the table: « Oct 12, 2026 ». */
@@ -16,8 +17,8 @@ export interface ChartSeries {
   /** One value per point; null where there is no figure (a gap, never a zero). */
   values: readonly (number | null)[];
   /**
-   * `area`: the main series, a mint line over a mint gradient that fades out. `line`: a dashed
-   * silver line. Each also has its name in the legend: a series is never told by its color alone.
+   * `area`: the main series, a turquoise line over its gradient fading out. `line`: a dashed
+   * white line. Each also has its name in the legend: a series is never told by its color alone.
    */
   look: 'area' | 'line';
 }
@@ -107,10 +108,11 @@ function runsOf(values: readonly (number | null)[]): { index: number; value: num
 }
 
 /**
- * Two series over time on one value axis (MOTION.md: the lines draw in from the left, the area
- * fades in; a new `period` draws again while the old one fades out). Hover, touch or the arrow
- * keys: a crosshair, a marker on each line and a tooltip with the day's figures, which screen
- * readers hear too. The figures are also a table for them.
+ * Two series over time on one value axis, in the one chart style (theme.ts). MOTION.md: the
+ * lines draw in from the left in 1.2 s, the area fades in; a new `period` draws again while the
+ * old one fades out. Hover, touch or the arrow keys: a crosshair, a marker on each line and a
+ * tooltip with the day's figures (120 ms), which screen readers hear too. The figures are also a
+ * table for them.
  */
 export function AreaChart({
   points,
@@ -192,7 +194,7 @@ export function AreaChart({
   return (
     <figure className="min-w-0">
       <figcaption className="sr-only">{summary}</figcaption>
-      <ul aria-hidden="true" className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+      <ul aria-hidden="true" className={`flex flex-wrap gap-x-5 gap-y-1 ${CHART.legend}`}>
         {series.map((s) => (
           <li key={s.key} className="inline-flex items-center gap-2">
             <Swatch look={s.look} />
@@ -207,12 +209,12 @@ export function AreaChart({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={ease('standard')}
-          className="relative h-48 min-w-10 @2xl:h-56"
+          className="relative h-52 min-w-10 @2xl:h-64"
         >
           {geometry.ticks.map((tick) => (
             <span
               key={tick}
-              className="tabular absolute end-0 -translate-y-1/2 text-xs whitespace-nowrap text-subtle"
+              className={`absolute end-0 -translate-y-1/2 ${CHART.axisLabel}`}
               style={{ top: `${(1 - tick / geometry.top) * 100}%` }}
             >
               {formatTick(tick)}
@@ -229,7 +231,7 @@ export function AreaChart({
           onFocus={() => setActive((current) => current ?? n - 1)}
           onBlur={() => setActive(null)}
           onKeyDown={onKey}
-          className="relative h-48 touch-pan-y rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent @2xl:h-56"
+          className="relative h-52 touch-pan-y rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent @2xl:h-64"
         >
           <svg
             aria-hidden="true"
@@ -239,8 +241,13 @@ export function AreaChart({
           >
             <defs>
               <linearGradient id={`${id}-fill`} x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" className="[stop-color:var(--accent)] [stop-opacity:0.3]" />
-                <stop offset="100%" className="[stop-color:var(--accent)] [stop-opacity:0]" />
+                {CHART.areaStops.map((stop) => (
+                  <stop
+                    key={stop.offset}
+                    offset={stop.offset}
+                    style={{ stopColor: stop.color, stopOpacity: stop.opacity }}
+                  />
+                ))}
               </linearGradient>
             </defs>
             {geometry.ticks.map((tick) => (
@@ -252,7 +259,7 @@ export function AreaChart({
                 y2={H - (tick / geometry.top) * H}
                 strokeWidth={1}
                 vectorEffect="non-scaling-stroke"
-                className={tick === 0 ? 'stroke-line-strong' : 'stroke-line'}
+                className={CHART.grid}
               />
             ))}
             <AnimatePresence initial={false}>
@@ -289,9 +296,9 @@ export function AreaChart({
                         strokeWidth={2}
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        strokeDasharray={path.look === 'line' ? '5 5' : undefined}
+                        strokeDasharray={path.look === 'line' ? CHART.dash : undefined}
                         vectorEffect="non-scaling-stroke"
-                        className={path.look === 'area' ? 'stroke-accent' : 'stroke-muted'}
+                        className={path.look === 'area' ? CHART.line : CHART.comparison}
                       />
                     </g>
                   )),
@@ -303,7 +310,7 @@ export function AreaChart({
             <>
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-y-0 w-px bg-line-strong"
+                className={`pointer-events-none absolute inset-y-0 w-px ${CHART.crosshair}`}
                 style={{ left: `${share(active) * 100}%` }}
               />
               {series.map((s) => {
@@ -313,8 +320,8 @@ export function AreaChart({
                   <span
                     key={s.key}
                     aria-hidden="true"
-                    className={`pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-surface ${
-                      s.look === 'area' ? 'bg-accent' : 'bg-muted'
+                    className={`pointer-events-none absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ${CHART.markerRing} ${
+                      s.look === 'area' ? CHART.marker : CHART.comparisonMarker
                     }`}
                     style={{
                       left: `${share(active) * 100}%`,
@@ -333,7 +340,7 @@ export function AreaChart({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1, transition: ease('tooltip') }}
                 exit={{ opacity: 0, transition: ease('tooltip') }}
-                className="pointer-events-none absolute top-2 z-10 min-w-44 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-lift"
+                className={`pointer-events-none absolute top-2 z-10 min-w-48 ${CHART.tooltip}`}
                 style={
                   share(active) > 0.55
                     ? { right: `calc(${(1 - share(active)) * 100}% + 12px)` }
@@ -348,9 +355,7 @@ export function AreaChart({
                         <Swatch look={s.look} />
                         {s.label}
                       </span>
-                      <span className="tabular font-semibold text-fg">
-                        {said(s.values[active])}
-                      </span>
+                      <span className="metric text-sm text-fg">{said(s.values[active])}</span>
                     </li>
                   ))}
                 </ul>
@@ -370,7 +375,7 @@ export function AreaChart({
           {tickIndexes.map((index, k) => (
             <span
               key={index}
-              className={`tabular absolute top-0 text-xs whitespace-nowrap text-subtle ${
+              className={`absolute top-0 ${CHART.axisLabel} ${
                 k === 0
                   ? ''
                   : k === tickIndexes.length - 1
@@ -419,7 +424,7 @@ function Swatch({ look }: { look: ChartSeries['look'] }) {
   return look === 'area' ? (
     <span
       aria-hidden="true"
-      className="h-2.5 w-4 shrink-0 rounded-[2px] border-t-2 border-accent bg-accent/25"
+      className="h-2.5 w-4 shrink-0 rounded-[2px] border-t-2 border-turq-300 bg-turq-300/20"
     />
   ) : (
     <svg aria-hidden="true" width="16" height="10" viewBox="0 0 16 10" className="shrink-0">
@@ -430,7 +435,7 @@ function Swatch({ look }: { look: ChartSeries['look'] }) {
         y2="5"
         strokeWidth="2"
         strokeDasharray="4 3"
-        className="stroke-muted"
+        className={CHART.comparison}
       />
     </svg>
   );

@@ -1,9 +1,10 @@
 import { useId, type ReactNode } from 'react';
-import { InfoTip } from './InfoTip';
+import { LabelTip } from './LabelTip';
 
 /**
- * A titled block of a screen: an icon, a title (what it means behind its « i ») and a line of
- * description on the left, actions on the right, then the content.
+ * A titled block of a screen: an icon, a title (what it means in its tooltip, on the title's own
+ * words: never an « i ») and a line of description on the left, actions on the right, then the
+ * content.
  */
 export function Card({
   title,
@@ -16,7 +17,7 @@ export function Card({
 }: {
   title?: ReactNode;
   description?: ReactNode;
-  /** What the block shows and how it is counted, behind an « i » beside the title. */
+  /** What the block shows and how it is counted: the title's tooltip. */
   info?: ReactNode;
   icon?: ReactNode;
   actions?: ReactNode;
@@ -40,12 +41,9 @@ export function Card({
               </span>
             ) : null}
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <h2 id={id} className="font-semibold text-fg">
-                  {title}
-                </h2>
-                {info ? <InfoTip>{info}</InfoTip> : null}
-              </div>
+              <h2 id={id} className="title-section">
+                <LabelTip tip={info}>{title}</LabelTip>
+              </h2>
               {description ? <p className="mt-1 text-sm">{description}</p> : null}
             </div>
           </div>

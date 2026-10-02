@@ -349,6 +349,7 @@ describe('GET /api/creator/:companyId/session', () => {
       // Not read from Whop yet.
       companyName: null,
       companyLogo: false,
+      testMode: false,
     });
     const companies = await withUser(t.db, 'user_alice', (tx) =>
       tx.query<{ id: string; status: string }>('select id, status from stayput.companies'),
@@ -2149,6 +2150,70 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     ).json()) as FeedView;
     expect(feed.items.some((i) => i.event === 'cancellation_scheduled')).toBe(true);
     expect((await env.request(`/api/creator/${env.company}/dashboard`, env.ana)).status).toBe(403);
+  });
+
+  it('offers a pause to the members leaving, and retries the failed payments now', async () => {
+    const env = await departing(11);
+    const boss = await env.boss();
+    const home = async () =>
+      (
+        (await (
+          await env.request(`/api/creator/${env.company}/dashboard`, boss)
+        ).json()) as DashboardView
+      ).priority;
+    const offers = (body: unknown) =>
+      env.request(`/api/creator/${env.company}/members/offers`, json(boss, 'POST', body));
+    expect((await offers({ memberIds: ['mber_Ret11'] })).status).toBe(400);
+    expect((await offers({ memberIds: [], kind: 'pause_offer' })).status).toBe(400);
+    // Ana leaves at the end of her period: a pause is the day's action.
+    expect(await home()).toEqual({ kind: 'pause', memberIds: ['mber_Ret11'], revenue: 49 });
+    expect(
+      await (await offers({ memberIds: ['mber_Ret11', 'mber_Ret11'], kind: 'pause_offer' })).json(),
+    ).toEqual({ made: 1, refused: 0 });
+    // Offered already: refused, never an error.
+    expect(await (await offers({ memberIds: ['mber_Ret11'], kind: 'pause_offer' })).json()).toEqual(
+      { made: 0, refused: 1 },
+    );
+    await settle();
+    // Nothing more to offer, she still leaves: hers to look at, never « nothing urgent ».
+    expect(await home()).toEqual({ kind: 'review', filter: 'cancelling', members: 1, revenue: 49 });
+
+    // Her payment failed two hours ago: retried now, approved by the click.
+    await t.db.query(
+      `insert into stayput.payments (id, company_id, member_id, amount, currency, status,
+                                     retryable, whop_created_at)
+       values ('pay_Ret11', $1, 'mber_Ret11', 49, 'eur', 'failed', true,
+               $2::timestamptz - interval '2 hours')`,
+      [env.company, NOW.toISOString()],
+    );
+    expect(await home()).toEqual({ kind: 'retry', payments: 1, revenue: 49 });
+    const retry = (as: RequestInit) =>
+      env.request(`/api/creator/${env.company}/payments/retry`, json(as, 'POST', {}));
+    expect((await retry(env.ana)).status).toBe(403);
+    expect(await (await retry(boss)).json()).toEqual({ queued: 1 });
+    await settle();
+    const [action] = await t.db.query<{ approved_by: string; trigger: string }>(
+      `select approved_by, trigger from stayput.actions
+        where company_id = $1 and type = 'payment_retry' and subject_id = 'pay_Ret11'`,
+      [env.company],
+    );
+    expect(action).toEqual({ approved_by: 'user_boss11', trigger: 'creator' });
+  });
+
+  it('turns the test mode off from its banner, nothing else changed', async () => {
+    const env = await departing(12, { dryRun: true, mode: 'manual' });
+    const boss = await env.boss();
+    const off = (as: RequestInit) =>
+      env.request(`/api/creator/${env.company}/test-mode/off`, json(as, 'POST', {}));
+    expect((await off(env.ana)).status).toBe(403);
+    expect(await (await off(boss)).json()).toMatchObject({ dryRun: false, mode: 'manual' });
+    const [row] = await t.db.query<{ dry_run: boolean; guardrails: string | null }>(
+      `select dry_run, guardrails_saved_at as guardrails from stayput.company_settings
+        where company_id = $1`,
+      [env.company],
+    );
+    // The limits were not looked at: « Getting started » still asks for them.
+    expect(row).toEqual({ dry_run: false, guardrails: null });
   });
 
   it('asks why, makes the offer for the reason, and keeps the membership only with consent', async () => {

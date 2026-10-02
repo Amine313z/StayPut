@@ -6,12 +6,12 @@ export function Skeleton({ className = '' }: { className?: string }) {
   return <div aria-hidden="true" className={`skeleton ${className}`} />;
 }
 
-/** A figure loading: its label, then its value. */
+/** A figure loading: its label, then its value (56 px for the hero, 32 px beside it). */
 export function MetricSkeleton({ hero = false }: { hero?: boolean }) {
   return (
-    <div className="rounded-xl border border-line bg-surface/60 p-5">
+    <div>
       <Skeleton className="h-3 w-28" />
-      <Skeleton className={`mt-4 ${hero ? 'h-11 w-40' : 'h-8 w-24'}`} />
+      <Skeleton className={`mt-4 ${hero ? 'h-14 w-48' : 'h-8 w-24'}`} />
     </div>
   );
 }

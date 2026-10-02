@@ -1635,3 +1635,124 @@ de la communauté et la synchronisation (Intégrations › Whop).
 - Le panneau d'erreur s'appelle « Cette page n'a pas pu s'ouvrir » (plus « Un obstacle »), en
   argent et non en rouge ; une donnée de démo manquante s'affiche en état vide calme, jamais en
   erreur.
+
+## 2026-10-02 — Refonte du design, v3 : noir · turquoise · blanc
+
+Le fondateur a envoyé une troisième version du brief (« v3 : black · turquoise · white ») avec
+la consigne « exécute étape par étape pour ne rien oublier ». Ordre : jetons et logo →
+composants → **Tableau de bord**, puis arrêt pour valider couleurs, typographie, mise en page et
+animation, avant Membres → Intégrations → Automatisations → Analyses → Réglages → Prise en main
+et Guide. Cette étape livre les jetons, le logo, les composants, le cadre et le Tableau de bord.
+
+### Ce qui ne change pas
+
+- React + Vite et le graphique SVG dessiné par StayPut (pas de Next.js, pas de Recharts) : les
+  raisons de la révision précédente tiennent toujours.
+
+### La palette exacte, un seul thème
+
+- Les douze couleurs du brief, exactement (`apps/web/src/styles.css`). La palette de Tailwind
+  est coupée (`--color-*: initial`) : une couleur absente n'existe pas. Le test des contrastes
+  vérifie chaque valeur, que chaque couleur écrite dans le code en fait partie (transparence
+  permise) et que chaque paire texte / fond atteint WCAG AA.
+- **Thème sombre seul** (« the only theme in V1 ») : le thème clair, son réglage et son script
+  de démarrage sont retirés.
+- Le dégradé signature blanc → turquoise clair sur le chiffre héros, le bouton principal (texte
+  noir) et le ruban du logo, nulle part ailleurs. Le turquoise plein seulement sur des éléments
+  fins (lignes, anneaux, bordures de 1 px, texte).
+- Décor : une lueur radiale de 700 px derrière le bloc héros (un dégradé, pas un flou), une
+  traînée diagonale turquoise à 6 %, et le logo à 3 % en bas à droite du Tableau de bord. Ce
+  filigrane est posé après le dernier bloc : fixé au coin de l'écran, il passait derrière la
+  courbe du graphique et ressemblait à un défaut des données.
+- Rouge : un point ou un petit badge à 70 %, seulement pour l'urgent.
+
+### Les polices : Satoshi et Geist
+
+- **Geist** (Vercel, licence OFL), installée par npm.
+- **Satoshi** (Indian Type Foundry, licence ITF FFL 2.0, Fontshare) : la licence permet de
+  l'utiliser dans notre app, mais interdit de redistribuer les fichiers, notamment par un dépôt,
+  et celui de StayPut est public. Elle est donc téléchargée chez Fontshare à chaque déploiement
+  (`scripts/deploy/satoshi.ts`, étape « Fetch the Satoshi font from Fontshare » avant le build),
+  jamais commitée (`apps/web/public/fonts/` est ignoré par Git), jamais convertie ni découpée.
+  L'empreinte SHA-256 du paquet relu est notée (`SATOSHI_SHA256`) : si Fontshare change le
+  paquet, le déploiement continue et le signale. Si le téléchargement échoue, le site part sans
+  Satoshi (Geist prend sa place) et le contrôle « look » d'Inspect échoue pour le dire.
+- Le proxy de la session de travail bloque fontshare.com : la licence et le contenu du paquet ont
+  été lus par le workflow Inspect (étape « Read Fontshare's Satoshi package »).
+- Space Grotesk et Inter sont retirés (le brief les interdit).
+
+### Le logo
+
+- Le ruban du « S » recoloré blanc → turquoise clair, forme et lumière gardées, sur un carré noir
+  pur ; les traînées des coins en turquoise. Exports 64 / 128 / 256 px, favicon 32 px,
+  apple-touch-icon.
+
+### Les composants
+
+- Faits : MetricHero et SecondaryMetric, AreaChart, RiskRing, la ligne de membre
+  (`MemberListRow`), Drawer, ActionButton (primaire en dégradé, fantôme), Toast, EmptyState,
+  Skeleton, GettingStartedPill, LabelTip (l'infobulle portée par le libellé lui-même), UrgentDot.
+- Avec leurs pages : RiskBadge (Membres), RuleCard (Automatisations), Heatmap (Analyses),
+  GuidePanel et OnboardingStep (Prise en main et Guide).
+- Retirés : l'icône « i » (`InfoTip`), MetricCard, ChecklistCard, le choix du thème.
+
+### Le cadre
+
+- Barre du haut sur toute la largeur : le logo de 40 px, le nom et le logo de la communauté lus
+  chez Whop, la recherche d'un membre (⌘K ou Ctrl K, depuis n'importe où), le Guide.
+- Menu de 220 px, 64 px replié (une infobulle par icône) ; la rubrique ouverte porte une barre
+  turquoise de 2 px qui glisse d'une rubrique à l'autre, et son icône est turquoise.
+- Mode test actif : une fine barre bordée de turquoise, « Mode test activé : StayPut calcule tout
+  mais n'envoie rien. » et « Désactiver » (avec confirmation). La route `POST /test-mode/off`
+  ne change que ce réglage ; la session dit désormais si le mode test est actif.
+
+### Le Tableau de bord
+
+- Exactement les cinq blocs du brief : la pastille « Getting started » sous le titre (repliée dès
+  2 étapes sur 4, disparue à 4 sur 4) ; un seul bloc héros sans cases intérieures (sauvé ce
+  mois-ci en 56 px dans le dégradé, avec sa lueur ; à risque et membres à risque en 32 px blanc ;
+  le graphique 7 / 30 / 90 jours dans le même bloc) ; l'action prioritaire du jour ; « Needs
+  attention », les 5 membres les plus urgents ; la bande « StayPut actions (30d) ».
+- Plus aucune phrase sous les chiffres : une infobulle de deux lignes au plus sur le libellé.
+  « Guardrails » devient « limits » (« limites ») partout où le créateur le lit.
+
+### L'action du jour ne dit jamais « rien d'urgent » à tort (migration 0029)
+
+- Les candidates : approuver les actions préparées (mode manuel), relancer les paiements échoués,
+  proposer une pause aux membres qui partent, écrire aux membres à haut risque que personne n'a
+  contactés. La plus grosse somme en jeu l'emporte ; à égalité, ce qui est déjà préparé ou le
+  plus sûr passe d'abord. La somme est le montant des paiements échoués ou ce que paient ces
+  membres par mois, jamais une promesse. Un clic vise 25 membres au plus.
+- S'il ne reste rien à faire en un clic mais qu'un paiement échoué ou un départ demeure : « 3
+  membres ont toujours un paiement échoué : 347 $ en jeu » et « Voir qui ». « Rien d'urgent »
+  seulement quand rien n'est en jeu.
+- Migration **0029** : `payments_to_retry` (le dernier paiement de chaque membre, échoué,
+  relançable, sans relance prévue par Whop, moins de deux relances de StayPut, aucune due dans
+  l'heure) et `retry_failed_payments` (avance les relances prévues, ajoute les manquantes,
+  approuvées par le créateur). Chaque relance passe par les garde-fous et le journal comme toute
+  action (règle 8 du SPEC) : deux par paiement au plus, les arrêts, la liste « ne jamais
+  contacter ».
+- Routes : `POST /payments/retry`, `POST /members/offers` (une pause ou une offre à 25 membres
+  au plus, chacune par `create_creator_offer`), `POST /test-mode/off`.
+
+### La démo
+
+- 36 membres (39 avec ceux qui sont partis, le brief en demande 25 à 40), des courbes réelles :
+  un sauvetage tous les 5 à 9 jours, parfois un VIP, une fois un abonnement annuel.
+- L'action du jour s'y enchaîne comme le vrai calcul : approuver 6 actions (384 $), relancer
+  3 paiements (347 $), proposer une pause (237 $), écrire à Théo (49 $), puis « 3 membres ont
+  toujours un paiement échoué ».
+
+### Vérifier les polices et le graphique en ligne
+
+- Le brief demande de vérifier dans le navigateur que les polices se chargent. Le job « look »
+  d'Inspect ouvre la démo en ligne dans Chrome (bureau et téléphone), vérifie Satoshi et Geist,
+  compte les jours du graphique et ses courbes dessinées, et échoue sinon
+  (`scripts/ops/look.mjs`). Ses captures sont gardées sur la branche `screenshots` du dépôt.
+
+### Limites connues
+
+- Le filtre « Paiement échoué » de Membres viendra avec la page Membres : en attendant, « Voir
+  qui » ouvre le filtre « risque élevé ».
+- Les autres pages gardent l'ancienne mise en page dans les nouvelles couleurs jusqu'à leur tour ;
+  le Guide est encore du texte.

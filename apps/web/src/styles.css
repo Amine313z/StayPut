@@ -176,9 +176,9 @@ body::before {
   pointer-events: none;
   background: linear-gradient(
     118deg,
-    transparent 0 66%,
-    rgb(94 234 212 / 0.06) 67.5%,
-    transparent 69%
+    transparent 0 71.4%,
+    rgb(94 234 212 / 0.06) 71.8%,
+    transparent 72.2%
   );
 }
 
@@ -252,13 +252,23 @@ body::before {
   color: transparent;
 }
 
-/* A figure that got better: a soft turquoise light; worse: dimmed a moment (never red). */
-.flash-good {
-  filter: drop-shadow(0 0 14px rgb(94 234 212 / 0.45));
+/*
+ * The light of a figure that got better (MOTION.md): the figure again, light turquoise and
+ * blurred, behind it. Drawn from `data-glow`, so the page's text (and a screen reader) holds the
+ * figure once; the component moves its opacity alone.
+ */
+.number-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  user-select: none;
+  color: var(--turq-300);
+  filter: blur(12px);
+  transition: opacity 500ms var(--ease-brand);
 }
 
-.flash-dim {
-  opacity: 0.55;
+.number-glow::before {
+  content: attr(data-glow);
 }
 
 /*

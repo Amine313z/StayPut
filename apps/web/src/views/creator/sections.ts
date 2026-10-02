@@ -22,7 +22,8 @@ export interface Section {
   id: SectionId;
   path: string;
   label: MessageKey;
-  description: MessageKey;
+  /** What it is for, under its title; none on the Dashboard (brief v3: nothing but its blocks). */
+  description?: MessageKey;
   Icon: LucideIcon;
   tabs: readonly Tab[];
   /** Part of the member space: hidden while it is off. */
@@ -44,7 +45,6 @@ export const SECTIONS: readonly Section[] = [
     id: 'dashboard',
     path: '',
     label: 'nav.dashboard',
-    description: 'nav.dashboard.description',
     Icon: LayoutDashboard,
     tabs: [{ path: '', label: 'tab.overview' }],
   },

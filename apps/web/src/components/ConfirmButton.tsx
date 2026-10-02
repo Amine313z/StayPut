@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useI18n } from '../i18n';
 import { Button } from '../ui/Button';
+import { UrgentDot } from '../ui/UrgentDot';
 
 /**
  * A button for what cannot be undone in one click: the first click asks, the second does it.
@@ -53,7 +54,8 @@ export function ConfirmButton({
         {label}
       </Button>
       {step === 'failed' ? (
-        <span role="alert" className="text-xs text-danger">
+        <span role="alert" className="inline-flex items-center gap-1.5 text-xs text-fg">
+          <UrgentDot />
           {t('common.failed')}
         </span>
       ) : null}

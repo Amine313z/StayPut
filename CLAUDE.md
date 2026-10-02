@@ -70,6 +70,14 @@ Guidance for Claude Code in this repository.
   Deployed on 2026-10-01 (0008 applied, `/health` ok); the sandbox's fake members were removed
   and seeded again (titled lessons, one inactive newcomer), and the « Seed sandbox » workflow's
   `report` action prints them by score with their reasons (the Phase 3 stop list).
+- **Design v3** (brief « black · turquoise · white », 2026-10-02, DECISIONS.md « Refonte du
+  design, v3 »): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
+  action of the day retries failed payments and offers pauses, never « nothing urgent » while a
+  payment failed or a member leaves). Waiting for the founder's validation of the Dashboard
+  before Members → Integrations → Automations → Analytics → Settings → Onboarding and Guide, one
+  stop per page. The « look » job of Inspect opens the live demo in Chrome, checks Satoshi,
+  Geist and the chart, and pushes its screenshots to the `screenshots` branch
+  (`git fetch origin screenshots`).
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;
   Whop's side: `GET /webhooks/{id}/deliveries` and `POST /webhooks/{id}/test` with
@@ -137,11 +145,16 @@ npm run db:bundle    # after adding a migration: supabase/install.sql + schema-v
 - **Background work** in a request: `inBackground(c, label, work)` (own database client,
   `waitUntil`); tests pass an execution context and await it (`settle()` in app.test.ts).
 - **Frontend**: no text in components, everything through `t()` from `packages/i18n` (English
-  reference, French typed on it; `no-hardcoded-text.test.ts`); colors only as tokens in
-  `apps/web/src/styles.css` (`contrast.test.ts` checks WCAG AA in both themes; a new token pair
-  goes into its `PAIRS`). Building blocks in `apps/web/src/ui/` (Button, Card, Badge/Notice,
-  Stat, NavTabs, EmptyState, Avatar, brand marks, ExternalButton); icons from `lucide-react`;
-  font Inter served by StayPut. The creator view loads its data once (`CreatorView`, read by
+  reference, French typed on it; `no-hardcoded-text.test.ts`); colors only from the twelve-color
+  palette of `apps/web/src/styles.css` (brief v3, dark only; Tailwind's own palette is off;
+  `contrast.test.ts` checks the exact values, that every color written in `apps/web/src` is one
+  of them, and WCAG AA; a new text / background pair goes into its `PAIRS`). Building blocks in
+  `apps/web/src/ui/` (Button / ActionButton, MetricHero / SecondaryMetric, LabelTip, RiskRing,
+  AreaChart, GettingStartedPill, Card, Badge / Notice, EmptyState, Avatar, brand marks,
+  ExternalButton); icons from `lucide-react`. Fonts served by StayPut: Geist (npm) and Satoshi,
+  downloaded from Fontshare at each deployment (`scripts/deploy/satoshi.ts`) and **never
+  committed** (its license forbids redistribution and the repository is public). Motion rules:
+  `MOTION.md`. The creator view loads its data once (`CreatorView`, read by
   the sections with `useCreatorData()`). Links that leave StayPut (Discord, Telegram) go through
   `ExternalButton`: inside Whop's frame it asks Whop to open them (`src/external.ts`).
 - **Risk score** (DECISIONS.md « Phase 3 »): `risk_features` gathers each member as one compact
@@ -150,8 +163,8 @@ npm run db:bundle    # after adding a migration: supabase/install.sql + schema-v
   worded by `reasonText` (`apps/web/src/risk-text.ts`): a new reason code needs its i18n keys
   and a case there. Two rules come before the weights (`computeRisk`): a scheduled cancellation
   is 100 and « Leaving »; a failed or overdue payment is high risk at least, said first. The
-  reasons never repeat nor contradict each other (`consistent`). A level is never shown by color alone (`LEVELS`: tone, icon,
-  name); the bars use the `--risk-*` tokens.
+  reasons never repeat nor contradict each other (`consistent`). A level has no color of its
+  own (`LEVELS`: icon and name; the ring's turquoise and its number say the score).
 
 ## Environment notes
 

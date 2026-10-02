@@ -270,6 +270,52 @@ export async function readDashboard(
       [companyId, at, REACHED_DAYS],
     );
 
+    // The failed payments StayPut may retry now (0029), what they come to in the main currency.
+    const [retryable] = await tx.query<{ payments: number; revenue: number }>(
+      `select count(*)::int as payments,
+              round(coalesce(sum(r.amount) filter (where r.currency = $3), 0), 2)::float8
+                as revenue
+         from stayput.payments_to_retry($1, $2::timestamptz) r`,
+      [companyId, at, chartCurrency],
+    );
+
+    // Every member whose last payment failed: still unpaid, whatever StayPut is doing about it.
+    const failed = await tx.query<{ member_id: string; amount: number; currency: string }>(
+      `select l.member_id, l.amount::float8 as amount, upper(l.currency) as currency
+         from (select distinct on (p.member_id) p.member_id, p.amount, p.currency, p.status
+                 from stayput.payments p
+                 join stayput.members m on m.company_id = p.company_id and m.id = p.member_id
+                where p.company_id = $1 and m.status = 'joined'
+                  and coalesce(m.access_level, '') <> 'admin'
+                order by p.member_id, p.whop_created_at desc, p.id) l
+        where l.status = any (array['failed', 'past_due', 'uncollectible', 'unresolved'])`,
+      [companyId],
+    );
+
+    // Every member leaving (a cancellation scheduled, not over yet): whether a pause can still be
+    // offered to them (reachable, no offer of the creator's open).
+    const leaving = await tx.query<{ member_id: string; reachable: boolean }>(
+      `select ms.member_id,
+              bool_and(not m.do_not_contact and not exists (
+                select 1 from stayput.creator_offers o
+                 where o.company_id = ms.company_id and o.member_id = ms.member_id
+                   and o.outcome = 'open' and o.expires_at > $2::timestamptz)) as reachable
+         from stayput.memberships ms
+         join stayput.members m on m.company_id = ms.company_id and m.id = ms.member_id
+        where ms.company_id = $1 and (ms.cancel_at_period_end or ms.status = 'canceling')
+          and ms.status = any (array['trialing', 'active', 'past_due', 'canceling'])
+          and ms.current_period_end > $2::timestamptz
+          and m.status = 'joined' and coalesce(m.access_level, '') <> 'admin'
+        group by ms.member_id`,
+      [companyId, at],
+    );
+    const failedRevenue = round2(
+      failed.filter((p) => p.currency === chartCurrency).reduce((t, p) => t + p.amount, 0),
+    );
+    const leavingRevenue = round2(
+      leaving.reduce((t, m) => t + (monthlyOf.get(m.member_id) ?? 0), 0),
+    );
+
     // Today ends on the live figure, the one the hero row shows.
     const today = revenue.at(-1);
     if (today && currency) today.atRisk = round2(atRiskRevenue);
@@ -324,9 +370,18 @@ export async function readDashboard(
           members: pendingMembers.length,
           revenue: round2(pendingMembers.reduce((t, id) => t + (monthlyOf.get(id) ?? 0), 0)),
         },
+        retryable: { payments: retryable?.payments ?? 0, revenue: retryable?.revenue ?? 0 },
+        leaving: leaving
+          .filter((m) => m.reachable && (monthlyOf.get(m.member_id) ?? 0) > 0)
+          .map((m) => ({ memberId: m.member_id, monthly: monthlyOf.get(m.member_id) ?? 0 }))
+          .sort((a, b) => b.monthly - a.monthly || a.memberId.localeCompare(b.memberId)),
         unreached: unreached
           .map((u) => ({ memberId: u.member_id, monthly: monthlyOf.get(u.member_id) ?? 0 }))
           .sort((a, b) => b.monthly - a.monthly),
+        unresolved: {
+          failed: { members: failed.length, revenue: failedRevenue },
+          leaving: { members: leaving.length, revenue: leavingRevenue },
+        },
       }),
     };
   });

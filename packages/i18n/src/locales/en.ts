@@ -181,7 +181,6 @@ export const en = {
   'members.count.other': '{count} members',
 
   'common.cancel': 'Cancel',
-  'common.moreInfo': 'What this means',
   'common.close': 'Close',
   'common.failed': 'That did not work. Try again.',
   'common.save': 'Save',
@@ -766,10 +765,8 @@ export const en = {
   'auth.failed': 'Signing in with Whop did not work. Try again.',
   'auth.signOut': 'Sign out',
 
-  'nav.team': 'Team view',
   'nav.tabs': '{section} tabs',
   'nav.dashboard': 'Dashboard',
-  'nav.dashboard.description': 'What is at risk, what StayPut saved, and what to do today.',
   'nav.space': 'Member space',
   'nav.space.description':
     'What your members do in their space: goals, results, testimonial cards.',
@@ -1057,44 +1054,55 @@ export const en = {
 
   'dash.money': 'Your money this month',
   'dash.saved': 'Revenue saved this month',
-  'dash.saved.kept.one': '{count} member kept',
-  'dash.saved.kept.other': '{count} members kept',
-  'dash.saved.influenced': '+ {amount} influenced',
-  'dash.saved.lastMonth': '{amount} last month',
-  'dash.saved.empty': 'Counted when a member StayPut reached pays again.',
-  'dash.currencyOnly': '{currency} only',
   'dash.atRisk': 'Revenue at risk',
   'dash.membersAtRisk': 'Members at risk',
   'dash.noRevenue': 'No paying membership yet.',
 
   'dash.priority': 'Priority action today',
-  'dash.priority.message.title.one': '{count} member at high risk has not heard from you in 5 days',
-  'dash.priority.message.title.other':
-    '{count} members at high risk have not heard from you in 5 days',
-  'dash.priority.message.body':
-    'StayPut writes to each of them once, in your name and within your guardrails.',
-  'dash.priority.message.button.one': 'Message {count} high-risk member',
-  'dash.priority.message.button.other': 'Message {count} high-risk members',
-  'dash.priority.approve.title.one': '{count} action waits for your approval',
-  'dash.priority.approve.title.other': '{count} actions wait for your approval',
-  'dash.priority.approve.body.one':
-    'For {count} member at risk. Each one passes your guardrails, then leaves at the member’s best hour.',
-  'dash.priority.approve.body.other':
-    'For {count} members at risk. Each one passes your guardrails, then leaves at the member’s best hour.',
-  'dash.priority.approve.button.one': 'Approve {count} action',
-  'dash.priority.approve.button.other': 'Approve {count} actions',
-  'dash.priority.review': 'Review them first',
-  'dash.priority.stake': 'At stake',
-  'dash.priority.perMonth': '{amount} a month',
-  'dash.priority.stakeHint': 'What these members pay: never a promise of what will be saved.',
+  'dash.priority.info':
+    'What protects the most revenue today. The amount is what they pay a month, never a promise.',
+  'dash.priority.approve.sentence.one': 'Approve the action StayPut prepared: {amount} at risk',
+  'dash.priority.approve.sentence.other':
+    'Approve the {count} actions StayPut prepared: {amount} at risk',
+  'dash.priority.approve.button': 'Approve all',
+  'dash.priority.reviewFirst': 'Review them first',
+  'dash.priority.retry.sentence.one': 'Retry {count} failed payment: {amount} at risk',
+  'dash.priority.retry.sentence.other': 'Retry {count} failed payments: {amount} at risk',
+  'dash.priority.retry.button': 'Retry now',
+  'dash.priority.pause.sentence.one': 'Offer a pause to {count} member leaving: {amount} at risk',
+  'dash.priority.pause.sentence.other':
+    'Offer a pause to {count} members leaving: {amount} at risk',
+  'dash.priority.pause.button': 'Offer a pause',
+  'dash.priority.message.sentence.one':
+    'Message {count} high-risk member nobody reached: {amount} at risk',
+  'dash.priority.message.sentence.other':
+    'Message {count} high-risk members nobody reached: {amount} at risk',
+  'dash.priority.message.button': 'Send the message',
+  'dash.priority.review.failed.one': '{count} member still has a failed payment: {amount} at risk',
+  'dash.priority.review.failed.other':
+    '{count} members still have a failed payment: {amount} at risk',
+  'dash.priority.review.cancelling.one': '{count} member is leaving: {amount} at risk',
+  'dash.priority.review.cancelling.other': '{count} members are leaving: {amount} at risk',
+  'dash.priority.review.button': 'See who',
+  'dash.toast.retried.one': '{count} payment retried now',
+  'dash.toast.retried.other': '{count} payments retried now',
+  'dash.toast.retried.body': 'Whop charges them again. Each one counts as saved once it is paid.',
+  'dash.toast.nothingToRetry': 'Already under way: these payments are being retried.',
+  'dash.toast.paused.one': 'A pause offered to {count} member',
+  'dash.toast.paused.other': 'A pause offered to {count} members',
+  'dash.toast.paused.body': 'They hear of it in Whop and have 7 days to accept.',
+  'dash.toast.noPause': 'No pause to offer: these members have one already.',
+  'testMode.banner': 'Test mode is on: StayPut computes everything but sends nothing.',
+  'testMode.turnOff': 'Turn off',
+  'testMode.confirm': 'From now on, StayPut really sends.',
+  'testMode.off': 'Test mode is off: StayPut now really sends.',
+  'shell.shortcut.mac': '⌘K',
+  'shell.shortcut.other': 'Ctrl K',
   'dash.priority.none.title': 'Nothing urgent today',
-  'dash.priority.none.body':
-    'StayPut keeps watching every member. The next thing to do will show here first.',
 
   'dash.toast.messaged.one': '{count} message queued',
   'dash.toast.messaged.other': '{count} messages queued',
-  'dash.toast.messaged.body':
-    'Each one passes your guardrails, then leaves at the member’s best hour.',
+  'dash.toast.messaged.body': 'Each one passes your limits, then leaves at the member’s best hour.',
   'dash.toast.simulated': 'Test mode: StayPut simulates them, nothing is sent.',
   'dash.toast.approved.one': '{count} action approved',
   'dash.toast.approved.other': '{count} actions approved',
@@ -1129,8 +1137,6 @@ export const en = {
   'dash.offer.confirm.promo': 'Make the offer',
 
   'dash.stayputActions': 'StayPut actions (30d)',
-  'dash.testMode': 'Test mode is on: StayPut computes everything and sends nothing.',
-  'dash.testMode.settings': 'Change it in Settings',
 
   'shell.guide': 'Guide',
   'tab.general': 'General',
@@ -1147,14 +1153,13 @@ export const en = {
   'member.allSet': 'Your membership is all set: nothing needs you here.',
   'chart.day': 'Day',
   'dash.saved.info':
-    'What StayPut recovered this month: failed payments it retried, cancellations withdrawn after its offer, paused members who came back.',
-  'dash.atRisk.info':
-    'What the members leaving or at high risk pay each month, out of {total} in all.',
+    'Payments recovered, cancellations withdrawn and pauses ended this month. Each counts once.',
+  'dash.atRisk.info': 'What the members leaving or at high risk pay each month, out of {total}.',
   'dash.membersAtRisk.info':
-    '{departures} leaving (cancellation scheduled), {high} at high risk of leaving.',
+    '{departures} leaving, {high} at high risk. Scored every hour, from 0 to 100.',
   'dash.chart.title': 'Revenue saved vs at risk',
   'dash.chart.info':
-    'Saved: what StayPut recovered, added up over the period. At risk: what the members leaving or at high risk paid each month, day by day.',
+    'Saved: added up over the period. At risk: what members at risk paid a month, day by day.',
   'dash.chart.saved': 'Revenue saved',
   'dash.chart.atRisk': 'Revenue at risk',
   'dash.chart.period': 'Period',
@@ -1175,12 +1180,12 @@ export const en = {
   'dash.strip.saved.one': 'member saved',
   'dash.strip.saved.other': 'members saved',
   'start.title': 'Getting started',
-  'start.progress': '{done} of {total} done',
+  'start.progress': '{done}/{total}',
   'start.done': 'done',
   'start.discord': 'Connect Discord',
   'start.automation': 'Activate your first automation',
   'start.reviewed': 'Review your at-risk members',
-  'start.guardrails': 'Set guardrails',
+  'start.guardrails': 'Set your limits',
   'notFound.title': 'Page not found',
 } as const;
 

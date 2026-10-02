@@ -185,7 +185,6 @@ export const fr: Messages = {
   'members.count.other': '{count} membres',
 
   'common.cancel': 'Annuler',
-  'common.moreInfo': 'Ce que cela veut dire',
   'common.close': 'Fermer',
   'common.failed': "Cela n'a pas marché. Réessayez.",
   'common.save': 'Enregistrer',
@@ -785,11 +784,8 @@ export const fr: Messages = {
   'auth.failed': "La connexion avec Whop n'a pas abouti. Réessayez.",
   'auth.signOut': 'Se déconnecter',
 
-  'nav.team': 'Vue de l’équipe',
   'nav.tabs': 'Onglets : {section}',
   'nav.dashboard': 'Tableau de bord',
-  'nav.dashboard.description':
-    'Ce qui est à risque, ce que StayPut a sauvé, et quoi faire aujourd’hui.',
   'nav.space': 'Espace membre',
   'nav.space.description':
     'Ce que vos membres font dans leur espace : objectifs, résultats, cartes témoignage.',
@@ -1084,46 +1080,57 @@ export const fr: Messages = {
 
   'dash.money': 'Votre argent ce mois-ci',
   'dash.saved': 'Revenus sauvés ce mois-ci',
-  'dash.saved.kept.one': '{count} membre gardé',
-  'dash.saved.kept.other': '{count} membres gardés',
-  'dash.saved.influenced': '+ {amount} influencés',
-  'dash.saved.lastMonth': '{amount} le mois dernier',
-  'dash.saved.empty': 'Compté quand un membre contacté par StayPut paie de nouveau.',
-  'dash.currencyOnly': 'en {currency} seulement',
   'dash.atRisk': 'Revenus à risque',
   'dash.membersAtRisk': 'Membres à risque',
   'dash.noRevenue': 'Aucun abonnement payant pour l’instant.',
 
   'dash.priority': 'Action prioritaire du jour',
-  'dash.priority.message.title.one':
-    '{count} membre à haut risque n’a pas eu de vos nouvelles depuis 5 jours',
-  'dash.priority.message.title.other':
-    '{count} membres à haut risque n’ont pas eu de vos nouvelles depuis 5 jours',
-  'dash.priority.message.body':
-    'StayPut écrit une fois à chacun, en votre nom et dans vos garde-fous.',
-  'dash.priority.message.button.one': 'Écrire à {count} membre à haut risque',
-  'dash.priority.message.button.other': 'Écrire à {count} membres à haut risque',
-  'dash.priority.approve.title.one': '{count} action attend votre accord',
-  'dash.priority.approve.title.other': '{count} actions attendent votre accord',
-  'dash.priority.approve.body.one':
-    'Pour {count} membre à risque. Chacune passe vos garde-fous, puis part à la meilleure heure du membre.',
-  'dash.priority.approve.body.other':
-    'Pour {count} membres à risque. Chacune passe vos garde-fous, puis part à la meilleure heure du membre.',
-  'dash.priority.approve.button.one': 'Approuver {count} action',
-  'dash.priority.approve.button.other': 'Approuver {count} actions',
-  'dash.priority.review': 'Les revoir d’abord',
-  'dash.priority.stake': 'En jeu',
-  'dash.priority.perMonth': '{amount} par mois',
-  'dash.priority.stakeHint':
-    'Ce que paient ces membres : jamais une promesse de ce qui sera sauvé.',
+  'dash.priority.info':
+    'Ce qui protège le plus de revenus aujourd’hui. Montant : ce qu’ils paient par mois, pas une promesse.',
+  'dash.priority.approve.sentence.one': 'Approuver l’action préparée par StayPut : {amount} en jeu',
+  'dash.priority.approve.sentence.other':
+    'Approuver les {count} actions préparées par StayPut : {amount} en jeu',
+  'dash.priority.approve.button': 'Tout approuver',
+  'dash.priority.reviewFirst': 'Les revoir d’abord',
+  'dash.priority.retry.sentence.one': 'Relancer {count} paiement échoué : {amount} en jeu',
+  'dash.priority.retry.sentence.other': 'Relancer {count} paiements échoués : {amount} en jeu',
+  'dash.priority.retry.button': 'Relancer maintenant',
+  'dash.priority.pause.sentence.one':
+    'Proposer une pause à {count} membre qui part : {amount} en jeu',
+  'dash.priority.pause.sentence.other':
+    'Proposer une pause à {count} membres qui partent : {amount} en jeu',
+  'dash.priority.pause.button': 'Proposer une pause',
+  'dash.priority.message.sentence.one':
+    'Écrire à {count} membre à haut risque que personne n’a contacté : {amount} en jeu',
+  'dash.priority.message.sentence.other':
+    'Écrire à {count} membres à haut risque que personne n’a contactés : {amount} en jeu',
+  'dash.priority.message.button': 'Envoyer le message',
+  'dash.priority.review.failed.one':
+    '{count} membre a toujours un paiement échoué : {amount} en jeu',
+  'dash.priority.review.failed.other':
+    '{count} membres ont toujours un paiement échoué : {amount} en jeu',
+  'dash.priority.review.cancelling.one': '{count} membre s’en va : {amount} en jeu',
+  'dash.priority.review.cancelling.other': '{count} membres s’en vont : {amount} en jeu',
+  'dash.priority.review.button': 'Voir qui',
+  'dash.toast.retried.one': '{count} paiement relancé',
+  'dash.toast.retried.other': '{count} paiements relancés',
+  'dash.toast.retried.body': 'Whop les débite à nouveau. Chacun compte comme sauvé une fois payé.',
+  'dash.toast.nothingToRetry': 'Déjà en cours : ces paiements sont en train d’être relancés.',
+  'dash.toast.paused.one': 'Pause proposée à {count} membre',
+  'dash.toast.paused.other': 'Pause proposée à {count} membres',
+  'dash.toast.paused.body': 'Ils l’apprennent dans Whop et ont 7 jours pour accepter.',
+  'dash.toast.noPause': 'Aucune pause à proposer : ces membres en ont déjà une.',
+  'testMode.banner': 'Mode test activé : StayPut calcule tout mais n’envoie rien.',
+  'testMode.turnOff': 'Désactiver',
+  'testMode.confirm': 'À partir de maintenant, StayPut envoie vraiment.',
+  'testMode.off': 'Mode test désactivé : StayPut envoie vraiment.',
+  'shell.shortcut.mac': '⌘K',
+  'shell.shortcut.other': 'Ctrl K',
   'dash.priority.none.title': 'Rien d’urgent aujourd’hui',
-  'dash.priority.none.body':
-    'StayPut continue de suivre chaque membre. La prochaine chose à faire s’affichera ici en premier.',
 
   'dash.toast.messaged.one': '{count} message en file',
   'dash.toast.messaged.other': '{count} messages en file',
-  'dash.toast.messaged.body':
-    'Chacun passe vos garde-fous, puis part à la meilleure heure du membre.',
+  'dash.toast.messaged.body': 'Chacun passe vos limites, puis part à la meilleure heure du membre.',
   'dash.toast.simulated': 'Mode test : StayPut les simule, rien n’est envoyé.',
   'dash.toast.approved.one': '{count} action approuvée',
   'dash.toast.approved.other': '{count} actions approuvées',
@@ -1160,8 +1167,6 @@ export const fr: Messages = {
   'dash.offer.confirm.promo': 'Faire l’offre',
 
   'dash.stayputActions': 'Actions de StayPut (30 j)',
-  'dash.testMode': 'Le mode test est actif : StayPut calcule tout et n’envoie rien.',
-  'dash.testMode.settings': 'Le changer dans Réglages',
 
   'shell.guide': 'Guide',
   'tab.general': 'Général',
@@ -1179,14 +1184,14 @@ export const fr: Messages = {
   'member.allSet': 'Votre abonnement est en ordre : rien ne vous attend ici.',
   'chart.day': 'Jour',
   'dash.saved.info':
-    'Ce que StayPut a récupéré ce mois-ci : paiements échoués relancés, annulations retirées après son offre, membres revenus de pause.',
+    'Paiements récupérés, annulations retirées, pauses terminées ce mois-ci. Chacun compté une fois.',
   'dash.atRisk.info':
-    'Ce que paient chaque mois les membres sur le départ ou à risque élevé, sur {total} au total.',
+    'Ce que paient chaque mois les membres sur le départ ou à risque élevé, sur {total}.',
   'dash.membersAtRisk.info':
-    '{departures} sur le départ (annulation prévue), {high} à risque élevé de partir.',
+    '{departures} sur le départ, {high} à risque élevé. Notés chaque heure, de 0 à 100.',
   'dash.chart.title': 'Revenus sauvés et revenus à risque',
   'dash.chart.info':
-    'Sauvés : ce que StayPut a récupéré, additionné sur la période. À risque : ce que payaient chaque mois les membres sur le départ ou à risque élevé, jour après jour.',
+    'Sauvés : cumulés sur la période. À risque : ce que payaient les membres à risque, jour après jour.',
   'dash.chart.saved': 'Revenus sauvés',
   'dash.chart.atRisk': 'Revenus à risque',
   'dash.chart.period': 'Période',
@@ -1207,11 +1212,11 @@ export const fr: Messages = {
   'dash.strip.saved.one': 'membre sauvé',
   'dash.strip.saved.other': 'membres sauvés',
   'start.title': 'Pour bien démarrer',
-  'start.progress': '{done} sur {total} faits',
+  'start.progress': '{done}/{total}',
   'start.done': 'fait',
   'start.discord': 'Connecter Discord',
   'start.automation': 'Activer votre première automatisation',
   'start.reviewed': 'Passer en revue vos membres à risque',
-  'start.guardrails': 'Régler les garde-fous',
+  'start.guardrails': 'Régler vos limites',
   'notFound.title': 'Page introuvable',
 };

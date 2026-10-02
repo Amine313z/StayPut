@@ -17,6 +17,7 @@ import {
 import { useI18n } from '../i18n';
 import { LEVEL_LABELS, reasonText } from '../risk-text';
 import { Badge } from '../ui/Badge';
+import { UrgentDot } from '../ui/UrgentDot';
 
 /**
  * The risk score of a member (SPEC Phase 3) as the team sees it: a level that always has an icon
@@ -36,13 +37,10 @@ export const LEVELS: Readonly<Record<RiskLevel, LevelLook>> = {
   low: { label: LEVEL_LABELS.low, Icon: ShieldCheck },
 };
 
-/** The small red dot of what is urgent (the brief: red as a dot or a small badge only). */
-export function UrgentDot() {
-  return <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-danger/70" />;
-}
+export { UrgentDot } from '../ui/UrgentDot';
 
 /**
- * « High risk · 82 »; a departure is said without its score, 100 by rule. A silver outline:
+ * « High risk · 82 »; a departure is said without its score, 100 by rule. A white outline:
  * `urgent` (a departure within 48 hours) adds the red dot.
  */
 export function RiskBadge({ risk, urgent = false }: { risk: MemberRisk; urgent?: boolean }) {

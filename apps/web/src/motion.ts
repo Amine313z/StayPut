@@ -56,10 +56,3 @@ export const itemVariants: Variants = {
   hidden: { opacity: 0, y: 8 },
   show: { opacity: 1, y: 0, transition: ease('standard') },
 };
-
-/** A new item at the top of a list: in from above. Removed: it folds away. */
-export const feedItemVariants: Variants = {
-  hidden: { opacity: 0, y: -12 },
-  show: { opacity: 1, y: 0, transition: ease('standard') },
-  exit: { opacity: 0, transition: ease('micro') },
-};

@@ -1,6 +1,8 @@
 import type {
   ActionSettingsView,
   CreatorMessagesResult,
+  CreatorOffersResult,
+  CreatorRetryResult,
   RiskSettingsView,
   SyncRun,
 } from '@stayput/core';
@@ -81,6 +83,18 @@ export async function answerDemo(method: string, path: string, body: unknown): P
     const list = Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
     return { queued: demo.message(list) } satisfies CreatorMessagesResult;
   }
+  if (method === 'POST' && route === 'payments/retry') {
+    return { queued: demo.retry() } satisfies CreatorRetryResult;
+  }
+  if (method === 'POST' && route === 'members/offers') {
+    const { memberIds, kind } = (body ?? {}) as { memberIds?: unknown; kind?: unknown };
+    if (!isCreatorOfferKind(kind) || !Array.isArray(memberIds)) {
+      throw new ApiError('invalid_request', 'expected { memberIds, kind }');
+    }
+    const ids = [...new Set(memberIds.filter((id): id is string => typeof id === 'string'))];
+    const made = ids.filter((id) => !('error' in demo.offer(id, kind))).length;
+    return { made, refused: ids.length - made } satisfies CreatorOffersResult;
+  }
   if (method === 'POST' && route === 'actions/approve') {
     const ids = (body as { ids?: unknown } | null)?.ids;
     const chosen = Array.isArray(ids)
@@ -130,6 +144,7 @@ export async function answerDemo(method: string, path: string, body: unknown): P
     demo.started('reviewed');
     return { done: true };
   }
+  if (method === 'POST' && route === 'test-mode/off') return answer(demo.testModeOff());
   if (method === 'PUT' && route === 'settings/actions') {
     return answer(demo.saveSettings(body as ActionSettingsView));
   }

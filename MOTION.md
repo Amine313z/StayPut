@@ -1,23 +1,25 @@
 # StayPut motion system
 
 Motion in StayPut explains what changed: a number that moved, a member who needs attention, a
-page that opened. It never decorates for its own sake, and it never slows anyone down. Every
-screen uses the same few gestures, from `apps/web/src/motion.ts` (Motion, `motion/react`) and the
-`--ease-brand` / `--dur-*` tokens of `apps/web/src/styles.css`.
+page that opened. It never decorates for its own sake and never slows anyone down. Every screen
+uses the same few gestures, from `apps/web/src/motion.ts` (Motion, `motion/react`) and the
+`--ease-brand` / `--dur-*` tokens of `apps/web/src/styles.css`. The rules are the brief's
+(v3, §8).
 
 ## Tokens
 
-| Token      | Value                            | Used for                                 |
-| ---------- | -------------------------------- | ---------------------------------------- |
-| Easing     | `cubic-bezier(0.22, 1, 0.36, 1)` | everything (`EASE`, `--ease-brand`)      |
-| `micro`    | 150 ms                           | press, hover, focus, tooltip, exit       |
-| `standard` | 250 ms                           | card, list item, value, toggle           |
-| `page`     | 400 ms                           | a page coming in                         |
-| `count`    | 600 ms                           | a number counting to its value           |
-| `tooltip`  | 120 ms                           | a chart tooltip fading in                |
-| Stagger    | 40 ms                            | cards of a group coming in one by one    |
-| Success    | 1.2 s                            | a button's check mark after it succeeded |
-| Toast      | 4 s                              | a toast before it leaves                 |
+| Token      | Value                            | Used for                                           |
+| ---------- | -------------------------------- | -------------------------------------------------- |
+| Easing     | `cubic-bezier(0.22, 1, 0.36, 1)` | everything (`EASE`, `--ease-brand`)                |
+| `micro`    | 150 ms                           | press, hover, focus, an item leaving a list        |
+| `standard` | 250 ms                           | a section, a row, a value, a toggle                |
+| `page`     | 400 ms                           | a page coming in                                   |
+| `count`    | 800 ms                           | a number counting to its value, a ring filling     |
+| `draw`     | 1.2 s                            | a chart drawing its lines, a new row's pulse       |
+| `tooltip`  | 120 ms                           | a tooltip fading in                                |
+| Stagger    | 60 ms                            | sections (and rows) of a page coming in one by one |
+| Success    | 1.2 s                            | a button's check mark after it succeeded           |
+| Toast      | 4 s                              | a toast before it leaves                           |
 
 No springs with overshoot, no bounce on data: a figure lands where it is, once.
 
@@ -25,40 +27,50 @@ No springs with overshoot, no bounce on data: a figure lands where it is, once.
 
 - **Page**: fades in while rising 8 px (`pageVariants`). The side menu and the top bar never
   move.
-- **Cards**: come in one after the other (`groupVariants` + `itemVariants`, 40 ms apart). On hover
-  a card rises 2 px and its border brightens to mint (`--border-strong`).
-- **Numbers**: count up from the previous value in 600 ms (`useCountUp`). When the value gets
-  better it flashes mint, when it gets worse it dims to silver a moment (never red); which way is
-  better belongs to the figure (revenue at risk going down is good).
-- **Risk rings and gauges**: the stroke draws from 0 to the value.
-- **Charts**: lines draw in from the left (one clip reveals the lines and their area together),
-  areas fade in, bars grow from their baseline. A new period (7, 30, 90 days) draws in again
-  while the old one fades out in 150 ms. Tooltips fade in in 120 ms; the crosshair and the
-  markers follow the pointer (or the arrow keys) at once.
-- **Choices side by side** (a period, a language): the chosen one's pill slides to it (250 ms).
+- **Sections**: come in one after the other, 60 ms apart (`<Stagger>` + `<StaggerItem>`).
+- **Numbers**: count up from the previous value in 800 ms (`useCountUp`). Then a soft turquoise
+  light pulses behind the figure, on load and each time it gets better: the figure again, light
+  turquoise and blurred (`.number-glow`, drawn by CSS from `data-glow`, so the page's text holds
+  the figure once), whose opacity alone moves. When it gets worse the figure dims a moment
+  instead, never red. Which way is better belongs to the figure (revenue at risk going down is
+  good).
+- **Risk rings**: the turquoise stroke draws from 0 to the score in 800 ms, each row's ring a
+  little after the one above it.
+- **Charts**: the lines draw in from the left in 1.2 s (one clip reveals the lines and their
+  area together) while the gradient area fades in. A new period (7, 30, 90 days) draws in again
+  while the old one fades out in 150 ms. The crosshair and the markers follow the pointer (or
+  the arrow keys) at once.
+- **Tooltips** (a label's, a chart's): fade in in 120 ms, two lines at most.
+- **Choices side by side** (a period): the chosen one's pill slides to it (250 ms). The side
+  menu's 2 px turquoise bar slides to the open section the same way.
 - **Progress** (« Getting started »): the bar grows from the left (`scaleX`).
-- **Lists**: a new item slides in from the top with a short mint highlight; a removed item
-  folds away.
+- **Lists** (« Needs attention »): a member who joins the list slides in with a short turquoise
+  pulse (1.2 s, opacity only); one who leaves it folds away (opacity, scale 0.98, 150 ms) and the
+  rows below close up. On hover a row lifts 2 px while a surface fades in behind it.
 - **Buttons**: press scales to 0.98; while working, a spinner takes the label's place without
   changing the button's size (the label stays for screen readers); on success a check mark
   shows for 1.2 s.
+- **Drawers**: slide in from the right; the page behind dims.
 - **Toasts**: slide in at the bottom right, stack, leave after 4 s.
-- **Loading**: every data block shows its own shape (skeleton) with a light passing over it;
-  never an empty box, never a page-wide spinner.
+- **Loading**: every block shows its own shape on black-700 with a black-600 light passing over
+  it; never an empty box, never a page-wide spinner.
 
 ## Less motion
 
 The app is wrapped in `<MotionConfig reducedMotion="user">`: when the device asks for less
 motion, Motion keeps opacity changes and drops movement (no rise, no slide, no scale). Numbers
-show their value at once; the skeleton's light stops (`prefers-reduced-motion` in
-`styles.css`).
+show their value at once, without their light; charts and rings show already drawn; the
+skeleton's light stops (`prefers-reduced-motion` in `styles.css`); the press and the hover lift
+are switched off with Tailwind's `motion-reduce:`.
 
 ## Performance
 
-- Animate only `transform` and `opacity` (and, for a number's flash, a filter). Never width,
-  height, top or left on a list or a chart: use `scaleX`/`scaleY` from the baseline instead. The
-  one exception is the width of the single clip rectangle that draws a chart in: one SVG
-  attribute, no layout.
+- Animate only `transform` and `opacity`. Never width, height, top or left on a list or a chart:
+  use `scaleX`/`scaleY` from the baseline instead. Two exceptions, both outside any layout: the
+  width of the single clip rectangle that draws a chart in (one SVG attribute), and a ring's
+  `pathLength`.
+- A figure's light is a blurred copy whose opacity moves, never an animated `filter` or
+  `text-shadow`: the blur is drawn once.
 - Charts are drawn by StayPut itself in SVG (`ui/charts/`), a few kilobytes: no chart library
   (Recharts weighed 109 KB compressed for one area chart, and animates every point in
   JavaScript with its own easing).
@@ -67,11 +79,13 @@ show their value at once; the skeleton's light stops (`prefers-reduced-motion` i
 ## Adding a screen
 
 1. Wrap the page in `<Page>` (it applies `pageVariants`).
-2. Put its cards in a `<Stagger>` group; use `<MetricCard>`, `<Card>` with `<AreaChart>`,
-   `<Skeleton>`.
+2. Put its sections in a `<Stagger>` group; use `<MetricHero>` / `<SecondaryMetric>`,
+   `<AreaChart>`, `<MemberListRow>`, `<Skeleton>`.
 3. Never write a duration or an easing by hand: take them from `motion.ts`.
 
 ## Tests
 
 The tests read what the screens say, not how they move: `apps/web/test/setup.ts` sets
-`MotionGlobalConfig.skipAnimations`, so every animation lands on its end at once.
+`MotionGlobalConfig.skipAnimations`, so every animation lands on its end at once. The live site
+is checked in a real browser by the « look » job of Inspect (`scripts/ops/look.mjs`): fonts
+loaded, chart drawn, screenshots of the Dashboard.

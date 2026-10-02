@@ -17,7 +17,7 @@ export function Page({ children, className = '' }: { children: ReactNode; classN
   );
 }
 
-/** A group whose children (Stagger.Item) come in 40 ms apart. */
+/** A group whose children (StaggerItem) come in 60 ms apart (MOTION.md). */
 export function Stagger({
   children,
   className = '',
@@ -53,7 +53,7 @@ export function StaggerItem({
 }
 
 /**
- * A number on its way to `value`: counts from where it was (0 the first time) in 600 ms. When
+ * A number on its way to `value`: counts from where it was (0 the first time) in 800 ms. When
  * the device asks for less motion, the value shows at once.
  */
 export function useCountUp(value: number): number {
@@ -78,42 +78,80 @@ export function useCountUp(value: number): number {
   return reduce ? value : shown;
 }
 
+/** How long the turquoise light stays after a count, in ms. */
+const PULSE_MS = 700;
+
 /**
- * A figure that counts to its value. When it changes, a short mint light if it got better, a
- * brief silver dim if it got worse (never red); which way is better belongs to the figure
- * (`better`).
+ * A figure that counts to its value (MOTION.md: 800 ms), then pulses a soft turquoise light: on
+ * load, and each time it gets better; when it gets worse it dims a moment instead (never red).
+ * Which way is better belongs to the figure (`better`; none: every change pulses). The light is a
+ * blurred turquoise copy behind the figure whose opacity alone moves (60 fps), so a figure in
+ * the signature gradient keeps its gradient. Less motion asked for: the value at once, no light.
  */
 export function AnimatedNumber({
   value,
   format,
   better = null,
   className = '',
+  tone = '',
 }: {
   value: number;
   format: (value: number) => string;
   /** « up »: more is better (money saved); « down »: less is better (revenue at risk). */
   better?: 'up' | 'down' | null;
+  /** The figure's type (size, weight): its light wears it too. */
   className?: string;
+  /** The figure's colour (`text-hero`, `text-fg`): the figure alone, never its light. */
+  tone?: string;
 }) {
+  const reduce = useReducedMotion();
   const shown = useCountUp(value);
   const previous = useRef(value);
   const [flash, setFlash] = useState<'good' | 'bad' | null>(null);
+  const count = DURATION.count * 1000;
+  // Loaded: the light once the count is done.
+  useEffect(() => {
+    if (reduce || previous.current === 0) return;
+    const on = window.setTimeout(() => setFlash('good'), count);
+    const off = window.setTimeout(() => setFlash(null), count + PULSE_MS);
+    return () => {
+      window.clearTimeout(on);
+      window.clearTimeout(off);
+    };
+  }, [reduce, count]);
   useEffect(() => {
     const before = previous.current;
     previous.current = value;
-    if (better === null || before === value) return;
-    const improved = better === 'up' ? value > before : value < before;
-    setFlash(improved ? 'good' : 'bad');
-    const timer = window.setTimeout(() => setFlash(null), DURATION.count * 1000 + 200);
-    return () => window.clearTimeout(timer);
-  }, [value, better]);
+    if (reduce || before === value) return;
+    const improved = better === null || (better === 'up' ? value > before : value < before);
+    if (!improved) setFlash('bad');
+    const timers = improved
+      ? [
+          window.setTimeout(() => setFlash('good'), count),
+          window.setTimeout(() => setFlash(null), count + PULSE_MS),
+        ]
+      : [window.setTimeout(() => setFlash(null), count + 200)];
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer);
+    };
+  }, [value, better, reduce, count]);
+  // The light is the number again, turquoise and blurred, behind it (`.number-glow`, drawn by
+  // CSS so the page's text holds the number once): only its opacity moves.
+  const text = format(shown);
   return (
-    <span
-      className={`tabular inline-block transition-[filter,opacity] duration-500 ease-brand ${
-        flash === 'good' ? 'flash-good' : flash === 'bad' ? 'flash-dim' : ''
-      } ${className}`}
-    >
-      {format(shown)}
+    <span className="relative inline-block">
+      <span
+        aria-hidden="true"
+        data-glow={text}
+        className={`tabular ${className} number-glow ${flash === 'good' ? 'opacity-60' : 'opacity-0'}`}
+      />
+      <span
+        className={`tabular relative inline-block transition-opacity duration-500 ease-brand ${
+          flash === 'bad' ? 'opacity-55' : ''
+        } ${className} ${tone}`}
+      >
+        {text}
+      </span>
     </span>
   );
 }

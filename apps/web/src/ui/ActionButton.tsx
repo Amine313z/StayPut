@@ -1,8 +1,7 @@
 import { Check, LoaderCircle } from 'lucide-react';
-import { motion } from 'motion/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { SUCCESS_MS, ease } from '../motion';
-import { buttonClass, type ButtonSize, type ButtonVariant } from './Button';
+import { SUCCESS_MS } from '../motion';
+import { buttonClass, leadingMark, type ButtonSize, type ButtonVariant } from './Button';
 
 /**
  * A button that does something and says how it went (MOTION.md): pressed, it scales to 0.98;
@@ -42,10 +41,8 @@ export function ActionButton({
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   return (
-    <motion.button
+    <button
       type="button"
-      whileTap={state === 'idle' && !disabled ? { scale: 0.98 } : undefined}
-      transition={ease('micro')}
       className={buttonClass(variant, size, `relative ${className}`)}
       disabled={disabled || state !== 'idle'}
       aria-busy={state === 'running' || undefined}
@@ -65,7 +62,11 @@ export function ActionButton({
       }}
     >
       <span className={`inline-flex items-center gap-2 ${state === 'running' ? 'opacity-0' : ''}`}>
-        {state === 'done' ? <Check aria-hidden="true" className="size-4" /> : icon}
+        {state === 'done' ? (
+          <Check aria-hidden="true" className="size-4" />
+        ) : (
+          leadingMark(variant, icon)
+        )}
         {state === 'done' && doneLabel ? doneLabel : children}
       </span>
       {state === 'running' ? (
@@ -73,6 +74,6 @@ export function ActionButton({
           <LoaderCircle className="size-4 animate-spin" />
         </span>
       ) : null}
-    </motion.button>
+    </button>
   );
 }

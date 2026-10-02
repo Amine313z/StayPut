@@ -65,6 +65,8 @@ export interface CreatorSession {
   companyName: string | null;
   /** Whop gave the community a logo: served at /api/creator/:companyId/logo. */
   companyLogo: boolean;
+  /** StayPut computes everything and sends nothing: the banner on top of every screen. */
+  testMode: boolean;
 }
 
 /** GET /api/member/:experienceId/session */
@@ -183,13 +185,18 @@ export interface RiskDay {
 }
 
 /**
- * The action of the day: approve what StayPut proposes (manual mode), or message the members at
- * high risk nobody reached in 5 days. `revenue`: what those members pay each month, the money
- * at stake (never a promise of what will be saved).
+ * The action of the day: approve what StayPut proposes (manual mode), retry the failed payments
+ * now, offer a pause to the members leaving, or message the members at high risk nobody reached
+ * in 5 days. While a payment stays failed or a member is leaving and none of these can be done,
+ * `review` leads to them: never « nothing urgent » then (brief v3 §6.2). `revenue`: the money at
+ * stake, what those payments or members bring each month (never a promise of what is saved).
  */
 export type PriorityAction =
   | { kind: 'approve'; actions: number; members: number; revenue: number }
-  | { kind: 'message'; memberIds: string[]; revenue: number };
+  | { kind: 'retry'; payments: number; revenue: number }
+  | { kind: 'pause'; memberIds: string[]; revenue: number }
+  | { kind: 'message'; memberIds: string[]; revenue: number }
+  | { kind: 'review'; filter: 'failed' | 'cancelling'; members: number; revenue: number };
 
 /** GET /api/creator/:companyId/feed: what just happened, the newest first. */
 export interface FeedView {
@@ -621,6 +628,20 @@ export interface CreatorOfferView {
 /** POST /api/creator/:companyId/members/message: the messages queued (a click approves them). */
 export interface CreatorMessagesResult {
   queued: number;
+}
+
+/** POST /api/creator/:companyId/payments/retry: the failed payments being retried now. */
+export interface CreatorRetryResult {
+  queued: number;
+}
+
+/**
+ * POST /api/creator/:companyId/members/offers: offers made at once (the action of the day); a
+ * member who cannot get one (« never contact », an offer open, no membership) is `refused`.
+ */
+export interface CreatorOffersResult {
+  made: number;
+  refused: number;
 }
 
 /** POST /api/creator/:companyId/members/:memberId/offer */

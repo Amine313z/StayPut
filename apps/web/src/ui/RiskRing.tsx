@@ -2,20 +2,23 @@ import { motion } from 'motion/react';
 import { ease } from '../motion';
 
 /**
- * A risk score from 0 to 100 as a mint ring that draws itself to the value (MOTION.md), the score
- * in its middle. The number carries the meaning, said in words by `label` (the level's name):
- * never a color.
+ * A risk score from 0 to 100 (brief v3 §5): a turquoise ring that draws itself from 0 to the
+ * value (MOTION.md, 800 ms), the score in white in its middle. The number and `label` (the
+ * level's name) carry the meaning: never a color.
  */
 export function RiskRing({
   score,
   label,
   size = 40,
+  delay = 0,
 }: {
   score: number;
   label: string;
   size?: number;
+  /** Seconds before it draws: the rows of a list one after the other. */
+  delay?: number;
 }) {
-  const stroke = 3;
+  const stroke = size >= 40 ? 3 : 2.5;
   const radius = (size - stroke) / 2;
   const share = Math.max(0, Math.min(100, score)) / 100;
   return (
@@ -32,7 +35,7 @@ export function RiskRing({
           r={radius}
           fill="none"
           strokeWidth={stroke}
-          className="stroke-line"
+          className="stroke-black-600"
         />
         <motion.circle
           cx={size / 2}
@@ -41,13 +44,18 @@ export function RiskRing({
           fill="none"
           strokeWidth={stroke}
           strokeLinecap="round"
-          className="stroke-accent"
+          className="stroke-turq-300"
           initial={{ pathLength: 0 }}
           animate={{ pathLength: share }}
-          transition={ease('count')}
+          transition={ease('count', delay)}
         />
       </svg>
-      <span className="metric absolute text-xs text-fg">{Math.round(score)}</span>
+      <span
+        className="metric absolute text-fg"
+        style={{ fontSize: Math.max(10, Math.round(size * 0.3)) }}
+      >
+        {Math.round(score)}
+      </span>
     </span>
   );
 }

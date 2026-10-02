@@ -136,6 +136,7 @@ describe('signing in with Whop outside the iframe (sandbox)', () => {
       timezoneSet: true,
       companyName: null,
       companyLogo: false,
+      testMode: false,
     });
   });
 

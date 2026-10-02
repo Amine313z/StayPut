@@ -11,8 +11,8 @@ export interface SegmentedOption<T extends string> {
 
 /**
  * A choice among a few, side by side (a period, a language): a radio group the keyboard walks
- * with the arrows. The chosen one wears a pill that slides to it (MOTION.md: 250 ms, the brand's
- * easing; at once when the device asks for less motion).
+ * with the arrows. The chosen one is turquoise, on a pill that slides to it (MOTION.md: 250 ms,
+ * the brand's easing; at once when the device asks for less motion).
  */
 export function Segmented<T extends string>({
   options,
@@ -67,8 +67,8 @@ export function Segmented<T extends string>({
             tabIndex={checked ? 0 : -1}
             onClick={() => onChange(option.value)}
             onKeyDown={(event) => move(event, index)}
-            className={`relative rounded-md px-3 py-1 text-sm font-medium transition-colors duration-150 ease-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-              checked ? 'text-fg' : 'text-muted hover:text-fg'
+            className={`relative rounded-md px-3 py-1 text-[0.8125rem] font-medium transition-colors duration-150 ease-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+              checked ? 'text-turq-300' : 'text-subtle hover:text-fg'
             }`}
           >
             {checked ? (
@@ -76,7 +76,7 @@ export function Segmented<T extends string>({
                 layoutId={pill}
                 transition={ease('standard')}
                 aria-hidden="true"
-                className="absolute inset-0 rounded-md border border-line-strong bg-surface-2"
+                className="absolute inset-0 rounded-md bg-surface-3"
               />
             ) : null}
             <span className="relative">{option.label}</span>

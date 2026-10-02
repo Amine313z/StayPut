@@ -22,6 +22,8 @@ import {
   type AffiliateLinkView,
   type CreatorMessagesResult,
   type CreatorOfferMade,
+  type CreatorOffersResult,
+  type CreatorRetryResult,
   type CreatorSession,
   type DiscordChannelsUpdate,
   type HealthReport,
@@ -638,10 +640,11 @@ export function createApp(deps: AppDeps) {
     const companyId = c.get('companyId');
     const userId = c.get('userId');
     const db = c.get('db');
-    let company: { timezoneSet: boolean; name: string | null; logo: boolean } = {
+    let company: { timezoneSet: boolean; name: string | null; logo: boolean; testMode: boolean } = {
       timezoneSet: true,
       name: null,
       logo: false,
+      testMode: false,
     };
     if (db) {
       company = await recordAdmin(db, companyId, userId, deps.now());
@@ -657,6 +660,7 @@ export function createApp(deps: AppDeps) {
       timezoneSet: company.timezoneSet,
       companyName: company.name,
       companyLogo: company.logo,
+      testMode: company.testMode,
     };
     return c.json(session);
   });
@@ -1161,6 +1165,31 @@ export function createApp(deps: AppDeps) {
     },
   );
 
+  /**
+   * « Turn off » on the test-mode banner (brief v3 §7): from now on StayPut really sends. Only the
+   * test mode changes; the limits do not count as « set » by it (Getting started keeps the step).
+   */
+  app.post(
+    '/api/creator/:companyId/test-mode/off',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const companyId = c.get('companyId');
+      const current = await readActionSettings(db, c.get('userId'), companyId);
+      if (!current) return apiError('not_found', 'no settings for this company');
+      const next = { ...current, dryRun: false };
+      await db.query('select stayput.save_action_settings($1, $2::text::jsonb)', [
+        companyId,
+        JSON.stringify(next),
+      ]);
+      if (next.mode === 'auto') runActionsInBackground(c, companyId, deps.now());
+      return c.json(next);
+    },
+  );
+
   /** « Getting started »: the creator opened their members at risk (the first time is kept). */
   app.post(
     '/api/creator/:companyId/getting-started/reviewed',
@@ -1297,6 +1326,78 @@ export function createApp(deps: AppDeps) {
       }
       runActionsInBackground(c, companyId, now);
       return c.json(made as CreatorOfferMade);
+    },
+  );
+
+  /**
+   * « Offer a pause » to the members leaving, the action of the day (brief v3 §6.2): the same
+   * offer as each member's « Pause », to several at once (25 at most). A member who cannot get
+   * one (the « never contact » list, an offer open, no membership) is counted, never an error.
+   */
+  app.post(
+    '/api/creator/:companyId/members/offers',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ memberIds?: unknown; kind?: unknown }>().catch(() => null);
+      const ids = body?.memberIds;
+      const kind = body?.kind;
+      if (
+        !isCreatorOfferKind(kind) ||
+        !Array.isArray(ids) ||
+        ids.length === 0 ||
+        ids.length > PRIORITY_MESSAGE_LIMIT ||
+        !ids.every((id) => typeof id === 'string' && MEMBER_ID.test(id))
+      ) {
+        return apiError(
+          'invalid_request',
+          'expected { memberIds: mber_…[] (25 at most), kind: pause_offer | promo_offer }',
+        );
+      }
+      const companyId = c.get('companyId');
+      const now = deps.now();
+      let made = 0;
+      for (const memberId of new Set(ids as string[])) {
+        const [row] = await db.query<{ made: { error?: string } | null }>(
+          'select stayput.create_creator_offer($1, $2, $3, $4, $5::timestamptz) as made',
+          [companyId, memberId, kind, c.get('userId'), now.toISOString()],
+        );
+        if (row?.made && !row.made.error) made += 1;
+      }
+      if (made > 0) runActionsInBackground(c, companyId, now);
+      return c.json({
+        made,
+        refused: new Set(ids as string[]).size - made,
+      } satisfies CreatorOffersResult);
+    },
+  );
+
+  /**
+   * « Retry now », the action of the day for failed payments (brief v3 §6.2): every failed
+   * payment StayPut may retry is charged again now rather than at its planned hour
+   * (stayput.retry_failed_payments, 0029), approved by the click and through the guardrails
+   * like every action; in test mode, simulated.
+   */
+  app.post(
+    '/api/creator/:companyId/payments/retry',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const companyId = c.get('companyId');
+      const now = deps.now();
+      const [row] = await db.query<{ queued: number }>(
+        'select stayput.retry_failed_payments($1, $2, $3::timestamptz) as queued',
+        [companyId, c.get('userId'), now.toISOString()],
+      );
+      const queued = row?.queued ?? 0;
+      if (queued > 0) runActionsInBackground(c, companyId, now);
+      return c.json({ queued } satisfies CreatorRetryResult);
     },
   );
 
@@ -2316,7 +2417,7 @@ async function recordAdmin(
   companyId: string,
   userId: string,
   now: Date,
-): Promise<{ timezoneSet: boolean; name: string | null; logo: boolean }> {
+): Promise<{ timezoneSet: boolean; name: string | null; logo: boolean; testMode: boolean }> {
   const at = now.toISOString();
   return db.transaction(async (tx) => {
     await tx.query(
@@ -2339,15 +2440,20 @@ async function recordAdmin(
       timezone_set: boolean;
       name: string | null;
       logo: boolean;
+      test_mode: boolean;
     }>(
-      `select timezone_set_at is not null as timezone_set, name, logo_url is not null as logo
-         from stayput.companies where id = $1`,
+      `select c.timezone_set_at is not null as timezone_set, c.name,
+              c.logo_url is not null as logo, coalesce(s.dry_run, false) as test_mode
+         from stayput.companies c
+         left join stayput.company_settings s on s.company_id = c.id
+        where c.id = $1`,
       [companyId],
     );
     return {
       timezoneSet: company?.timezone_set ?? true,
       name: company?.name ?? null,
       logo: company?.logo ?? false,
+      testMode: company?.test_mode ?? false,
     };
   });
 }

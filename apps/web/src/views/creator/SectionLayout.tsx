@@ -37,8 +37,10 @@ export function SectionLayout({ id }: { id: SectionId }) {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-fg">{t(section.label)}</h1>
-        <p className="mt-1 text-sm text-muted">{t(section.description)}</p>
+        <h1 className="title-page">{t(section.label)}</h1>
+        {section.description ? (
+          <p className="mt-1 text-sm text-muted">{t(section.description)}</p>
+        ) : null}
       </header>
       {tabs.length < 2 ? null : (
         <NavTabs

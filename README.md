@@ -21,7 +21,7 @@ il a sauvé.
 | 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les droits |
 | 5. Espace membre               | Faite, mise de côté pour la V1 (`MEMBER_SPACE_ENABLED`)   |
 | 6. Preuve de valeur            | En cours : l'argent sauvé (6.4) et l'accueil (6.2) faits  |
-| Refonte du design              | Tableau de bord refait (brief du 2/10), à valider         |
+| Refonte du design (v3)         | Jetons, logo, cadre et Tableau de bord faits, à valider   |
 
 ## Architecture
 
@@ -43,12 +43,15 @@ sur chaque table. Le Worker s'y connecte par Hyperdrive. Budget : 0 €.
 
 ### Le tableau de bord du créateur
 
-Un menu de rubriques sur le côté, qui se replie sur ses icônes ; en haut, la communauté (nom et
-logo lus chez Whop), la recherche d'un membre et le **Guide**. La langue (English par défaut,
-Français) et le thème se changent **uniquement** dans Réglages › Général ; l'identifiant brut de
-la communauté (`biz_…`) n'apparaît que là, dans « Développeur ». Sur un téléphone, les rubriques
-passent dans une barre en bas de l'écran. Les couleurs, polices et animations suivent
-[`docs/design-tokens.md`](./docs/design-tokens.md) et [`MOTION.md`](./MOTION.md).
+Noir, turquoise clair et blanc, en thème sombre seulement ; les chiffres et les titres en
+Satoshi, le reste en Geist. Un menu de rubriques sur le côté, qui se replie sur ses icônes ; en
+haut, le logo de StayPut, la communauté (nom et logo lus chez Whop), la recherche d'un membre
+(⌘K ou Ctrl K) et le **Guide**. Quand le mode test est actif, une fine barre le dit, avec
+« Désactiver ». La langue (English par défaut, Français) se change **uniquement** dans
+Réglages › Général ; l'identifiant brut de la communauté (`biz_…`) n'apparaît que là, dans
+« Développeur ». Sur un téléphone, les rubriques passent dans une barre en bas de l'écran. Les
+couleurs, polices et animations suivent [`docs/design-tokens.md`](./docs/design-tokens.md) et
+[`MOTION.md`](./MOTION.md).
 
 | Rubrique (EN · FR)            | Onglets                                             |
 | ----------------------------- | --------------------------------------------------- |
@@ -60,11 +63,13 @@ passent dans une barre en bas de l'écran. Les couleurs, polices et animations s
 | Settings · Réglages           | Général · Score de risque · Automatisations         |
 
 La page d'accueil répond à une seule question, « Est-ce que je perds de l'argent, et que faire
-aujourd'hui ? », en cinq blocs : l'argent (sauvé ce mois-ci, à risque, membres à risque), l'action
-prioritaire du jour en un bouton, la courbe de l'argent sauvé face à l'argent à risque (7, 30 ou
-90 jours), les cinq membres les plus urgents avec Écrire / Pause / Offre, et ce que StayPut a fait
-en 30 jours. Tant que la mise en route n'est pas finie, la carte « Pour bien démarrer » (Discord,
-première automatisation, membres à risque passés en revue, garde-fous) s'affiche au-dessus.
+aujourd'hui ? » : un bloc pour l'argent (sauvé ce mois-ci, à risque, membres à risque, et la
+courbe de l'argent sauvé face à l'argent à risque sur 7, 30 ou 90 jours), l'action prioritaire du
+jour en un bouton (approuver, relancer les paiements échoués, proposer une pause, écrire ; jamais
+« rien d'urgent » tant qu'un paiement échoué ou un départ demeure), les cinq membres les plus
+urgents avec Écrire / Pause / Offre, et ce que StayPut a fait en 30 jours. Tant que la mise en
+route n'est pas finie, la pastille « Getting started » (Discord, première automatisation,
+membres à risque passés en revue, limites) s'affiche sous le titre.
 
 Chaque onglet a son adresse (`/dashboard/<communauté>/<rubrique>/<onglet>`) ; une adresse
 inconnue ouvre le premier onglet de sa rubrique, et les anciennes (`/actions?view=history`)
@@ -102,7 +107,8 @@ npm run db:migrate     # applique les migrations (DATABASE_URL, voir .env.exampl
 Par GitHub Actions, sans rien installer : **Actions → Deploy → Run workflow**
 ([`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml)). Le workflow vérifie le code,
 applique les migrations manquantes, crée la connexion Hyperdrive au premier passage (cache
-désactivé), construit l'interface, publie le Worker avec ses secrets, puis vérifie `/health`
+désactivé), télécharge la police Satoshi chez Fontshare (sa licence interdit de la mettre dans le
+dépôt), construit l'interface, publie le Worker avec ses secrets, puis vérifie `/health`
 (jusqu'à 3 minutes).
 
 Adresse actuelle (sandbox Whop) : **https://stayput.chezbenz18.workers.dev**. La toute première
@@ -184,9 +190,9 @@ Whop du sandbox ».
 
 `https://stayput.chezbenz18.workers.dev/demo` montre le tableau de bord sur une communauté
 imaginaire (« Atlas Trading Club ») : rien n'y est réel, rien n'est envoyé, aucun compte n'est
-nécessaire. 56 membres, 90 jours d'historique, des annulations, des paiements échoués et la carte
-« Pour bien démarrer » à moitié faite (elle se coche quand on visite Membres et qu'on enregistre
-les garde-fous). Pour les captures de l'App Store et pour montrer StayPut ; dans l'app, le Guide
+nécessaire. 36 membres (39 avec ceux qui sont partis), 90 jours d'historique, des annulations,
+des paiements échoués et la pastille « Getting started » à 2 étapes sur 4 (elle se coche quand
+on visite Membres et qu'on enregistre les limites). Pour les captures de l'App Store et pour montrer StayPut ; dans l'app, le Guide
 y mène par « Explorer avec des données de démo ».
 
 ### Discord et Telegram (optionnels, gratuits)
@@ -229,7 +235,10 @@ avertissement avec la correction à faire, jamais un échec du déploiement.
   heures, webhooks reçus par type). Aucun nom, aucune adresse, aucun contenu. Il demande aussi
   au Worker en ligne ce qu'un navigateur reçoit (une page de chaque vue, son script, le relais
   `whop-frame.mjs`, `/health`, et `/api` sans jeton, qui doit être refusé). Le rapport
-  s'affiche dans le résumé de l'exécution.
+  s'affiche dans le résumé de l'exécution. Son job **look** ouvre la démo en ligne dans Chrome
+  (bureau et téléphone), vérifie que Satoshi et Geist se chargent et que le graphique a ses
+  données, et échoue sinon ; ses captures du Tableau de bord sont gardées sur la branche
+  `screenshots` du dépôt.
 - **Seed sandbox** (**Actions → Seed sandbox → Run workflow**, `seed`, `remove` ou `report`) :
   25 membres fictifs avec 60 jours d'historique dans « StayPut Test » (8 actifs, 5 en déclin,
   4 inactifs, 3 paiements échoués, 3 annulations programmées, 2 nouveaux dont un qui n'a encore
