@@ -17,7 +17,7 @@ export function Home() {
   return (
     <div className="mx-auto max-w-3xl space-y-8 py-6 sm:py-12">
       <div className="space-y-4 text-center">
-        <StayPutMark className="mx-auto size-12" />
+        <StayPutMark size={48} className="mx-auto" />
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{t('home.title')}</h1>
         <p className="text-lg text-muted">{t('app.tagline')}</p>
       </div>

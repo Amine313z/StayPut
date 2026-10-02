@@ -19,14 +19,22 @@ export function TelegramIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 /** StayPut's mark: the favicon's rounded square and S. */
-export function StayPutMark(props: SVGProps<SVGSVGElement>) {
+/**
+ * StayPut's official logo (docs/brand-logo-1024.png): the folded « S » on its dark square, sharp
+ * at any size. Decorative: the name « StayPut » is always written next to it or said around it.
+ */
+export function StayPutMark({ size = 28, className = '' }: { size?: number; className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" aria-hidden="true" {...props}>
-      <rect width="32" height="32" rx="8" fill="var(--accent)" />
-      <path
-        d="M10 21.5c1.4 1.2 3.4 1.9 5.8 1.9 3.3 0 5.6-1.6 5.6-4.1 0-2.2-1.5-3.3-4.9-4l-1.7-.4c-1.7-.4-2.3-.8-2.3-1.6 0-.9.9-1.5 2.4-1.5 1.6 0 2.9.6 3.9 1.5l1.6-2.2c-1.3-1.1-3.2-1.8-5.4-1.8-3.1 0-5.4 1.7-5.4 4.1 0 2.1 1.4 3.3 4.6 4l1.7.4c1.9.4 2.5.9 2.5 1.7 0 1-.9 1.6-2.7 1.6-1.9 0-3.5-.7-4.6-1.8z"
-        fill="var(--on-accent)"
-      />
-    </svg>
+    <img
+      src="/logo-64.png"
+      srcSet="/logo-64.png 64w, /logo-128.png 128w, /logo-256.png 256w"
+      sizes={`${size}px`}
+      width={size}
+      height={size}
+      alt=""
+      aria-hidden="true"
+      decoding="async"
+      className={`shrink-0 select-none ${className}`}
+    />
   );
 }

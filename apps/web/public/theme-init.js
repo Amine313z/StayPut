@@ -1,11 +1,11 @@
-// Applies the saved theme, or the system's, before React starts (same rule as src/theme.tsx).
-// Storage can be blocked inside Whop's iframe: then the system theme applies.
+// Applies the saved theme, else dark (StayPut's own), before React starts (same rule as
+// src/theme.tsx). Storage can be blocked inside Whop's iframe: then dark applies.
 (function () {
-  var preference = 'system';
+  var preference = 'dark';
   try {
-    preference = localStorage.getItem('stayput.theme') || 'system';
+    preference = localStorage.getItem('stayput.theme') || 'dark';
   } catch {
-    // Keep the system theme.
+    // Keep the dark theme.
   }
   var dark =
     preference === 'dark' ||

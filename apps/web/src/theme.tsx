@@ -13,9 +13,12 @@ export function resolveTheme(preference: ThemePreference, systemDark: boolean): 
   return preference;
 }
 
+/** Dark is StayPut's own theme (the brand): the default until the user picks another. */
+export const DEFAULT_THEME: ThemePreference = 'dark';
+
 function storedPreference(): ThemePreference {
   const value = readPreference(STORAGE_KEY);
-  return THEME_PREFERENCES.find((p) => p === value) ?? 'system';
+  return THEME_PREFERENCES.find((p) => p === value) ?? DEFAULT_THEME;
 }
 
 interface ThemeContextValue {

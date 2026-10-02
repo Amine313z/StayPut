@@ -1,86 +1,118 @@
 @import 'tailwindcss';
-/* Inter, served by StayPut itself (the CSP allows no other origin); only the Latin files load. */
+/* Fonts served by StayPut itself (the CSP allows no other origin); only the Latin files load. */
 @import '@fontsource-variable/inter/wght.css';
+@import '@fontsource/space-grotesk/latin-600.css';
+@import '@fontsource/space-grotesk/latin-700.css';
 
 /* `dark:` follows the theme applied on <html> (theme-init.js, then src/theme.tsx). */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /*
- * Colors exist only here, as tokens. Every text / background pair used by the screens reaches
- * WCAG AA in both themes (test/contrast.test.ts computes it). `-soft` tokens are the tinted
- * backgrounds of badges and notices; their text is the token of the same name.
+ * The design tokens (docs/design-tokens.md, MOTION.md). Colors exist only here. Every text /
+ * background pair the screens use reaches WCAG AA in both themes (test/contrast.test.ts
+ * computes it). `-soft` tokens are the tinted backgrounds of badges and notices; their text is
+ * the token of the same name. Dark is StayPut's own theme (the brand, sampled from the logo);
+ * light keeps the same hierarchy.
  */
 :root {
   color-scheme: light;
-  --bg: #f6f7f9;
+  --bg-deep: #e8eeec;
+  --bg: #f3f6f5;
   --surface: #ffffff;
-  --surface-2: #f2f4f7;
-  --text: #111827;
-  --muted: #4b5565;
-  --border: #e2e6ec;
-  --accent: #1d6b58;
-  --accent-soft: #e3f1ec;
+  --surface-2: #eef3f1;
+  --glow: #cdefe2;
+  --text: #0b1512;
+  /* Secondary text (descriptions). */
+  --muted: #3f4b47;
+  /* Labels and placeholders: on bg and surface only. */
+  --subtle: #5c6864;
+  --border: rgb(11 21 18 / 0.12);
+  --border-strong: rgb(23 105 79 / 0.45);
+  --accent: #17694f;
+  --accent-2: #2e8a6c;
+  --accent-soft: #e0f2ea;
   --on-accent: #ffffff;
-  --danger: #b42318;
-  --danger-soft: #fdeceb;
-  --warning: #8a4b00;
-  --warning-soft: #fdf1dc;
-  /* Between warning and danger: a high risk (danger is kept for a departure). */
-  --serious: #b4400f;
-  --serious-soft: #fdeee5;
-  --info: #1d5aa6;
-  --info-soft: #e7effa;
+  --saved: #17694f;
+  --danger: #c92a2a;
+  --danger-soft: #fdecec;
+  --warning: #8a5300;
+  --warning-soft: #fff3dc;
+  --serious: #c92a2a;
+  --serious-soft: #fdecec;
+  --info: #1c6577;
+  --info-soft: #e3f2f6;
   /*
-   * The bars of the risk levels: marks, never text. Distinct side by side, for colour-blind eyes
-   * too (checked with the dataviz validator: ΔE ≥ 15 normal, ≥ 8 simulated); each bar also has
-   * its level's name, icon and count. « Low » is the accent.
+   * The risk levels as marks (bars, rings, dots), never as text: distinct side by side, for
+   * colour-blind eyes too (dataviz validator: adjacent ΔE ≥ 15 normal, ≥ 8 simulated); each
+   * mark also has its level's name, icon and count.
    */
-  --risk-departure: #9a0029;
-  --risk-high: #dc631e;
-  --risk-medium: #e6a700;
+  --risk-departure: #a51d36;
+  --risk-high: #e5484d;
+  --risk-medium: #e8a23b;
+  --risk-low: #3e9b79;
   /* The brands' own colors, for their marks only (never text). */
   --brand-discord: #5865f2;
   --brand-telegram: #229ed9;
-  --shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow: 0 1px 2px rgb(11 21 18 / 0.05), 0 1px 3px rgb(11 21 18 / 0.06);
+  --shadow-lift: 0 8px 24px -12px rgb(11 21 18 / 0.25);
+  /* Motion (MOTION.md): one easing, three durations. */
+  --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-micro: 150ms;
+  --dur-standard: 250ms;
+  --dur-page: 400ms;
 }
 
 [data-theme='dark'] {
   color-scheme: dark;
-  --bg: #0b0e13;
-  --surface: #12161d;
-  --surface-2: #191e27;
-  --text: #e7eaf0;
-  --muted: #9aa3b2;
-  --border: #252b36;
-  --accent: #5cc9a8;
-  --accent-soft: #11302a;
-  --on-accent: #07120f;
-  --danger: #ff8b7c;
-  --danger-soft: #3b1714;
-  --warning: #f2b555;
-  --warning-soft: #33260e;
-  --serious: #ff9b6a;
-  --serious-soft: #3a1f12;
-  --info: #84b8ff;
-  --info-soft: #13233a;
-  --risk-departure: #d93f5a;
-  --risk-high: #f3821d;
-  --risk-medium: #ffcf53;
+  --bg-deep: #060908;
+  --bg: #0b1512;
+  --surface: #10201c;
+  --surface-2: #142823;
+  --glow: #194a3b;
+  --text: #fbfcfb;
+  --muted: #c0c7c4;
+  --subtle: #7f8a86;
+  --border: rgb(167 215 196 / 0.16);
+  --border-strong: rgb(204 247 231 / 0.4);
+  --accent: #ccf7e7;
+  --accent-2: #a7d7c4;
+  --accent-soft: #143a30;
+  --on-accent: #0b1512;
+  --saved: #ccf7e7;
+  --danger: #ff6b6b;
+  --danger-soft: #3b1a1c;
+  --warning: #ffc56b;
+  --warning-soft: #3a2d14;
+  --serious: #ff6b6b;
+  --serious-soft: #3b1a1c;
+  --info: #9ecfdb;
+  --info-soft: #142b31;
+  --risk-departure: #c2364e;
+  --risk-high: #ff6b6b;
+  --risk-medium: #ffc56b;
+  --risk-low: #5dbb98;
   --brand-discord: #7983f5;
   --brand-telegram: #3fb0e6;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-lift: 0 12px 32px -16px rgb(0 0 0 / 0.7);
 }
 
 @theme inline {
+  --color-bg-deep: var(--bg-deep);
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-glow: var(--glow);
   --color-fg: var(--text);
   --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
   --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
   --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
   --color-accent-soft: var(--accent-soft);
   --color-on-accent: var(--on-accent);
+  --color-saved: var(--saved);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-warning: var(--warning);
@@ -92,12 +124,18 @@
   --color-risk-departure: var(--risk-departure);
   --color-risk-high: var(--risk-high);
   --color-risk-medium: var(--risk-medium);
+  --color-risk-low: var(--risk-low);
   --color-discord: var(--brand-discord);
   --color-telegram: var(--brand-telegram);
   --shadow-card: var(--shadow);
+  --shadow-lift: var(--shadow-lift);
+  --ease-brand: var(--ease-brand);
   --font-sans:
     'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
     Arial, sans-serif;
+  --font-display:
+    'Space Grotesk', 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
+    sans-serif;
 }
 
 body {
@@ -105,7 +143,32 @@ body {
   color: var(--text);
   font-family: var(--font-sans);
   font-feature-settings: 'cv11', 'ss01';
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * The brand's light, used sparingly: a soft glow at the top and two thin diagonal streaks, as on
+ * the logo's background. A fixed layer behind the page: it never moves with the content, and is
+ * too faint to change the contrast of any text over it.
+ */
+[data-theme='dark'] body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(70rem 36rem at 88% -12%, rgb(25 74 59 / 0.45), transparent 62%),
+    linear-gradient(
+      118deg,
+      transparent 0 64%,
+      rgb(204 247 231 / 0.035) 64% 65.2%,
+      transparent 65.2% 71%,
+      rgb(204 247 231 / 0.025) 71% 71.8%,
+      transparent 71.8%
+    ),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
 }
 
 /* Figures line up in columns and do not jump when they change. */
@@ -113,14 +176,87 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* A hero figure: the money first, in the display face. */
+.metric-hero {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(2.25rem, 1.6rem + 1.6vw, 3.25rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A figure of second rank, same face. */
+.metric {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The small label above a figure or a block. */
+.label-caps {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--subtle);
+}
+
+/* The soft glow behind a key figure. Decoration: never strong enough to change the contrast. */
+.glow-behind {
+  background-image: radial-gradient(
+    120% 90% at 0% 0%,
+    color-mix(in srgb, var(--glow) 70%, transparent) 0%,
+    transparent 70%
+  );
+}
+
+/* A block still loading: its shape, and a light passing over it (transform only). */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  background-color: var(--surface-2);
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--text) 7%, transparent),
+    transparent
+  );
+  animation: shimmer 1.4s var(--ease-brand) infinite;
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
 /*
- * The dimmed page behind a window (ui/Dialog.tsx). Written in full: an older browser's
- * ::backdrop does not inherit the tokens.
+ * The dimmed page behind a window (ui/Dialog.tsx, ui/Drawer.tsx), frosted. Written in full: an
+ * older browser's ::backdrop does not inherit the tokens.
  */
 dialog::backdrop {
-  background-color: rgb(16 24 40 / 0.55);
+  background-color: rgb(11 21 18 / 0.45);
+  backdrop-filter: blur(6px);
 }
 
 [data-theme='dark'] dialog::backdrop {
-  background-color: rgb(0 0 0 / 0.7);
+  background-color: rgb(6 9 8 / 0.65);
+}
+
+/* Less motion asked for: no light passing over loading blocks. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none;
+  }
 }

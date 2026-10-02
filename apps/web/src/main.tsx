@@ -1,3 +1,4 @@
+import { MotionConfig } from 'motion/react';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider, createBrowserRouter } from 'react-router';
@@ -18,7 +19,10 @@ createRoot(root).render(
   <StrictMode>
     <I18nProvider initialLocale={locale}>
       <ThemeProvider>
-        <RouterProvider router={createBrowserRouter(routes)} />
+        {/* Less motion asked for by the device: fades stay, movement goes (MOTION.md). */}
+        <MotionConfig reducedMotion="user">
+          <RouterProvider router={createBrowserRouter(routes)} />
+        </MotionConfig>
       </ThemeProvider>
     </I18nProvider>
   </StrictMode>,

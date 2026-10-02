@@ -49,7 +49,7 @@ export function AppShell() {
             to="/"
             className="flex items-center gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
-            <StayPutMark className="size-7" />
+            <StayPutMark size={28} />
             <span className="text-base font-semibold tracking-tight">{t('app.name')}</span>
           </Link>
           <div className="flex items-center gap-2">
