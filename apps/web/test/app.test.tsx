@@ -1392,6 +1392,85 @@ describe('activity sources', () => {
     );
   });
 
+  it('ties each platform’s accounts under its own tab, where its card says « below »', async () => {
+    // The founder, 2 October: since the tabs, the accounts to tie were only at the bottom of
+    // Activity, while the Discord and Telegram tabs said « tie the others below ».
+    const kev = {
+      platform: 'discord',
+      accountId: '940000000000000009',
+      name: 'Kev',
+      username: 'kev.trades',
+      messages: 14,
+      lastAt: '2026-10-01T09:00:00.000Z',
+      suggestions: [{ memberId: 'mber_3', name: 'Bruno Petit', strong: false }],
+    } satisfies AccountsView['unlinked'][number];
+    const bruno = {
+      platform: 'telegram',
+      accountId: '5550001',
+      name: 'Bruno',
+      username: 'bruno_p',
+      messages: 2,
+      lastAt: '2026-10-01T08:00:00.000Z',
+      suggestions: [],
+    } satisfies AccountsView['unlinked'][number];
+    const both: AccountsView = { unlinked: [kev, bruno], linked: [], dismissed: [] };
+    mockApi({
+      ...dashboard(MEMBERS, connected),
+      '/api/creator/biz_A1/accounts': [
+        { status: 200, body: both },
+        { status: 200, body: both },
+      ],
+      'POST /api/creator/biz_A1/accounts/link': [
+        {
+          status: 200,
+          body: {
+            unlinked: [bruno],
+            linked: [
+              {
+                platform: 'discord',
+                accountId: kev.accountId,
+                name: 'Kev',
+                username: 'kev.trades',
+                member: { id: 'mber_3', name: 'Bruno Petit' },
+                via: 'creator',
+              },
+            ],
+            dismissed: [],
+          } satisfies AccountsView,
+        },
+      ],
+      '/api/creator/biz_A1/integrations?lang=en': [
+        { status: 200, body: connected },
+        { status: 200, body: connected },
+      ],
+      '/api/creator/biz_A1/members': [
+        { status: 200, body: MEMBERS },
+        { status: 200, body: MEMBERS },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/sources/discord');
+    // Under the server's card, Discord's accounts only.
+    const discord = await screen.findByRole('region', { name: 'Discord accounts' });
+    expect(await within(discord).findByText('To tie (1)')).toBeTruthy();
+    expect(within(discord).getByText('@kev.trades')).toBeTruthy();
+    expect(within(discord).queryByText('@bruno_p')).toBeNull();
+    fireEvent.click(within(discord).getByRole('button', { name: 'Tie to Bruno Petit' }));
+    expect(await within(discord).findByText('Every account is tied to a member.')).toBeTruthy();
+    expect(bodies.get('POST /api/creator/biz_A1/accounts/link')).toEqual({
+      platform: 'discord',
+      accountId: kev.accountId,
+      memberId: 'mber_3',
+    });
+    expect(within(discord).getByText('Tied (1)')).toBeTruthy();
+
+    // Telegram's tab: its own account, tied from there too.
+    fireEvent.click(screen.getByRole('link', { name: 'Telegram' }));
+    const telegram = await screen.findByRole('region', { name: 'Telegram accounts' });
+    expect(await within(telegram).findByText('@bruno_p')).toBeTruthy();
+    expect(within(telegram).queryByText('@kev.trades')).toBeNull();
+    expect(within(telegram).getByRole('combobox', { name: 'Another member:' })).toBeTruthy();
+  });
+
   it('sets the creator’s own account aside as the team’s, and brings it back', async () => {
     const mine = {
       platform: 'telegram',
@@ -3742,6 +3821,21 @@ describe('the demo (/demo)', () => {
       }),
     ).toBeTruthy();
   }, 40_000);
+
+  it('ties a Discord account from its own tab, and the source’s count follows', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo/sources/discord');
+    expect(
+      await screen.findByText('2 recent authors not linked to a member', undefined, {
+        timeout: 3_000,
+      }),
+    ).toBeTruthy();
+    const accounts = await screen.findByRole('region', { name: 'Discord accounts' });
+    expect(await within(accounts).findByText('To tie (2)')).toBeTruthy();
+    fireEvent.click(within(accounts).getByRole('button', { name: /^Tie to Margaux Picard/ }));
+    expect(await within(accounts).findByText('To tie (1)')).toBeTruthy();
+    expect(await screen.findByText('1 recent author not linked to a member')).toBeTruthy();
+  });
 
   it('says calmly when a screen has no demo data, never as an error', async () => {
     const { ApiError } = await import('../src/api');

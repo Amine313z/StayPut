@@ -8,6 +8,7 @@ import {
   findBlockingLessons,
   normalizeWeights,
   renderMessage,
+  type AccountPlatform,
   type AccountsView,
   type ActionRow,
   type ActionView,
@@ -17,6 +18,7 @@ import {
   type CohortHorizon,
   type DiscordChannelChoice,
   type InsightsReport,
+  type IntegrationsStatus,
   type MemberRow,
   type MessageAction,
   type PeopleView,
@@ -64,6 +66,11 @@ export interface DemoPages {
   people: () => PeopleView;
   accounts: () => AccountsView;
   changeAccount: (what: string, body: Record<string, unknown>) => AccountsView | null;
+  /**
+   * The sources' counts as the accounts stand: one tied or set aside leaves the « recent authors
+   * not linked », as on the server (stayput.unlinked_authors counts the messages waiting).
+   */
+  integrations: (status: IntegrationsStatus) => IntegrationsStatus;
   riskSettings: () => RiskSettingsView;
   saveRiskSettings: (next: RiskSettingsView) => RiskSettingsView;
   alumni: () => AlumniView;
@@ -617,6 +624,20 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     followed: Boolean(followed),
   }));
 
+  // The accounts tied when the demo opens: those tied since add to the sources' counts.
+  const tiedAtStart: Readonly<Record<AccountPlatform, number>> = {
+    discord: accountsState.linked.filter((a) => a.platform === 'discord').length,
+    telegram: accountsState.linked.filter((a) => a.platform === 'telegram').length,
+  };
+  const sourceCounts = (platform: AccountPlatform, linkedMembers: number) => ({
+    linkedMembers:
+      linkedMembers +
+      accountsState.linked.filter((a) => a.platform === platform).length -
+      tiedAtStart[platform],
+    unlinkedAuthors: accountsState.unlinked.filter((a) => a.platform === platform && a.messages > 0)
+      .length,
+  });
+
   return {
     actions: (view) => ({
       view,
@@ -680,6 +701,11 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     platformActivity: () => platformActivity,
     people,
     accounts: () => accountsState,
+    integrations: (status) => ({
+      ...status,
+      discord: { ...status.discord, ...sourceCounts('discord', status.discord.linkedMembers) },
+      telegram: { ...status.telegram, ...sourceCounts('telegram', status.telegram.linkedMembers) },
+    }),
     changeAccount: (what, body) => {
       const matches = sameAccount(body);
       if (what === 'link') {

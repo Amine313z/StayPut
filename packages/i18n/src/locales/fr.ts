@@ -106,6 +106,12 @@ export const fr: Messages = {
   'accounts.title': 'Comptes Discord et Telegram',
   'accounts.description':
     'Les personnes de votre Discord et de votre Telegram, et quel membre c’est. StayPut relie seul un compte quand un seul membre porte exactement son nom ou son pseudo ; reliez les autres ici.',
+  'accounts.title.discord': 'Comptes Discord',
+  'accounts.description.discord':
+    'Les personnes de votre serveur Discord, et quel membre c’est. StayPut relie seul un compte quand un seul membre porte exactement son nom ou son pseudo ; reliez les autres ici.',
+  'accounts.title.telegram': 'Comptes Telegram',
+  'accounts.description.telegram':
+    'Les personnes de vos groupes Telegram, et quel membre c’est. StayPut relie seul un compte quand un seul membre porte exactement son nom ou son pseudo ; reliez les autres ici.',
   'accounts.toLink': 'À relier ({count})',
   'accounts.linked': 'Reliés ({count})',
   'accounts.empty':

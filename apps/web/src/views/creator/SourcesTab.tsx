@@ -1,4 +1,4 @@
-import type { IntegrationsStatus } from '@stayput/core';
+import type { AccountPlatform, IntegrationsStatus } from '@stayput/core';
 import { Activity, ShieldCheck } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { AccountsCard } from '../../components/AccountsCard';
@@ -41,6 +41,7 @@ export function DiscordTab() {
             api={api}
             onChange={integrations.reload}
           />
+          {status.discord.servers.length > 0 ? <PlatformAccounts platform="discord" /> : null}
           <Privacy />
         </div>
       )}
@@ -61,6 +62,7 @@ export function TelegramTab() {
             api={api}
             onChange={integrations.reload}
           />
+          {status.telegram.groups.length > 0 ? <PlatformAccounts platform="telegram" /> : null}
           <Privacy />
         </div>
       )}
@@ -107,7 +109,7 @@ export function ActivityTab() {
                 setPeopleKey((key) => key + 1);
               }}
             />
-            <PeopleCard api={api} whopAppId={status.whopAppId} refreshKey={peopleKey} />
+            {/* What to do before what to read: the accounts to tie, then everyone. */}
             <AccountsCard
               api={api}
               members={members.state.status === 'ready' ? members.state.data.members : []}
@@ -119,11 +121,31 @@ export function ActivityTab() {
                 setPeopleKey((key) => key + 1);
               }}
             />
+            <PeopleCard api={api} whopAppId={status.whopAppId} refreshKey={peopleKey} />
             <Privacy />
           </div>
         );
       }}
     </WithIntegrations>
+  );
+}
+
+/**
+ * A platform's accounts to tie to members, right under its card, which says « tie the others
+ * below » (the founder, 2 October: since the tabs, they were only at the bottom of Activity).
+ */
+function PlatformAccounts({ platform }: { platform: AccountPlatform }) {
+  const { api, integrations, members } = useCreatorData();
+  return (
+    <AccountsCard
+      api={api}
+      platform={platform}
+      members={members.state.status === 'ready' ? members.state.data.members : []}
+      onChange={() => {
+        integrations.reload();
+        members.reload();
+      }}
+    />
   );
 }
 

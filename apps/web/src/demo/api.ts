@@ -54,7 +54,7 @@ export async function answerDemo(method: string, path: string, body: unknown): P
       case 'sync':
         return answer(demo.sync);
       case 'integrations':
-        return answer(demo.integrations);
+        return answer(pages.integrations(demo.integrations));
       case 'settings/actions':
         return answer(demo.settings);
       case 'settings/risk':

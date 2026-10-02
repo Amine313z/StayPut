@@ -1,4 +1,5 @@
 import type {
+  AccountPlatform,
   AccountsView,
   DismissedAccount,
   LinkedAccount,
@@ -25,23 +26,39 @@ const VIA: Readonly<Record<NonNullable<LinkedAccount['via']>, MessageKey>> = {
   creator: 'accounts.via.creator',
 };
 
+/** Under a platform's own tab, its accounts only. */
+const TITLE: Readonly<Record<AccountPlatform, MessageKey>> = {
+  discord: 'accounts.title.discord',
+  telegram: 'accounts.title.telegram',
+};
+
+const DESCRIPTION: Readonly<Record<AccountPlatform, MessageKey>> = {
+  discord: 'accounts.description.discord',
+  telegram: 'accounts.description.telegram',
+};
+
 type Change = 'link' | 'unlink' | 'dismiss' | 'restore';
 
 /**
  * The Discord and Telegram accounts seen writing, and the members they are (decision of
  * 2026-10-01): StayPut ties an account by name when one member surely matches; the creator ties
  * the others in one click, from the suggestions or the whole list, sets aside who is no member,
- * and unties a mistake. Their messages wait 30 days for that.
+ * and unties a mistake. Their messages wait 30 days for that. Under the Discord and the Telegram
+ * tabs, right below the card that says « tie the others below », each platform's own; on the
+ * Activity tab, both.
  */
 export function AccountsCard({
   api,
   members,
+  platform,
   refreshKey = 0,
   onChange,
 }: {
   api: string;
   /** The community's members, to choose from. */
   members: readonly MemberRow[];
+  /** One platform's accounts only; none: both. */
+  platform?: AccountPlatform;
   /** Read again when it changes: new messages may come from accounts to tie. */
   refreshKey?: number;
   /** After a change: the counts of the sources, and the members' activity, move. */
@@ -51,8 +68,9 @@ export function AccountsCard({
   const { state, retry, reload } = useApi<AccountsView>(`${api}/accounts`);
   // The answer of the creator's last change, until the list is read again.
   const [changed, setChanged] = useState<{ key: number; view: AccountsView } | null>(null);
-  const view =
+  const read =
     changed?.key === refreshKey ? changed.view : state.status === 'ready' ? state.data : null;
+  const view = read && platform ? onPlatform(read, platform) : read;
   const latestReload = useRef(reload);
   useEffect(() => {
     latestReload.current = reload;
@@ -70,8 +88,8 @@ export function AccountsCard({
   return (
     <Card
       icon={<UsersRound aria-hidden="true" className="size-4" />}
-      title={t('accounts.title')}
-      description={t('accounts.description')}
+      title={t(platform ? TITLE[platform] : 'accounts.title')}
+      description={t(platform ? DESCRIPTION[platform] : 'accounts.description')}
     >
       {view ? (
         <Accounts view={view} members={members} change={change} />
@@ -82,6 +100,15 @@ export function AccountsCard({
       )}
     </Card>
   );
+}
+
+/** The accounts of one platform. */
+function onPlatform(view: AccountsView, platform: AccountPlatform): AccountsView {
+  return {
+    unlinked: view.unlinked.filter((account) => account.platform === platform),
+    linked: view.linked.filter((account) => account.platform === platform),
+    dismissed: view.dismissed.filter((account) => account.platform === platform),
+  };
 }
 
 function Accounts({

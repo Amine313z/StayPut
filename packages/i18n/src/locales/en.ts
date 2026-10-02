@@ -105,6 +105,12 @@ export const en = {
   'accounts.title': 'Discord and Telegram accounts',
   'accounts.description':
     'The people on your Discord and Telegram, and which member each is. StayPut ties an account on its own when exactly one member has its name or username; tie the others here.',
+  'accounts.title.discord': 'Discord accounts',
+  'accounts.description.discord':
+    'The people on your Discord server, and which member each is. StayPut ties an account on its own when exactly one member has its name or username; tie the others here.',
+  'accounts.title.telegram': 'Telegram accounts',
+  'accounts.description.telegram':
+    'The people in your Telegram groups, and which member each is. StayPut ties an account on its own when exactly one member has its name or username; tie the others here.',
   'accounts.toLink': 'To tie ({count})',
   'accounts.linked': 'Tied ({count})',
   'accounts.empty': 'No one yet: each person on your server or in your group will show up here.',

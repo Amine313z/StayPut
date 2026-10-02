@@ -1756,3 +1756,19 @@ et Guide. Cette étape livre les jetons, le logo, les composants, le cadre et le
   qui » ouvre le filtre « risque élevé ».
 - Les autres pages gardent l'ancienne mise en page dans les nouvelles couleurs jusqu'à leur tour ;
   le Guide est encore du texte.
+
+### Correctif du 2 octobre : relier les comptes Discord et Telegram
+
+- Le fondateur ne trouvait plus comment relier les comptes Discord et Telegram aux membres. Rien
+  n'était cassé côté serveur : depuis le découpage d'Intégrations en onglets (Whop, Discord,
+  Telegram, Activité), la liste « À relier » n'existait plus qu'en bas de l'onglet Activité,
+  après le graphique et la liste de toutes les personnes (une quarantaine dans la démo). Les
+  onglets Discord et Telegram disaient pourtant « reliez les autres ci-dessous », sans rien en
+  dessous.
+- Chaque onglet a maintenant sa liste juste sous sa carte : « Comptes Discord » sous le serveur,
+  « Comptes Telegram » sous les groupes, chacun avec ses seuls comptes (relier, « C'est moi /
+  mon équipe », « Pas un membre », délier). Dans Activité, la liste des deux plateformes passe
+  avant la liste des personnes : ce qui est à faire avant ce qui est à lire.
+- Dans la démo, « auteurs récents non reliés » suit la liste, comme sur le serveur
+  (`stayput.unlinked_authors` compte les comptes dont des messages attendent) : il baisse quand
+  on relie ou qu'on écarte quelqu'un. Il disait 3 quand la liste en montrait 2.

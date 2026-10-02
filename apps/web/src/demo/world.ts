@@ -595,7 +595,7 @@ export function createWorld(now: number): DemoWorld {
         },
       ],
       linkedMembers: 28,
-      unlinkedAuthors: 3,
+      unlinkedAuthors: 2,
     },
     telegram: {
       available: true,
