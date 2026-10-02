@@ -2,8 +2,9 @@ name: Inspect
 
 # Started by hand (GitHub -> Actions -> Inspect -> Run workflow) or by Claude through the API:
 # what the database holds, as counts only (scripts/ops/inspect.ts), which permissions Whop
-# grants the app's key (scripts/ops/whop-permissions.ts), and how Telegram sees the connected
-# groups (scripts/ops/telegram-groups.ts). It changes nothing.
+# grants the app's key (scripts/ops/whop-permissions.ts), how Telegram sees the connected
+# groups (scripts/ops/telegram-groups.ts), and what a browser gets from the deployed Worker.
+# It changes nothing.
 on:
   workflow_dispatch:
 
@@ -32,3 +33,36 @@ jobs:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: npx tsx scripts/ops/telegram-groups.ts
+
+      # What a browser gets from the deployed Worker, on the frame relay's path too: a view's
+      # page, its script, the relay itself, and /api without a token (refused, as it must be).
+      - name: Ask the deployed Worker for the site
+        if: always()
+        env:
+          STAYPUT_URL: ${{ vars.STAYPUT_URL || 'https://stayput.chezbenz18.workers.dev' }}
+        run: |
+          body="$RUNNER_TEMP/body"
+          failed=0
+          expect() {
+            local path=$1 code=$2 type=$3 got mark=ok
+            rm -f "$body"
+            got=$(curl -sS -o "$body" -w '%{http_code} %{content_type} %{size_download}' \
+              --max-time 20 "$STAYPUT_URL$path") || got="000 - 0"
+            if [[ "${got%% *}" != "$code" || "$got" != *"$type"* ]]; then mark=FAILED; failed=1; fi
+            echo "- \`$path\`: $got ($mark)" | tee -a "$GITHUB_STEP_SUMMARY"
+          }
+          echo "### The deployed Worker: $STAYPUT_URL" >> "$GITHUB_STEP_SUMMARY"
+          expect /health 200 json
+          echo "  \`$(cat "$body" 2>/dev/null)\`" | tee -a "$GITHUB_STEP_SUMMARY"
+          expect /dashboard/biz_2whAzkbCRpcGqQ 200 text/html
+          script=$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' "$body" | head -1 || true)
+          if [ -n "$script" ]; then
+            expect "$script" 200 javascript
+          else
+            echo "- no script in the page (FAILED)" | tee -a "$GITHUB_STEP_SUMMARY"
+            failed=1
+          fi
+          expect /experiences/exp_check 200 text/html
+          expect /whop-frame.mjs 200 javascript
+          expect /api/creator/biz_2whAzkbCRpcGqQ/session 401 json
+          exit $failed
