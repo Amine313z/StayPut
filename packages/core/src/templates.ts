@@ -15,6 +15,7 @@ export const TEMPLATE_VARIABLES = [
   'progress',
   'creator_name',
   'offer',
+  'buddy_name',
 ] as const;
 
 export type TemplateVariable = (typeof TEMPLATE_VARIABLES)[number];
@@ -36,6 +37,8 @@ export type MessageAction = Extract<
   | 'high_risk_message'
   | 'welcome_message'
   | 'alumni_followup'
+  | 'buddy_intro'
+  | 'mentor_intro'
 >;
 
 export const MESSAGE_ACTIONS: readonly MessageAction[] = [
@@ -45,6 +48,8 @@ export const MESSAGE_ACTIONS: readonly MessageAction[] = [
   'high_risk_message',
   'welcome_message',
   'alumni_followup',
+  'buddy_intro',
+  'mentor_intro',
 ];
 
 export type TemplateLocale = 'en' | 'fr';
@@ -77,6 +82,14 @@ export const DEFAULT_TEMPLATES: Readonly<
       title: 'News from {creator_name}',
       body: 'Hi[[ {first_name}]], a lot happened since you left. Here is a welcome-back code if you feel like coming back: {offer}.',
     },
+    buddy_intro: {
+      title: 'Meet your buddy[[, {first_name}]]',
+      body: 'Welcome to {creator_name}! {buddy_name} has been a member for a while and will help you get started. Say hello in the community.',
+    },
+    mentor_intro: {
+      title: 'A newcomer to welcome[[, {first_name}]]',
+      body: '{buddy_name} just joined {creator_name}. You know the way: say hello and share your best first step. If your buddy is still here in 30 days, you earn the Mentor badge.',
+    },
   },
   fr: {
     payment_failed_notice: {
@@ -103,7 +116,26 @@ export const DEFAULT_TEMPLATES: Readonly<
       title: 'Des nouvelles de {creator_name}',
       body: 'Salut[[ {first_name}]], il s’est passé beaucoup de choses depuis ton départ. Voici un code de retour si tu as envie de revenir : {offer}.',
     },
+    buddy_intro: {
+      title: 'Ton binôme t’attend[[, {first_name}]]',
+      body: 'Bienvenue dans {creator_name} ! {buddy_name} est membre depuis un moment et va t’aider à bien démarrer. Dis-lui bonjour dans la communauté.',
+    },
+    mentor_intro: {
+      title: 'Un nouveau à accueillir[[, {first_name}]]',
+      body: '{buddy_name} vient d’arriver dans {creator_name}. Tu connais le chemin : dis-lui bonjour et partage ton meilleur premier pas. Si ton binôme est toujours là dans 30 jours, tu gagnes le badge Mentor.',
+    },
   },
+};
+
+/**
+ * The buddy's name when Whop gives the member neither a name nor a username: the templates put
+ * `{buddy_name}` at the start of a sentence.
+ */
+export const BUDDY_FALLBACK: Readonly<
+  Record<TemplateLocale, Record<'buddy_intro' | 'mentor_intro', string>>
+> = {
+  en: { buddy_intro: 'Your buddy', mentor_intro: 'A new member' },
+  fr: { buddy_intro: 'Ton binôme', mentor_intro: 'Un nouveau membre' },
 };
 
 const OPTIONAL = /\[\[(.*?)\]\]/gs;

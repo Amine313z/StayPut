@@ -22,7 +22,13 @@ import {
   type TemplateLocale,
   type TemplateValues,
 } from '@stayput/core';
-import { announcementOf, followupMessage, followupOffer, renderActionMessage } from './actions';
+import {
+  announcementOf,
+  followupMessage,
+  followupOffer,
+  messageValues,
+  renderActionMessage,
+} from './actions';
 import { withUser, type TransactionalDb } from './db';
 
 /**
@@ -106,7 +112,8 @@ export async function readActions(
     }>(
       `select a.id, a.type, a.status, a.trigger, a.member_id, m.display_name, a.send_at,
               a.sent_at, a.created_at, a.blocked_reason, a.result,
-              case when a.trigger in ('exit_survey', 'alumni', 'milestone', 'member_request')
+              case when a.trigger in ('exit_survey', 'alumni', 'milestone', 'member_request',
+                                      'buddy_pair')
                    then a.content end as content,
               a.error_log -> -1 ->> 'error' as last_error,
               case when $3 <> 'history' and a.message_kind <> 'none'
@@ -139,7 +146,12 @@ export async function readActions(
                 row.type as MessageAction,
                 company.locale,
                 company.templates,
-                row.message_values,
+                messageValues(
+                  row.type as MessageAction,
+                  company.locale,
+                  row.message_values,
+                  row.content,
+                ),
               )
             : null;
       // An announcement: where it goes, and its words (the member's first name, as members'

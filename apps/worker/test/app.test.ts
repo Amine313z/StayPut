@@ -2453,6 +2453,70 @@ describe('the member space (SPEC Phase 5)', () => {
     });
   });
 
+  it('pairs a newcomer with a veteran: the creator turns it on, the member can opt out', async () => {
+    const { request, company, lina, boss, base } = await community(10);
+    // Lina joined two days ago; Sam is a member for months, engaged.
+    await t.db.query(`update stayput.members set joined_at = $2::timestamptz where id = $1`, [
+      'mber_Spc10',
+      new Date(NOW.getTime() - 2 * 86_400_000).toISOString(),
+    ]);
+    await t.db.query('select stayput.ingest_page($1, $2, null, $3::text::jsonb)', [
+      company,
+      'members',
+      JSON.stringify(page([member('mber_Sam10', 'user_sam10')])),
+    ]);
+    await t.db.query(
+      `insert into stayput.member_risk (company_id, member_id, score, level, sub_scores,
+                                        level_since, computed_at)
+       values ($1, 'mber_Sam10', 8, 'low', '{}', $2::timestamptz, $2::timestamptz)`,
+      [company, NOW.toISOString()],
+    );
+    const url = `/api/creator/${company}/buddies`;
+    expect(await (await request(url, boss)).json()).toEqual({
+      enabled: false,
+      activePairs: 0,
+      waitingNewcomers: 1,
+      veterans: 1,
+      mentors: 0,
+    });
+    // A member is no creator.
+    expect((await request(url, lina)).status).toBe(403);
+    expect((await request(url, json(boss, 'PUT', { enabled: 'yes' }))).status).toBe(400);
+    expect(await (await request(url, json(boss, 'PUT', { enabled: true }))).json()).toMatchObject({
+      enabled: true,
+    });
+    await t.db.query('select stayput.plan_buddies($1, $2::timestamptz)', [
+      company,
+      NOW.toISOString(),
+    ]);
+
+    const seen = (await (await request(`${base}?lang=fr`, lina)).json()) as MemberSpaceView;
+    expect(seen.buddies).toEqual({
+      optedOut: false,
+      partners: [
+        {
+          pairId: expect.any(String) as string,
+          role: 'veteran',
+          name: 'Name user_sam10',
+          joinedAt: '2026-06-01T10:00:00.000Z',
+          pairedAt: NOW.toISOString(),
+          sameCategory: null,
+        },
+      ],
+    });
+    // The team previews the space: nobody's buddy.
+    const preview = (await (await request(`${base}?lang=fr`, boss)).json()) as MemberSpaceView;
+    expect(preview.buddies).toBeNull();
+    expect((await request(`${base}/buddies`, json(boss, 'POST', { optOut: true }))).status).toBe(
+      403,
+    );
+    expect((await request(`${base}/buddies`, json(lina, 'POST', { optOut: 1 }))).status).toBe(400);
+    expect(
+      await (await request(`${base}/buddies`, json(lina, 'POST', { optOut: true }))).json(),
+    ).toEqual({ optedOut: true, partners: [] });
+    expect(await (await request(url, boss)).json()).toMatchObject({ activePairs: 0 });
+  });
+
   it('lets the creator write the goals proposed to members', async () => {
     const { request, company, boss, lina, base } = await community(3);
     const url = `/api/creator/${company}/goals`;

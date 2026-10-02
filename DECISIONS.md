@@ -1190,3 +1190,40 @@ nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en
   (Phase 4) ; sans lien, ce membre lit toujours qu'il recevra les détails.
 - **L'essai de l'équipe** dessine la carte comme celle d'un membre (« Votre nom » à la place du
   nom, sans nom de communauté) ; rien n'est publié, il n'y a pas de page à ouvrir.
+
+### Les binômes (migration 0025)
+
+- **Éteints par défaut** : le créateur les allume dans Réglages → « Binômes », qui montre aussi
+  les binômes en cours, les nouveaux en attente, les vétérans disponibles et les mentors.
+- **Qui est associé** : chaque nouveau membre (arrivé il y a moins de 7 jours) reçoit un vétéran :
+  un membre depuis plus de 30 jours dont le risque est faible, du même type d'objectif quand il y
+  en a un (« Autre » ne compte pas), puis le moins pris (3 binômes en cours au plus), le plus
+  engagé (score le plus bas), le plus ancien. Les nouveaux que le radar d'activation signale
+  passent en premier. Ni l'équipe, ni la liste « ne jamais contacter », ni un membre qui a refusé.
+- **Interprétation de la SPEC** : la Phase 5 (point 8) parle de tout nouveau membre ; le tableau
+  des déclencheurs de la Phase 4 rattache le binôme au radar d'activation. J'ai suivi la Phase 5,
+  avec la priorité au radar : avec le radar seul, aucun nouveau n'aurait d'objectif (en fixer un
+  est une activité), et la règle « même type d'objectif » ne servirait jamais.
+- **La présentation** : deux actions, `buddy_intro` au nouveau et `mentor_intro` au vétéran
+  (déclencheur `buddy_pair`), des relances comme les autres : heure d'or, garde-fous (espacement
+  et plafonds), mode test (simulées), mode manuel (validées par le créateur). Modèles FR et EN
+  modifiables, avec la variable `{buddy_name}` (le prénom de l'autre). Un vétéran n'est associé
+  qu'une fois tous les 5 jours : l'espacement des garde-fous bloquerait sinon sa deuxième
+  présentation.
+- **Le binôme existe dès l'association** : chacun le voit dans son espace (le nom de l'autre,
+  depuis quand il est membre, le type d'objectif s'il est le même), même quand la présentation
+  attend le créateur ou est simulée en mode test.
+- **La fin** : l'un des deux part, refuse (« Pas de binôme pour moi »), ou passe sur la liste
+  « ne jamais contacter » : le binôme s'arrête, ses présentations pas encore parties sont
+  annulées, et un nouveau qui a encore moins de 7 jours reçoit un autre vétéran (jamais le même
+  deux fois). Éteindre les binômes arrête les nouvelles associations ; celles en cours vont à
+  leur terme.
+- **Le badge Mentor** : 30 jours après l'association, si le nouveau est toujours là, le vétéran
+  le gagne (une fois). L'espace d'un vétéran le montre « à obtenir » tant qu'il accueille
+  quelqu'un.
+- **Vie privée** : chacun ne voit de l'autre que son nom, depuis quand il est membre et le type
+  d'objectif s'il est le même ; jamais un score ni des chiffres.
+- **Ce qui manque** : l'API ne permet pas à une app d'ouvrir une conversation privée entre deux
+  membres (Phase 0 : messages privés « INCERTAIN », non utilisés). La présentation leur dit de se
+  saluer dans la communauté.
+- **L'essai de l'équipe** n'a pas de binôme : ils se font entre membres réels.

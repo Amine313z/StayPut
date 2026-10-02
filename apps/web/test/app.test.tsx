@@ -3,6 +3,7 @@ import type {
   AccountsView,
   AlumniView,
   AnnouncementsView,
+  BuddiesView,
   GoalProposalsView,
   MemberSpaceView,
   ResultAnswer,
@@ -1368,6 +1369,18 @@ describe('risk settings', () => {
         { status: 200, body: { enabled: false, at50: 3, at100: 7 } },
       ],
       '/api/creator/biz_A1/announcements': [{ status: 200, body: NO_ANNOUNCEMENTS }],
+      '/api/creator/biz_A1/buddies': [
+        {
+          status: 200,
+          body: {
+            enabled: false,
+            activePairs: 0,
+            waitingNewcomers: 2,
+            veterans: 0,
+            mentors: 0,
+          } satisfies BuddiesView,
+        },
+      ],
       ...answers,
     });
   const share = (name: string) =>
@@ -1456,6 +1469,33 @@ describe('risk settings', () => {
       at50: 5,
       at100: 7,
     });
+  });
+
+  it('turns the buddies on, and says when no veteran can take a newcomer yet', async () => {
+    settings({
+      'PUT /api/creator/biz_A1/buddies': [
+        {
+          status: 200,
+          body: {
+            enabled: true,
+            activePairs: 0,
+            waitingNewcomers: 2,
+            veterans: 0,
+            mentors: 0,
+          } satisfies BuddiesView,
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    const save = await screen.findByRole('button', { name: 'Save the buddies' });
+    expect(screen.getByText('2 newcomers waiting')).toBeTruthy();
+    expect(screen.getByText('0 veterans available')).toBeTruthy();
+    expect(save.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Pair each newcomer with a veteran' }));
+    expect(screen.getByText(/No member can be a veteran yet/)).toBeTruthy();
+    fireEvent.click(save);
+    expect(await screen.findByText('Buddies saved.')).toBeTruthy();
+    expect(bodies.get('PUT /api/creator/biz_A1/buddies')).toEqual({ enabled: true });
   });
 
   it('picks where the milestones are announced, among the places StayPut can post in', async () => {
@@ -2039,6 +2079,7 @@ describe('member space', () => {
     announce: null,
     cards: [],
     whopAppId: 'app_stayput',
+    buddies: { optedOut: false, partners: [] },
     ...over,
   });
   const open = (answers: Record<string, Answer[]>, locale: Locale = 'en') => {
@@ -2268,6 +2309,75 @@ describe('member space', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start the trial again' }));
     expect(screen.getByRole('button', { name: /Train regularly/ })).toBeTruthy();
     expect(screen.queryByText(/^Earned /)).toBeNull();
+  });
+
+  it('shows the newcomer their buddy, and lets them do without one', async () => {
+    const sam = {
+      pairId: 'a1b2c3d4-0000-4000-8000-000000000001',
+      role: 'veteran' as const,
+      name: 'Sam Lee',
+      joinedAt: '2026-06-01T10:00:00.000Z',
+      pairedAt: '2026-10-01T08:00:00.000Z',
+      sameCategory: 'body' as const,
+    };
+    open({
+      '/api/member/exp_E1/space?lang=en': [
+        {
+          status: 200,
+          body: space({ goal: WEIGHT, buddies: { optedOut: false, partners: [sam] } }),
+        },
+      ],
+      'POST /api/member/exp_E1/space/buddies': [
+        { status: 200, body: { optedOut: true, partners: [] } },
+        { status: 200, body: { optedOut: false, partners: [] } },
+      ],
+    });
+    expect(await screen.findByRole('heading', { name: 'Your buddy' })).toBeTruthy();
+    expect(screen.getByText('Sam Lee')).toBeTruthy();
+    expect(screen.getByText('Member since Jun 1, 2026')).toBeTruthy();
+    expect(screen.getByText('Same kind of goal: Body and health')).toBeTruthy();
+    expect(screen.getByText('StayPut shows each of you only the other’s name.')).toBeTruthy();
+    // No Mentor badge ahead for a newcomer.
+    expect(screen.queryByText('Mentor')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'No buddy for me' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, stop' }));
+    expect(await screen.findByText('You asked not to be paired with a buddy.')).toBeTruthy();
+    expect(bodies.get('POST /api/member/exp_E1/space/buddies')).toEqual({ optOut: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Accept a buddy again' }));
+    await vi.waitFor(() =>
+      expect(bodies.get('POST /api/member/exp_E1/space/buddies')).toEqual({ optOut: false }),
+    );
+    // Nobody paired yet: the card goes until a buddy comes.
+    await vi.waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Your buddy' })).toBeNull(),
+    );
+  });
+
+  it('shows the veteran the newcomers they welcome, and the Mentor badge ahead', async () => {
+    const newcomer = (n: number, name: string) => ({
+      pairId: `a1b2c3d4-0000-4000-8000-00000000000${n}`,
+      role: 'newcomer' as const,
+      name,
+      joinedAt: '2026-09-29T10:00:00.000Z',
+      pairedAt: '2026-10-01T08:00:00.000Z',
+      sameCategory: null,
+    });
+    open({
+      '/api/member/exp_E1/space?lang=en': [
+        {
+          status: 200,
+          body: space({
+            buddies: { optedOut: false, partners: [newcomer(1, 'Léa'), newcomer(2, 'Tom')] },
+          }),
+        },
+      ],
+    });
+    expect(await screen.findByRole('heading', { name: 'The newcomers you welcome' })).toBeTruthy();
+    expect(screen.getByText(/you earn the Mentor badge/)).toBeTruthy();
+    expect(screen.getByText('Léa')).toBeTruthy();
+    expect(screen.getByText('Tom')).toBeTruthy();
+    expect(screen.getByText('Mentor')).toBeTruthy();
   });
 
   it('makes a testimonial card of a result, with the affiliate link Whop gives', async () => {

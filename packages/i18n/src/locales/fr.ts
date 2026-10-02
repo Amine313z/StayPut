@@ -402,6 +402,38 @@ export const fr: Messages = {
   'space.trial.body':
     'Ce que voient vos membres : essayez comme le ferait l’un d’eux. Rien n’est enregistré.',
   'space.trial.reset': 'Recommencer l’essai',
+  'buddies.title': 'Binômes',
+  'buddies.body':
+    'Chaque nouveau membre est associé à un vétéran qui l’aide à démarrer. Les deux reçoivent une présentation (une notification Whop, qui suit vos réglages des actions), et le vétéran gagne le badge Mentor si le nouveau est toujours là 30 jours plus tard.',
+  'buddies.enable': 'Associer chaque nouveau membre à un vétéran',
+  'buddies.hint':
+    'Nouveau : arrivé il y a moins de 7 jours. Vétéran : membre depuis plus de 30 jours avec un risque faible, avec le même type d’objectif si possible, 3 nouveaux au plus. Les membres de la liste « ne jamais contacter » ne sont jamais associés, et chaque membre peut refuser.',
+  'buddies.active.one': '{count} binôme en cours',
+  'buddies.active.other': '{count} binômes en cours',
+  'buddies.waiting.one': '{count} nouveau en attente',
+  'buddies.waiting.other': '{count} nouveaux en attente',
+  'buddies.veterans.one': '{count} vétéran disponible',
+  'buddies.veterans.other': '{count} vétérans disponibles',
+  'buddies.mentors.one': '{count} mentor',
+  'buddies.mentors.other': '{count} mentors',
+  'buddies.noVeteran':
+    'Aucun membre ne peut encore être vétéran (plus de 30 jours dans la communauté, risque faible) : les nouveaux attendent.',
+  'buddies.save': 'Enregistrer les binômes',
+  'buddies.saved': 'Binômes enregistrés.',
+  'buddy.title': 'Votre binôme',
+  'buddy.mentorTitle': 'Les nouveaux que vous accueillez',
+  'buddy.veteranBody':
+    'Ce membre est dans la communauté depuis un moment et va vous aider à bien démarrer. Dites-lui bonjour dans la communauté !',
+  'buddy.mentorBody':
+    'Dites-leur bonjour et partagez votre meilleur premier pas. Si l’un d’eux est encore là 30 jours après votre rencontre, vous gagnez le badge Mentor.',
+  'buddy.since': 'Membre depuis le {date}',
+  'buddy.sameCategory': 'Même type d’objectif : {category}',
+  'buddy.someone': 'Un membre',
+  'buddy.privacy': 'StayPut ne montre à chacun que le nom de l’autre.',
+  'buddy.optOut': 'Pas de binôme pour moi',
+  'buddy.optOutConfirm': 'Oui, arrêter',
+  'buddy.optedOut': 'Vous avez demandé à ne pas avoir de binôme.',
+  'buddy.optIn': 'Accepter à nouveau un binôme',
   'card.title': 'Votre carte témoignage',
   'card.body':
     'Une image de votre progression à partager, avec un QR code vers une page qui montre que le résultat est réel.',
@@ -806,6 +838,9 @@ export const fr: Messages = {
   'actions.trigger.exit_survey': 'Réponse au questionnaire de départ',
   'actions.trigger.milestone': '{percent} d’un objectif atteints',
   'actions.trigger.member_request': 'à la demande du membre',
+  'actions.type.buddy_intro': 'Présentation du binôme',
+  'actions.type.mentor_intro': 'Nouveau à accueillir',
+  'actions.trigger.buddy_pair': 'nouveau binôme',
   'actions.trigger.alumni': '{days} jours après son départ, dans l’Alumni',
   'actions.status.proposed': 'À valider',
   'actions.status.approved': 'Validée',

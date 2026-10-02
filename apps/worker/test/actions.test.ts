@@ -981,3 +981,101 @@ describe('the announcement of a milestone (SPEC Phase 5, point 4)', () => {
     });
   });
 });
+
+describe('the buddies’ introductions (SPEC Phase 5, point 8)', () => {
+  beforeEach(async () => {
+    await t.db.query(`update stayput.actions set status = 'cancelled' where status = 'scheduled'`);
+  });
+
+  it('introduce each one to the other at their golden hour, as a follow-up', async () => {
+    const c = await company();
+    await t.db.query('select stayput.save_buddies($1, true)', [c]);
+    const ana = await member(c, { name: 'Ana Lopez' });
+    await risk(c, ana, { level: 'low', since: hoursAgo(48) });
+    const lea = await member(c, { name: 'Léa Martin' });
+    await t.db.query(`update stayput.members set joined_at = $2::timestamptz where id = $1`, [
+      lea,
+      hoursAgo(30),
+    ]);
+    const prepared = await prepareActions(t.db, c, NOW);
+    expect(prepared).toMatchObject({ planned: 2, scheduled: 2, blocked: 0 });
+    const intros = await t.db.query<{ type: string; member_id: string; send_at: string }>(
+      `select type, member_id, send_at::text as send_at from stayput.actions
+        where company_id = $1 and trigger = 'buddy_pair' order by type`,
+      [c],
+    );
+    // Nothing known of their hours: the creator's default, 19:00 in Paris.
+    expect(intros).toEqual([
+      { type: 'buddy_intro', member_id: lea, send_at: '2026-10-01 17:00:00+00' },
+      { type: 'mentor_intro', member_id: ana, send_at: '2026-10-01 17:00:00+00' },
+    ]);
+
+    const calls: { path: string; body: unknown }[] = [];
+    const whop = {
+      request: (_method: string, path: string, options?: { body?: unknown }) => {
+        calls.push({ path, body: options?.body });
+        return Promise.resolve({});
+      },
+    } as unknown as WhopClient;
+    expect(await executeDueActions(t.db, whop, new Date('2026-10-01T17:00:00Z'))).toEqual({
+      sent: 2,
+    });
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        {
+          path: '/notifications',
+          body: {
+            experience_id: 'exp_Club1',
+            user_ids: [`user_Act${lea.replace('mber_Act', '')}`],
+            title: 'Ton binôme t’attend, Léa',
+            content:
+              'Bienvenue dans Le Club ! Ana est membre depuis un moment et va t’aider à bien démarrer. Dis-lui bonjour dans la communauté.',
+          },
+        },
+        {
+          path: '/notifications',
+          body: {
+            experience_id: 'exp_Club1',
+            user_ids: [`user_Act${ana.replace('mber_Act', '')}`],
+            title: 'Un nouveau à accueillir, Ana',
+            content:
+              'Léa vient d’arriver dans Le Club. Tu connais le chemin : dis-lui bonjour et partage ton meilleur premier pas. Si ton binôme est toujours là dans 30 jours, tu gagnes le badge Mentor.',
+          },
+        },
+      ]),
+    );
+  });
+
+  it('name the buddy in words when Whop gave them no name', async () => {
+    const intro = (type: 'buddy_intro' | 'mentor_intro', locale: string): DueAction => ({
+      id: '1b2c3d4e-5f60-4a1b-8c2d-3e4f5a6b7c8d',
+      companyId: 'biz_X',
+      createdAt: '2026-10-01T08:00:00.000Z',
+      type,
+      attempts: 0,
+      content: { pair_id: 'p', buddy_id: 'mber_X', buddy_name: null },
+      globalKillSwitch: false,
+      killSwitch: false,
+      dryRun: true,
+      locale,
+      timezone: 'Europe/Paris',
+      quietHoursStart: 22,
+      quietHoursEnd: 8,
+      experienceId: 'exp_X',
+      templates: {},
+      member: { userId: 'user_X', doNotContact: false, joined: true },
+      payment: null,
+      membership: null,
+      values: { first_name: 'Lina', creator_name: 'Le Club' },
+    });
+    const at = Date.parse('2026-10-01T10:00:00Z');
+    expect(await runAction(intro('buddy_intro', 'fr'), null, at)).toMatchObject({
+      status: 'simulated',
+      result: { message: { body: expect.stringContaining('Ton binôme est membre') as string } },
+    });
+    expect(await runAction(intro('mentor_intro', 'en'), null, at)).toMatchObject({
+      status: 'simulated',
+      result: { message: { body: expect.stringMatching(/^A new member just joined/) as string } },
+    });
+  });
+});

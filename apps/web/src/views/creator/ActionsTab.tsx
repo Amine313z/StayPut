@@ -18,6 +18,7 @@ import {
   CreditCard,
   FlaskConical,
   Gift,
+  Handshake,
   HeartHandshake,
   History,
   Inbox,
@@ -32,6 +33,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
+  UserRoundPlus,
   X,
   Zap,
   type LucideIcon,
@@ -80,6 +82,8 @@ const TYPES: Readonly<Record<ActionType, { label: MessageKey; Icon: LucideIcon }
   welcome_message: { label: 'actions.type.welcome_message', Icon: Sparkles },
   alumni_followup: { label: 'actions.type.alumni_followup', Icon: Mail },
   milestone_announcement: { label: 'actions.type.milestone_announcement', Icon: Megaphone },
+  buddy_intro: { label: 'actions.type.buddy_intro', Icon: Handshake },
+  mentor_intro: { label: 'actions.type.mentor_intro', Icon: UserRoundPlus },
 };
 
 const TRIGGERS: Readonly<Record<string, MessageKey>> = {
@@ -90,6 +94,7 @@ const TRIGGERS: Readonly<Record<string, MessageKey>> = {
   activation_radar: 'actions.trigger.activation_radar',
   exit_survey: 'actions.trigger.exit_survey',
   member_request: 'actions.trigger.member_request',
+  buddy_pair: 'actions.trigger.buddy_pair',
 };
 
 const STATUSES: Readonly<Record<ActionStatus, { label: MessageKey; tone: Tone }>> = {

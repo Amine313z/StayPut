@@ -30,7 +30,11 @@ export type ActionType =
   /** A former member in the Alumni offer, 7, 30 and 60 days after leaving. */
   | 'alumni_followup'
   /** A member's milestone, announced in the community's chat at their request (SPEC Phase 5). */
-  | 'milestone_announcement';
+  | 'milestone_announcement'
+  /** A newcomer meets the veteran paired with them (SPEC Phase 5, buddies)… */
+  | 'buddy_intro'
+  /** …and the veteran meets the newcomer. */
+  | 'mentor_intro';
 
 export const ACTION_TYPES: readonly ActionType[] = [
   'payment_retry',
@@ -46,6 +50,8 @@ export const ACTION_TYPES: readonly ActionType[] = [
   'welcome_message',
   'alumni_followup',
   'milestone_announcement',
+  'buddy_intro',
+  'mentor_intro',
 ];
 
 export function isActionType(value: unknown): value is ActionType {
@@ -77,6 +83,9 @@ export const MESSAGE_KINDS: Readonly<Record<ActionType, MessageKind>> = {
   alumni_followup: 'relance',
   // A public message the member asked for, in the community's chat: not one to them.
   milestone_announcement: 'none',
+  // StayPut reaches out on its own: capped like any follow-up.
+  buddy_intro: 'relance',
+  mentor_intro: 'relance',
 };
 
 /** The creator's guardrails (company_settings), and the company's time zone. */

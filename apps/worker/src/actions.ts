@@ -1,4 +1,5 @@
 import {
+  BUDDY_FALLBACK,
   DEFAULT_TEMPLATES,
   MESSAGE_KINDS,
   PROMO_VALID_DAYS,
@@ -142,7 +143,8 @@ export async function prepareActions(
   const at = now.toISOString();
   const [plan] = await db.query<{ planned: number }>(
     `select stayput.plan_actions($1, $2::timestamptz)
-              + stayput.plan_alumni_followups($1, $2::timestamptz) as planned`,
+              + stayput.plan_alumni_followups($1, $2::timestamptz)
+              + stayput.plan_buddies($1, $2::timestamptz) as planned`,
     [companyId, at],
   );
   const [row] = await db.query<{ context: ScheduleContext | null }>(
@@ -251,7 +253,33 @@ function stale(type: ActionType, action: DueAction): string | null {
 
 /** The message of an action: the creator's template when they wrote one, else StayPut's. */
 export function actionMessage(action: DueAction, type: MessageAction): MessageTemplate {
-  return renderActionMessage(type, action.locale, action.templates, action.values);
+  return renderActionMessage(
+    type,
+    action.locale,
+    action.templates,
+    messageValues(type, action.locale, action.values, action.content),
+  );
+}
+
+/**
+ * The words of a message: the member's, and for a buddies' introduction the other one's first
+ * name, as it was when they were paired.
+ */
+export function messageValues(
+  type: MessageAction,
+  locale: string,
+  values: TemplateValues,
+  content: Record<string, unknown> | null,
+): TemplateValues {
+  if (type !== 'buddy_intro' && type !== 'mentor_intro') return values;
+  const name = content?.buddy_name;
+  return {
+    ...values,
+    buddy_name:
+      typeof name === 'string' && name.trim()
+        ? name
+        : BUDDY_FALLBACK[locale === 'fr' ? 'fr' : 'en'][type],
+  };
 }
 
 /**

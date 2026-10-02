@@ -85,10 +85,13 @@ import { LATEST_MIGRATION } from './schema-version';
 import { goneProofPage, proofPage } from './public-proof';
 import {
   makeCard,
+  parseBuddiesUpdate,
+  parseBuddyOptOut,
   parseEarnedDays,
   parseShareRequest,
   planEarnedDays,
   readAnnounceTo,
+  readBuddiesView,
   readEarnedDays,
   readGoalProposals,
   readMemberSpace,
@@ -96,8 +99,10 @@ import {
   recordOpen,
   recordResult,
   saveAnnounceTo,
+  saveBuddies,
   saveEarnedDays,
   saveGoalProposals,
+  setBuddyOptOut,
   setGoal,
   shareMilestone,
   spaceLocale,
@@ -783,6 +788,27 @@ export function createApp(deps: AppDeps) {
       return saved ? c.json(saved) : apiError('not_found', 'no settings for this company');
     },
   );
+
+  /**
+   * The buddies (SPEC Phase 5, point 8): a newcomer paired with a veteran who helps them start.
+   * On or off, and where they stand.
+   */
+  app.get('/api/creator/:companyId/buddies', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const view = await readBuddiesView(db, c.get('userId'), c.get('companyId'), deps.now());
+    return view ? c.json(view) : apiError('not_found', 'no settings for this company');
+  });
+
+  app.put('/api/creator/:companyId/buddies', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const enabled = parseBuddiesUpdate(await c.req.json<unknown>().catch(() => null));
+    if (enabled === null) return apiError('invalid_request', 'expected { enabled: boolean }');
+    await saveBuddies(db, c.get('companyId'), enabled);
+    const view = await readBuddiesView(db, c.get('userId'), c.get('companyId'), deps.now());
+    return view ? c.json(view) : apiError('not_found', 'no settings for this company');
+  });
 
   /**
    * Where the members' milestones are announced (SPEC Phase 5, point 4), and where they can be:
@@ -1790,6 +1816,29 @@ export function createApp(deps: AppDeps) {
       if (companyId instanceof Response) return companyId;
       const removed = await unpublishCard(db, companyId, c.get('userId'), proofId);
       return removed ? c.json({ removed }) : apiError('not_found', 'no such card of yours');
+    },
+  );
+
+  /** The member asks not to be paired with a buddy (their pairs end), or may be again. */
+  app.post(
+    '/api/member/:experienceId/space/buddies',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      if (c.get('accessLevel') === 'admin') {
+        return apiError('forbidden', 'the team previews the member space, nothing is recorded');
+      }
+      const optOut = parseBuddyOptOut(await c.req.json<unknown>().catch(() => null));
+      if (optOut === null) return apiError('invalid_request', 'expected { optOut: boolean }');
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const buddies = await setBuddyOptOut(db, companyId, c.get('userId'), optOut, deps.now());
+      return buddies
+        ? c.json(buddies)
+        : apiError('not_found', 'StayPut does not know this member yet');
     },
   );
 

@@ -13,6 +13,7 @@ import {
   type GoalEntry,
   type GoalInput,
   type GoalProposal,
+  type MemberBuddies,
   type MemberGoal,
   type MemberSpaceView,
   type Milestone,
@@ -62,6 +63,7 @@ import { Badge, Notice } from '../ui/Badge';
 import { Button, buttonClass } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { useWithUnit } from '../units';
+import { BuddyCard } from './BuddyCard';
 import { FIELD } from './SettingsParts';
 import { TestimonialCards, type CardBackend } from './Testimonial';
 
@@ -86,6 +88,7 @@ interface SpaceBackend extends CardBackend {
   setGoal: (goal: GoalInput, current: MemberSpaceView) => Promise<MemberSpaceView>;
   recordResult: (entry: ResultEntry, current: MemberSpaceView) => Promise<ResultAnswer>;
   share: (request: ShareRequest) => Promise<ShareAnswer>;
+  setBuddyOptOut: (optOut: boolean) => Promise<MemberBuddies>;
 }
 
 /**
@@ -107,6 +110,7 @@ export function MemberSpace({ api }: { api: string }) {
         await deleteJson(`${api}/space/card/${encodeURIComponent(proofId)}`);
       },
       affiliateLink: async () => (await getJson<AffiliateLinkView>(`${api}/space/affiliate`)).url,
+      setBuddyOptOut: (optOut) => postJson<MemberBuddies>(`${api}/space/buddies`, { optOut }),
     }),
     [api, locale],
   );
@@ -166,6 +170,8 @@ function TrialSpace({ preview }: { preview: MemberSpaceView }) {
       },
       removeCard: () => Promise.resolve(),
       affiliateLink: () => Promise.resolve(null),
+      // The trial has no buddy: pairs are made among the community's members.
+      setBuddyOptOut: (optOut) => Promise.resolve({ optedOut: optOut, partners: [] }),
     }),
     [t, locale],
   );
@@ -306,10 +312,21 @@ function Space({
           )}
         </div>
       </Card>
+      {shown.buddies ? (
+        <BuddyCard
+          buddies={shown.buddies}
+          categories={CATEGORY_LABELS}
+          onOptOut={backend.setBuddyOptOut}
+        />
+      ) : null}
       {(goal && shown.results.length > 0) || shown.cards.length > 0 ? (
         <TestimonialCards view={shown} backend={backend} trial={Boolean(trial)} />
       ) : null}
-      <BadgesCard badges={shown.badges} />
+      <BadgesCard
+        badges={shown.badges}
+        // A veteran welcoming a newcomer can earn the Mentor badge: it shows among those ahead.
+        ahead={shown.buddies?.partners.some((p) => p.role === 'newcomer') ? ['mentor'] : []}
+      />
     </>
   );
 }
@@ -1081,12 +1098,12 @@ function useBadgeHint(): (code: BadgeCode) => string {
   };
 }
 
-/** The badges earned, and those ahead with how to earn them. */
-function BadgesCard({ badges }: { badges: EarnedBadge[] }) {
+/** The badges earned, and those ahead with how to earn them (`ahead`: beyond the usual ones). */
+function BadgesCard({ badges, ahead }: { badges: EarnedBadge[]; ahead: readonly BadgeCode[] }) {
   const { t, date } = useI18n();
   const hint = useBadgeHint();
   const earned = new Map(badges.map((b) => [b.code, b.awardedAt]));
-  const shown = [...new Set<BadgeCode>([...badges.map((b) => b.code), ...ALWAYS_SHOWN])];
+  const shown = [...new Set<BadgeCode>([...badges.map((b) => b.code), ...ALWAYS_SHOWN, ...ahead])];
   const ordered = [
     ...shown.filter((code) => earned.has(code)),
     ...shown.filter((code) => !earned.has(code)),

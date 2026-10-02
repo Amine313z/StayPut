@@ -537,6 +537,51 @@ export interface MemberSpaceView {
   cards: TestimonialCard[];
   /** To open a card's public page through Whop inside its iframe. */
   whopAppId: string | null;
+  /** The member's buddies (SPEC Phase 5, point 8); null for the team's preview. */
+  buddies: MemberBuddies | null;
+}
+
+/** Someone paired with the member: what they are to the member, and what they share. */
+export interface BuddyPartner {
+  pairId: string;
+  /** `veteran`: the member who helps them start; `newcomer`: the one they help. */
+  role: 'newcomer' | 'veteran';
+  name: string | null;
+  /** When the other one joined the community. */
+  joinedAt: string | null;
+  pairedAt: string;
+  /** The other one's goal category, when it is the member's too. */
+  sameCategory: GoalCategory | null;
+}
+
+export interface MemberBuddies {
+  /** The member asked not to be paired. */
+  optedOut: boolean;
+  /** Their pairs under way: one veteran for a newcomer, up to 3 newcomers for a veteran. */
+  partners: BuddyPartner[];
+}
+
+/** POST …/space/buddies: the member asks not to be paired, or may be again. */
+export interface BuddyOptOutRequest {
+  optOut: boolean;
+}
+
+/**
+ * GET /api/creator/:companyId/buddies: the buddies on or off (SPEC Phase 5, point 8), and where
+ * they stand: the pairs under way, the newcomers waiting for one, the veterans who can take
+ * one, the members who earned the Mentor badge.
+ */
+export interface BuddiesView {
+  enabled: boolean;
+  activePairs: number;
+  waitingNewcomers: number;
+  veterans: number;
+  mentors: number;
+}
+
+/** PUT /api/creator/:companyId/buddies */
+export interface BuddiesUpdate {
+  enabled: boolean;
 }
 
 /** A testimonial card online: its public page, and what it shows. */

@@ -12,6 +12,8 @@ import {
   proofJustifies,
   type AnnounceDestination,
   type BadgeCode,
+  type BuddiesView,
+  type BuddyPartner,
   type CardRequest,
   type EarnedBadge,
   type EarnedDaysSettings,
@@ -19,6 +21,7 @@ import {
   type GoalProposal,
   type GoalProposalsView,
   type GoalResult,
+  type MemberBuddies,
   type MemberGoal,
   type MemberSpaceView,
   type Milestone,
@@ -143,6 +146,7 @@ export async function readMemberSpace(
       announce,
       cards: [],
       whopAppId: options.whopAppId ?? null,
+      buddies: null,
     };
   }
   return {
@@ -171,6 +175,7 @@ export async function readMemberSpace(
     announce,
     cards: await readCards(db, companyId, userId, options.origin ?? ''),
     whopAppId: options.whopAppId ?? null,
+    buddies: await readBuddies(db, companyId, userId),
   };
 }
 
@@ -568,4 +573,133 @@ export async function saveGoalProposals(
     companyId,
     proposals === null ? null : JSON.stringify(proposals),
   ]);
+}
+
+/** What stayput.member_buddies returns. */
+interface BuddiesRow {
+  optedOut: boolean;
+  partners: {
+    pairId: string;
+    role: string;
+    name: string | null;
+    joinedAt: string | null;
+    pairedAt: string;
+    sameCategory: string | null;
+  }[];
+}
+
+function buddiesOf(row: BuddiesRow): MemberBuddies {
+  return {
+    optedOut: row.optedOut === true,
+    partners: row.partners.map((p): BuddyPartner => ({
+      pairId: p.pairId,
+      role: p.role === 'veteran' ? 'veteran' : 'newcomer',
+      name: p.name,
+      joinedAt: p.joinedAt ? iso(p.joinedAt) : null,
+      pairedAt: iso(p.pairedAt),
+      sameCategory: isGoalCategory(p.sameCategory) ? p.sameCategory : null,
+    })),
+  };
+}
+
+/** The member's buddies (SPEC Phase 5, point 8); null for someone StayPut does not know. */
+export async function readBuddies(
+  db: Db,
+  companyId: string,
+  userId: string,
+): Promise<MemberBuddies | null> {
+  const [row] = await db.query<{ buddies: BuddiesRow | null }>(
+    'select stayput.member_buddies($1, $2) as buddies',
+    [companyId, userId],
+  );
+  return row?.buddies ? buddiesOf(row.buddies) : null;
+}
+
+/** POST …/space/buddies: `{ optOut: boolean }`. */
+export function parseBuddyOptOut(value: unknown): boolean | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const optOut = (value as Record<string, unknown>).optOut;
+  return typeof optOut === 'boolean' ? optOut : null;
+}
+
+/** The member asks not to be paired (their pairs end), or may be again. */
+export async function setBuddyOptOut(
+  db: Db,
+  companyId: string,
+  userId: string,
+  optOut: boolean,
+  now: Date,
+): Promise<MemberBuddies | null> {
+  const [row] = await db.query<{ known: boolean }>(
+    'select stayput.set_buddy_optout($1, $2, $3, $4::timestamptz) as known',
+    [companyId, userId, optOut, now.toISOString()],
+  );
+  return row?.known ? readBuddies(db, companyId, userId) : null;
+}
+
+/**
+ * The buddies as the creator sees them, under RLS: on or off, the pairs under way, the newcomers
+ * waiting for a buddy, the veterans who can take one, the mentors. Null for a company StayPut
+ * has no settings of.
+ */
+export async function readBuddiesView(
+  db: TransactionalDb,
+  userId: string,
+  companyId: string,
+  now: Date,
+): Promise<BuddiesView | null> {
+  const [row] = await withUser(db, userId, (tx) =>
+    tx.query<{
+      enabled: boolean | null;
+      active: number;
+      waiting: number;
+      veterans: number;
+      mentors: number;
+    }>(
+      `select (s.options ->> 'buddies')::boolean as enabled,
+              (select count(*) from stayput.buddy_pairs p
+                where p.company_id = s.company_id and p.status = 'active')::int as active,
+              (select count(*) from stayput.members m
+                where m.company_id = s.company_id and m.status = 'joined'
+                  and m.access_level is distinct from 'admin'
+                  and not m.do_not_contact and m.buddy_optout_at is null
+                  and m.joined_at > $2::timestamptz - interval '7 days'
+                  and not exists (select 1 from stayput.buddy_pairs p
+                                   where p.company_id = m.company_id
+                                     and p.newcomer_member_id = m.id
+                                     and p.status in ('active', 'completed')))::int as waiting,
+              (select count(*) from stayput.members m
+                 join stayput.member_risk r
+                   on r.company_id = m.company_id and r.member_id = m.id and r.level = 'low'
+                where m.company_id = s.company_id and m.status = 'joined'
+                  and m.access_level is distinct from 'admin'
+                  and not m.do_not_contact and m.buddy_optout_at is null
+                  and m.joined_at <= $2::timestamptz - interval '30 days')::int as veterans,
+              (select count(*) from stayput.member_badges b
+                where b.company_id = s.company_id and b.badge_code = 'mentor')::int as mentors
+         from stayput.company_settings s
+        where s.company_id = $1`,
+      [companyId, now.toISOString()],
+    ),
+  );
+  return row
+    ? {
+        enabled: row.enabled === true,
+        activePairs: row.active,
+        waitingNewcomers: row.waiting,
+        veterans: row.veterans,
+        mentors: row.mentors,
+      }
+    : null;
+}
+
+/** PUT /api/creator/:companyId/buddies: `{ enabled: boolean }`. */
+export function parseBuddiesUpdate(value: unknown): boolean | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const enabled = (value as Record<string, unknown>).enabled;
+  return typeof enabled === 'boolean' ? enabled : null;
+}
+
+export async function saveBuddies(db: Db, companyId: string, enabled: boolean): Promise<void> {
+  await db.query('select stayput.save_buddies($1, $2)', [companyId, enabled]);
 }

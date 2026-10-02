@@ -20,6 +20,7 @@ const preview: MemberSpaceView = {
   announce: null,
   cards: [],
   whopAppId: 'app_stayput',
+  buddies: null,
 };
 
 describe('the trial', () => {
