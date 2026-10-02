@@ -1287,6 +1287,29 @@ l'application dans Chromium ; son QR code, décodé par un lecteur indépendant,
 - **Le parcours a trouvé un défaut** : le nom de la communauté manquait partout (voir le
   correctif ci-dessus).
 
+### L'espace membre réuni dans le tableau de bord (2 octobre, demande du fondateur)
+
+Le fondateur n'avait l'espace membre que « par petits morceaux » : le tableau de bord dans le
+cadre de Whop, l'espace membre par un autre lien (la vue expérience), une carte témoignage reçue
+en image, sa page par un lien. Un onglet **Espace membre** du tableau de bord réunit tout, pour
+l'équipe :
+
+- **Les chiffres sur 30 jours** : objectifs en cours (et atteints depuis le début), résultats
+  notés et ceux qu'une capture appuie, membres actifs dans leur espace (ouverture, objectif ou
+  résultat : un membre qui note un résultat a utilisé son espace), badges gagnés, cartes en ligne.
+  Lus en tant que créateur, sous RLS, comme le reste du tableau de bord.
+- **Les cartes témoignage en ligne** (les 6 plus récentes, et combien en tout) : dessinées dans le
+  navigateur comme le membre les a partagées, QR code compris, avec « Ouvrir sa page » et
+  « Copier le lien ». Ce sont déjà des pages publiques : l'équipe n'y voit rien de plus que ce que
+  le membre a montré. Elle ne peut pas les retirer : seul le membre le peut.
+- **L'entraide** : binômes et défis de sauvetage, allumés ou non, en cours, avec le lien vers
+  leurs réglages (qui restent dans Réglages, où le fondateur les connaît).
+- **L'espace des membres à essayer** : le questionnaire de départ avec les offres du créateur,
+  puis l'objectif, les résultats, la carte et les badges, exactement comme la vue membre les
+  montre à l'équipe (rien n'est enregistré ni envoyé). Les mêmes composants, servis par
+  `/api/creator/:companyId/preview/retention` et `…/preview/space` : plus besoin de connaître
+  l'expérience de StayPut dans la communauté pour les voir.
+
 ### Reste à faire dans cette phase
 
 - Les permissions à ajouter dans Whop, avec celles de la phase 4 : `chat:read` et

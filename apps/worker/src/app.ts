@@ -95,6 +95,7 @@ import {
   readAnnounceTo,
   readBuddiesView,
   readRescuesView,
+  readSpaceOverview,
   readEarnedDays,
   readGoalProposals,
   readMemberSpace,
@@ -820,6 +821,56 @@ export function createApp(deps: AppDeps) {
     const view = await readBuddiesView(db, c.get('userId'), c.get('companyId'), deps.now());
     return view ? c.json(view) : apiError('not_found', 'no settings for this company');
   });
+
+  /**
+   * The member space in the dashboard (SPEC Phase 5), every part in one place: what members do
+   * with it over 30 days, the testimonial cards online, the buddies and the challenges.
+   */
+  app.get('/api/creator/:companyId/space', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const view = await readSpaceOverview(db, c.get('userId'), c.get('companyId'), deps.now(), {
+      origin: new URL(c.req.url).origin,
+      whopAppId: c.get('config').appId,
+    });
+    return view ? c.json(view) : apiError('not_found', 'no such company');
+  });
+
+  /**
+   * What members see, shown to the team in the dashboard: the previews the member view shows
+   * them (the departure survey with its offers, the space to try), where nothing is recorded.
+   */
+  app.get(
+    '/api/creator/:companyId/preview/retention',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      return c.json(await retentionFor(c, db, c.get('companyId'), deps.now()));
+    },
+  );
+
+  app.get(
+    '/api/creator/:companyId/preview/space',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      return c.json(
+        await readMemberSpace(db, c.get('companyId'), c.get('userId'), {
+          locale: spaceLocale(c.req.query('lang')),
+          preview: true,
+          fresh: [],
+          origin: new URL(c.req.url).origin,
+          whopAppId: c.get('config').appId,
+        }),
+      );
+    },
+  );
 
   /**
    * The rescue challenges (SPEC Phase 5, point 9): members inactive for 14 days shown, without

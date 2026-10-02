@@ -10,6 +10,7 @@ import type {
   RescueChallenge,
   ResultAnswer,
   ShareAnswer,
+  SpaceOverview,
   TestimonialCard,
   PlatformActivityView,
   ActionRow,
@@ -1703,6 +1704,144 @@ describe('signing in with Whop outside the iframe (sandbox)', () => {
     renderAt('/dashboard/biz_A1');
     expect(await screen.findByRole('heading', { name: 'Retention dashboard' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Sign out' })).toBeNull();
+  });
+});
+
+describe('the member space in the dashboard', () => {
+  const card: TestimonialCard = {
+    proofId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+    resultId: '5f0c3e1a-9b2d-4e8f-a1c3-d5e7f9b1c3d5',
+    level: 'justified',
+    url: 'https://stayput.example/v/7c9e6679-7425-40de-944b-e07fc1f90ae7',
+    display: {
+      community: 'Le Club',
+      locale: 'en',
+      goal: 'Reach 3,000 € a month',
+      unit: '€',
+      entry: 'total',
+      start: 0,
+      target: 3000,
+      value: 1650,
+      progress: 55,
+      recordedAt: '2026-09-30T10:00:00.000Z',
+      day: '2026-09-30',
+      publishedAt: '2026-10-02T01:42:00.000Z',
+      name: 'Léa Moreau',
+      affiliateUrl: null,
+    },
+  };
+  const overview: SpaceOverview = {
+    goals: { active: 3, achieved: 1 },
+    results: { last30: 12, justified30: 4, members30: 3 },
+    opens30: 7,
+    badges30: 9,
+    cards: { online: 8, latest: [card] },
+    buddies: { enabled: true, activePairs: 2 },
+    rescues: { enabled: false, open: 0, rescuedLast30: 0 },
+    whopAppId: 'app_stayput',
+  };
+  const preview: MemberSpaceView = {
+    preview: true,
+    known: false,
+    goal: null,
+    results: [],
+    badges: [],
+    proposals: [{ title: 'Train regularly', unit: 'sessions', category: 'practice', entry: 'add' }],
+    fresh: [],
+    rewards: { offered: null, received: [] },
+    announce: null,
+    cards: [],
+    whopAppId: 'app_stayput',
+    buddies: { optedOut: false, partners: [] },
+    rescues: null,
+  };
+  const survey: MemberRetentionView = {
+    creatorName: 'Le Club',
+    whopAppId: 'app_stayput',
+    alumniUrl: null,
+    preview: { offers: ACTION_SETTINGS.offers, testMode: false },
+    payment: null,
+    departure: null,
+    alumni: null,
+  };
+
+  it('gathers its figures, the cards online and the members’ space in one tab', async () => {
+    // A canvas that answers: the card is drawn as members shared it.
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
+      () =>
+        ({
+          font: '',
+          measureText: (text: string) => ({ width: text.length * 20 }),
+          fillText: vi.fn(),
+          fillRect: vi.fn(),
+          beginPath: vi.fn(),
+          moveTo: vi.fn(),
+          arcTo: vi.fn(),
+          closePath: vi.fn(),
+          fill: vi.fn(),
+        }) as never,
+    );
+    const toDataURL = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
+      .mockReturnValue('data:image/png;base64,QUJD');
+    try {
+      const calls = mockApi({
+        ...dashboard(),
+        '/api/creator/biz_A1/space': [{ status: 200, body: overview }],
+        '/api/creator/biz_A1/preview/retention': [{ status: 200, body: survey }],
+        '/api/creator/biz_A1/preview/space?lang=en': [{ status: 200, body: preview }],
+      });
+      renderAt('/dashboard/biz_A1/space');
+      expect(await screen.findByText('Goals under way')).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'Member space' }).getAttribute('aria-current')).toBe(
+        'page',
+      );
+      expect(screen.getByText('1 goal reached')).toBeTruthy();
+      expect(screen.getByText('4 backed by a screenshot')).toBeTruthy();
+      expect(screen.getByText('3 noted a result')).toBeTruthy();
+      // The cards online, drawn with their QR code, and the way to their page.
+      const image = await screen.findByRole('img', {
+        name: 'Testimonial card: Reach 3,000 € a month, 55% of the goal',
+      });
+      expect(image.getAttribute('src')).toBe('data:image/png;base64,QUJD');
+      expect(screen.getByRole('link', { name: /Open its page/ }).getAttribute('href')).toBe(
+        card.url,
+      );
+      expect(screen.getByText('And 7 more online.')).toBeTruthy();
+      // The team never takes a member’s card down.
+      expect(screen.queryByRole('button', { name: /Take the page down/ })).toBeNull();
+      // Members helping members: the buddies on, the challenges off, and where to set them.
+      expect(screen.getByText('2 pairs under way')).toBeTruthy();
+      expect(screen.getByText('Off')).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'Set them in Settings' }).getAttribute('href')).toBe(
+        '/dashboard/biz_A1/settings',
+      );
+      // Their space, to try: the survey and the goals, nothing sent.
+      expect(await screen.findByText('What your members see')).toBeTruthy();
+      expect(await screen.findByText('Train regularly')).toBeTruthy();
+      expect(calls).toContain('/api/creator/biz_A1/preview/space?lang=en');
+      expect(calls.filter((call) => !call.startsWith('/'))).toEqual([]);
+    } finally {
+      getContext.mockRestore();
+      toDataURL.mockRestore();
+    }
+  });
+
+  it('says how a card comes when none is online yet', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/space': [
+        { status: 200, body: { ...overview, cards: { online: 0, latest: [] } } },
+      ],
+      '/api/creator/biz_A1/preview/retention': [{ status: 200, body: survey }],
+      '/api/creator/biz_A1/preview/space?lang=en': [{ status: 200, body: preview }],
+    });
+    renderAt('/dashboard/biz_A1/space');
+    expect(
+      await screen.findByText(
+        'No card yet. A member makes theirs in their space, from one of their results.',
+      ),
+    ).toBeTruthy();
   });
 });
 

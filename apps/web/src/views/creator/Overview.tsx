@@ -21,17 +21,13 @@ import { useI18n } from '../../i18n';
 import { Avatar } from '../../ui/Avatar';
 import { Badge } from '../../ui/Badge';
 import { DiscordIcon, TelegramIcon } from '../../ui/BrandIcons';
+import { SECTION_LINK_CLASS } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { Stat } from '../../ui/Stat';
 import { useCreatorData } from '../CreatorView';
 
 /** Members listed at most in « Needs attention » and in the activation radar. */
 const LIST_LIMIT = 5;
-
-const LINK_CLASS =
-  'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-accent ' +
-  'hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 ' +
-  'focus-visible:outline-accent';
 
 /**
  * The first section: the figures, who is about to leave and why, the new members who did not
@@ -172,7 +168,7 @@ function Attention({ members, root }: { members: readonly MemberRow[]; root: str
       description={t('attention.description')}
       actions={
         flagged.length > 0 ? (
-          <Link to={`${root}/members`} className={LINK_CLASS}>
+          <Link to={`${root}/members`} className={SECTION_LINK_CLASS}>
             {t('attention.byRisk')}
             <ArrowRight aria-hidden="true" className="size-4" />
           </Link>
@@ -240,7 +236,7 @@ function Newcomers({ members, root }: { members: readonly MemberRow[]; root: str
       description={t('newcomers.description')}
       actions={
         newcomers.length > 0 ? (
-          <Link to={`${root}/members?filter=newcomers`} className={LINK_CLASS}>
+          <Link to={`${root}/members?filter=newcomers`} className={SECTION_LINK_CLASS}>
             {t('attention.seeAll', { count: newcomers.length })}
             <ArrowRight aria-hidden="true" className="size-4" />
           </Link>
@@ -292,7 +288,7 @@ function SourcesSummary({ status, root }: { status: IntegrationsStatus | null; r
       icon={<Plug aria-hidden="true" className="size-4" />}
       title={t('sources.title')}
       actions={
-        <Link to={`${root}/sources`} className={LINK_CLASS}>
+        <Link to={`${root}/sources`} className={SECTION_LINK_CLASS}>
           {t('sources.manage')}
           <ArrowRight aria-hidden="true" className="size-4" />
         </Link>

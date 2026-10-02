@@ -245,8 +245,14 @@ avec un lien vers son dernier message ; s'il revient, ceux qui s'en sont occupé
 Sauveteur.
 Chaque ouverture de l'espace et chaque résultat comptent comme de l'activité dans le score. Le
 créateur choisit les objectifs proposés dans **Réglages** (ceux de sa niche par défaut) ; dans
-la vue membre, l'équipe essaie l'espace sans rien enregistrer. Détails : `DECISIONS.md`,
-« Phase 5 ».
+la vue membre, l'équipe essaie l'espace sans rien enregistrer.
+
+Dans le **tableau de bord**, l'onglet **Espace membre** réunit tout cela au même endroit : les
+chiffres sur 30 jours (objectifs en cours, résultats notés et appuyés par une capture, membres
+actifs dans leur espace, badges, cartes en ligne), les cartes témoignage publiées par les membres,
+dessinées avec leur QR code et le lien de leur page, l'état des binômes et des défis de
+sauvetage, puis l'espace des membres à essayer (le questionnaire de départ et ses offres,
+l'objectif, la carte, les badges), sans rien enregistrer. Détails : `DECISIONS.md`, « Phase 5 ».
 
 ## Outils de la Phase 0
 

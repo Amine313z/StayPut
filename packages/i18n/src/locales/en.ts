@@ -799,6 +799,41 @@ export const en = {
 
   'creator.tab.actions': 'Actions',
 
+  'creator.tab.space': 'Member space',
+
+  'spaceTab.figures': 'Your member space in figures',
+  'spaceTab.goals': 'Goals under way',
+  'spaceTab.achieved.one': '{count} goal reached',
+  'spaceTab.achieved.other': '{count} goals reached',
+  'spaceTab.results': 'Results noted, 30 days',
+  'spaceTab.justified.one': '{count} backed by a screenshot',
+  'spaceTab.justified.other': '{count} backed by a screenshot',
+  'spaceTab.opens': 'Members active in their space, 30 days',
+  'spaceTab.noting.one': '{count} noted a result',
+  'spaceTab.noting.other': '{count} noted a result',
+  'spaceTab.badges': 'Badges won, 30 days',
+  'spaceTab.cards': 'Testimonial cards online',
+  'spaceTab.cards.title': 'Testimonial cards online',
+  'spaceTab.cards.body':
+    'The cards your members put online. Each QR code leads to a public page that shows the result is real.',
+  'spaceTab.cards.none':
+    'No card yet. A member makes theirs in their space, from one of their results.',
+  'spaceTab.cards.more.one': 'And {count} more online.',
+  'spaceTab.cards.more.other': 'And {count} more online.',
+  'spaceTab.help.title': 'Members helping members',
+  'spaceTab.help.body': 'Buddies and rescue challenges: members who help others stay.',
+  'spaceTab.help.settings': 'Set them in Settings',
+  'spaceTab.help.off': 'Off',
+  'spaceTab.help.pairs.one': '{count} pair under way',
+  'spaceTab.help.pairs.other': '{count} pairs under way',
+  'spaceTab.help.open.one': '{count} challenge open',
+  'spaceTab.help.open.other': '{count} challenges open',
+  'spaceTab.help.rescued.one': '{count} member back in 30 days',
+  'spaceTab.help.rescued.other': '{count} members back in 30 days',
+  'spaceTab.preview.title': 'Your members’ space, to try',
+  'spaceTab.preview.body':
+    'Exactly what they see in Whop. Try it: nothing you do here is recorded or sent.',
+
   'actions.title': 'Actions',
   'actions.description':
     'What StayPut does for your members, always through the guardrails: approve, read the message, see what happened.',

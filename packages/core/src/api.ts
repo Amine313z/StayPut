@@ -640,6 +640,29 @@ export interface TestimonialCard {
 }
 
 /**
+ * GET /api/creator/:companyId/space: the member space as the team sees it in the dashboard (SPEC
+ * Phase 5), every part of it in one place: what members do with it over 30 days, the testimonial
+ * cards they put online, the buddies and the rescue challenges. Counts only, and the cards that
+ * are public pages already: nothing a member did not show.
+ */
+export interface SpaceOverview {
+  /** Members with a goal under way, and the goals reached since the start. */
+  goals: { active: number; achieved: number };
+  /** Results noted over 30 days, those a screenshot backs, and the members who noted them. */
+  results: { last30: number; justified30: number; members30: number };
+  /** Members active in their space over 30 days: they opened it, set a goal or noted a result. */
+  opens30: number;
+  /** Badges won over 30 days. */
+  badges30: number;
+  /** The cards online: how many, and the newest. */
+  cards: { online: number; latest: TestimonialCard[] };
+  buddies: { enabled: boolean; activePairs: number };
+  rescues: { enabled: boolean; open: number; rescuedLast30: number };
+  /** StayPut's Whop app: a card's page opens through Whop from inside its frame. */
+  whopAppId: string | null;
+}
+
+/**
  * GET …/space/affiliate: the member's own affiliate link to the community, read from Whop (SPEC
  * 5.6), to offer on their card; null when Whop gives none.
  */

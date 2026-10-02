@@ -32,6 +32,7 @@ import {
   type ResultAnswer,
   type ResultEntry,
   type ShareRequest,
+  type SpaceOverview,
   type TemplateLocale,
   type TestimonialCard,
   type TestimonialDisplay,
@@ -822,6 +823,111 @@ export async function readRescuesView(
         rescuers: row.rescuers,
       }
     : null;
+}
+
+/** The cards the dashboard draws: the newest ones online (the count says how many in all). */
+export const OVERVIEW_CARDS = 6;
+
+/**
+ * The member space for the team, every part in one place (SPEC Phase 5): goals, results and
+ * badges over 30 days, the cards online (public pages already), the buddies and the challenges.
+ * Read as the creator, under RLS: someone not of the team reads nothing (null).
+ */
+export async function readSpaceOverview(
+  db: TransactionalDb,
+  userId: string,
+  companyId: string,
+  now: Date,
+  options: { origin: string; whopAppId: string | null },
+): Promise<SpaceOverview | null> {
+  const [row] = await withUser(db, userId, (tx) =>
+    tx.query<{
+      buddies: boolean | null;
+      rescues: boolean | null;
+      goals_active: number;
+      goals_achieved: number;
+      results_30: number;
+      justified_30: number;
+      members_30: number;
+      opens_30: number;
+      badges_30: number;
+      cards_online: number;
+      cards: CardRow[] | null;
+      pairs: number;
+      open: number;
+      rescued: number;
+    }>(
+      `with since as (select $2::timestamptz - interval '30 days' as at)
+       select (s.options ->> 'buddies')::boolean as buddies,
+              (s.options ->> 'rescue_challenges')::boolean as rescues,
+              (select count(*) from stayput.goals g
+                 join stayput.members m on m.company_id = g.company_id and m.id = g.member_id
+                where g.company_id = c.id and g.status = 'active'
+                  and m.status = 'joined')::int as goals_active,
+              (select count(*) from stayput.goals g
+                where g.company_id = c.id and g.status = 'achieved')::int as goals_achieved,
+              (select count(*) from stayput.results r
+                where r.company_id = c.id and r.recorded_at > (select at from since)
+                  and r.recorded_at <= $2::timestamptz)::int as results_30,
+              (select count(*) from stayput.results r
+                 join stayput.proofs p on p.company_id = r.company_id and p.result_id = r.id
+                where r.company_id = c.id and p.level = 'justified'
+                  and r.recorded_at > (select at from since)
+                  and r.recorded_at <= $2::timestamptz)::int as justified_30,
+              (select count(distinct r.member_id) from stayput.results r
+                where r.company_id = c.id and r.recorded_at > (select at from since)
+                  and r.recorded_at <= $2::timestamptz)::int as members_30,
+              (select count(distinct e.member_id) from stayput.activity_events e
+                where e.company_id = c.id and e.type in ('stayput_open', 'goal_update')
+                  and e.occurred_at > (select at from since)
+                  and e.occurred_at <= $2::timestamptz)::int as opens_30,
+              (select count(*) from stayput.member_badges b
+                where b.company_id = c.id and b.awarded_at > (select at from since)
+                  and b.awarded_at <= $2::timestamptz)::int as badges_30,
+              (select count(*) from stayput.proofs p
+                where p.company_id = c.id
+                  and (p.public_display ->> 'published')::boolean is true)::int as cards_online,
+              (select jsonb_agg(jsonb_build_object('proofId', x.id, 'resultId', x.result_id,
+                                                   'level', x.level, 'display', x.public_display)
+                                order by x.published desc, x.id)
+                 from (select p.id, p.result_id, p.level, p.public_display,
+                              p.public_display ->> 'publishedAt' as published
+                         from stayput.proofs p
+                        where p.company_id = c.id
+                          and (p.public_display ->> 'published')::boolean is true
+                        order by published desc, p.id
+                        limit $3) x) as cards,
+              (select count(*) from stayput.buddy_pairs b
+                where b.company_id = c.id and b.status = 'active')::int as pairs,
+              (select count(*) from stayput.rescue_challenges r
+                where r.company_id = c.id and r.status = 'open')::int as open,
+              (select count(*) from stayput.rescue_challenges r
+                where r.company_id = c.id and r.status = 'resolved'
+                  and r.resolved_at > (select at from since))::int as rescued
+         from stayput.companies c
+         left join stayput.company_settings s on s.company_id = c.id
+        where c.id = $1`,
+      [companyId, now.toISOString(), OVERVIEW_CARDS],
+    ),
+  );
+  if (!row) return null;
+  return {
+    goals: { active: row.goals_active, achieved: row.goals_achieved },
+    results: {
+      last30: row.results_30,
+      justified30: row.justified_30,
+      members30: row.members_30,
+    },
+    opens30: row.opens_30,
+    badges30: row.badges_30,
+    cards: {
+      online: row.cards_online,
+      latest: (row.cards ?? []).flatMap((card) => cardOf(card, options.origin) ?? []),
+    },
+    buddies: { enabled: row.buddies === true, activePairs: row.pairs },
+    rescues: { enabled: row.rescues === true, open: row.open, rescuedLast30: row.rescued },
+    whopAppId: options.whopAppId,
+  };
 }
 
 /** PUT /api/creator/:companyId/rescues: `{ enabled: boolean }`. */

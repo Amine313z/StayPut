@@ -819,6 +819,42 @@ export const fr: Messages = {
 
   'creator.tab.actions': 'Actions',
 
+  'creator.tab.space': 'Espace membre',
+
+  'spaceTab.figures': 'Votre espace membre en chiffres',
+  'spaceTab.goals': 'Objectifs en cours',
+  'spaceTab.achieved.one': '{count} objectif atteint',
+  'spaceTab.achieved.other': '{count} objectifs atteints',
+  'spaceTab.results': 'Résultats notés, 30 jours',
+  'spaceTab.justified.one': '{count} appuyé par une capture',
+  'spaceTab.justified.other': '{count} appuyés par une capture',
+  'spaceTab.opens': 'Membres actifs dans leur espace, 30 jours',
+  'spaceTab.noting.one': '{count} a noté un résultat',
+  'spaceTab.noting.other': '{count} ont noté un résultat',
+  'spaceTab.badges': 'Badges gagnés, 30 jours',
+  'spaceTab.cards': 'Cartes témoignage en ligne',
+  'spaceTab.cards.title': 'Cartes témoignage en ligne',
+  'spaceTab.cards.body':
+    'Les cartes que vos membres ont mises en ligne. Chaque QR code mène à une page publique qui montre que le résultat est réel.',
+  'spaceTab.cards.none':
+    'Aucune carte pour l’instant. Un membre crée la sienne dans son espace, à partir d’un de ses résultats.',
+  'spaceTab.cards.more.one': 'Et {count} de plus en ligne.',
+  'spaceTab.cards.more.other': 'Et {count} de plus en ligne.',
+  'spaceTab.help.title': 'Entraide entre membres',
+  'spaceTab.help.body':
+    'Les binômes et les défis de sauvetage : des membres qui aident les autres à rester.',
+  'spaceTab.help.settings': 'Les régler dans Réglages',
+  'spaceTab.help.off': 'Désactivés',
+  'spaceTab.help.pairs.one': '{count} binôme en cours',
+  'spaceTab.help.pairs.other': '{count} binômes en cours',
+  'spaceTab.help.open.one': '{count} défi ouvert',
+  'spaceTab.help.open.other': '{count} défis ouverts',
+  'spaceTab.help.rescued.one': '{count} membre revenu en 30 jours',
+  'spaceTab.help.rescued.other': '{count} membres revenus en 30 jours',
+  'spaceTab.preview.title': 'L’espace de vos membres, à essayer',
+  'spaceTab.preview.body':
+    'Exactement ce qu’ils voient dans Whop. Essayez : rien de ce que vous faites ici n’est enregistré ni envoyé.',
+
   'actions.title': 'Actions',
   'actions.description':
     'Ce que StayPut fait pour vos membres, toujours à travers les garde-fous : validez, relisez le message, voyez ce qui s’est passé.',

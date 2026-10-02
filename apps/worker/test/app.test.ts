@@ -7,6 +7,7 @@ import type {
   MemberSpaceView,
   ResultAnswer,
   ShareAnswer,
+  SpaceOverview,
   TestimonialCard,
   PlatformActivityView,
   ActionsPage,
@@ -2302,6 +2303,79 @@ describe('the member space (SPEC Phase 5)', () => {
       targetDate: NOW.toISOString().slice(0, 10),
     };
     expect((await request(`${base}/goal`, json(boss, 'POST', goal))).status).toBe(403);
+  });
+
+  it('brings the member space into the dashboard: its figures, cards online, previews', async () => {
+    const { request, company, lina, boss, base } = await community(12);
+    const overview = `/api/creator/${company}/space`;
+    expect(await (await request(overview, boss)).json()).toEqual({
+      goals: { active: 0, achieved: 0 },
+      results: { last30: 0, justified30: 0, members30: 0 },
+      opens30: 0,
+      badges30: 0,
+      cards: { online: 0, latest: [] },
+      buddies: { enabled: false, activePairs: 0 },
+      rescues: { enabled: false, open: 0, rescuedLast30: 0 },
+      whopAppId: APP_ID,
+    });
+
+    // A member opens their space, sets a goal, notes two results (one backed) and makes a card.
+    await request(`${base}?lang=fr`, lina);
+    const goal = {
+      title: 'Atteindre mon chiffre d’affaires mensuel',
+      unit: '€',
+      category: 'income',
+      entry: 'total',
+      start: 0,
+      target: 5000,
+      targetDate: new Date(NOW.getTime() + 90 * 86_400_000).toISOString().slice(0, 10),
+    };
+    const set = (await (
+      await request(`${base}/goal`, json(lina, 'POST', goal))
+    ).json()) as MemberSpaceView;
+    const goalId = set.goal!.id;
+    await request(`${base}/result`, json(lina, 'POST', { goalId, value: 1500 }));
+    const proof = { sha256: 'd'.repeat(64), numbers: [3250] };
+    const backed = (await (
+      await request(`${base}/result`, json(lina, 'POST', { goalId, value: 3250, proof }))
+    ).json()) as ResultAnswer;
+    const resultId = backed.space.results.find((r) => r.proof === 'justified')!.id;
+    const card = (await (
+      await request(
+        `${base}/card`,
+        json(lina, 'POST', { resultId, showName: false, affiliateUrl: null }),
+      )
+    ).json()) as TestimonialCard;
+
+    const seen = (await (await request(overview, boss)).json()) as SpaceOverview;
+    expect(seen).toMatchObject({
+      goals: { active: 1, achieved: 0 },
+      results: { last30: 2, justified30: 1, members30: 1 },
+      opens30: 1,
+      cards: { online: 1, latest: [card] },
+    });
+    expect(seen.badges30).toBeGreaterThan(0);
+
+    // What members see, without an experience: the same previews as in the member view.
+    const retention = (await (
+      await request(`/api/creator/${company}/preview/retention`, boss)
+    ).json()) as MemberRetentionView;
+    expect(retention.preview).not.toBeNull();
+    const space = (await (
+      await request(`/api/creator/${company}/preview/space?lang=en`, boss)
+    ).json()) as MemberSpaceView;
+    expect(space).toMatchObject({ preview: true, known: false, goal: null, cards: [] });
+    expect(space.proposals.map((p) => p.title)).toContain('Train regularly');
+    // The team's previews record nothing: the member's opening is the only one.
+    expect(await opensOf(company)).toBe(1);
+    // The team only.
+    for (const path of [
+      overview,
+      `/api/creator/${company}/preview/retention`,
+      `/api/creator/${company}/preview/space`,
+    ]) {
+      expect((await request(path, lina)).status).toBe(403);
+    }
   });
 
   it('publishes the card of a member’s result, and its page until they take it down', async () => {

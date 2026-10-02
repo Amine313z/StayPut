@@ -21,6 +21,12 @@ const SIZES: Record<ButtonSize, string> = {
   md: 'px-4 py-2 text-sm',
 };
 
+/** A link inside a card that leads to another section: accent text, a soft hover. */
+export const SECTION_LINK_CLASS =
+  'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-accent ' +
+  'hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+  'focus-visible:outline-accent';
+
 export function buttonClass(
   variant: ButtonVariant = 'primary',
   size: ButtonSize = 'md',

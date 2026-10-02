@@ -1,5 +1,13 @@
 import type { CreatorSession, IntegrationsStatus, MembersPage } from '@stayput/core';
-import { ChartColumn, LayoutDashboard, Plug, SlidersHorizontal, Users, Zap } from 'lucide-react';
+import {
+  ChartColumn,
+  LayoutDashboard,
+  Plug,
+  SlidersHorizontal,
+  Target,
+  Users,
+  Zap,
+} from 'lucide-react';
 import { useEffect } from 'react';
 import { Outlet, useOutletContext, useParams } from 'react-router';
 import { useApi, useReloadOnReturn, type Loadable } from '../api';
@@ -44,7 +52,7 @@ export function CreatorView() {
 
 /**
  * The sections of the dashboard (SPEC Phase 2, then Phase 6): an overview, the members, the
- * analyses, the activity sources and the settings. The members and the sources are read once
+ * actions, the member space, the analyses, the activity sources and the settings. The members and the sources are read once
  * here and kept while the creator moves between sections; both are read again each time a
  * synchronization brings something new, the sources also each time the creator comes back to
  * the page (after connecting one in another tab).
@@ -101,6 +109,11 @@ function Dashboard({ session }: { session: CreatorSession }) {
             to: `${root}/actions`,
             label: t('creator.tab.actions'),
             icon: <Zap aria-hidden="true" className="size-4" />,
+          },
+          {
+            to: `${root}/space`,
+            label: t('creator.tab.space'),
+            icon: <Target aria-hidden="true" className="size-4" />,
           },
           {
             to: `${root}/insights`,

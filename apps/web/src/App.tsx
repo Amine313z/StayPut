@@ -7,6 +7,7 @@ import { InsightsTab } from './views/creator/InsightsTab';
 import { MembersTab } from './views/creator/MembersTab';
 import { Overview } from './views/creator/Overview';
 import { SettingsTab } from './views/creator/SettingsTab';
+import { SpaceTab } from './views/creator/SpaceTab';
 import { SourcesTab } from './views/creator/SourcesTab';
 import { Home } from './views/Home';
 import { MemberView } from './views/MemberView';
@@ -30,6 +31,7 @@ export const routes: RouteObject[] = [
           { index: true, element: <Overview /> },
           { path: 'members', element: <MembersTab /> },
           { path: 'actions', element: <ActionsTab /> },
+          { path: 'space', element: <SpaceTab /> },
           { path: 'insights', element: <InsightsTab /> },
           { path: 'sources', element: <SourcesTab /> },
           { path: 'settings', element: <SettingsTab /> },

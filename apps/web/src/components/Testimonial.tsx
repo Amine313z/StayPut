@@ -274,6 +274,61 @@ function CardForm({
   );
 }
 
+/**
+ * A card drawn in this browser: null while it is drawn, then its image as a PNG `data:` address
+ * (null when the browser cannot draw).
+ */
+export function useCardImage(card: TestimonialCard): { url: string | null } | null {
+  const i18n = useI18n();
+  const content = useMemo(() => cardContent(card, i18n), [card, i18n]);
+  // The image of `content`, once drawn.
+  const [image, setImage] = useState<{ content: CardContent; url: string | null } | null>(null);
+  useEffect(() => {
+    let live = true;
+    void renderCard(content).then((url) => {
+      if (live) setImage({ content, url });
+    });
+    return () => {
+      live = false;
+    };
+  }, [content]);
+  return image && image.content === content ? image : null;
+}
+
+/** The image of a card, as `useCardImage` draws it: while drawing, drawn, or not drawable. */
+export function CardPicture({
+  card,
+  drawn,
+  className = 'max-w-xs',
+}: {
+  card: TestimonialCard;
+  drawn: { url: string | null } | null;
+  className?: string;
+}) {
+  const { t, percent } = useI18n();
+  if (drawn === null) {
+    return (
+      <p role="status" className="flex items-center gap-2 text-sm text-muted">
+        <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-accent" />
+        {t('card.drawing')}
+      </p>
+    );
+  }
+  if (!drawn.url) return <Notice tone="info">{t('card.noImage')}</Notice>;
+  return (
+    <img
+      src={drawn.url}
+      width={CARD_WIDTH}
+      height={CARD_HEIGHT}
+      alt={t('card.alt', {
+        goal: card.display.goal,
+        percent: percent(card.display.progress / 100),
+      })}
+      className={`h-auto w-full rounded-xl border border-line shadow-card ${className}`}
+    />
+  );
+}
+
 /** A card: its image to download, its page's link to copy or open, and taking it down. */
 function CardView({
   card,
@@ -286,45 +341,12 @@ function CardView({
   trial: boolean;
   onRemove: () => Promise<void>;
 }) {
-  const i18n = useI18n();
-  const { t, percent } = i18n;
-  const content = useMemo(() => cardContent(card, i18n), [card, i18n]);
-  // The image of `content`, once drawn (null: the browser cannot draw it).
-  const [image, setImage] = useState<{ content: CardContent; url: string | null } | null>(null);
+  const { t } = useI18n();
+  const drawn = useCardImage(card);
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
-
-  useEffect(() => {
-    let live = true;
-    void renderCard(content).then((url) => {
-      if (live) setImage({ content, url });
-    });
-    return () => {
-      live = false;
-    };
-  }, [content]);
-
-  const drawn = image && image.content === content ? image : null;
   return (
     <div className="space-y-3">
-      {drawn === null ? (
-        <p role="status" className="flex items-center gap-2 text-sm text-muted">
-          <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-accent" />
-          {t('card.drawing')}
-        </p>
-      ) : drawn.url ? (
-        <img
-          src={drawn.url}
-          width={CARD_WIDTH}
-          height={CARD_HEIGHT}
-          alt={t('card.alt', {
-            goal: card.display.goal,
-            percent: percent(card.display.progress / 100),
-          })}
-          className="h-auto w-full max-w-xs rounded-xl border border-line shadow-card"
-        />
-      ) : (
-        <Notice tone="info">{t('card.noImage')}</Notice>
-      )}
+      <CardPicture card={card} drawn={drawn} />
       <div className="flex flex-wrap items-center gap-2">
         {drawn?.url ? (
           <a
