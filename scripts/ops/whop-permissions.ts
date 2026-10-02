@@ -107,6 +107,18 @@ async function main() {
         'Dashboard → Settings → Authorized apps.',
     );
   }
+  // The community's name (its public title), as each address answers the app key: StayPut
+  // shows it in the dashboard, the messages and the cards.
+  lines.push('', `### The community's name, read with the app key`, '');
+  lines.push('| address | HTTP | title |', '| --- | --- | --- |');
+  for (const path of [`/companies/${companyId}`, `/accounts/${companyId}`]) {
+    const answer = await fetch(`${WHOP_API_BASE_URL[env]}${path}`, {
+      headers: { Authorization: `Bearer ${key}`, 'Api-Version-Date': WHOP_API_VERSION_DATE },
+    });
+    const read = (await answer.json().catch(() => null)) as { title?: unknown } | null;
+    const title = typeof read?.title === 'string' ? read.title : '(none)';
+    lines.push(`| \`${path}\` | ${answer.status} | ${title} |`);
+  }
   for (const line of lines) console.info(line);
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, `\n${lines.join('\n')}\n`);
