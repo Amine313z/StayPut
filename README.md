@@ -12,14 +12,14 @@ il a sauvé.
 
 ## État
 
-| Phase                          | Statut                                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------ |
-| 0. Vérification de l'API Whop  | Validée le 30/09/2026                                                                            |
-| 1. Fondations                  | Validée le 01/10/2026                                                                            |
-| 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation                                        |
-| 3. Détection (score de risque) | Faite, en attente de validation                                                                  |
-| 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les droits                                        |
-| 5. Espace membre               | En cours : objectifs, preuves, badges, jours mérités, annonces, cartes témoignage, binômes faits |
+| Phase                          | Statut                                                    |
+| ------------------------------ | --------------------------------------------------------- |
+| 0. Vérification de l'API Whop  | Validée le 30/09/2026                                     |
+| 1. Fondations                  | Validée le 01/10/2026                                     |
+| 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation |
+| 3. Détection (score de risque) | Faite, en attente de validation                           |
+| 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les droits |
+| 5. Espace membre               | Faite, en attente de validation                           |
 
 ## Architecture
 
@@ -237,7 +237,10 @@ coché ; son lien d'affiliation Whop s'il en a un). Il peut retirer la page à t
 créateur les allume (Réglages → Binômes), chaque nouveau membre est associé à un vétéran engagé
 (même type d'objectif si possible, 3 nouveaux au plus) ; les deux reçoivent une présentation et
 se voient dans leur espace, et le vétéran gagne le badge Mentor si le nouveau est toujours là
-30 jours plus tard. Chacun peut refuser.
+30 jours plus tard. Chacun peut refuser. Avec les **défis de sauvetage** (Réglages → Défis de
+sauvetage), un membre inactif depuis 14 jours devient un défi que les autres voient sans son nom,
+avec un lien vers son dernier message ; s'il revient, ceux qui s'en sont occupés gagnent le badge
+Sauveteur.
 Chaque ouverture de l'espace et chaque résultat comptent comme de l'activité dans le score. Le
 créateur choisit les objectifs proposés dans **Réglages** (ceux de sa niche par défaut) ; dans
 la vue membre, l'équipe essaie l'espace sans rien enregistrer. Détails : `DECISIONS.md`,

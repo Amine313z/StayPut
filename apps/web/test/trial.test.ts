@@ -21,6 +21,7 @@ const preview: MemberSpaceView = {
   cards: [],
   whopAppId: 'app_stayput',
   buddies: null,
+  rescues: null,
 };
 
 describe('the trial', () => {

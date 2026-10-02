@@ -1227,3 +1227,31 @@ nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en
   membres (Phase 0 : messages privés « INCERTAIN », non utilisés). La présentation leur dit de se
   saluer dans la communauté.
 - **L'essai de l'équipe** n'a pas de binôme : ils se font entre membres réels.
+
+### Les défis de sauvetage (migration 0026)
+
+- **Éteints par défaut** : le créateur les allume dans Réglages → « Défis de sauvetage », qui
+  montre les défis ouverts, les membres revenus en 30 jours et les sauveteurs.
+- **Le défi** : un membre inactif depuis 14 jours (dans la communauté depuis 14 jours au moins)
+  devient un défi que les membres voient dans leur espace : « Aidez un membre qui a décroché :
+  répondez à son dernier message ». Sans son nom : seulement l'endroit (Discord, Telegram, le
+  chat Whop), le nom du serveur ou du groupe, depuis quand il s'est tu, et un lien vers son
+  dernier message quand la plateforme en donne un (un message Discord ; un message d'un
+  supergroupe Telegram, que ses membres peuvent ouvrir). Le chat Whop ne donne pas de lien vers
+  un message : le défi dit seulement « Dans le chat Whop ».
+- **Seulement un membre qu'on peut aider** : il faut que StayPut connaisse son dernier message
+  (90 jours au plus) ; sinon il n'y a rien à quoi répondre. Jamais l'équipe, ni la liste « ne
+  jamais contacter ».
+- **Mesure** : 10 défis ouverts au plus par communauté, les membres qui ont décroché le plus
+  récemment d'abord (les plus faciles à faire revenir) ; un défi dure 14 jours ; une fois par mois
+  au plus pour un même membre. Un membre voit 5 défis au plus, ceux que personne n'a encore pris
+  d'abord, jamais le sien.
+- **Le badge Sauveteur** : un membre « s'en occupe » ; si le membre décroché revient (n'importe
+  quelle activité après la création du défi), ceux qui s'en occupaient avant son retour gagnent
+  le badge (une fois). StayPut ne peut pas vérifier qu'ils ont vraiment répondu : il note qui a
+  pris le défi avant le retour.
+- **Vie privée** : StayPut ne dit jamais de qui il s'agit. Le lien mène au message là où il a
+  été écrit, dans un endroit que les membres voient déjà ; c'est le prix de « répondez à son
+  dernier message », et c'est pourquoi les défis restent éteints tant que le créateur ne les
+  allume pas.
+- **L'essai de l'équipe** n'a pas de défi : ils portent sur des membres réels.

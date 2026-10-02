@@ -23,9 +23,12 @@ import {
   type GoalResult,
   type MemberBuddies,
   type MemberGoal,
+  type MemberRescues,
   type MemberSpaceView,
   type Milestone,
   type ProofLevel,
+  type RescueChallenge,
+  type RescuesView,
   type ResultAnswer,
   type ResultEntry,
   type ShareRequest,
@@ -147,6 +150,7 @@ export async function readMemberSpace(
       cards: [],
       whopAppId: options.whopAppId ?? null,
       buddies: null,
+      rescues: null,
     };
   }
   return {
@@ -176,6 +180,7 @@ export async function readMemberSpace(
     cards: await readCards(db, companyId, userId, options.origin ?? ''),
     whopAppId: options.whopAppId ?? null,
     buddies: await readBuddies(db, companyId, userId),
+    rescues: await readRescues(db, companyId, userId),
   };
 }
 
@@ -702,4 +707,128 @@ export function parseBuddiesUpdate(value: unknown): boolean | null {
 
 export async function saveBuddies(db: Db, companyId: string, enabled: boolean): Promise<void> {
   await db.query('select stayput.save_buddies($1, $2)', [companyId, enabled]);
+}
+
+/** What stayput.member_rescues returns. */
+interface RescuesRow {
+  challenges: {
+    id: string;
+    platform: string;
+    place: string | null;
+    url: string | null;
+    lastMessageAt: string | null;
+    createdAt: string;
+    helpers: number;
+    joined: boolean;
+  }[];
+  rescued: number;
+}
+
+/** The links a challenge may open: a Discord message, a Telegram supergroup's message. */
+const MESSAGE_LINK = /^https:\/\/(discord\.com\/channels\/\d+\/\d+\/\d+|t\.me\/c\/\d+\/\d+)$/;
+
+function rescuesOf(row: RescuesRow): MemberRescues {
+  return {
+    challenges: row.challenges.flatMap((c): RescueChallenge[] => {
+      const platform =
+        c.platform === 'discord' || c.platform === 'telegram' || c.platform === 'whop'
+          ? c.platform
+          : null;
+      if (!platform || !c.lastMessageAt) return [];
+      return [
+        {
+          id: c.id,
+          platform,
+          place: c.place,
+          url: c.url && MESSAGE_LINK.test(c.url) ? c.url : null,
+          lastMessageAt: iso(c.lastMessageAt),
+          createdAt: iso(c.createdAt),
+          helpers: Number(c.helpers),
+          joined: c.joined === true,
+        },
+      ];
+    }),
+    rescued: Number(row.rescued),
+  };
+}
+
+/**
+ * The rescue challenges a member sees (SPEC Phase 5, point 9); null while the creator has them
+ * off, or for someone StayPut does not know.
+ */
+export async function readRescues(
+  db: Db,
+  companyId: string,
+  userId: string,
+): Promise<MemberRescues | null> {
+  const [row] = await db.query<{ rescues: RescuesRow | null }>(
+    'select stayput.member_rescues($1, $2) as rescues',
+    [companyId, userId],
+  );
+  return row?.rescues ? rescuesOf(row.rescues) : null;
+}
+
+/** The member takes a challenge up; null when it is not theirs to take (or no longer open). */
+export async function joinRescue(
+  db: Db,
+  companyId: string,
+  userId: string,
+  challengeId: string,
+  now: Date,
+): Promise<MemberRescues | null> {
+  const [row] = await db.query<{ joined: boolean }>(
+    'select stayput.join_rescue($1, $2, $3::uuid, $4::timestamptz) as joined',
+    [companyId, userId, challengeId, now.toISOString()],
+  );
+  return row?.joined ? readRescues(db, companyId, userId) : null;
+}
+
+/** The hourly round of a company's challenges: ended, resolved (badges), new. */
+export async function planRescues(db: Db, companyId: string, now: Date): Promise<number> {
+  const [row] = await db.query<{ made: number }>(
+    'select stayput.plan_rescues($1, $2::timestamptz) as made',
+    [companyId, now.toISOString()],
+  );
+  return row?.made ?? 0;
+}
+
+/** The challenges as the creator sees them, under RLS; null without settings. */
+export async function readRescuesView(
+  db: TransactionalDb,
+  userId: string,
+  companyId: string,
+  now: Date,
+): Promise<RescuesView | null> {
+  const [row] = await withUser(db, userId, (tx) =>
+    tx.query<{ enabled: boolean | null; open: number; rescued: number; rescuers: number }>(
+      `select (s.options ->> 'rescue_challenges')::boolean as enabled,
+              (select count(*) from stayput.rescue_challenges r
+                where r.company_id = s.company_id and r.status = 'open')::int as open,
+              (select count(*) from stayput.rescue_challenges r
+                where r.company_id = s.company_id and r.status = 'resolved'
+                  and r.resolved_at > $2::timestamptz - interval '30 days')::int as rescued,
+              (select count(*) from stayput.member_badges b
+                where b.company_id = s.company_id and b.badge_code = 'rescuer')::int as rescuers
+         from stayput.company_settings s
+        where s.company_id = $1`,
+      [companyId, now.toISOString()],
+    ),
+  );
+  return row
+    ? {
+        enabled: row.enabled === true,
+        open: row.open,
+        rescuedLast30: row.rescued,
+        rescuers: row.rescuers,
+      }
+    : null;
+}
+
+/** PUT /api/creator/:companyId/rescues: `{ enabled: boolean }`. */
+export function parseRescuesUpdate(value: unknown): boolean | null {
+  return parseBuddiesUpdate(value);
+}
+
+export async function saveRescues(db: Db, companyId: string, enabled: boolean): Promise<void> {
+  await db.query('select stayput.save_rescues($1, $2)', [companyId, enabled]);
 }

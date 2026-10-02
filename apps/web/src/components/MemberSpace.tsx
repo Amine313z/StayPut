@@ -15,6 +15,7 @@ import {
   type GoalProposal,
   type MemberBuddies,
   type MemberGoal,
+  type MemberRescues,
   type MemberSpaceView,
   type Milestone,
   type ProofInput,
@@ -64,6 +65,7 @@ import { Button, buttonClass } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { useWithUnit } from '../units';
 import { BuddyCard } from './BuddyCard';
+import { RescueCard } from './RescueCard';
 import { FIELD } from './SettingsParts';
 import { TestimonialCards, type CardBackend } from './Testimonial';
 
@@ -89,6 +91,7 @@ interface SpaceBackend extends CardBackend {
   recordResult: (entry: ResultEntry, current: MemberSpaceView) => Promise<ResultAnswer>;
   share: (request: ShareRequest) => Promise<ShareAnswer>;
   setBuddyOptOut: (optOut: boolean) => Promise<MemberBuddies>;
+  joinRescue: (challengeId: string) => Promise<MemberRescues>;
 }
 
 /**
@@ -111,6 +114,8 @@ export function MemberSpace({ api }: { api: string }) {
       },
       affiliateLink: async () => (await getJson<AffiliateLinkView>(`${api}/space/affiliate`)).url,
       setBuddyOptOut: (optOut) => postJson<MemberBuddies>(`${api}/space/buddies`, { optOut }),
+      joinRescue: (challengeId) =>
+        postJson<MemberRescues>(`${api}/space/rescues/${encodeURIComponent(challengeId)}`),
     }),
     [api, locale],
   );
@@ -172,6 +177,8 @@ function TrialSpace({ preview }: { preview: MemberSpaceView }) {
       affiliateLink: () => Promise.resolve(null),
       // The trial has no buddy: pairs are made among the community's members.
       setBuddyOptOut: (optOut) => Promise.resolve({ optedOut: optOut, partners: [] }),
+      // Nor any challenge: they are about the community's real members.
+      joinRescue: () => Promise.reject(new Error('no challenge in the trial')),
     }),
     [t, locale],
   );
@@ -223,6 +230,11 @@ function Space({
   // The celebration the member closed.
   const [closed, setClosed] = useState<string | null>(null);
   const [choosing, setChoosing] = useState(false);
+  // The challenges a member just took up, until the space comes back with them.
+  const [taken, setTaken] = useState<{
+    base: MemberRescues | null;
+    rescues: MemberRescues;
+  } | null>(null);
   const current = answer && answer.base === view ? answer : null;
   const shown = current?.view ?? view;
   // What the last answer brought, or the badges this opening brought (seven days in a row).
@@ -246,6 +258,7 @@ function Space({
   };
 
   const goal = shown.goal;
+  const rescues = taken && taken.base === shown.rescues ? taken.rescues : shown.rescues;
   return (
     <>
       <Card
@@ -319,13 +332,29 @@ function Space({
           onOptOut={backend.setBuddyOptOut}
         />
       ) : null}
+      {rescues ? (
+        <RescueCard
+          rescues={rescues}
+          whopAppId={shown.whopAppId}
+          onJoin={async (challengeId) => {
+            const next = await backend.joinRescue(challengeId);
+            setTaken({ base: shown.rescues, rescues: next });
+          }}
+        />
+      ) : null}
       {(goal && shown.results.length > 0) || shown.cards.length > 0 ? (
         <TestimonialCards view={shown} backend={backend} trial={Boolean(trial)} />
       ) : null}
       <BadgesCard
         badges={shown.badges}
-        // A veteran welcoming a newcomer can earn the Mentor badge: it shows among those ahead.
-        ahead={shown.buddies?.partners.some((p) => p.role === 'newcomer') ? ['mentor'] : []}
+        // A veteran welcoming a newcomer can earn the Mentor badge, a member who took a rescue
+        // challenge up the Rescuer one: they show among those ahead.
+        ahead={[
+          ...(shown.buddies?.partners.some((p) => p.role === 'newcomer')
+            ? (['mentor'] as const)
+            : []),
+          ...(rescues?.challenges.some((c) => c.joined) ? (['rescuer'] as const) : []),
+        ]}
       />
     </>
   );

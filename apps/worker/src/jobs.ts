@@ -1,4 +1,5 @@
 import { EXECUTE_BATCH, executeDueActions, prepareActions } from './actions';
+import { planRescues } from './space';
 import type { CronJob } from './cron';
 import { scoreDueCompanies } from './risk';
 import { SYNC_REQUEST_BUDGET, summarize, syncDueCompanies } from './sync';
@@ -92,6 +93,9 @@ export const runActions: CronJob = {
           `Actions ${id}: ${prepared.planned} planned, ${prepared.scheduled} scheduled, ${prepared.blocked} blocked.`,
         );
       }
+      // The rescue challenges (SPEC Phase 5, point 9) go round with the actions.
+      const challenges = await planRescues(db, id, now);
+      if (challenges > 0) console.info(`Rescue challenges ${id}: ${challenges} made.`);
     }
     const ran = await executeDueActions(db, whop, now, EXECUTE_BATCH, { discord, telegram });
     if (Object.keys(ran).length > 0) console.info(`Actions run: ${JSON.stringify(ran)}.`);

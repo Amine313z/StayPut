@@ -5,7 +5,9 @@ import type {
   AnnouncementsView,
   BuddiesView,
   GoalProposalsView,
+  RescuesView,
   MemberSpaceView,
+  RescueChallenge,
   ResultAnswer,
   ShareAnswer,
   TestimonialCard,
@@ -1381,6 +1383,12 @@ describe('risk settings', () => {
           } satisfies BuddiesView,
         },
       ],
+      '/api/creator/biz_A1/rescues': [
+        {
+          status: 200,
+          body: { enabled: false, open: 0, rescuedLast30: 0, rescuers: 0 } satisfies RescuesView,
+        },
+      ],
       ...answers,
     });
   const share = (name: string) =>
@@ -1496,6 +1504,25 @@ describe('risk settings', () => {
     fireEvent.click(save);
     expect(await screen.findByText('Buddies saved.')).toBeTruthy();
     expect(bodies.get('PUT /api/creator/biz_A1/buddies')).toEqual({ enabled: true });
+  });
+
+  it('turns the rescue challenges on', async () => {
+    settings({
+      'PUT /api/creator/biz_A1/rescues': [
+        {
+          status: 200,
+          body: { enabled: true, open: 2, rescuedLast30: 0, rescuers: 0 } satisfies RescuesView,
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    const save = await screen.findByRole('button', { name: 'Save the challenges' });
+    expect(screen.getByText('0 open challenges')).toBeTruthy();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Show rescue challenges to members' }));
+    fireEvent.click(save);
+    expect(await screen.findByText('Challenges saved.')).toBeTruthy();
+    expect(screen.getByText('2 open challenges')).toBeTruthy();
+    expect(bodies.get('PUT /api/creator/biz_A1/rescues')).toEqual({ enabled: true });
   });
 
   it('picks where the milestones are announced, among the places StayPut can post in', async () => {
@@ -2080,6 +2107,7 @@ describe('member space', () => {
     cards: [],
     whopAppId: 'app_stayput',
     buddies: { optedOut: false, partners: [] },
+    rescues: null,
     ...over,
   });
   const open = (answers: Record<string, Answer[]>, locale: Locale = 'en') => {
@@ -2352,6 +2380,57 @@ describe('member space', () => {
     await vi.waitFor(() =>
       expect(screen.queryByRole('heading', { name: 'Your buddy' })).toBeNull(),
     );
+  });
+
+  it('shows the rescue challenges, never who, and lets the member take one up', async () => {
+    const challenge = (n: number, over: Partial<RescueChallenge> = {}): RescueChallenge => ({
+      id: `b1c2d3e4-0000-4000-8000-00000000000${n}`,
+      platform: 'discord',
+      place: 'Le Club Discord',
+      url: `https://discord.com/channels/1/2/${n}`,
+      lastMessageAt: '2026-09-15T08:00:00.000Z',
+      createdAt: '2026-10-01T08:00:00.000Z',
+      helpers: 0,
+      joined: false,
+      ...over,
+    });
+    const whop = challenge(2, { platform: 'whop', place: null, url: null, helpers: 2 });
+    open({
+      '/api/member/exp_E1/space?lang=en': [
+        {
+          status: 200,
+          body: space({ rescues: { challenges: [challenge(1), whop], rescued: 1 } }),
+        },
+      ],
+      [`POST /api/member/exp_E1/space/rescues/${challenge(1).id}`]: [
+        {
+          status: 200,
+          body: { challenges: [challenge(1, { joined: true, helpers: 1 }), whop], rescued: 1 },
+        },
+      ],
+    });
+    expect(await screen.findByRole('heading', { name: 'Rescue challenges' })).toBeTruthy();
+    expect(screen.getByText('You helped 1 member come back.')).toBeTruthy();
+    expect(
+      screen.getAllByText('Help a member who stalled: answer their last message.'),
+    ).toHaveLength(2);
+    expect(screen.getByText(/^On Discord · Le Club Discord · /)).toBeTruthy();
+    expect(screen.getByText(/^In the Whop chat · /)).toBeTruthy();
+    expect(screen.getByText('2 members on it')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open their last message/ }).getAttribute('href')).toBe(
+      'https://discord.com/channels/1/2/1',
+    );
+    expect(screen.queryByText('Rescuer')).toBeNull();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'I’ll take it' })[0]!);
+    expect(
+      await screen.findByText(
+        'You took it up: if this member comes back, you earn the Rescuer badge.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('1 member on it')).toBeTruthy();
+    // The badge to earn shows among those ahead.
+    expect(screen.getByText('Rescuer')).toBeTruthy();
   });
 
   it('shows the veteran the newcomers they welcome, and the Mentor badge ahead', async () => {

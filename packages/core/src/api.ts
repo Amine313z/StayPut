@@ -539,6 +539,51 @@ export interface MemberSpaceView {
   whopAppId: string | null;
   /** The member's buddies (SPEC Phase 5, point 8); null for the team's preview. */
   buddies: MemberBuddies | null;
+  /**
+   * The rescue challenges (SPEC Phase 5, point 9); null for the team's preview, or while the
+   * creator has them off.
+   */
+  rescues: MemberRescues | null;
+}
+
+/**
+ * A rescue challenge, as members see it: anonymized, the place where the stalled member last
+ * wrote, and a link to that message when the platform gives one.
+ */
+export interface RescueChallenge {
+  id: string;
+  platform: 'whop' | 'discord' | 'telegram';
+  /** The server or group, when known. */
+  place: string | null;
+  url: string | null;
+  lastMessageAt: string;
+  createdAt: string;
+  /** Members who took it up. */
+  helpers: number;
+  /** This member took it up. */
+  joined: boolean;
+}
+
+export interface MemberRescues {
+  challenges: RescueChallenge[];
+  /** Members this one helped bring back. */
+  rescued: number;
+}
+
+/**
+ * GET /api/creator/:companyId/rescues: the rescue challenges on or off, the open ones, the
+ * members back over 30 days, and the members who earned the Rescuer badge.
+ */
+export interface RescuesView {
+  enabled: boolean;
+  open: number;
+  rescuedLast30: number;
+  rescuers: number;
+}
+
+/** PUT /api/creator/:companyId/rescues */
+export interface RescuesUpdate {
+  enabled: boolean;
 }
 
 /** Someone paired with the member: what they are to the member, and what they share. */

@@ -84,14 +84,17 @@ import { REQUEST_RISK_BATCH, refreshDetection } from './risk';
 import { LATEST_MIGRATION } from './schema-version';
 import { goneProofPage, proofPage } from './public-proof';
 import {
+  joinRescue,
   makeCard,
   parseBuddiesUpdate,
   parseBuddyOptOut,
   parseEarnedDays,
+  parseRescuesUpdate,
   parseShareRequest,
   planEarnedDays,
   readAnnounceTo,
   readBuddiesView,
+  readRescuesView,
   readEarnedDays,
   readGoalProposals,
   readMemberSpace,
@@ -100,6 +103,7 @@ import {
   recordResult,
   saveAnnounceTo,
   saveBuddies,
+  saveRescues,
   saveEarnedDays,
   saveGoalProposals,
   setBuddyOptOut,
@@ -807,6 +811,27 @@ export function createApp(deps: AppDeps) {
     if (enabled === null) return apiError('invalid_request', 'expected { enabled: boolean }');
     await saveBuddies(db, c.get('companyId'), enabled);
     const view = await readBuddiesView(db, c.get('userId'), c.get('companyId'), deps.now());
+    return view ? c.json(view) : apiError('not_found', 'no settings for this company');
+  });
+
+  /**
+   * The rescue challenges (SPEC Phase 5, point 9): members inactive for 14 days shown, without
+   * their name, to the community's members. On or off, and where they stand.
+   */
+  app.get('/api/creator/:companyId/rescues', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const view = await readRescuesView(db, c.get('userId'), c.get('companyId'), deps.now());
+    return view ? c.json(view) : apiError('not_found', 'no settings for this company');
+  });
+
+  app.put('/api/creator/:companyId/rescues', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const enabled = parseRescuesUpdate(await c.req.json<unknown>().catch(() => null));
+    if (enabled === null) return apiError('invalid_request', 'expected { enabled: boolean }');
+    await saveRescues(db, c.get('companyId'), enabled);
+    const view = await readRescuesView(db, c.get('userId'), c.get('companyId'), deps.now());
     return view ? c.json(view) : apiError('not_found', 'no settings for this company');
   });
 
@@ -1816,6 +1841,27 @@ export function createApp(deps: AppDeps) {
       if (companyId instanceof Response) return companyId;
       const removed = await unpublishCard(db, companyId, c.get('userId'), proofId);
       return removed ? c.json({ removed }) : apiError('not_found', 'no such card of yours');
+    },
+  );
+
+  /** The member takes a rescue challenge up: if its member comes back, they earn the badge. */
+  app.post(
+    '/api/member/:experienceId/space/rescues/:challengeId',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      if (c.get('accessLevel') === 'admin') {
+        return apiError('forbidden', 'the team previews the member space, nothing is recorded');
+      }
+      const challengeId = c.req.param('challengeId');
+      if (!isProofId(challengeId)) return apiError('invalid_request', 'not a challenge id');
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const rescues = await joinRescue(db, companyId, c.get('userId'), challengeId, deps.now());
+      return rescues ? c.json(rescues) : apiError('not_found', 'no such open challenge');
     },
   );
 

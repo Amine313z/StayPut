@@ -2517,6 +2517,76 @@ describe('the member space (SPEC Phase 5)', () => {
     expect(await (await request(url, boss)).json()).toMatchObject({ activePairs: 0 });
   });
 
+  it('shows members the rescue challenges, never who, and lets them take one up', async () => {
+    const { request, company, lina, boss, base } = await community(11);
+    // Sam, a member for months, silent on the community's Discord for 20 days.
+    await t.db.query('select stayput.ingest_page($1, $2, null, $3::text::jsonb)', [
+      company,
+      'members',
+      JSON.stringify(page([member('mber_Sam11', 'user_sam11')])),
+    ]);
+    await t.db.query(
+      `insert into stayput.discord_guilds (guild_id, company_id, name, channel_ids, connected_at)
+       values ('950000000000000011', $1, 'Le Club', array['950000000000000012'],
+               $2::timestamptz)`,
+      [company, NOW.toISOString()],
+    );
+    await t.db.query(
+      `insert into stayput.activity_events (company_id, member_id, type, occurred_at,
+                                            external_id, metadata)
+       values ($1, 'mber_Sam11', 'discord_message', $2::timestamptz, '950000000000000013',
+               '{"channel_id": "950000000000000012"}')`,
+      [company, new Date(NOW.getTime() - 20 * 86_400_000).toISOString()],
+    );
+    const url = `/api/creator/${company}/rescues`;
+    expect(await (await request(url, boss)).json()).toEqual({
+      enabled: false,
+      open: 0,
+      rescuedLast30: 0,
+      rescuers: 0,
+    });
+    expect((await request(url, lina)).status).toBe(403);
+    expect((await request(url, json(boss, 'PUT', {}))).status).toBe(400);
+    expect(await (await request(url, json(boss, 'PUT', { enabled: true }))).json()).toMatchObject({
+      enabled: true,
+    });
+    await t.db.query('select stayput.plan_rescues($1, $2::timestamptz)', [
+      company,
+      NOW.toISOString(),
+    ]);
+    expect(await (await request(url, boss)).json()).toMatchObject({ open: 1 });
+
+    const seen = (await (await request(`${base}?lang=fr`, lina)).json()) as MemberSpaceView;
+    expect(seen.rescues).toEqual({
+      challenges: [
+        {
+          id: expect.any(String) as string,
+          platform: 'discord',
+          place: 'Le Club',
+          url: 'https://discord.com/channels/950000000000000011/950000000000000012/950000000000000013',
+          lastMessageAt: new Date(NOW.getTime() - 20 * 86_400_000).toISOString(),
+          createdAt: NOW.toISOString(),
+          helpers: 0,
+          joined: false,
+        },
+      ],
+      rescued: 0,
+    });
+    expect(JSON.stringify(seen.rescues)).not.toMatch(/sam|Sam/);
+    // The team previews the space: no challenge there.
+    const preview = (await (await request(`${base}?lang=fr`, boss)).json()) as MemberSpaceView;
+    expect(preview.rescues).toBeNull();
+    const id = seen.rescues!.challenges[0]!.id;
+    const take = (init: RequestInit, challenge: string) =>
+      request(`${base}/rescues/${challenge}`, { ...init, method: 'POST' });
+    expect((await take(boss, id)).status).toBe(403);
+    expect((await take(lina, 'not-a-challenge')).status).toBe(400);
+    expect((await take(lina, '00000000-0000-4000-8000-000000000000')).status).toBe(404);
+    expect(await (await take(lina, id)).json()).toMatchObject({
+      challenges: [{ id, joined: true, helpers: 1 }],
+    });
+  });
+
   it('lets the creator write the goals proposed to members', async () => {
     const { request, company, boss, lina, base } = await community(3);
     const url = `/api/creator/${company}/goals`;
