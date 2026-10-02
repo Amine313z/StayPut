@@ -1001,7 +1001,7 @@ nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en
 (`existing_memberships_only`). Les défis de sauvetage et les binômes dépendent de la Phase 5
 (espace membre).
 
-## 2026-10-01 — Phase 5 : espace membre (en cours)
+## 2026-10-01 — Phase 5 : espace membre (arrêt le 02/10/2026)
 
 ### Objectif, résultats, jalons et premiers badges (migration 0020)
 
@@ -1265,3 +1265,27 @@ Le parcours du membre fictif a montré que StayPut ne connaissait pas le nom des
 depuis le tableau de bord, et dès qu'il manque. Les modèles par défaut mettent aussi
 `{creator_name}` dans une partie facultative : sans nom, la phrase reste juste (« Content de
 t'avoir. »).
+
+### Le parcours d'un membre fictif (arrêt de la phase 5)
+
+Le 2 octobre, sur le sandbox, le workflow « Seed sandbox » (action `journey`) a fait faire tout le
+chemin à Léa Moreau, une des membres fictives, par les fonctions mêmes du Worker : un objectif
+(0 € → 3 000 € de chiffre d'affaires mensuel), trois résultats (800 €, 1 650 € appuyés par une
+capture, 2 400 €), les jalons de 25, 50 et 75 % et cinq badges, puis la carte témoignage du
+résultat appuyé, dont la page publique est en ligne. La carte a été dessinée par le code de
+l'application dans Chromium ; son QR code, décodé par un lecteur indépendant, mène à cette page.
+
+- **La capture d'écran** d'un membre fictif ne passe pas par un navigateur : le parcours donne ce
+  que le navigateur envoie (l'empreinte de l'image et les nombres lus). La lecture elle-même a été
+  vérifiée dans un vrai navigateur, sous la politique de sécurité du site (étape 2).
+- **Le parcours a trouvé un défaut** : le nom de la communauté manquait partout (voir le
+  correctif ci-dessus).
+
+### Reste à faire dans cette phase
+
+- Les permissions à ajouter dans Whop, avec celles de la phase 4 : `chat:read` et
+  `chat:message:create` (annonces dans un chat Whop), `affiliate:basic:read` (lien d'affiliation
+  sur les cartes).
+- Un vrai membre de test (un second compte Whop dans la communauté du sandbox), pour les
+  parcours qu'un membre fictif ne peut pas faire : ouvrir l'espace dans Whop, lire une vraie
+  capture, recevoir les notifications.
