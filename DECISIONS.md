@@ -1156,6 +1156,12 @@ nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en
   thème de la page. Le QR code (`qrcode-generator` 2.0.4, licence MIT, sans dépendance, correction
   M) a des modules en pixels entiers et une marge blanche de 4 modules : un lecteur indépendant
   (jsQR) le décode en taille réelle et réduit à 35 %, avec l'adresse de production.
+- **Le chemin n'est jamais coupé** (correctif du 2 octobre) : avec une unité en mots, la carte
+  d'essai affichait « 0 séances → 6… ». Le chemin prend la plus grande taille qui tient sur une
+  ligne (de 88 à 56 px) ; au-delà, il passe sur deux lignes, coupées après la flèche, aussi
+  grandes que la place au-dessus du QR code le permet (36 px au moins). Vérifié dans Chromium
+  avec « séances », « heures de pratique » et la pire mise en page (communauté sur deux lignes,
+  objectif sur trois, chemin sur deux) : rien ne touche le QR code.
 - **Téléchargement en PNG** par une adresse `data:` (la politique de sécurité du site les
   autorise déjà pour les images). Dans le cadre de Whop, un téléchargement peut être bloqué : la
   carte s'affiche en image, que le membre enregistre d'un appui long ou d'un clic droit (c'est
