@@ -1,3 +1,4 @@
+import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { checkDiscord, checkTelegram, type Finding } from '../../../scripts/deploy/check-bots';
 import { checkWhopKey, deployedVar } from '../../../scripts/deploy/check-whop';
@@ -12,6 +13,13 @@ import {
   prepare,
   secretValue,
 } from '../../../scripts/deploy/prepare';
+import {
+  SATOSHI_FILE,
+  checkSatoshi,
+  readZip,
+  satoshiFiles,
+  sha256,
+} from '../../../scripts/deploy/satoshi';
 
 const ID = '0123456789abcdef0123456789abcdef';
 
@@ -581,5 +589,75 @@ describe('checkTelegram', () => {
       { level: 'warning', text: 'Could not ask Telegram (unreachable).' },
     ]);
     never([...refused, ...shapeless]);
+  });
+});
+
+/** A zip archive as zip tools write it: each file stored or deflated, then the directory. */
+function zipOf(files: readonly { name: string; text: string; deflate?: boolean }[]): Buffer {
+  const locals: Buffer[] = [];
+  const directory: Buffer[] = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = Buffer.from(file.name);
+    const raw = Buffer.from(file.text);
+    const data = file.deflate ? deflateRawSync(raw) : raw;
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(file.deflate ? 8 : 0, 8);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(raw.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    const entry = Buffer.alloc(46);
+    entry.writeUInt32LE(0x02014b50, 0);
+    entry.writeUInt16LE(file.deflate ? 8 : 0, 10);
+    entry.writeUInt32LE(data.length, 20);
+    entry.writeUInt32LE(raw.length, 24);
+    entry.writeUInt16LE(name.length, 28);
+    entry.writeUInt32LE(offset, 42);
+    locals.push(local, name, data);
+    directory.push(entry, name);
+    offset += local.length + name.length + data.length;
+  }
+  const central = Buffer.concat(directory);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(files.length, 8);
+  end.writeUInt16LE(files.length, 10);
+  end.writeUInt32LE(central.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, central, end]);
+}
+
+describe('Satoshi, downloaded at deployment', () => {
+  const zip = zipOf([
+    { name: 'Satoshi_Complete/License/FFL.txt', text: 'ITF Free Font License', deflate: true },
+    { name: 'Satoshi_Complete/Fonts/WEB/fonts/Satoshi-VariableItalic.woff2', text: 'italic' },
+    { name: `Satoshi_Complete/Fonts/WEB/fonts/${SATOSHI_FILE}`, text: 'wOF2 upright' },
+  ]);
+
+  it('reads the files of a zip archive, stored or deflated', () => {
+    const entries = readZip(zip);
+    expect(entries.map((entry) => entry.name)).toEqual([
+      'Satoshi_Complete/License/FFL.txt',
+      'Satoshi_Complete/Fonts/WEB/fonts/Satoshi-VariableItalic.woff2',
+      `Satoshi_Complete/Fonts/WEB/fonts/${SATOSHI_FILE}`,
+    ]);
+    expect(entries[0]?.read().toString()).toBe('ITF Free Font License');
+    expect(entries[2]?.read().toString()).toBe('wOF2 upright');
+    expect(() => readZip(Buffer.from('not a zip'))).toThrow(/not a zip archive/);
+  });
+
+  it('takes the upright variable font and the license, never the italic', () => {
+    const { font, licenses } = satoshiFiles(readZip(zip));
+    expect(font?.read().toString()).toBe('wOF2 upright');
+    expect(licenses.map((license) => license.name)).toEqual(['Satoshi_Complete/License/FFL.txt']);
+  });
+
+  it('serves only the file reviewed, once its fingerprint is pinned', () => {
+    const digest = sha256(Buffer.from('wOF2 upright'));
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
+    expect(checkSatoshi(digest, '')).toBe('unpinned');
+    expect(checkSatoshi(digest, digest)).toBe('reviewed');
+    expect(checkSatoshi(digest, sha256(Buffer.from('another file')))).toBe('changed');
   });
 });

@@ -57,6 +57,11 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: npx tsx scripts/deploy/hyperdrive.ts apps/worker/wrangler.toml
 
+      # Satoshi's license forbids passing its files on and this repository is public: the font is
+      # downloaded from Fontshare here and served with the app (scripts/deploy/satoshi.ts).
+      - name: Fetch the Satoshi font from Fontshare
+        run: npx tsx scripts/deploy/satoshi.ts apps/web/public
+
       - run: npm run build
 
       # WHOP_ENV and WHOP_APP_ID come from wrangler.toml (the sandbox app) unless the repository

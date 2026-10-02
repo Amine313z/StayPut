@@ -34,6 +34,12 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: npx tsx scripts/ops/telegram-groups.ts
 
+      # Satoshi is downloaded at deployment, never committed (scripts/deploy/satoshi.ts): what
+      # Fontshare's package holds, its license, and the fingerprint of the font served.
+      - name: Read Fontshare's Satoshi package (files, license, fingerprint)
+        if: always()
+        run: npx tsx scripts/deploy/satoshi.ts "$RUNNER_TEMP/satoshi" --report
+
       # What a browser gets from the deployed Worker, on the frame relay's path too: a view's
       # page, its script, the relay itself, and /api without a token (refused, as it must be).
       - name: Ask the deployed Worker for the site

@@ -3,6 +3,8 @@ node_modules/
 
 # builds
 dist/
+# Satoshi, downloaded at deployment: its license forbids redistributing it (scripts/deploy/satoshi.ts)
+apps/web/public/fonts/
 .wrangler/
 coverage/
 *.tsbuildinfo
