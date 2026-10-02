@@ -2,6 +2,7 @@ import type { MemberRow } from '@stayput/core';
 import { BellOff, Search, Users } from 'lucide-react';
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
+import { postJson } from '../../api';
 import { MemberList } from '../../components/MemberRows';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { useI18n } from '../../i18n';
@@ -49,6 +50,7 @@ export function MembersTab() {
   const { t, number } = useI18n();
   const { members, api } = useCreatorData();
   useMemberCounts();
+  useReviewed(api);
   const [params, setParams] = useSearchParams();
   const filter = FILTERS.find((f) => f === params.get('filter')) ?? 'all';
   const query = params.get('q') ?? '';
@@ -147,6 +149,21 @@ export function MembersTab() {
 }
 
 /** Members › how many in all, and on the « never contact » list: the section's tabs say it. */
+/** The communities whose members were opened since the page loaded. */
+const reviewed = new Set<string>();
+
+/** « Getting started »: opening the members ticks « Review your at-risk members » (once). */
+function useReviewed(api: string) {
+  useEffect(() => {
+    if (reviewed.has(api)) return;
+    reviewed.add(api);
+    postJson(`${api}/getting-started/reviewed`).catch(() => {
+      // A convenience: the next visit ticks it.
+      reviewed.delete(api);
+    });
+  }, [api]);
+}
+
 function useMemberCounts() {
   const { members, tabCounts } = useCreatorData();
   const page = members.state.status === 'ready' ? members.state.data : null;

@@ -1,8 +1,8 @@
 import type { CreatorSession, MemberRow } from '@stayput/core';
 import {
+  BookOpen,
   ChevronsLeft,
   ChevronsRight,
-  CircleHelp,
   Ellipsis,
   FlaskConical,
   LogOut,
@@ -21,10 +21,9 @@ import { StayPutMark } from '../ui/BrandIcons';
 import { buttonClass } from '../ui/Button';
 import { CommunityMark } from '../ui/CommunityMark';
 import { Dialog } from '../ui/Dialog';
-import { LanguageSwitch } from '../ui/LanguageSwitch';
+import { Drawer } from '../ui/Drawer';
 import { MetricSkeleton, Skeleton } from '../ui/Skeleton';
-import { ThemeSelect } from '../ui/ThemeSelect';
-import { SECTIONS, sectionHref, sectionOf, type Section } from '../views/creator/sections';
+import { sectionHref, sectionOf, visibleSections, type Section } from '../views/creator/sections';
 import { SignOut } from './SignOut';
 
 const COLLAPSED_KEY = 'stayput.menu.collapsed';
@@ -39,10 +38,10 @@ export function rememberDemoExit(path: string): void {
 const PHONE_SECTIONS = ['dashboard', 'members', 'actions', 'insights'] as const;
 
 /**
- * The creator's frame (the redesign): the sections in a side menu that folds to its icons (the
- * open one marked by a mint bar), a top bar with the community, the member search, the
- * language, the theme and help; on a phone the menu becomes a bar at the bottom. The frame never
- * moves: only the page inside it comes in (MOTION.md).
+ * The creator's frame (the redesign brief): the sections in a side menu that folds to its icons
+ * (the open one marked by a mint bar), a top bar with the community, the member search and the
+ * guide; on a phone the menu becomes a bar at the bottom. The language and the theme are in
+ * Settings only. The frame never moves: only the page inside it comes in (MOTION.md).
  */
 export function CreatorShell({
   session,
@@ -111,7 +110,7 @@ function Sidebar({
       </Link>
       <nav aria-label={t('creator.sections')} className="flex-1 overflow-y-auto px-3 py-2">
         <ul className="space-y-1">
-          {SECTIONS.map((section) => (
+          {visibleSections().map((section) => (
             <li key={section.id}>
               <NavItem
                 section={section}
@@ -163,8 +162,8 @@ function NavItem({
       to={href}
       aria-current={active ? 'page' : undefined}
       title={collapsed ? t(section.label) : undefined}
-      className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-        active ? 'bg-accent-soft/60 text-accent' : 'text-muted hover:bg-surface-2 hover:text-fg'
+      className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+        active ? 'bg-surface-2 text-fg' : 'text-muted hover:bg-surface-2/60 hover:text-fg'
       }`}
     >
       {active ? (
@@ -174,7 +173,10 @@ function NavItem({
           className="absolute inset-y-2 -start-3 w-1 rounded-e-full bg-accent"
         />
       ) : null}
-      <Icon aria-hidden="true" className="size-[1.125rem] shrink-0" />
+      <Icon
+        aria-hidden="true"
+        className={`size-[1.125rem] shrink-0 ${active ? 'text-accent' : ''}`}
+      />
       {collapsed ? <span className="sr-only">{t(section.label)}</span> : t(section.label)}
     </Link>
   );
@@ -225,22 +227,17 @@ function TopBar({
         </Link>
         <div className="ms-auto flex items-center gap-2">
           <MemberSearch root={root} members={members} />
-          <span className="hidden sm:inline-flex">
-            <LanguageSwitch />
-          </span>
-          <ThemeSelect compact />
           <button
             type="button"
             onClick={() => setHelp(true)}
-            aria-label={t('shell.help')}
-            title={t('shell.help')}
-            className="flex size-9 items-center justify-center rounded-lg border border-line bg-surface text-subtle transition-colors duration-150 hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            className={buttonClass('ghost', 'sm', 'h-9 border border-line')}
           >
-            <CircleHelp aria-hidden="true" className="size-4" />
+            <BookOpen aria-hidden="true" className="size-4" />
+            {t('shell.guide')}
           </button>
         </div>
       </div>
-      {help ? <HelpDialog root={root} demo={demo} onClose={() => setHelp(false)} /> : null}
+      {help ? <GuidePanel root={root} demo={demo} onClose={() => setHelp(false)} /> : null}
     </header>
   );
 }
@@ -331,10 +328,11 @@ function MemberSearch({ root, members }: { root: string; members: readonly Membe
 }
 
 /**
- * How StayPut works, in four short answers: risk, saved money, guardrails, test mode; and, from
- * a real dashboard, the way to the demo community.
+ * The guide (top bar), a panel at the side: how StayPut works in four short answers, and, from a
+ * real dashboard, the way to the demo community. The full guide (one item per feature, with its
+ * video) comes with the onboarding step.
  */
-function HelpDialog({ root, demo, onClose }: { root: string; demo: boolean; onClose: () => void }) {
+function GuidePanel({ root, demo, onClose }: { root: string; demo: boolean; onClose: () => void }) {
   const { t } = useI18n();
   const parts = [
     ['help.risk.title', 'help.risk.body'],
@@ -343,29 +341,29 @@ function HelpDialog({ root, demo, onClose }: { root: string; demo: boolean; onCl
     ['help.test.title', 'help.test.body'],
   ] as const;
   return (
-    <Dialog title={t('help.title')} description={t('help.lead')} onClose={onClose}>
-      <dl className="space-y-4">
+    <Drawer title={t('help.title')} description={t('help.lead')} onClose={onClose}>
+      <dl className="space-y-5">
         {parts.map(([title, body]) => (
           <div key={title}>
-            <dt className="font-semibold">{t(title)}</dt>
-            <dd className="mt-1 text-sm text-muted">{t(body)}</dd>
+            <dt className="font-medium text-fg">{t(title)}</dt>
+            <dd className="mt-1 text-sm">{t(body)}</dd>
           </div>
         ))}
       </dl>
       {demo ? null : (
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-2 p-4">
-          <p className="min-w-0 flex-1 basis-48 text-sm text-muted">{t('help.demoHint')}</p>
+        <div className="mt-6 space-y-3 rounded-xl border border-line p-4">
+          <p className="text-sm">{t('help.demoHint')}</p>
           <Link
             to={`/demo?from=${encodeURIComponent(root)}`}
             onClick={onClose}
-            className={buttonClass('secondary', 'sm')}
+            className={buttonClass('ghost', 'sm', 'border border-line')}
           >
             <Sparkles aria-hidden="true" className="size-4" />
             {t('help.demo')}
           </Link>
         </div>
       )}
-    </Dialog>
+    </Drawer>
   );
 }
 
@@ -379,7 +377,7 @@ function DemoNotice() {
   return (
     <div
       role="note"
-      className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-line-strong bg-accent-soft/40 px-4 py-2.5 text-sm"
+      className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-line-strong px-4 py-2 text-sm"
     >
       <FlaskConical aria-hidden="true" className="size-4 shrink-0 text-accent" />
       <p className="min-w-0 flex-1 basis-64">{t('demo.notice')}</p>
@@ -397,8 +395,9 @@ function PhoneBar({ root }: { root: string }) {
   const { pathname } = useLocation();
   const current = sectionOf(pathname, root);
   const [more, setMore] = useState(false);
-  const main = SECTIONS.filter((s) => (PHONE_SECTIONS as readonly string[]).includes(s.id));
-  const others = SECTIONS.filter((s) => !(PHONE_SECTIONS as readonly string[]).includes(s.id));
+  const sections = visibleSections();
+  const main = sections.filter((s) => (PHONE_SECTIONS as readonly string[]).includes(s.id));
+  const others = sections.filter((s) => !(PHONE_SECTIONS as readonly string[]).includes(s.id));
   const inOthers = others.some((s) => s.id === current.id);
   return (
     <>
@@ -456,10 +455,6 @@ function PhoneBar({ root }: { root: string }) {
               </li>
             ))}
           </ul>
-          <div className="mt-4 flex items-center justify-between border-t border-line pt-4">
-            <span className="text-sm text-muted">{t('settings.language')}</span>
-            <LanguageSwitch />
-          </div>
         </Dialog>
       ) : null}
     </>
@@ -487,8 +482,7 @@ export function ShellSkeleton() {
           <Skeleton className="size-8 rounded-lg" />
           <Skeleton className="h-4 w-36" />
         </div>
-        <div className="mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-4 px-4 pt-6 sm:grid-cols-2 sm:px-6 xl:grid-cols-4">
-          <MetricSkeleton hero />
+        <div className="mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-6 px-4 pt-6 sm:px-6 lg:grid-cols-3">
           <MetricSkeleton hero />
           <MetricSkeleton hero />
           <MetricSkeleton hero />

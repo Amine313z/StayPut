@@ -82,21 +82,25 @@ export const scoreMembers: CronJob = {
  */
 export const runActions: CronJob = {
   name: 'actions',
-  async run({ db, whop, discord, telegram, now }) {
+  async run({ config, db, whop, discord, telegram, now }) {
     if (!db) return;
     const companies = await db.query<{ id: string }>(
       `select id from stayput.companies where status = 'active' and not is_demo order by id`,
     );
+    const memberSpace = config.memberSpace;
     for (const { id } of companies) {
-      const prepared = await prepareActions(db, id, now);
+      const prepared = await prepareActions(db, id, now, { memberSpace });
       if (prepared.planned + prepared.scheduled + prepared.blocked > 0) {
         console.info(
           `Actions ${id}: ${prepared.planned} planned, ${prepared.scheduled} scheduled, ${prepared.blocked} blocked.`,
         );
       }
-      // The rescue challenges (SPEC Phase 5, point 9) go round with the actions.
-      const challenges = await planRescues(db, id, now);
-      if (challenges > 0) console.info(`Rescue challenges ${id}: ${challenges} made.`);
+      // The rescue challenges (SPEC Phase 5, point 9) go round with the actions, when the member
+      // space is on.
+      if (memberSpace) {
+        const challenges = await planRescues(db, id, now);
+        if (challenges > 0) console.info(`Rescue challenges ${id}: ${challenges} made.`);
+      }
     }
     const ran = await executeDueActions(db, whop, now, EXECUTE_BATCH, { discord, telegram });
     if (Object.keys(ran).length > 0) console.info(`Actions run: ${JSON.stringify(ran)}.`);

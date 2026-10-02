@@ -1,7 +1,7 @@
 import {
+  DEFAULT_LOCALE,
   createTranslator,
   isLocale,
-  matchLocale,
   type Locale,
   type Translator,
 } from '@stayput/i18n';
@@ -10,12 +10,13 @@ import { readPreference, writePreference } from './storage';
 
 const STORAGE_KEY = 'stayput.locale';
 
-/** The saved choice, else the browser's languages, else English. */
+/**
+ * The language chosen in Settings › General, else English: the app's official language. The
+ * browser's languages are never read (the redesign brief, 2 October).
+ */
 export function detectLocale(): Locale {
   const saved = readPreference(STORAGE_KEY);
-  if (isLocale(saved)) return saved;
-  const languages = navigator.languages.length > 0 ? navigator.languages : [navigator.language];
-  return matchLocale(languages);
+  return isLocale(saved) ? saved : DEFAULT_LOCALE;
 }
 
 interface I18nContextValue extends Translator {

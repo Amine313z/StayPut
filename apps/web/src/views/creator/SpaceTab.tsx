@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { MemberRetention } from '../../components/MemberRetention';
+import { LoadedRetention } from '../../components/MemberRetention';
 import { MemberSpace } from '../../components/MemberSpace';
 import { PagePreviewButton } from '../../components/PagePreview';
 import { QrCode } from '../../components/QrCode';
@@ -86,7 +86,7 @@ export function SpacePreviewTab() {
       <Notice tone="info" icon={<Eye aria-hidden="true" className="size-4" />}>
         {t('spaceTab.preview.body')}
       </Notice>
-      <MemberRetention api={`${api}/preview`} />
+      <LoadedRetention api={`${api}/preview`} />
       <MemberSpace api={`${api}/preview`} />
     </div>
   );

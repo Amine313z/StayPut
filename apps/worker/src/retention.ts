@@ -11,6 +11,7 @@ import {
   type MemberRetentionView,
   type OfferResult,
   type OfferSettings,
+  type TemplateLocale,
 } from '@stayput/core';
 import type { Db } from './db';
 
@@ -232,14 +233,18 @@ export function retentionView(
     /** A former member in the Alumni: their return code, and the way back. */
     alumni?: AlumniReturn | null;
     manageUrl?: string | null;
+    /** The community's language for its members. */
+    locale?: TemplateLocale;
   },
 ): MemberRetentionView {
   const creatorName = row.company?.name ?? null;
+  const locale = options.locale ?? 'en';
   const whopAppId = options.whopAppId;
   const alumniUrl = options.alumniUrl ?? null;
   if (options.preview) {
     return {
       creatorName,
+      locale,
       whopAppId,
       alumniUrl,
       preview: row.company
@@ -261,6 +266,7 @@ export function retentionView(
   const survey = row.survey;
   return {
     creatorName,
+    locale,
     whopAppId,
     // Only to a member who leaves: the others have no use for it.
     alumniUrl: surveyOpen(row) ? alumniUrl : null,

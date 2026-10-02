@@ -179,7 +179,8 @@ describe('the home of the dashboard', () => {
 
   it('puts the money first: saved this month, at risk, members at risk, retention', async () => {
     const view = await readDashboard(t.db, 'user_Owner', C, NOW);
-    expect(view).toEqual({
+    const { revenueHistory, ...rest } = view!;
+    expect(rest).toEqual({
       currency: 'EUR',
       saved: {
         thisMonth: { direct: 49, influenced: 29, saves: 2 },
@@ -193,16 +194,89 @@ describe('the home of the dashboard', () => {
       retention30: { rate: 0.8, kept: 4, base: 5 },
       members: { total: 5, newLast7Days: 1 },
       memberActivity30d: 5,
-      stayputActions30d: { total: 3, messages: 1, paymentRetries: 1, offers: 1 },
+      // The pause action applies an accepted offer: no survey or creator offer made one here.
+      stayputActions30d: {
+        total: 3,
+        messages: 1,
+        paymentRetries: 1,
+        offers: 1,
+        pauses: 0,
+        saved: 1,
+      },
       mode: 'manual',
       testMode: true,
       riskHistory: [
         { day: days(-2).slice(0, 10), departure: 0, high: 1, medium: 1, low: 2 },
         { day: days(-1).slice(0, 10), departure: 1, high: 2, medium: 0, low: 1 },
       ],
+      gettingStarted: { discord: false, automation: false, reviewed: false, guardrails: false },
       // Approving the survey protects 99 a month; messaging Lea (Calm: never contact) 49.
       priority: { kind: 'approve', actions: 1, members: 1, revenue: 99 },
     });
+
+    // 90 days in the community's calendar, the last one today.
+    expect(revenueHistory).toHaveLength(90);
+    expect(revenueHistory[0]?.day).toBe('2026-07-18');
+    const on = (day: string) => revenueHistory.find((d) => d.day === day);
+    // Today: the live figure of the hero row (Lea 49, Paul 99, Calm 15).
+    expect(on('2026-10-15')).toEqual({ day: '2026-10-15', saved: 0, atRisk: 163 });
+    // Yesterday: 49 saved; Lea and Calm high, Paul leaving.
+    expect(on('2026-10-14')).toEqual({ day: '2026-10-14', saved: 49, atRisk: 163 });
+    // The day before: only Lea high; the influenced 29 is not money StayPut saved itself.
+    expect(on('2026-10-13')).toEqual({ day: '2026-10-13', saved: 0, atRisk: 49 });
+    // Before the first score, no risk figure rather than a zero.
+    expect(on('2026-09-25')).toEqual({ day: '2026-09-25', saved: 20, atRisk: null });
+    expect(on('2026-08-16')).toEqual({ day: '2026-08-16', saved: 999, atRisk: null });
+  });
+
+  it('counts the pauses offered and what the setup checklist has done', async () => {
+    const lea = 'mber_Lea';
+    await t.db.query(
+      `insert into stayput.exit_surveys (company_id, member_id, reason, offer_type, created_at,
+                                         answered_at)
+       values ($1, $2, 'no_time', 'pause_offer', $3::timestamptz, $3::timestamptz),
+              ($1, $2, 'no_time', 'pause_offer', $4::timestamptz, $4::timestamptz),
+              ($1, $2, 'too_expensive', 'promo_offer', $3::timestamptz, $3::timestamptz)`,
+      [C, lea, days(-3), days(-45)],
+    );
+    await t.db.query(
+      `insert into stayput.creator_offers (company_id, member_id, membership_id, kind, terms,
+                                           created_by, created_at, expires_at)
+       values ($1, $2, 'mem_Lea', 'pause_offer', '{"days": 30}', 'user_Owner', $3::timestamptz,
+               $3::timestamptz + interval '7 days')`,
+      [C, lea, days(-1)],
+    );
+    await t.db.query(
+      `insert into stayput.discord_guilds (guild_id, company_id, connected_at)
+       values ('123456789', $1, $2::timestamptz)`,
+      [C, days(-2)],
+    );
+    await t.db.query(
+      `update stayput.company_settings set guardrails_saved_at = $2::timestamptz,
+              at_risk_reviewed_at = $2::timestamptz where company_id = $1`,
+      [C, days(-1)],
+    );
+    const view = await readDashboard(t.db, 'user_Owner', C, NOW);
+    // The survey 3 days ago and the creator's own offer; not the one 45 days ago, not a promo.
+    expect(view?.stayputActions30d.pauses).toBe(2);
+    // Manual mode and nothing approved by hand yet: no automation running.
+    expect(view?.gettingStarted).toEqual({
+      discord: true,
+      automation: false,
+      reviewed: true,
+      guardrails: true,
+    });
+    await t.db.query(`update stayput.companies set mode = 'auto' where id = $1`, [C]);
+    expect((await readDashboard(t.db, 'user_Owner', C, NOW))?.gettingStarted.automation).toBe(true);
+    await t.db.query(`update stayput.companies set mode = 'manual' where id = $1`, [C]);
+    await t.db.query(`delete from stayput.discord_guilds where company_id = $1`, [C]);
+    await t.db.query(
+      `update stayput.company_settings set guardrails_saved_at = null, at_risk_reviewed_at = null
+        where company_id = $1`,
+      [C],
+    );
+    await t.db.query(`delete from stayput.creator_offers where company_id = $1`, [C]);
+    await t.db.query(`delete from stayput.exit_surveys where company_id = $1`, [C]);
   });
 
   it('turns to the members at high risk nobody reached once nothing waits', async () => {

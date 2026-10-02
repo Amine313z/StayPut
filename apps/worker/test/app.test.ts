@@ -55,6 +55,8 @@ const ENV: Env = {
   WHOP_APP_ID: APP_ID,
   WHOP_API_KEY: 'test_key',
   WHOP_WEBHOOK_SECRET: SECRET,
+  // The member space's own tests run with it on; « the member space is off » turns it off.
+  MEMBER_SPACE_ENABLED: 'true',
 };
 
 let t: TestDb;
@@ -287,6 +289,49 @@ describe('/api authentication', () => {
       });
       expect(res.status).toBe(401);
     }
+  });
+});
+
+describe('the member space, off in V1 (MEMBER_SPACE_ENABLED)', () => {
+  it('answers none of its routes, while the departure survey goes on', async () => {
+    const { request } = setup(
+      {
+        'user_boss:biz_Off1': 'admin',
+        'user_ana:exp_Off1': 'customer',
+      },
+      { experiences: { exp_Off1: 'biz_Off1' } },
+    );
+    const off: Env = { ...ENV, MEMBER_SPACE_ENABLED: undefined };
+    const boss = await asUser('user_boss');
+    await request('/api/creator/biz_Off1/session', boss, off);
+    await settle();
+    for (const path of [
+      '/api/creator/biz_Off1/space',
+      '/api/creator/biz_Off1/preview/space',
+      '/api/creator/biz_Off1/goals',
+      '/api/creator/biz_Off1/earned-days',
+      '/api/creator/biz_Off1/buddies',
+      '/api/creator/biz_Off1/rescues',
+      '/api/creator/biz_Off1/announcements',
+    ]) {
+      expect((await request(path, boss, off)).status, path).toBe(404);
+    }
+    const ana = await asUser('user_ana');
+    expect((await request('/api/member/exp_Off1/space', ana, off)).status).toBe(404);
+    expect(
+      (await request('/api/member/exp_Off1/space/goal', { ...ana, method: 'POST' }, off)).status,
+    ).toBe(404);
+    expect((await request('/api/member/exp_Off1/space/affiliate', ana, off)).status).toBe(404);
+    // The departure survey and the payment links are not the member space; nor the survey's
+    // invitation to recommend the community (its affiliate link).
+    expect((await request('/api/member/exp_Off1/retention', ana, off)).status).toBe(200);
+    expect(
+      await (await request('/api/member/exp_Off1/retention/affiliate', ana, off)).json(),
+    ).toEqual({ url: null });
+    // A card page once online says it is gone.
+    const page = await request('/v/00000000-0000-4000-8000-000000000001', {}, off);
+    expect(page.status).toBe(404);
+    expect(page.headers.get('content-type')).toContain('text/html');
   });
 });
 
@@ -1923,6 +1968,45 @@ describe('the actions (SPEC Phase 4)', () => {
     }
   });
 
+  it('ticks « Set guardrails » and « Review your at-risk members » once, for the team only', async () => {
+    const { request, init } = await withProposal('biz_ActQ7', 'user_gus');
+    const ticks = async () =>
+      (
+        await t.db.query<{ guardrails: string | null; reviewed: string | null }>(
+          `select guardrails_saved_at::text as guardrails, at_risk_reviewed_at::text as reviewed
+             from stayput.company_settings where company_id = $1`,
+          ['biz_ActQ7'],
+        )
+      )[0];
+    expect(await ticks()).toEqual({ guardrails: null, reviewed: null });
+
+    // A refused save ticks nothing; a saved one does.
+    const path = '/api/creator/biz_ActQ7/settings/actions';
+    expect((await request(path, json(init, 'PUT', { ...DEFAULTS, mode: 'yolo' }))).status).toBe(
+      400,
+    );
+    expect((await ticks())?.guardrails).toBeNull();
+    expect((await request(path, json(init, 'PUT', DEFAULTS))).status).toBe(200);
+    const first = await ticks();
+    expect(first?.guardrails).not.toBeNull();
+
+    const reviewed = '/api/creator/biz_ActQ7/getting-started/reviewed';
+    expect((await request(reviewed, { ...init, method: 'POST' })).status).toBe(200);
+    expect(await (await request(reviewed, { ...init, method: 'POST' })).json()).toEqual({
+      done: true,
+    });
+    // The first time is kept.
+    const second = await ticks();
+    expect(second?.reviewed).not.toBeNull();
+    expect((await request(path, json(init, 'PUT', DEFAULTS))).status).toBe(200);
+    expect(await ticks()).toEqual(second);
+    expect(second?.guardrails).toBe(first?.guardrails);
+
+    // A member of the community is not the team.
+    const eve = await asUser('user_eve');
+    expect((await request(reviewed, { ...eve, method: 'POST' })).status).toBe(403);
+  });
+
   it('takes the zone from the creator’s browser once, then only from the settings', async () => {
     const { request, init } = await withProposal('biz_ActQ5', 'user_eli');
     const detected = (timezone: unknown, as = init) =>
@@ -2163,7 +2247,12 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
       departure: null,
       alumni: null,
       creatorOffer: null,
+      locale: 'en',
     });
+    // The member reads the survey in the language of the community's messages, never their
+    // browser's.
+    await t.db.query(`update stayput.companies set locale = 'fr' where id = $1`, [company]);
+    expect((await read()).locale).toBe('fr');
   });
 
   it('shows the payment to settle, and no survey in test mode or for « never contact »', async () => {

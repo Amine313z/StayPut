@@ -6,9 +6,9 @@ import { buttonClass, type ButtonSize, type ButtonVariant } from './Button';
 
 /**
  * A button that does something and says how it went (MOTION.md): pressed, it scales to 0.98;
- * while it works a spinner takes the icon's place (the label stays, the size never changes);
- * done, a check mark shows for 1.2 s. `run` rejects to say it failed: the button is offered
- * again and `onError` says why.
+ * while it works a spinner takes the label's place (the label stays for screen readers and keeps
+ * the button's size); done, a check mark shows for 1.2 s. `run` rejects to say it failed: the
+ * button is offered again and `onError` says why.
  */
 export function ActionButton({
   run,
@@ -46,7 +46,7 @@ export function ActionButton({
       type="button"
       whileTap={state === 'idle' && !disabled ? { scale: 0.98 } : undefined}
       transition={ease('micro')}
-      className={buttonClass(variant, size, className)}
+      className={buttonClass(variant, size, `relative ${className}`)}
       disabled={disabled || state !== 'idle'}
       aria-busy={state === 'running' || undefined}
       aria-label={ariaLabel}
@@ -64,14 +64,15 @@ export function ActionButton({
         );
       }}
     >
+      <span className={`inline-flex items-center gap-2 ${state === 'running' ? 'opacity-0' : ''}`}>
+        {state === 'done' ? <Check aria-hidden="true" className="size-4" /> : icon}
+        {state === 'done' && doneLabel ? doneLabel : children}
+      </span>
       {state === 'running' ? (
-        <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
-      ) : state === 'done' ? (
-        <Check aria-hidden="true" className="size-4" />
-      ) : (
-        icon
-      )}
-      {state === 'done' && doneLabel ? doneLabel : children}
+        <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
+          <LoaderCircle className="size-4 animate-spin" />
+        </span>
+      ) : null}
     </motion.button>
   );
 }

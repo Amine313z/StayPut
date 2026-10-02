@@ -3,6 +3,7 @@ import {
   type DashboardView,
   type FeedItem,
   type FeedView,
+  type RevenueDay,
   type RiskDay,
 } from '@stayput/core';
 import { withUser, type TransactionalDb } from './db';
@@ -29,8 +30,23 @@ export async function readDashboard(
 ): Promise<DashboardView | null> {
   const at = now.toISOString();
   return withUser(db, userId, async (tx) => {
-    const [company] = await tx.query<{ mode: 'auto' | 'manual'; zone: string; dry_run: boolean }>(
-      `select c.mode, coalesce(c.timezone, 'UTC') as zone, coalesce(s.dry_run, false) as dry_run
+    const [company] = await tx.query<{
+      mode: 'auto' | 'manual';
+      zone: string;
+      dry_run: boolean;
+      guardrails: boolean;
+      reviewed: boolean;
+      discord: boolean;
+      acted: boolean;
+    }>(
+      `select c.mode, coalesce(c.timezone, 'UTC') as zone, coalesce(s.dry_run, false) as dry_run,
+              s.guardrails_saved_at is not null as guardrails,
+              s.at_risk_reviewed_at is not null as reviewed,
+              exists (select 1 from stayput.discord_guilds g where g.company_id = c.id) as discord,
+              exists (select 1 from stayput.actions a
+                       where a.company_id = c.id
+                         and (a.approved_by like 'user_%'
+                              or a.type in ('creator_message', 'creator_offer'))) as acted
          from stayput.companies c
          left join stayput.company_settings s on s.company_id = c.id
         where c.id = $1`,
@@ -83,6 +99,8 @@ export async function readDashboard(
       messages: number;
       retries: number;
       offers: number;
+      pauses: number;
+      saved_members: number;
       pending_actions: number;
       pending_members: string[];
     }>(
@@ -127,6 +145,15 @@ export async function readDashboard(
          (select count(*) from done
            where type in ('pause_offer', 'promo_offer', 'extend_offer', 'coaching_offer',
                           'affiliate_invite'))::int as offers,
+         ((select count(*) from stayput.exit_surveys e
+            where e.company_id = $1 and e.offer_type = 'pause_offer'
+              and e.answered_at > $2::timestamptz - interval '30 days')
+          + (select count(*) from stayput.creator_offers o
+              where o.company_id = $1 and o.kind = 'pause_offer'
+                and o.created_at > $2::timestamptz - interval '30 days'))::int as pauses,
+         (select count(distinct v.member_id) from stayput.saves v
+           where v.company_id = $1 and v.saved_at > $2::timestamptz - interval '30 days'
+             and v.saved_at <= $2::timestamptz)::int as saved_members,
          (select count(*) from stayput.actions
            where company_id = $1 and status = 'proposed')::int as pending_actions,
          (select coalesce(jsonb_agg(distinct member_id), '[]'::jsonb) from stayput.actions
@@ -185,6 +212,47 @@ export async function readDashboard(
       [companyId, at, company.zone],
     );
 
+    // The chart: what was saved each day (direct saves) and what the members at risk that day
+    // pay a month, over 90 days, in the community's main currency. A day without scores has no
+    // risk figure (null), not a zero.
+    const chartCurrency = currency ?? savedCurrency ?? '';
+    const revenue = await tx.query<RevenueDay>(
+      `with paying as (
+         select ms.member_id, sum(${monthlyPrice('ms')}) as monthly
+           from stayput.memberships ms
+           join stayput.members m on m.company_id = ms.company_id and m.id = ms.member_id
+          where ms.company_id = $1 and ms.status in ${PAYING_STATUSES_SQL}
+            and ms.price > 0 and ms.billing_period_days > 0 and upper(ms.currency) = $4
+            and m.status = 'joined' and coalesce(m.access_level, '') <> 'admin'
+          group by ms.member_id
+       ), today as (
+         select ($2::timestamptz at time zone $3)::date as day
+       ), days as (
+         select (t.day - n)::date as day from today t, generate_series(0, 89) as n
+       ), scored as (
+         select r.day, sum(case when r.level in ('high', 'scheduled_departure')
+                                then coalesce(p.monthly, 0) else 0 end) as at_risk
+           from stayput.risk_scores r
+           left join paying p on p.member_id = r.member_id
+          where r.company_id = $1 and r.day > (select day from today) - 90
+          group by r.day
+       ), saved as (
+         select (v.saved_at at time zone $3)::date as day, sum(v.amount) as amount
+           from stayput.saves v
+          where v.company_id = $1 and v.category = 'direct' and upper(v.currency) = $4
+            and v.saved_at > $2::timestamptz - interval '91 days' and v.saved_at <= $2::timestamptz
+          group by 1
+       )
+       select to_char(d.day, 'YYYY-MM-DD') as day,
+              round(coalesce(s.amount, 0), 2)::float8 as saved,
+              round(k.at_risk, 2)::float8 as "atRisk"
+         from days d
+         left join saved s on s.day = d.day
+         left join scored k on k.day = d.day
+        order by d.day`,
+      [companyId, at, company.zone, chartCurrency],
+    );
+
     // Members at high risk nobody reached in 5 days, the « never contact » list aside.
     const unreached = await tx.query<{ member_id: string }>(
       `select k.member_id from stayput.member_risk k
@@ -201,6 +269,10 @@ export async function readDashboard(
         order by k.score desc, k.member_id`,
       [companyId, at, REACHED_DAYS],
     );
+
+    // Today ends on the live figure, the one the hero row shows.
+    const today = revenue.at(-1);
+    if (today && currency) today.atRisk = round2(atRiskRevenue);
 
     const f = figures!;
     const pendingMembers = f.pending_members;
@@ -232,10 +304,19 @@ export async function readDashboard(
         messages: f.messages,
         paymentRetries: f.retries,
         offers: f.offers,
+        pauses: f.pauses,
+        saved: f.saved_members,
       },
       mode: company.mode,
       testMode: company.dry_run,
       riskHistory: history,
+      revenueHistory: revenue,
+      gettingStarted: {
+        discord: company.discord,
+        automation: company.mode === 'auto' || company.acted,
+        reviewed: company.reviewed,
+        guardrails: company.guardrails,
+      },
       priority: choosePriority({
         mode: company.mode,
         pending: {

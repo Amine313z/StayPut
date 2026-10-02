@@ -1,0 +1,88 @@
+import { motion } from 'motion/react';
+import { useId, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { ease } from '../motion';
+
+export interface SegmentedOption<T extends string> {
+  value: T;
+  label: ReactNode;
+  /** The option's own language, when it is named in it (« Français »). */
+  lang?: string;
+}
+
+/**
+ * A choice among a few, side by side (a period, a language): a radio group the keyboard walks
+ * with the arrows. The chosen one wears a pill that slides to it (MOTION.md: 250 ms, the brand's
+ * easing; at once when the device asks for less motion).
+ */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+  labelledBy,
+}: {
+  options: readonly SegmentedOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
+  /** Its name for screen readers, unless `labelledBy` points to a visible one. */
+  label?: string;
+  labelledBy?: string;
+}) {
+  const pill = useId();
+  const buttons = useRef<(HTMLButtonElement | null)[]>([]);
+  const move = (event: KeyboardEvent, index: number) => {
+    const step =
+      event.key === 'ArrowRight' || event.key === 'ArrowDown'
+        ? 1
+        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+          ? -1
+          : 0;
+    if (step === 0) return;
+    event.preventDefault();
+    const next = (index + step + options.length) % options.length;
+    const option = options[next];
+    if (!option) return;
+    onChange(option.value);
+    buttons.current[next]?.focus();
+  };
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      aria-labelledby={labelledBy}
+      className="inline-flex rounded-lg border border-line p-0.5"
+    >
+      {options.map((option, index) => {
+        const checked = option.value === value;
+        return (
+          <button
+            key={option.value}
+            ref={(element) => {
+              buttons.current[index] = element;
+            }}
+            type="button"
+            role="radio"
+            lang={option.lang}
+            aria-checked={checked}
+            tabIndex={checked ? 0 : -1}
+            onClick={() => onChange(option.value)}
+            onKeyDown={(event) => move(event, index)}
+            className={`relative rounded-md px-3 py-1 text-sm font-medium transition-colors duration-150 ease-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+              checked ? 'text-fg' : 'text-muted hover:text-fg'
+            }`}
+          >
+            {checked ? (
+              <motion.span
+                layoutId={pill}
+                transition={ease('standard')}
+                aria-hidden="true"
+                className="absolute inset-0 rounded-md border border-line-strong bg-surface-2"
+              />
+            ) : null}
+            <span className="relative">{option.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}

@@ -27,6 +27,12 @@ export interface Env {
   DISCORD_CLIENT_SECRET?: string;
   /** Secret, optional: the token of StayPut's Telegram bot (Telegram module). */
   TELEGRAM_BOT_TOKEN?: string;
+  /**
+   * "true" turns the member space on (goals, results, testimonial cards and their pages,
+   * buddies, rescue challenges): off in V1, kept for a later version (decision of 2026-10-02).
+   * The departure survey is not part of it: it always runs.
+   */
+  MEMBER_SPACE_ENABLED?: string;
 }
 
 export interface Config {
@@ -49,6 +55,8 @@ export interface Config {
   telegram: { botToken: string } | null;
   /** Set only in development (ENVIRONMENT=development), never in a deployed Worker. */
   dev: { userId: string; accessLevel: AccessLevel | null } | null;
+  /** The member space is on (MEMBER_SPACE_ENABLED=true); off, its routes and its work stop. */
+  memberSpace: boolean;
 }
 
 export function readConfig(env: Env): Config {
@@ -69,5 +77,6 @@ export function readConfig(env: Env): Config {
       : null,
     telegram: env.TELEGRAM_BOT_TOKEN ? { botToken: env.TELEGRAM_BOT_TOKEN } : null,
     dev: devUser ? { userId: devUser, accessLevel: devLevel } : null,
+    memberSpace: env.MEMBER_SPACE_ENABLED === 'true',
   };
 }

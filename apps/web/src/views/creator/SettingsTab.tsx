@@ -11,7 +11,18 @@ import {
   type RiskWeights,
 } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
-import { CircleAlert, CircleCheck, RotateCcw, Save, SlidersHorizontal } from 'lucide-react';
+import {
+  Check,
+  CircleAlert,
+  CircleCheck,
+  Code,
+  Copy,
+  Languages,
+  Palette,
+  RotateCcw,
+  Save,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { putJson, useApi } from '../../api';
 import { LEVELS } from '../../components/Risk';
@@ -20,6 +31,8 @@ import { useI18n } from '../../i18n';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
+import { LanguageSelect } from '../../ui/LanguageSelect';
+import { ThemeSelect } from '../../ui/ThemeSelect';
 import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { useCreatorData } from '../CreatorView';
 import { Announcements } from './Announcements';
@@ -65,6 +78,69 @@ function WithRiskSettings({ children }: { children: (settings: RiskSettingsView)
     );
   }
   return <>{children(state.data)}</>;
+}
+
+/**
+ * Settings › General: the language (the only place it changes, English by default), the theme,
+ * and what a developer or Whop's support asks for, the community's id.
+ */
+export function GeneralSettingsTab() {
+  const { t } = useI18n();
+  const { companyId } = useCreatorData();
+  const languageId = useId();
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="space-y-6">
+      <Card
+        icon={<Languages aria-hidden="true" className="size-4" />}
+        title={<span id={languageId}>{t('settings.language')}</span>}
+        description={t('settings.language.hint')}
+      >
+        <LanguageSelect labelledBy={languageId} />
+        <p className="mt-3 text-sm">{t('settings.language.members')}</p>
+      </Card>
+      <Card
+        icon={<Palette aria-hidden="true" className="size-4" />}
+        title={t('settings.theme')}
+        description={t('settings.theme.hint')}
+      >
+        <ThemeSelect />
+      </Card>
+      <Card
+        icon={<Code aria-hidden="true" className="size-4" />}
+        title={t('settings.developer')}
+        description={t('settings.developer.hint')}
+      >
+        <dl className="flex flex-wrap items-center justify-between gap-3">
+          <dt className="text-sm">{t('settings.developer.companyId')}</dt>
+          <dd className="flex items-center gap-2">
+            <code className="tabular rounded-md border border-line px-2 py-1 text-sm text-fg">
+              {companyId}
+            </code>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={
+                copied ? (
+                  <Check aria-hidden="true" className="size-4" />
+                ) : (
+                  <Copy aria-hidden="true" className="size-4" />
+                )
+              }
+              onClick={() => {
+                void navigator.clipboard?.writeText(companyId).then(
+                  () => setCopied(true),
+                  () => undefined,
+                );
+              }}
+            >
+              {t(copied ? 'settings.developer.copied' : 'settings.developer.copy')}
+            </Button>
+          </dd>
+        </dl>
+      </Card>
+    </div>
+  );
 }
 
 /** Settings › Risk score: the niche, the weight of each sign, the thresholds. */
@@ -341,13 +417,9 @@ function RiskSettingsForm({ initial }: { initial: RiskSettingsView }) {
                     ['high', highFrom, 100],
                   ] as const
                 ).map(([level, from, to]) => {
-                  const { tone, label, Icon } = LEVELS[level];
+                  const { label, Icon } = LEVELS[level];
                   return (
-                    <Badge
-                      key={level}
-                      tone={tone}
-                      icon={<Icon aria-hidden="true" className="size-3" />}
-                    >
+                    <Badge key={level} icon={<Icon aria-hidden="true" className="size-3" />}>
                       {t('riskSettings.range', {
                         level: t(label),
                         from: number(from),

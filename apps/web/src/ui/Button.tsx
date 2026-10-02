@@ -9,11 +9,15 @@ const BASE =
   'transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 ' +
   'focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60';
 
+/**
+ * One primary (mint) button per screen at most; every other action is a ghost: outlined
+ * (`secondary`) or bare (`ghost`). Red only for what destroys (`danger`).
+ */
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-on-accent shadow-card hover:opacity-90',
-  secondary: 'border border-line bg-surface text-fg shadow-card hover:bg-surface-2',
-  ghost: 'text-muted hover:bg-surface-2 hover:text-fg',
-  danger: 'border border-line bg-surface text-danger hover:bg-danger-soft',
+  primary: 'button-primary',
+  secondary: 'border border-line text-fg hover:border-line-strong hover:bg-surface-2/60',
+  ghost: 'text-muted hover:bg-surface-2/60 hover:text-fg',
+  danger: 'border border-line text-danger hover:bg-danger-soft',
 };
 
 const SIZES: Record<ButtonSize, string> = {
@@ -21,7 +25,7 @@ const SIZES: Record<ButtonSize, string> = {
   md: 'px-4 py-2 text-sm',
 };
 
-/** A link inside a card that leads to another section: accent text, a soft hover. */
+/** A link inside a card that leads to another section: a ghost, mint text. */
 export const SECTION_LINK_CLASS =
   'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-accent ' +
   'hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 ' +
@@ -42,7 +46,10 @@ interface Look {
   icon?: ReactNode;
 }
 
-/** A button of the design system; `loading` shows a spinner and blocks a second click. */
+/**
+ * A button of the design system; `loading` puts a spinner in the label's place (same size, the
+ * label kept for screen readers) and blocks a second click.
+ */
 export function Button({
   variant,
   size,
@@ -56,13 +63,20 @@ export function Button({
   return (
     <button
       type="button"
-      className={buttonClass(variant, size, className)}
+      className={buttonClass(variant, size, `relative ${className}`)}
       disabled={disabled || loading}
       aria-busy={loading || undefined}
       {...rest}
     >
-      {loading ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : icon}
-      {children}
+      <span className={`inline-flex items-center gap-2 ${loading ? 'opacity-0' : ''}`}>
+        {icon}
+        {children}
+      </span>
+      {loading ? (
+        <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
+          <LoaderCircle className="size-4 animate-spin" />
+        </span>
+      ) : null}
     </button>
   );
 }

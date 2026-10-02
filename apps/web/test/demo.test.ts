@@ -53,6 +53,43 @@ describe('the demo community', () => {
     expect(home.retention30.rate).toBeLessThan(1);
   });
 
+  it('tells one story, from the hero row to the chart', () => {
+    const home = world.dashboard();
+    expect(home.revenueHistory).toHaveLength(90);
+    // Today's risk is the hero row's; three months ago it was higher (StayPut at work).
+    expect(home.revenueHistory.at(-1)!.atRisk).toBe(home.atRisk.revenue);
+    expect(home.revenueHistory[0]!.atRisk).toBeGreaterThan(home.atRisk.revenue);
+    expect(home.revenueHistory.every((d) => d.atRisk !== null && d.atRisk > 0)).toBe(true);
+    // The month's money saved is its days' in the chart.
+    const month = home.revenueHistory.filter((d) => d.day.startsWith('2026-10'));
+    expect(home.saved.thisMonth.direct).toBe(month.reduce((total, d) => total + d.saved, 0));
+    // Credible: a payment saved every few days, a fraction of what the community earns.
+    const last30 = home.revenueHistory.slice(-30).reduce((total, d) => total + d.saved, 0);
+    expect(last30).toBeGreaterThan(0);
+    expect(last30 / home.monthlyRevenue!).toBeLessThan(0.25);
+    expect(home.stayputActions30d.saved).toBeGreaterThan(0);
+  });
+
+  it('shows « Getting started » half done, and ticks the steps the visitor takes', () => {
+    const demo = createWorld(NOW);
+    expect(demo.dashboard().gettingStarted).toEqual({
+      discord: true,
+      automation: true,
+      reviewed: false,
+      guardrails: false,
+    });
+    demo.started('reviewed');
+    expect(demo.saveSettings({ ...demo.settings, maxMessagesPerMonth: 3 })).toMatchObject({
+      maxMessagesPerMonth: 3,
+    });
+    expect(demo.dashboard().gettingStarted).toEqual({
+      discord: true,
+      automation: true,
+      reviewed: true,
+      guardrails: true,
+    });
+  });
+
   it('asks to message the members at high risk, the best paying first', () => {
     const home = world.dashboard();
     expect(home.priority?.kind).toBe('message');

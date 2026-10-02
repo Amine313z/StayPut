@@ -18,7 +18,6 @@ import type {
   ActionsPage,
   DashboardView,
   DiscordChannelChoice,
-  FeedView,
   InsightsReport,
   IntegrationsStatus,
   MemberRetentionView,
@@ -27,13 +26,14 @@ import type {
   MemberTelegramStatus,
   MembersPage,
   PeopleView,
+  RevenueDay,
   RiskSettingsView,
   SyncRun,
   SyncStatus,
 } from '@stayput/core';
 import type { Locale } from '@stayput/i18n';
 import { RouterProvider, createMemoryRouter } from 'react-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '../src/App';
 import { resetDemo } from '../src/demo/api';
 import { readScreenshot } from '../src/ocr';
@@ -301,6 +301,15 @@ const ACTION_SETTINGS: ActionSettingsView = {
 
 const NO_ALUMNI: AlumniView = { offer: null, entered: 0, left: 0, returned: 0 };
 
+/**
+ * 90 days of the home's chart, the last one Oct 1: $49 saved on Sep 30 and on Oct 1; the members
+ * at risk paid $147 a month from Sep 2 (the first scores), $98 today.
+ */
+const REVENUE_HISTORY: RevenueDay[] = Array.from({ length: 90 }, (_, i) => {
+  const day = new Date(Date.UTC(2026, 9, 1) - (89 - i) * 86_400_000).toISOString().slice(0, 10);
+  return { day, saved: day >= '2026-09-30' ? 49 : 0, atRisk: i < 60 ? null : i === 89 ? 98 : 147 };
+});
+
 /** The home's figures for MEMBERS: $245 a month, $98 of it at risk, Bruno to message. */
 const HOME: DashboardView = {
   currency: 'USD',
@@ -314,7 +323,7 @@ const HOME: DashboardView = {
   retention30: { rate: 0.8, kept: 4, base: 5 },
   members: { total: 5, newLast7Days: 1 },
   memberActivity30d: 7,
-  stayputActions30d: { total: 6, messages: 4, paymentRetries: 1, offers: 1 },
+  stayputActions30d: { total: 6, messages: 4, paymentRetries: 1, offers: 1, pauses: 2, saved: 3 },
   mode: 'manual',
   testMode: false,
   riskHistory: [
@@ -322,50 +331,9 @@ const HOME: DashboardView = {
     { day: '2026-09-30', departure: 1, high: 2, medium: 1, low: 1 },
     { day: '2026-10-01', departure: 1, high: 1, medium: 1, low: 2 },
   ],
+  revenueHistory: REVENUE_HISTORY,
+  gettingStarted: { discord: true, automation: true, reviewed: true, guardrails: true },
   priority: { kind: 'message', memberIds: ['mber_3'], revenue: 49 },
-};
-
-const FEED: FeedView = {
-  items: [
-    {
-      id: 'action:1',
-      at: '2026-10-01T11:30:00.000Z',
-      by: 'stayput',
-      event: 'message_sent',
-      memberId: 'mber_3',
-      memberName: 'Bruno Petit',
-    },
-    {
-      id: 'payment:1',
-      at: '2026-10-01T10:00:00.000Z',
-      by: 'member',
-      event: 'payment_failed',
-      memberId: 'mber_2',
-      memberName: null,
-      amount: 49,
-      currency: 'USD',
-    },
-    {
-      id: 'save:1',
-      at: '2026-09-30T10:00:00.000Z',
-      by: 'stayput',
-      event: 'saved',
-      memberId: 'mber_1',
-      memberName: 'Alice Martin',
-      amount: 49,
-      currency: 'USD',
-    },
-    {
-      id: 'activity:1',
-      at: '2026-09-30T09:00:00.000Z',
-      by: 'member',
-      event: 'activity',
-      memberId: 'mber_1',
-      memberName: 'Alice Martin',
-      source: 'discord',
-      activity: 'message',
-    },
-  ],
 };
 
 const dashboard = (
@@ -379,8 +347,15 @@ const dashboard = (
   '/api/creator/biz_A1/integrations?lang=en': [{ status: 200, body: integrations }],
   '/api/creator/biz_A1/alumni': [{ status: 200, body: NO_ALUMNI }],
   '/api/creator/biz_A1/dashboard': [{ status: 200, body: home }],
-  '/api/creator/biz_A1/feed': [{ status: 200, body: FEED }],
+  // Opening Members ticks « Review your at-risk members ».
+  'POST /api/creator/biz_A1/getting-started/reviewed': [
+    { status: 200, body: { done: true } },
+    { status: 200, body: { done: true } },
+  ],
 });
+
+/** The member space is off in V1 (MEMBER_SPACE_ENABLED): its tests turn it on. */
+const spaceOn = () => vi.stubEnv('VITE_MEMBER_SPACE_ENABLED', 'true');
 
 const NOBODY: MembersPage = {
   summary: {
@@ -406,6 +381,7 @@ const NOBODY: MembersPage = {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   window.localStorage.clear();
   resetDemo();
 });
@@ -415,29 +391,24 @@ describe('creator view', () => {
     const calls = mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
     expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
-    // The side menu: the sections in the redesign's order, the open one marked.
+    // The side menu: the six sections of the redesign, in its order, the open one marked.
     const menu = screen.getByRole('navigation', { name: 'Dashboard sections' });
     expect(
       within(menu)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual([
-      'Dashboard',
-      'Members',
-      'Member space',
-      'Automations',
-      'Analytics',
-      'Integrations',
-      'Settings',
-    ]);
+    ).toEqual(['Dashboard', 'Members', 'Automations', 'Analytics', 'Integrations', 'Settings']);
     expect(within(menu).getByRole('link', { name: 'Dashboard' }).getAttribute('aria-current')).toBe(
       'page',
     );
-    // The top bar: the community by its name (never its id), the team's view.
+    // The top bar: the community by its name (never its id), the team's view, the guide; the
+    // language and the theme are in Settings only.
     expect(screen.getByText('Le Club')).toBeTruthy();
     expect(screen.queryByText('biz_A1')).toBeNull();
     expect(screen.getByText('Team view')).toBeTruthy();
-    expect(await screen.findByText('Up to date.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Guide' })).toBeTruthy();
+    expect(screen.queryByRole('radiogroup', { name: 'Language' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Theme' })).toBeNull();
     // One page: no row of tabs.
     expect(screen.queryByRole('navigation', { name: 'Dashboard tabs' })).toBeNull();
     // On a phone, the main sections at the bottom, the others under « More ».
@@ -448,10 +419,9 @@ describe('creator view', () => {
         .map((link) => link.textContent),
     ).toEqual(['Dashboard', 'Members', 'Automations', 'Analytics']);
     expect(within(phone).getByRole('button', { name: 'More' })).toBeTruthy();
-    await screen.findByText('StayPut messaged Bruno Petit');
+    await screen.findByText('Bruno Petit');
     expect(calls.slice().sort()).toEqual([
       '/api/creator/biz_A1/dashboard',
-      '/api/creator/biz_A1/feed',
       '/api/creator/biz_A1/integrations?lang=en',
       '/api/creator/biz_A1/members',
       '/api/creator/biz_A1/session',
@@ -459,29 +429,49 @@ describe('creator view', () => {
     ]);
   });
 
-  it('puts the money first: saved this month, at risk, members at risk, retention', async () => {
+  it('puts the money first: saved this month, at risk, members at risk', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
     const money = (await screen.findByText('Revenue saved this month')).closest('dl')!;
-    await vi.waitFor(() => {
-      expect(money.textContent).toContain(
-        'Revenue saved this month$983 members kept · + $49 influenced$49 last month',
-      );
-      expect(money.textContent).toContain('Revenue at risk$98Per month, out of $245');
-      expect(money.textContent).toContain('Members at risk21 leaving · 1 at high risk');
-      expect(money.textContent).toContain('Retention, 30 days80%4 of 5 members still here');
-    });
-    // Second to the money: the members, the revenue, what members did, what StayPut did.
-    const community = (await screen.findByText('Member activity (30d)')).closest('dl')!;
-    await vi.waitFor(() => {
-      expect(community.textContent).toContain('Members51 new this week');
-      expect(community.textContent).toContain(
-        'Member activity (30d)7Messages, reactions, posts and lessons',
-      );
-      expect(community.textContent).toContain(
-        'StayPut actions (30d)64 messages · 1 payment retry · 1 offer',
-      );
-    });
+    // Three figures, each its label and its value; what it means behind its « i ».
+    await vi.waitFor(() =>
+      expect(
+        within(money)
+          .getAllByRole('definition')
+          .map((dd) => dd.textContent),
+      ).toEqual(['$98', '$98', '2']),
+    );
+    expect(
+      within(money)
+        .getAllByRole('tooltip')
+        .map((tip) => tip.textContent),
+    ).toEqual([
+      'What StayPut recovered this month: failed payments it retried, cancellations withdrawn ' +
+        'after its offer, paused members who came back.3 members kept+ $49 influenced$49 last month',
+      'What the members leaving or at high risk pay each month, out of $245 in all.',
+      '1 leaving (cancellation scheduled), 1 at high risk of leaving.',
+    ]);
+    // The money saved is the largest, in the logo's gradient; the money at risk in silver.
+    const [saved, atRisk] = within(money).getAllByRole('definition');
+    expect(saved!.className).toContain('metric-lead');
+    expect(saved!.querySelector('.text-hero')).toBeTruthy();
+    expect(atRisk!.querySelector('.text-hero')).toBeNull();
+    expect(atRisk!.innerHTML).not.toMatch(/danger/);
+    // In Analytics now: the retention, what the members themselves did.
+    expect(screen.queryByText('Retention, 30 days')).toBeNull();
+    expect(screen.queryByText('Member activity (30d)')).toBeNull();
+    // What StayPut did in 30 days, in one strip.
+    const strip = screen
+      .getByRole('heading', { name: 'StayPut actions (30d)' })
+      .closest('section')!;
+    await vi.waitFor(() =>
+      expect(Array.from(strip.querySelectorAll('dl > div')).map((d) => d.textContent)).toEqual([
+        'messages sent4',
+        'payment retried1',
+        'pauses offered2',
+        'members saved3',
+      ]),
+    );
   });
 
   it('shows the action of the day with the revenue at stake, and does it in one click', async () => {
@@ -491,10 +481,6 @@ describe('creator view', () => {
         { status: 200, body: HOME },
         { status: 200, body: { ...HOME, priority: null } },
       ],
-      '/api/creator/biz_A1/feed': [
-        { status: 200, body: FEED },
-        { status: 200, body: FEED },
-      ],
       'POST /api/creator/biz_A1/members/message': [{ status: 200, body: { queued: 1 } }],
     });
     renderAt('/dashboard/biz_A1');
@@ -503,9 +489,17 @@ describe('creator view', () => {
         name: '1 member at high risk has not heard from you in 5 days',
       })
     ).closest('section')!;
-    expect(card.textContent).toContain('At stake$49 a month');
-    expect(card.textContent).toContain('never a promise of what will be saved');
-    fireEvent.click(within(card).getByRole('button', { name: 'Message 1 high-risk member' }));
+    expect(card.textContent).toContain('At stake $49 a month');
+    // How it works, behind its « i »: what those members pay, never a promise.
+    expect(within(card).getByRole('tooltip').textContent).toContain(
+      'never a promise of what will be saved',
+    );
+    // The page's only primary button.
+    const button = within(card).getByRole('button', { name: 'Message 1 high-risk member' });
+    expect(button.className).toContain('button-primary');
+    await screen.findByText('Bruno Petit');
+    expect(document.querySelectorAll('.button-primary')).toHaveLength(1);
+    fireEvent.click(button);
     expect(await screen.findByText('1 message queued')).toBeTruthy();
     expect(bodies.get('POST /api/creator/biz_A1/members/message')).toEqual({
       memberIds: ['mber_3'],
@@ -517,27 +511,30 @@ describe('creator view', () => {
     expect(await screen.findByRole('heading', { name: 'Nothing urgent today' })).toBeTruthy();
   });
 
-  it('lists who needs attention with the reason, the date and what they pay', async () => {
+  it('lists who needs attention: their ring, the reason, the date and what they pay', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
     await screen.findByText('Bruno Petit');
     const attention = screen.getByRole('heading', { name: 'Needs attention' }).closest('section')!;
-    const text = attention.textContent ?? '';
-    expect(text).toContain('Member without a name');
-    expect(text).toContain('Leaving');
-    expect(text).toContain('No activity this week');
-    expect(text).toContain('Leaves on Oct 20, 2026');
-    expect(text).toContain('High risk · 78');
-    expect(text).toContain('No activity for 21 days');
-    expect(text).toContain('Renews on Oct 15, 2026');
-    expect(text).toContain('$49/mo');
-    expect(text.indexOf('Member without a name')).toBeLessThan(text.indexOf('Bruno Petit'));
-    expect(text).not.toContain('Denis Moreau');
-    expect(text).not.toContain('Alice Martin');
-    expect(screen.getByRole('link', { name: 'See all (2)' }).getAttribute('href')).toBe(
-      '/dashboard/biz_A1/attention',
+    const rows = within(attention).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    // The urgent first: a payment failed and not recovered, the red dot said in words too.
+    expect(rows[0]!.textContent).toContain('Member without a name');
+    expect(rows[0]!.textContent).toContain('UrgentPayment failed');
+    expect(rows[0]!.textContent).toContain('Leaves on Oct 20');
+    expect(within(rows[0]!).getByRole('img', { name: 'Leaving' })).toBeTruthy();
+    expect(rows[1]!.textContent).toContain('Bruno Petit');
+    expect(rows[1]!.textContent).toContain('No activity for 21 days');
+    expect(rows[1]!.textContent).toContain('Renews on Oct 15');
+    expect(rows[1]!.textContent).toContain('$49/mo');
+    expect(rows[1]!.textContent).not.toContain('Urgent');
+    expect(within(rows[1]!).getByRole('img', { name: 'High risk · 78' })).toBeTruthy();
+    expect(attention.textContent).not.toContain('Denis Moreau');
+    expect(attention.textContent).not.toContain('Alice Martin');
+    expect(within(attention).getByRole('link', { name: 'See all (2)' }).getAttribute('href')).toBe(
+      '/dashboard/biz_A1/members',
     );
-    // Each one with the means to act: Message, Pause, Offer.
+    // Each one with the means to act on the spot: Message, Pause, Offer.
     expect(within(attention).getByRole('button', { name: 'Message Bruno Petit' })).toBeTruthy();
     expect(
       within(attention).getByRole('button', { name: 'Offer Bruno Petit a pause' }),
@@ -545,17 +542,8 @@ describe('creator view', () => {
     expect(
       within(attention).getByRole('button', { name: 'Make Bruno Petit an offer' }),
     ).toBeTruthy();
-
-    // The activation radar, with a word of welcome.
-    const radar = screen
-      .getByRole('heading', { name: 'New members who have not started' })
-      .closest('section')!;
-    expect(radar.textContent).toContain('Chloé Dubois');
-    expect(within(radar).getByRole('button', { name: 'Message Chloé Dubois' })).toBeTruthy();
-    expect(within(radar).queryByRole('button', { name: /pause/ })).toBeNull();
-    expect(screen.getByRole('link', { name: 'See all (1)' }).getAttribute('href')).toBe(
-      '/dashboard/biz_A1/new-members',
-    );
+    // The newcomers are found in Members now (brief: five things on the home, no more).
+    expect(screen.queryByRole('heading', { name: 'New members who have not started' })).toBeNull();
   });
 
   it('writes to a member in one click, and says it is queued', async () => {
@@ -621,79 +609,155 @@ describe('creator view', () => {
     ).toBeTruthy();
   });
 
-  it('shows what just happened, StayPut’s actions and the members’', async () => {
-    mockApi(dashboard());
-    renderAt('/dashboard/biz_A1');
-    const feed = await screen.findByRole('list', { name: 'Live activity' });
-    expect(
-      Array.from(feed.querySelectorAll('li')).map((li) => li.querySelector('p')?.textContent),
-    ).toEqual([
-      'StayPut messaged Bruno Petit',
-      'A member’s payment of $49 failed',
-      '$49 saved: Alice Martin stays',
-      'Alice Martin wrote on Discord',
-    ]);
-  });
-
-  it('says when test mode is on, on top of the page', async () => {
+  it('says when test mode is on, on top of the page, in a thin line', async () => {
     mockApi(dashboard(MEMBERS, INTEGRATIONS, { ...HOME, testMode: true }));
     renderAt('/dashboard/biz_A1');
-    expect(
-      await screen.findByText('Test mode is on: StayPut computes everything and sends nothing.'),
-    ).toBeTruthy();
+    const words = await screen.findByText(
+      'Test mode is on: StayPut computes everything and sends nothing.',
+    );
     expect(screen.getByRole('link', { name: 'Change it in Settings' }).getAttribute('href')).toBe(
       '/dashboard/biz_A1/settings/actions',
     );
-    expect(
-      screen.getByText('Test mode: the messages are simulated, nothing is sent.'),
-    ).toBeTruthy();
+    // A mint outline and muted words, never an amber fill.
+    const bar = words.closest('p')!;
+    expect(bar.className).toContain('border-line-strong');
+    expect(bar.className).not.toMatch(/warning|bg-/);
   });
 
-  it('lists every member who needs attention, and every new member who has not started', async () => {
-    mockApi(dashboard());
-    renderAt('/dashboard/biz_A1/attention');
-    await screen.findByText('Bruno Petit');
-    const attention = screen
-      .getByRole('heading', { name: 'Needs attention', level: 2 })
-      .closest('section')!;
-    expect(attention.textContent).toContain('Member without a name');
-    expect(within(attention).queryByRole('link', { name: /See all/ })).toBeNull();
-    cleanup();
-    mockApi(dashboard());
-    renderAt('/dashboard/biz_A1/new-members');
-    await screen.findByText('Chloé Dubois');
-    const radar = screen
-      .getByRole('heading', { name: 'New members who have not started' })
-      .closest('section')!;
-    expect(radar.textContent).toContain('Chloé Dubois');
+  it('shows the five most urgent members only, the most urgent first', async () => {
+    const day = 86_400_000;
+    const leaving = (inDays: number): MemberRow['membership'] => ({
+      status: 'active',
+      price: 49,
+      currency: 'usd',
+      billingPeriodDays: 30,
+      cancelAtPeriodEnd: true,
+      currentPeriodEnd: new Date(Date.now() + inDays * day).toISOString(),
+    });
+    const members: MemberRow[] = [
+      memberRow({ id: 'm_a', name: 'Ana High', risk: risk({ score: 90, level: 'high' }) }),
+      memberRow({
+        id: 'm_b',
+        name: 'Ben Soon',
+        risk: risk({ score: 100, level: 'scheduled_departure' }),
+        membership: leaving(1),
+      }),
+      memberRow({
+        id: 'm_c',
+        name: 'Cleo Card',
+        risk: risk({ score: 70, level: 'high' }),
+        lastPayment: {
+          status: 'failed',
+          amount: 49,
+          currency: 'usd',
+          at: '2026-09-30T10:00:00.000Z',
+          failureReason: 'Card declined',
+        },
+      }),
+      memberRow({
+        id: 'm_d',
+        name: 'Dan Later',
+        risk: risk({ score: 100, level: 'scheduled_departure' }),
+        membership: leaving(10),
+      }),
+      memberRow({ id: 'm_e', name: 'Eve High', risk: risk({ score: 85, level: 'high' }) }),
+      memberRow({ id: 'm_f', name: 'Fay High', risk: risk({ score: 60, level: 'high' }) }),
+      memberRow({ id: 'm_g', name: 'Gus High', risk: risk({ score: 95, level: 'high' }) }),
+      memberRow({ id: 'm_h', name: 'Hal Medium', risk: risk({ score: 50, level: 'medium' }) }),
+    ];
+    mockApi(dashboard({ ...MEMBERS, members }));
+    renderAt('/dashboard/biz_A1');
+    const attention = (await screen.findByRole('heading', { name: 'Needs attention' })).closest(
+      'section',
+    )!;
+    await within(attention).findByText('Ben Soon');
+    // Leaving within 48 hours, a payment failed; then the departures; then the highest scores.
+    const rows = within(attention).getAllByRole('listitem');
+    expect(rows.map((li) => li.querySelector('p')?.textContent)).toEqual([
+      'Ben Soon',
+      'Cleo Card',
+      'Dan Later',
+      'Gus High',
+      'Ana High',
+    ]);
+    expect(rows[0]!.textContent).toContain('UrgentLeaves on');
+    expect(rows[2]!.textContent).not.toContain('Urgent');
+    expect(within(attention).getByRole('link', { name: 'See all (7)' })).toBeTruthy();
   });
 
-  it('shows how the risk spreads, each level with its count, share and members', async () => {
+  it('draws the money saved against the money at risk, over 7, 30 or 90 days', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
-    const bar = await screen.findByRole('group', { name: 'Members by risk level' });
-    const legend = bar.parentElement!.querySelector('ul')!;
-    const rows = Array.from(legend.querySelectorAll('a'));
-    expect(rows.map((a) => a.textContent)).toEqual([
-      'Leaving1 · 20%',
-      'High risk1 · 20%',
-      'Medium risk1 · 20%',
-      'Low risk2 · 40%',
-    ]);
-    expect(rows.map((a) => a.getAttribute('href'))).toEqual([
-      '/dashboard/biz_A1/members?filter=leaving',
-      '/dashboard/biz_A1/members?filter=high',
-      '/dashboard/biz_A1/members?filter=medium',
-      '/dashboard/biz_A1/members?filter=low',
-    ]);
-    // The members at risk over 30 days: a line, said in words too.
+    const chart = (await screen.findByRole('table', { name: 'Revenue saved vs at risk' })).closest(
+      'section',
+    )!;
+    const periods = within(chart).getByRole('radiogroup', { name: 'Period' });
     expect(
-      await screen.findByRole('img', {
-        name: 'Members at high risk or leaving, day by day: 3 on Sep 29, 2026, 2 on Oct 1, 2026.',
+      within(periods)
+        .getAllByRole('radio')
+        .map((radio) => `${radio.textContent} ${radio.getAttribute('aria-checked')}`),
+    ).toEqual(['7d false', '30d true', '90d false']);
+    // Said in a sentence, and as a table, for screen readers; the saved money added up.
+    const summary = () => chart.querySelector('figcaption')?.textContent;
+    expect(summary()).toBe(
+      'Over the last 30 days, StayPut saved $98; the revenue at risk went from $147 to $98 a month.',
+    );
+    const rows = () => within(chart).getAllByRole('row');
+    expect(rows()).toHaveLength(31);
+    expect(rows()[30]!.textContent).toBe('Oct 1, 2026$98$98');
+    // Before the first scores, no risk figure rather than a zero.
+    fireEvent.click(within(periods).getByRole('radio', { name: '90d' }));
+    expect(rows()).toHaveLength(91);
+    expect(rows()[1]!.textContent).toBe('Jul 4, 2026$0—');
+    fireEvent.click(within(periods).getByRole('radio', { name: '7d' }));
+    expect(summary()).toBe(
+      'Over the last 7 days, StayPut saved $98; the revenue at risk went from $147 to $98 a month.',
+    );
+    // The keyboard walks the days, and each day's figures are said.
+    const plot = within(chart).getByRole('group', { name: 'Revenue saved vs at risk' });
+    const said = () => chart.querySelector('[aria-live]')?.textContent;
+    fireEvent.focus(plot);
+    expect(said()).toBe('Oct 1, 2026: Revenue saved $98, Revenue at risk $98');
+    fireEvent.keyDown(plot, { key: 'ArrowLeft' });
+    expect(said()).toBe('Sep 30, 2026: Revenue saved $49, Revenue at risk $147');
+    fireEvent.keyDown(plot, { key: 'Home' });
+    expect(said()).toBe('Sep 25, 2026: Revenue saved $0, Revenue at risk $147');
+    fireEvent.keyDown(plot, { key: 'Escape' });
+    expect(said()).toBe('');
+  });
+
+  it('puts « Getting started » on top until the setup is done', async () => {
+    const calls = mockApi(
+      dashboard(MEMBERS, INTEGRATIONS, {
+        ...HOME,
+        gettingStarted: { discord: true, automation: false, reviewed: false, guardrails: true },
       }),
-    ).toBeTruthy();
-    expect(screen.getByText('1 fewer than 30 days ago')).toBeTruthy();
-    expect(screen.getByText(/^Computed /)).toBeTruthy();
+    );
+    renderAt('/dashboard/biz_A1');
+    const card = (await screen.findByRole('heading', { name: 'Getting started' })).closest(
+      'section',
+    )!;
+    expect(card.textContent).toContain('2 of 4 done');
+    // Each step leads to its screen; the done ones say so.
+    const step = (name: string) => within(card).getByRole('link', { name }).getAttribute('href');
+    expect(step('Connect Discord · done')).toBe('/dashboard/biz_A1/sources');
+    expect(step('Activate your first automation')).toBe('/dashboard/biz_A1/actions');
+    expect(step('Review your at-risk members')).toBe('/dashboard/biz_A1/members?filter=high');
+    expect(step('Set guardrails · done')).toBe('/dashboard/biz_A1/settings/actions');
+    // Opening the members at risk ticks their step.
+    fireEvent.click(within(card).getByRole('link', { name: 'Review your at-risk members' }));
+    await vi.waitFor(() =>
+      expect(calls).toContain('POST /api/creator/biz_A1/getting-started/reviewed'),
+    );
+    expect(
+      headersOf.get('POST /api/creator/biz_A1/getting-started/reviewed')?.get('x-stayput-csrf'),
+    ).toBe('1');
+    cleanup();
+    // Everything done: the card is gone.
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1');
+    await screen.findByText('Revenue saved this month');
+    expect(screen.queryByRole('heading', { name: 'Getting started' })).toBeNull();
   });
 
   it('shows what StayPut collected about each member, and the risk with why', async () => {
@@ -733,7 +797,7 @@ describe('creator view', () => {
     await screen.findByText('Member without a name');
     const attention = screen.getByRole('heading', { name: 'Needs attention' }).closest('section')!;
     expect(attention.textContent).toContain('Payment failed');
-    expect(attention.textContent).toContain('Cancellation scheduled');
+    expect(attention.textContent).toContain('Leaves on Oct 20');
     expect(attention.textContent).not.toContain('Bruno Petit');
   });
 
@@ -820,8 +884,16 @@ describe('creator view', () => {
         retention30: { rate: null, kept: 0, base: 0 },
         members: { total: 0, newLast7Days: 0 },
         memberActivity30d: 0,
-        stayputActions30d: { total: 0, messages: 0, paymentRetries: 0, offers: 0 },
+        stayputActions30d: {
+          total: 0,
+          messages: 0,
+          paymentRetries: 0,
+          offers: 0,
+          pauses: 0,
+          saved: 0,
+        },
         riskHistory: [],
+        revenueHistory: REVENUE_HISTORY.map((d) => ({ ...d, saved: 0, atRisk: null })),
         priority: null,
       }),
       '/api/creator/biz_A1/sync': [syncStatus({ backfillDone: false })],
@@ -833,9 +905,14 @@ describe('creator view', () => {
       ),
     ).toBeTruthy();
     expect(await screen.findByText('Nothing needs your attention right now.')).toBeTruthy();
-    expect(await screen.findAllByText('No paying membership yet.')).toHaveLength(3);
-    expect(screen.getByText('Measured once members have been here 30 days.')).toBeTruthy();
+    // No amount yet: a dash, and why behind the « i ».
+    expect(await screen.findAllByText('No paying membership yet.')).toHaveLength(2);
     expect(screen.getByRole('heading', { name: 'Nothing urgent today' })).toBeTruthy();
+    expect(
+      screen.getByText(
+        'The chart fills in day after day, as StayPut scores your members and saves revenue.',
+      ),
+    ).toBeTruthy();
     fireEvent.click(
       within(screen.getByRole('navigation', { name: 'Dashboard sections' })).getByRole('link', {
         name: 'Members',
@@ -848,7 +925,7 @@ describe('creator view', () => {
     ).toBeTruthy();
   });
 
-  it('syncs now on demand, then reads the members and the sources again', async () => {
+  it('syncs now on demand in Integrations, then reads the members and the sources again', async () => {
     const run = (ran: boolean): { status: number; body: SyncRun } => ({
       status: 200,
       body: {
@@ -868,31 +945,21 @@ describe('creator view', () => {
         { status: 200, body: INTEGRATIONS },
         { status: 200, body: INTEGRATIONS },
       ],
-      '/api/creator/biz_A1/dashboard': [
-        { status: 200, body: HOME },
-        { status: 200, body: HOME },
-      ],
-      '/api/creator/biz_A1/feed': [
-        { status: 200, body: FEED },
-        { status: 200, body: FEED },
-      ],
     });
-    renderAt('/dashboard/biz_A1');
-    const button = await screen.findByRole('button', { name: 'Sync now' });
-    await screen.findByText('Nothing needs your attention right now.');
-    fireEvent.click(button);
-    expect(await screen.findByText('Member without a name')).toBeTruthy();
+    renderAt('/dashboard/biz_A1/sources');
+    fireEvent.click(await screen.findByRole('button', { name: 'Sync now' }));
+    await vi.waitFor(() =>
+      expect(calls.filter((c) => c === '/api/creator/biz_A1/members')).toHaveLength(2),
+    );
     expect(headersOf.get('POST /api/creator/biz_A1/sync')?.get('x-stayput-csrf')).toBe('1');
-    fireEvent.click(screen.getByRole('button', { name: 'Sync now' }));
+    // « Sync now » reads Discord too: the sources are read again with the members.
+    await vi.waitFor(() =>
+      expect(calls.filter((c) => c === '/api/creator/biz_A1/integrations?lang=en')).toHaveLength(2),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Sync now' }));
     expect(
       await screen.findByText('A synchronization just ran. Try again in a minute.'),
     ).toBeTruthy();
-    expect(calls.filter((c) => c === '/api/creator/biz_A1/members')).toHaveLength(2);
-    // « Sync now » reads Discord too: the sources are read again with the members.
-    expect(calls.filter((c) => c === '/api/creator/biz_A1/integrations?lang=en')).toHaveLength(2);
-    // And the home its figures and its feed.
-    expect(calls.filter((c) => c === '/api/creator/biz_A1/dashboard')).toHaveLength(2);
-    expect(calls.filter((c) => c === '/api/creator/biz_A1/feed')).toHaveLength(2);
   });
 
   it('names the data StayPut could not read, and why', async () => {
@@ -926,7 +993,7 @@ describe('creator view', () => {
         }),
       ],
     });
-    renderAt('/dashboard/biz_A1', 'fr');
+    renderAt('/dashboard/biz_A1/sources', 'fr');
     expect(
       await screen.findByText("Messages : la permission n'est pas accordée dans Whop."),
     ).toBeTruthy();
@@ -955,7 +1022,6 @@ describe('creator view', () => {
     ).toEqual([
       'Tableau de bord',
       'Membres',
-      'Espace membre',
       'Automatisations',
       'Analyses',
       'Intégrations',
@@ -1035,6 +1101,22 @@ describe('creator view', () => {
           .getAttribute('aria-current'),
       ).toBe('page'),
     );
+  });
+
+  it('keeps the member space out of V1: no section, no settings tab, its addresses lead away', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/space');
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
+    cleanup();
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/settings/space');
+    expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeTruthy();
+    expect(
+      within(screen.getByRole('navigation', { name: 'Settings tabs' }))
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['General', 'Risk score', 'Automations']);
+    expect(await screen.findByRole('radiogroup', { name: 'Language' })).toBeTruthy();
   });
 
   it('offers to try again after a network failure, and succeeds', async () => {
@@ -1786,6 +1868,7 @@ describe('risk settings', () => {
     screen.getByRole('slider', { name }).closest('div')!.querySelector('output')!.textContent;
 
   it('proposes the goals of the niche saved to members', async () => {
+    spaceOn();
     const calls = settings({
       // Read by each tab that needs it: the goals, the score, the goals again.
       '/api/creator/biz_A1/settings/risk': [
@@ -1812,6 +1895,7 @@ describe('risk settings', () => {
   });
 
   it('lets the creator write their own goals, and go back to StayPut’s', async () => {
+    spaceOn();
     const own = [
       { title: 'Finish the course', unit: '%', category: 'learning', entry: 'total' },
       { title: 'Book 3 calls', unit: 'calls', category: 'clients', entry: 'add' },
@@ -1855,6 +1939,7 @@ describe('risk settings', () => {
   });
 
   it('turns the earned days on, with the creator’s numbers', async () => {
+    spaceOn();
     settings({
       'PUT /api/creator/biz_A1/earned-days': [
         { status: 200, body: { enabled: true, at50: 5, at100: 7 } },
@@ -1882,6 +1967,7 @@ describe('risk settings', () => {
   });
 
   it('turns the buddies on, and says when no veteran can take a newcomer yet', async () => {
+    spaceOn();
     settings({
       'PUT /api/creator/biz_A1/buddies': [
         {
@@ -1909,6 +1995,7 @@ describe('risk settings', () => {
   });
 
   it('turns the rescue challenges on', async () => {
+    spaceOn();
     settings({
       'PUT /api/creator/biz_A1/rescues': [
         {
@@ -1928,6 +2015,7 @@ describe('risk settings', () => {
   });
 
   it('picks where the milestones are announced, among the places StayPut can post in', async () => {
+    spaceOn();
     settings({
       'PUT /api/creator/biz_A1/announcements': [
         {
@@ -1959,7 +2047,7 @@ describe('risk settings', () => {
     const calls = settings({
       'PUT /api/creator/biz_A1/settings/risk': [{ status: 200, body: TRADING }],
     });
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/risk');
     const save = await screen.findByRole('button', { name: 'Save' });
     expect(save.hasAttribute('disabled')).toBe(true);
     expect(share('Recency')).toBe('30%');
@@ -1981,7 +2069,7 @@ describe('risk settings', () => {
 
   it('brings the weights back to 100% as they move', async () => {
     settings();
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/risk');
     const payment = await screen.findByRole('slider', { name: 'Payment' });
     fireEvent.change(payment, { target: { value: '0' } });
     // 30 + 25 + 20 + 0 + 10 = 85 points: recency weighs 30 / 85.
@@ -1992,7 +2080,7 @@ describe('risk settings', () => {
 
   it('refuses levels in the wrong order, and a recency out of range', async () => {
     settings();
-    renderAt('/dashboard/biz_A1/settings');
+    renderAt('/dashboard/biz_A1/settings/risk');
     fireEvent.change(await screen.findByRole('spinbutton', { name: 'Medium risk from' }), {
       target: { value: '80' },
     });
@@ -2015,7 +2103,7 @@ describe('risk settings', () => {
         { status: 500, body: { error: { code: 'internal', message: 'boom' } } },
       ],
     });
-    renderAt('/dashboard/biz_A1/settings', 'fr');
+    renderAt('/dashboard/biz_A1/settings/risk', 'fr');
     fireEvent.change(await screen.findByRole('combobox', { name: 'Votre niche' }), {
       target: { value: 'fitness' },
     });
@@ -2109,6 +2197,7 @@ describe('signing in with Whop outside the iframe (sandbox)', () => {
 });
 
 describe('the member space in the dashboard', () => {
+  beforeEach(spaceOn);
   const card: TestimonialCard = {
     proofId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
     resultId: '5f0c3e1a-9b2d-4e8f-a1c3-d5e7f9b1c3d5',
@@ -2165,6 +2254,7 @@ describe('the member space in the dashboard', () => {
     departure: null,
     alumni: null,
     creatorOffer: null,
+    locale: 'en',
   };
 
   it('shows the member space in three tabs: its figures, the cards online, the member view', async () => {
@@ -2295,6 +2385,7 @@ describe('member view', () => {
       departure: null,
       alumni: null,
       creatorOffer: null,
+      locale: 'en',
       ...over,
     } satisfies MemberRetentionView,
   });
@@ -2320,15 +2411,18 @@ describe('member view', () => {
     } satisfies MemberTelegramStatus,
   });
 
-  it('opens the progress space of the experience', async () => {
+  it('opens the member’s subscription, and says plainly when nothing needs them', async () => {
     mockApi({
       '/api/member/exp_E1/session': [memberSession],
       '/api/member/exp_E1/retention': [retention()],
       '/api/member/exp_E1/telegram?lang=en': [telegram({ available: false, link: null })],
     });
     renderAt('/experiences/exp_E1');
-    expect(await screen.findByRole('heading', { name: 'Your progress space' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Your membership' })).toBeTruthy();
+    expect(screen.getByText('Your membership is all set: nothing needs you here.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Sign out' })).toBeTruthy();
+    // The member space is off in V1: no goals, no progress space.
+    expect(screen.queryByRole('heading', { name: 'Your progress space' })).toBeNull();
     expect(screen.queryByText('Your Telegram account')).toBeNull();
   });
 
@@ -2362,7 +2456,7 @@ describe('member view', () => {
       '/api/member/exp_E1/session': [memberSession],
       '/api/member/exp_E1/retention': [accepted],
       '/api/member/exp_E1/telegram?lang=en': [telegram({ available: false, link: null })],
-      '/api/member/exp_E1/space/affiliate': [
+      '/api/member/exp_E1/retention/affiliate': [
         { status: 200, body: { url: 'https://whop.com/le-club/?a=lina' } },
       ],
     });
@@ -2388,7 +2482,7 @@ describe('member view', () => {
         }),
       ],
       '/api/member/exp_E1/telegram?lang=en': [telegram({ available: false, link: null })],
-      '/api/member/exp_E1/space/affiliate': [{ status: 200, body: { url: null } }],
+      '/api/member/exp_E1/retention/affiliate': [{ status: 200, body: { url: null } }],
     });
     renderAt('/experiences/exp_E1');
     expect(
@@ -2555,6 +2649,7 @@ describe('member view', () => {
       '/api/member/exp_E1/session': [memberSession],
       '/api/member/exp_E1/retention': [
         retention({
+          locale: 'fr',
           alumniUrl: 'https://whop.com/checkout/plan_Alumni',
           payment: {
             kind: 'action_required',
@@ -2573,7 +2668,8 @@ describe('member view', () => {
       ],
       '/api/member/exp_E1/telegram?lang=fr': [telegram({ available: false, link: null })],
     });
-    renderAt('/experiences/exp_E1', 'fr');
+    // The interface is in English here: the member reads the community's language all the same.
+    renderAt('/experiences/exp_E1');
     expect(await screen.findByRole('link', { name: /Valider mon paiement/ })).toBeTruthy();
     // Leaving all the same: the free Alumni keeps them in touch.
     expect(screen.getByRole('link', { name: /Rejoindre l’Alumni/ }).getAttribute('href')).toBe(
@@ -2589,6 +2685,7 @@ describe('member view', () => {
       '/api/member/exp_E1/session': [memberSession],
       '/api/member/exp_E1/retention': [
         retention({
+          locale: 'fr',
           alumni: {
             code: {
               code: 'STAY-K7QM2XPA',
@@ -2602,7 +2699,7 @@ describe('member view', () => {
       ],
       '/api/member/exp_E1/telegram?lang=fr': [telegram({ available: false, link: null })],
     });
-    renderAt('/experiences/exp_E1', 'fr');
+    renderAt('/experiences/exp_E1');
     expect(await screen.findByText('Bienvenue dans l’Alumni')).toBeTruthy();
     expect(screen.getByText('20 % de réduction pendant 3 mois')).toBeTruthy();
     expect(screen.getByText('STAY-K7QM2XPA')).toBeTruthy();
@@ -2624,6 +2721,7 @@ describe('member view', () => {
 });
 
 describe('member space', () => {
+  beforeEach(spaceOn);
   const memberSession = {
     status: 200,
     body: { experienceId: 'exp_E1', userId: 'user_m', accessLevel: 'customer', via: 'iframe' },
@@ -2639,6 +2737,7 @@ describe('member space', () => {
       departure: null,
       alumni: null,
       creatorOffer: null,
+      locale: 'en',
     } satisfies MemberRetentionView,
   };
   const noTelegram = {
@@ -2688,7 +2787,8 @@ describe('member space', () => {
   const open = (answers: Record<string, Answer[]>, locale: Locale = 'en') => {
     const calls = mockApi({
       '/api/member/exp_E1/session': [memberSession],
-      '/api/member/exp_E1/retention': [noRetention],
+      // The community's language is its members' (never their browser's).
+      '/api/member/exp_E1/retention': [{ ...noRetention, body: { ...noRetention.body, locale } }],
       [`/api/member/exp_E1/telegram?lang=${locale}`]: [noTelegram],
       ...answers,
     });
@@ -3365,27 +3465,14 @@ describe('member space', () => {
 });
 
 describe('shell', () => {
-  it('switches the language, and remembers it', async () => {
+  it('opens in English, whatever the browser says, without a switch on the page', async () => {
     renderAt('/');
-    fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), {
-      target: { value: 'fr' },
-    });
     expect(
-      await screen.findByRole('heading', { name: 'La rétention pour les communautés Whop' }),
+      await screen.findByRole('heading', { name: 'Retention for Whop communities' }),
     ).toBeTruthy();
-    expect(window.localStorage.getItem('stayput.locale')).toBe('fr');
-  });
-
-  it('switches the theme on <html>', () => {
-    renderAt('/');
-    fireEvent.change(screen.getByRole('combobox', { name: 'Theme' }), {
-      target: { value: 'dark' },
-    });
-    expect(document.documentElement.dataset.theme).toBe('dark');
-    fireEvent.change(screen.getByRole('combobox', { name: 'Theme' }), {
-      target: { value: 'light' },
-    });
-    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(screen.queryByRole('combobox', { name: 'Language' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Language' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Theme' })).toBeNull();
   });
 
   it('resolves "automatic" to the system theme', () => {
@@ -3431,31 +3518,58 @@ describe('the creator’s frame', () => {
     expect(await screen.findByText('No member by that name.')).toBeTruthy();
   });
 
-  it('switches the language from the top bar, at once', async () => {
+  it('changes the language in Settings › General only, at once, and remembers it', async () => {
     mockApi({
       ...dashboard(),
       '/api/creator/biz_A1/integrations?lang=fr': [{ status: 200, body: INTEGRATIONS }],
     });
-    renderAt('/dashboard/biz_A1');
-    await screen.findByText('Revenue saved this month');
-    const languages = screen.getAllByRole('group', { name: 'Language' })[0]!;
-    fireEvent.click(within(languages).getByRole('button', { name: 'Français' }));
-    expect(await screen.findByText('Revenus sauvés ce mois-ci')).toBeTruthy();
+    renderAt('/dashboard/biz_A1/settings');
+    const languages = await screen.findByRole('radiogroup', { name: 'Language' });
     expect(
-      within(languages).getByRole('button', { name: 'Français' }).getAttribute('aria-pressed'),
+      within(languages)
+        .getAllByRole('radio')
+        .map((radio) => `${radio.textContent} ${radio.getAttribute('aria-checked')}`),
+    ).toEqual(['English true', 'Français false']);
+    fireEvent.click(within(languages).getByRole('radio', { name: 'Français' }));
+    // At once, without reloading: the words, and the menu around them.
+    expect(await screen.findByRole('heading', { name: 'Réglages', level: 1 })).toBeTruthy();
+    expect(window.localStorage.getItem('stayput.locale')).toBe('fr');
+    expect(
+      within(screen.getByRole('radiogroup', { name: 'Langue' }))
+        .getByRole('radio', { name: 'Français' })
+        .getAttribute('aria-checked'),
     ).toBe('true');
+    // The arrows move the choice too, as in any radio group.
+    fireEvent.keyDown(screen.getByRole('radio', { name: 'Français' }), { key: 'ArrowLeft' });
+    expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeTruthy();
   });
 
-  it('explains how StayPut works, and leads to the demo', async () => {
+  it('switches the theme in Settings › General, and gives the company ID to copy', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/settings');
+    const theme = await screen.findByRole('combobox', { name: 'Theme' });
+    fireEvent.change(theme, { target: { value: 'light' } });
+    expect(document.documentElement.dataset.theme).toBe('light');
+    fireEvent.change(theme, { target: { value: 'dark' } });
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    // The raw ID only here, for Whop's support or an integration.
+    const developer = screen.getByRole('heading', { name: 'Developer' }).closest('section')!;
+    expect(within(developer).getByText('biz_A1')).toBeTruthy();
+    expect(within(developer).getByRole('button', { name: 'Copy' })).toBeTruthy();
+  });
+
+  it('opens the guide from the top bar, and leads to the demo', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
-    fireEvent.click(await screen.findByRole('button', { name: 'How StayPut works' }));
-    const help = await screen.findByRole('dialog', { name: 'How StayPut works' });
-    expect(help.textContent).toContain('The risk score');
-    expect(help.textContent).toContain('Each payment counts once.');
+    fireEvent.click(await screen.findByRole('button', { name: 'Guide' }));
+    const guide = await screen.findByRole('dialog', { name: 'How StayPut works' });
+    expect(guide.textContent).toContain('The risk score');
+    expect(guide.textContent).toContain('Each payment counts once.');
     expect(
-      within(help).getByRole('link', { name: 'Explore with demo data' }).getAttribute('href'),
+      within(guide).getByRole('link', { name: 'Explore with demo data' }).getAttribute('href'),
     ).toBe('/demo?from=%2Fdashboard%2Fbiz_A1');
+    fireEvent.click(within(guide).getByRole('button', { name: 'Close' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('lists the other sections under « More » on a phone', async () => {
@@ -3468,7 +3582,7 @@ describe('the creator’s frame', () => {
       within(more)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Member space', 'Integrations', 'Settings']);
+    ).toEqual(['Integrations', 'Settings']);
   });
 });
 
@@ -3487,10 +3601,12 @@ describe('the demo (/demo)', () => {
     expect(screen.getByRole('link', { name: 'Leave the demo' }).getAttribute('href')).toBe('/');
     // Its figures, as a real community's: computed from its members.
     const money = (await screen.findByText('Revenue saved this month')).closest('dl')!;
-    await vi.waitFor(() => expect(money.textContent).toContain('$345'));
-    expect(money.textContent).toContain('7 members kept');
+    await vi.waitFor(() =>
+      expect(within(money).getAllByRole('definition')[1]!.textContent).toBe('$641'),
+    );
+    expect(within(money).getAllByRole('definition')[2]!.textContent).toBe('9');
     expect(await screen.findByText('Hugo Bernard')).toBeTruthy();
-    expect(await screen.findByText('$49 saved: Clara Faure stays')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Getting started' })).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -3865,7 +3981,7 @@ describe('the actions (SPEC Phase 4)', () => {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
     expect(headersOf.get('POST /api/creator/biz_A1/timezone')?.get('x-stayput-csrf')).toBe('1');
-    expect(await screen.findByText('Up to date.')).toBeTruthy();
+    expect(await screen.findByText('Revenue saved this month')).toBeTruthy();
     expect(calls.filter((call) => call.endsWith('/timezone'))).toHaveLength(1);
   });
 

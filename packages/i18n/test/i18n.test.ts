@@ -72,6 +72,12 @@ describe('createTranslator', () => {
     expect(fr.currency(1225.4, 'EUR', { whole: true })).toMatch(/^1\s225\s€$/);
     expect(fr.number(0.5)).toBe('0,5');
     expect(createTranslator('en').date(new Date('2026-09-30T12:00:00Z'))).toBe('Sep 30, 2026');
+    // A chart's axis: short.
+    expect(createTranslator('en').day(new Date('2026-09-30T12:00:00Z'))).toBe('Sep 30');
+    expect(fr.day(new Date('2026-09-30T12:00:00Z'))).toBe('30 sept.');
+    expect(createTranslator('en').currency(1240, 'USD', { compact: true })).toBe('$1.2K');
+    expect(fr.currency(1240, 'EUR', { compact: true })).toMatch(/^1,2\sk\s?€$/);
+    expect(createTranslator('en').currency(500, 'USD', { compact: true })).toBe('$500');
   });
 
   it('formats shares and calendar months', () => {

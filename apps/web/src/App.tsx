@@ -6,9 +6,9 @@ import { ActionSettings } from './views/creator/ActionSettings';
 import { ActionsHome, ActionsTab, AlumniTab } from './views/creator/ActionsTab';
 import { CohortsTab, LessonsTab } from './views/creator/InsightsTab';
 import { MembersTab, NeverContactTab } from './views/creator/MembersTab';
-import { AttentionTab, NewMembersTab, Overview } from './views/creator/Overview';
-import { SectionHome, SectionLayout } from './views/creator/SectionLayout';
-import { RiskSettingsTab, SpaceSettingsTab } from './views/creator/SettingsTab';
+import { Overview } from './views/creator/Overview';
+import { MemberSpaceOnly, SectionHome, SectionLayout } from './views/creator/SectionLayout';
+import { GeneralSettingsTab, RiskSettingsTab, SpaceSettingsTab } from './views/creator/SettingsTab';
 import { SpaceCardsTab, SpaceOverviewTab, SpacePreviewTab } from './views/creator/SpaceTab';
 import { ActivityTab, DiscordTab, TelegramTab, WhopTab } from './views/creator/SourcesTab';
 import { Home } from './views/Home';
@@ -28,16 +28,7 @@ function section(id: SectionId, path: string | undefined, tabs: RouteObject[]): 
 /** The sections of the dashboard and their tabs: the same for a real community and the demo. */
 function creatorSections(): RouteObject[] {
   return [
-    section('dashboard', undefined, [
-      { index: true, element: <Overview /> },
-      { path: 'attention', element: <AttentionTab /> },
-      { path: 'new-members', element: <NewMembersTab /> },
-    ]),
-    section('space', 'space', [
-      { index: true, element: <SpaceOverviewTab /> },
-      { path: 'cards', element: <SpaceCardsTab /> },
-      { path: 'preview', element: <SpacePreviewTab /> },
-    ]),
+    section('dashboard', undefined, [{ index: true, element: <Overview /> }]),
     section('members', 'members', [
       { index: true, element: <MembersTab /> },
       { path: 'never-contact', element: <NeverContactTab /> },
@@ -59,9 +50,23 @@ function creatorSections(): RouteObject[] {
       { path: 'activity', element: <ActivityTab /> },
     ]),
     section('settings', 'settings', [
-      { index: true, element: <RiskSettingsTab /> },
+      { index: true, element: <GeneralSettingsTab /> },
+      { path: 'risk', element: <RiskSettingsTab /> },
       { path: 'actions', element: <ActionSettings /> },
-      { path: 'space', element: <SpaceSettingsTab /> },
+      {
+        path: 'space',
+        element: (
+          <MemberSpaceOnly section="settings">
+            <SpaceSettingsTab />
+          </MemberSpaceOnly>
+        ),
+      },
+    ]),
+    // The member space: kept, shown only while it is on (features.ts).
+    section('space', 'space', [
+      { index: true, element: <SpaceOverviewTab /> },
+      { path: 'cards', element: <SpaceCardsTab /> },
+      { path: 'preview', element: <SpacePreviewTab /> },
     ]),
   ];
 }

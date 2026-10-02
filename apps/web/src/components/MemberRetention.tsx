@@ -29,7 +29,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
-import { postJson, useApi, useReloadOnReturn } from '../api';
+import { postJson, useApi, useReloadOnReturn, type Loadable } from '../api';
 import { REASON_LABELS } from '../exit-reasons';
 import { useI18n } from '../i18n';
 import { Badge, Notice } from '../ui/Badge';
@@ -40,15 +40,33 @@ import { ExternalButton } from '../ui/ExternalLink';
 type Departure = NonNullable<MemberRetentionView['departure']>;
 type Payment = NonNullable<MemberRetentionView['payment']>;
 
+/** The member's retention view, read again when they come back (from paying in another tab). */
+export function useRetention(api: string): { state: Loadable<MemberRetentionView> } {
+  const { state, reload } = useApi<MemberRetentionView>(`${api}/retention`);
+  useReloadOnReturn(reload);
+  return { state };
+}
+
+/** The retention cards of `api`, read by themselves (the team's preview of the member view). */
+export function LoadedRetention({ api }: { api: string }) {
+  const source = useRetention(api);
+  return <MemberRetention api={api} source={source} />;
+}
+
 /**
  * The member's own subscription (SPEC Phase 4): the payment that needs them, with the button to
  * settle it, and the cancellation they scheduled, with the one-click survey and the offer that
  * answers their reason. The team sees a preview instead, where nothing is recorded.
  */
-export function MemberRetention({ api }: { api: string }) {
-  const { state, reload } = useApi<MemberRetentionView>(`${api}/retention`);
-  // Back from paying in another tab, or from Whop: the cards show where things stand.
-  useReloadOnReturn(reload);
+export function MemberRetention({
+  api,
+  source,
+}: {
+  api: string;
+  /** The view as read (useRetention): the member view reads it first, for its language. */
+  source: { state: Loadable<MemberRetentionView> };
+}) {
+  const { state } = source;
   const loaded = state.status === 'ready' ? state.data : undefined;
   // What an answer returned, until the next reading replaces it.
   const [answer, setAnswer] = useState<{
@@ -632,7 +650,7 @@ function OfferOutcome({
  */
 function AffiliateLink({ api }: { api: string }) {
   const { t } = useI18n();
-  const { state } = useApi<AffiliateLinkView>(`${api}/space/affiliate`);
+  const { state } = useApi<AffiliateLinkView>(`${api}/retention/affiliate`);
   const [copied, setCopied] = useState(false);
   const url = state.status === 'ready' ? state.data.url : null;
   if (!url) return <p>{t('member.result.affiliate')}</p>;

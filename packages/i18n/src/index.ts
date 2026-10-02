@@ -38,11 +38,20 @@ export interface Translator {
   /** The plural form for `count` (passed as `{count}`, formatted for the locale). */
   plural: (key: PluralKey, count: number, params?: Params) => string;
   number: (value: number) => string;
-  /** An amount in its currency; `whole` drops the cents (a figure of the dashboard). */
-  currency: (amount: number, currency: string, options?: { whole?: boolean }) => string;
+  /**
+   * An amount in its currency; `whole` drops the cents (a figure of the dashboard); `compact`
+   * shortens it for a chart's axis (« $1.2K », « 1,2 k€ »).
+   */
+  currency: (
+    amount: number,
+    currency: string,
+    options?: { whole?: boolean; compact?: boolean },
+  ) => string;
   /** A share from 0 to 1, as a whole percentage: « 42% », « 42 % ». */
   percent: (ratio: number) => string;
   date: (value: Date) => string;
+  /** A day without its year, for a chart's axis: « Oct 12 », « 12 oct. ». */
+  day: (value: Date) => string;
   /** A calendar month, « September 2026 » (read in UTC: `2026-09-01` is September anywhere). */
   month: (value: Date) => string;
   /** A moment: the date and the time, in the browser's time zone. */
@@ -67,6 +76,7 @@ export function createTranslator(locale: Locale): Translator {
   const numbers = new Intl.NumberFormat(locale);
   const percents = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
   const dates = new Intl.DateTimeFormat(locale, { dateStyle: 'medium' });
+  const days = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' });
   const months = new Intl.DateTimeFormat(locale, {
     month: 'long',
     year: 'numeric',
@@ -96,10 +106,15 @@ export function createTranslator(locale: Locale): Translator {
       new Intl.NumberFormat(locale, {
         style: 'currency',
         currency,
-        ...(options?.whole ? { minimumFractionDigits: 0, maximumFractionDigits: 0 } : {}),
+        ...(options?.compact
+          ? { notation: 'compact', minimumFractionDigits: 0, maximumFractionDigits: 1 }
+          : options?.whole
+            ? { minimumFractionDigits: 0, maximumFractionDigits: 0 }
+            : {}),
       }).format(amount),
     percent: (ratio) => percents.format(ratio),
     date: (value) => dates.format(value),
+    day: (value) => days.format(value),
     month: (value) => months.format(value),
     dateTime: (value) => moments.format(value),
     relative: (value, now = new Date()) => {

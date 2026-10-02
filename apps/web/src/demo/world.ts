@@ -7,9 +7,11 @@ import {
   type CreatorSession,
   type DashboardView,
   type FeedItem,
+  type GettingStarted,
   type IntegrationsStatus,
   type MemberRow,
   type MembersPage,
+  type RevenueDay,
   type RiskDay,
   type RiskLevel,
   type RiskReason,
@@ -270,6 +272,10 @@ export interface DemoWorld {
   settings: ActionSettingsView;
   /** « Message » on the dashboard: queued for the members not on the never-contact list. */
   message: (memberIds: readonly string[]) => number;
+  /** « Getting started »: a step done (the members reviewed, the guardrails saved). */
+  started: (step: 'reviewed' | 'guardrails') => void;
+  /** The action settings saved (Settings › Automations). */
+  saveSettings: (next: ActionSettingsView) => ActionSettingsView;
   /** « Pause » or « Offer »: refused when one is open, when the member cannot be contacted. */
   offer: (memberId: string, kind: CreatorOfferKind) => CreatorOfferMade | { error: string };
   setContact: (memberId: string, doNotContact: boolean) => boolean | null;
@@ -414,6 +420,54 @@ export function createWorld(now: number): DemoWorld {
     };
   });
 
+  // The money StayPut saved, payment by payment, over 90 days: the three of the feed first (a
+  // payment recovered after a retry, a member back from a pause), then one every few days, most
+  // of them a monthly plan, now and then a VIP, once a year's plan.
+  const savesMade: { ago: number; amount: number }[] = [
+    { ago: 41 * MINUTE, amount: 49 },
+    { ago: 26 * HOUR, amount: 149 },
+    { ago: 41 * HOUR, amount: 49 },
+  ];
+  // Every three to six days, as payments fall due.
+  for (let day = 3; day < 90; day += 3 + Math.floor(random() * 4)) {
+    savesMade.push({
+      ago: day * DAY + between([1, 20]) * HOUR,
+      amount: day >= 50 && day <= 54 ? 470 : random() < 0.18 ? 149 : 49,
+    });
+  }
+  const monthOf = (moment: Date) => moment.getFullYear() * 12 + moment.getMonth();
+  const thisMonth = monthOf(new Date(now));
+  const savedIn = (month: number) =>
+    savesMade
+      .filter((save) => monthOf(new Date(now - save.ago)) === month)
+      .reduce((total, save) => total + save.amount, 0);
+  const savesThisMonth = savesMade.filter(
+    (save) => monthOf(new Date(now - save.ago)) === thisMonth,
+  ).length;
+  const savedByDay = new Map<string, number>();
+  for (const save of savesMade) {
+    const day = localDay(new Date(now - save.ago));
+    savedByDay.set(day, (savedByDay.get(day) ?? 0) + save.amount);
+  }
+  // What the members at risk paid each month: higher three months ago, coming down as StayPut
+  // acts, with the day-to-day noise of a real community; today, the figure of the hero row.
+  const revenueHistory: RevenueDay[] = Array.from({ length: 90 }, (_, i) => {
+    const day = localDay(new Date(now - (89 - i) * DAY));
+    const trend = 1_180 - ((1_180 - atRiskRevenue) * i) / 89;
+    const noise = (random() - 0.5) * 160 + Math.sin(i / 6) * 45;
+    return {
+      day,
+      saved: savedByDay.get(day) ?? 0,
+      atRisk: i === 89 ? atRiskRevenue : Math.round(Math.max(atRiskRevenue * 0.8, trend + noise)),
+    };
+  });
+  const gettingStarted: GettingStarted = {
+    discord: true,
+    automation: true,
+    reviewed: false,
+    guardrails: false,
+  };
+
   const byName = (name: string) => rows.find((m) => m.name === name)!;
   let feedSeq = 0;
   const item = (
@@ -450,7 +504,6 @@ export function createWorld(now: number): DemoWorld {
       source: 'telegram',
       activity: 'message',
     }),
-    item(8 * HOUR, 'stayput', 'saved', 'Noah Blanc', usd(49)),
     item(9 * HOUR, 'member', 'joined', 'Pauline Giraud'),
     item(11 * HOUR, 'stayput', 'message_sent', 'Rose Gauthier'),
     item(14 * HOUR, 'member', 'activity', 'Inès Haddad', { source: 'whop', activity: 'post' }),
@@ -459,7 +512,6 @@ export function createWorld(now: number): DemoWorld {
     item(26 * HOUR, 'stayput', 'saved', 'Anaïs Robin', usd(149)),
     item(29 * HOUR, 'member', 'cancellation_scheduled', 'Kevin Nguyen'),
     item(31 * HOUR, 'stayput', 'message_sent', 'Victor Leclerc'),
-    item(34 * HOUR, 'stayput', 'saved', 'Julia Martins', usd(49)),
     item(38 * HOUR, 'member', 'activity', 'Nathan Girard', {
       source: 'discord',
       activity: 'message',
@@ -589,8 +641,9 @@ export function createWorld(now: number): DemoWorld {
       return {
         currency: CURRENCY,
         saved: {
-          thisMonth: { direct: 345, influenced: 98, saves: 7 },
-          lastMonth: { direct: 245 },
+          // And two renewals after a message (influenced), counted apart.
+          thisMonth: { direct: savedIn(thisMonth), influenced: 98, saves: savesThisMonth + 2 },
+          lastMonth: { direct: savedIn(thisMonth - 1) },
           otherCurrencies: false,
         },
         monthlyRevenue: revenue,
@@ -606,10 +659,19 @@ export function createWorld(now: number): DemoWorld {
           newLast7Days: PEOPLE.filter((p) => p.left === undefined && p.joined < 7).length,
         },
         memberActivity30d: activity30d,
-        stayputActions30d: { total: 52, messages: 38, paymentRetries: 9, offers: 5 },
+        stayputActions30d: {
+          total: 52,
+          messages: 38,
+          paymentRetries: 9,
+          offers: 5,
+          pauses: 6,
+          saved: savesMade.filter((save) => save.ago < 30 * DAY).length,
+        },
         mode: settings.mode,
         testMode: settings.dryRun,
         riskHistory,
+        revenueHistory,
+        gettingStarted: { ...gettingStarted },
         priority: choosePriority({
           mode: settings.mode,
           pending: { actions: 0, members: 0, revenue: 0 },
@@ -657,6 +719,14 @@ export function createWorld(now: number): DemoWorld {
             ? { days: settings.offers.pauseDays }
             : { percentOff: settings.offers.promoPercent, months: settings.offers.promoMonths },
       };
+    },
+    started: (step) => {
+      gettingStarted[step] = true;
+    },
+    saveSettings: (next) => {
+      Object.assign(settings, next);
+      gettingStarted.guardrails = true;
+      return settings;
     },
     setContact: (id, doNotContact) => {
       const member = memberOf(id);

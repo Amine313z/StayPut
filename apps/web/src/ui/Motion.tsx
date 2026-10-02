@@ -79,8 +79,9 @@ export function useCountUp(value: number): number {
 }
 
 /**
- * A figure that counts to its value. When it changes, it flashes mint if it got better and a
- * soft red if it got worse; which way is better belongs to the figure (`better`).
+ * A figure that counts to its value. When it changes, a short mint light if it got better, a
+ * brief silver dim if it got worse (never red); which way is better belongs to the figure
+ * (`better`).
  */
 export function AnimatedNumber({
   value,
@@ -108,8 +109,8 @@ export function AnimatedNumber({
   }, [value, better]);
   return (
     <span
-      className={`tabular transition-colors duration-500 ease-brand ${
-        flash === 'good' ? 'text-accent' : flash === 'bad' ? 'text-danger' : ''
+      className={`tabular inline-block transition-[filter,opacity] duration-500 ease-brand ${
+        flash === 'good' ? 'flash-good' : flash === 'bad' ? 'flash-dim' : ''
       } ${className}`}
     >
       {format(shown)}

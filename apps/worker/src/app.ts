@@ -275,6 +275,30 @@ export function createApp(deps: AppDeps) {
     }
   });
 
+  /**
+   * The member space (goals, results, testimonial cards and their public pages, buddies, rescue
+   * challenges) answers only while it is on: off in V1 (MEMBER_SPACE_ENABLED, decision of
+   * 2026-10-02). The departure survey and the payment links are not part of it.
+   */
+  const memberSpaceOnly = createMiddleware<AppEnv>(async (c, next) => {
+    if (!c.get('config').memberSpace) return apiError('not_found', 'the member space is off');
+    await next();
+    return undefined;
+  });
+  for (const path of [
+    '/api/creator/:companyId/goals',
+    '/api/creator/:companyId/earned-days',
+    '/api/creator/:companyId/buddies',
+    '/api/creator/:companyId/space',
+    '/api/creator/:companyId/preview/space',
+    '/api/creator/:companyId/rescues',
+    '/api/creator/:companyId/announcements',
+    '/api/member/:experienceId/space',
+    '/api/member/:experienceId/space/*',
+  ]) {
+    app.use(path, memberSpaceOnly);
+  }
+
   /** Opens the request's database client, closed once the response is sent. */
   const withDb = createMiddleware<AppEnv>(async (c, next) => {
     const db = deps.openDb(c.env);
@@ -1125,9 +1149,32 @@ export function createApp(deps: AppDeps) {
           JSON.stringify(settings.offers),
         ]);
       }
+      // « Getting started »: the guardrails are set.
+      await db.query('select stayput.getting_started_done($1, $2, $3::timestamptz)', [
+        companyId,
+        'guardrails',
+        deps.now().toISOString(),
+      ]);
       // In automatic mode, what waits for the guardrails goes through them now.
       if (settings.mode === 'auto') runActionsInBackground(c, companyId, deps.now());
       return c.json((await readActionSettings(db, c.get('userId'), companyId)) ?? settings);
+    },
+  );
+
+  /** « Getting started »: the creator opened their members at risk (the first time is kept). */
+  app.post(
+    '/api/creator/:companyId/getting-started/reviewed',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const [row] = await db.query<{ done: boolean }>(
+        'select stayput.getting_started_done($1, $2, $3::timestamptz) as done',
+        [c.get('companyId'), 'reviewed', deps.now().toISOString()],
+      );
+      return c.json({ done: row?.done ?? false });
     },
   );
 
@@ -1260,7 +1307,7 @@ export function createApp(deps: AppDeps) {
   function runActionsInBackground(c: Context<AppEnv>, companyId: string, now: Date): void {
     const whop = deps.whopClient(c.get('config'));
     inBackground(c, 'Actions', async (work) => {
-      await prepareActions(work, companyId, now);
+      await prepareActions(work, companyId, now, { memberSpace: c.get('config').memberSpace });
       await executeDueActions(work, whop, now, REQUEST_ACTION_BATCH);
     });
   }
@@ -1773,7 +1820,7 @@ export function createApp(deps: AppDeps) {
       }
       if (!decided) return apiError('not_found', 'no offer waiting for an answer');
       if (decided.actionId) {
-        await prepareActions(db, companyId, now);
+        await prepareActions(db, companyId, now, { memberSpace: c.get('config').memberSpace });
         await executeAction(db, deps.whopClient(c.get('config')), decided.actionId, now);
       }
       return c.json(await retentionFor(c, db, companyId, now));
@@ -1810,7 +1857,7 @@ export function createApp(deps: AppDeps) {
       );
       if (!decided) return apiError('not_found', 'no offer waiting for an answer');
       if (decided.actionId) {
-        await prepareActions(db, companyId, now);
+        await prepareActions(db, companyId, now, { memberSpace: c.get('config').memberSpace });
         await executeAction(db, deps.whopClient(c.get('config')), decided.actionId, now);
       }
       return c.json(await retentionFor(c, db, companyId, now));
@@ -1832,11 +1879,17 @@ export function createApp(deps: AppDeps) {
       now,
       c.get('config').whopEnv,
     );
+    // The member view speaks the community's language to its members, never the browser's.
+    const [settings] = await db.query<{ locale: string | null }>(
+      'select locale from stayput.companies where id = $1',
+      [companyId],
+    );
     const view = retentionView(row, {
       preview: c.get('accessLevel') === 'admin',
       whopAppId: c.get('config').appId,
       alumniUrl: alumni.url,
       alumni: alumni.alumni,
+      locale: settings?.locale === 'fr' ? 'fr' : 'en',
     });
     if (view.payment?.kind === 'failed' && !view.payment.url && row.payment?.membershipId) {
       // Where the member updates their payment method: Whop's page for their membership.
@@ -1953,7 +2006,7 @@ export function createApp(deps: AppDeps) {
         now,
       );
       if (earned.length > 0) {
-        await prepareActions(db, companyId, now);
+        await prepareActions(db, companyId, now, { memberSpace: c.get('config').memberSpace });
         const whop = deps.whopClient(c.get('config'));
         for (const action of earned) {
           if ((await executeAction(db, whop, action.id, now)) === 'sent') earnedDays += action.days;
@@ -1996,7 +2049,7 @@ export function createApp(deps: AppDeps) {
       const shared = await shareMilestone(db, companyId, c.get('userId'), share, now);
       if (!shared) return apiError('not_found', 'nothing to share there');
       if (shared === 'duplicate') return c.json({ status: 'duplicate' } satisfies ShareAnswer);
-      await prepareActions(db, companyId, now);
+      await prepareActions(db, companyId, now, { memberSpace: c.get('config').memberSpace });
       const [row] = await db.query<{ status: string }>(
         'select status from stayput.actions where id = $1',
         [shared.id],
@@ -2120,15 +2173,15 @@ export function createApp(deps: AppDeps) {
   );
 
   /**
-   * The member's own affiliate link, read from Whop (SPEC 5.6), to offer on their card. The team,
-   * who preview the space, get none.
+   * The member's own affiliate link, read from Whop (SPEC 5.6): the departure survey's invitation
+   * to recommend the community (« I reached my goal », part of V1), and their card in the member
+   * space (answered only while the space is on). The team, who preview, get none.
    */
-  app.get(
+  for (const path of [
+    '/api/member/:experienceId/retention/affiliate',
     '/api/member/:experienceId/space/affiliate',
-    authenticate,
-    withDb,
-    requireMember,
-    async (c) => {
+  ]) {
+    app.get(path, authenticate, withDb, requireMember, async (c) => {
       const none: AffiliateLinkView = { url: null };
       if (c.get('accessLevel') === 'admin') return c.json(none);
       const whop = deps.whopClient(c.get('config'), { maxRetries: 0 });
@@ -2139,8 +2192,8 @@ export function createApp(deps: AppDeps) {
         url: await memberAffiliateLink(whop, companyId, c.get('userId')),
       };
       return c.json(view);
-    },
-  );
+    });
+  }
 
   /** Linking one's Telegram account, so that one's messages in the community's groups count. */
   app.get('/api/member/:experienceId/telegram', authenticate, withDb, requireMember, async (c) => {
@@ -2198,7 +2251,8 @@ export function createApp(deps: AppDeps) {
     const proofId = c.req.param('proofId');
     if (!isProofId(proofId)) return apiError('invalid_request', 'not a proof id');
     const db = c.get('db');
-    const proof = db ? await readPublicProof(db, proofId) : null;
+    // The member space off, no card is online: the page of one that was says so.
+    const proof = db && c.get('config').memberSpace ? await readPublicProof(db, proofId) : null;
     if (!proof) {
       const language = c.req.header('accept-language') ?? '';
       return goneProofPage(/^fr\b/i.test(language) ? 'fr' : 'en');

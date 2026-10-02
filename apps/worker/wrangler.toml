@@ -17,6 +17,9 @@ WHOP_ENV = "sandbox"
 # The Whop app (not a secret): StayPut in the sandbox, created on 2026-09-30 (README.md). At the
 # switch to production, the repository variables WHOP_ENV and WHOP_APP_ID replace both values.
 WHOP_APP_ID = "app_rjFkp2xKgjfPxY"
+# The member space (goals, results, testimonial cards, buddies, rescue challenges) is off in V1
+# (decision of 2026-10-02): "true" turns it back on. The departure survey always runs.
+MEMBER_SPACE_ENABLED = "false"
 
 # Secrets, never in this file: `npx wrangler secret put WHOP_API_KEY` and
 # `npx wrangler secret put WHOP_WEBHOOK_SECRET` (README.md, Deployment). Optional modules:

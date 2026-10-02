@@ -126,15 +126,51 @@ export interface DashboardView {
   members: { total: number; newLast7Days: number };
   /** What the members did over 30 days: messages, reactions, posts, lessons. */
   memberActivity30d: number;
-  /** What StayPut did over 30 days (simulated ones included in test mode). */
-  stayputActions30d: { total: number; messages: number; paymentRetries: number; offers: number };
+  /**
+   * What StayPut did over 30 days (simulated ones included in test mode): messages sent, payments
+   * retried, offers given, pauses offered (departure surveys and the creator's), members saved.
+   */
+  stayputActions30d: {
+    total: number;
+    messages: number;
+    paymentRetries: number;
+    offers: number;
+    pauses: number;
+    saved: number;
+  };
   mode: 'auto' | 'manual';
   /** Test mode: everything is computed, nothing is sent. */
   testMode: boolean;
   /** Members at each level, day by day over the last 30 days (the daily score history). */
   riskHistory: RiskDay[];
+  /** The money saved and the money at risk, day by day over the last 90 days (the chart). */
+  revenueHistory: RevenueDay[];
+  /** The « Getting started » steps; the card is gone once all four are done. */
+  gettingStarted: GettingStarted;
   /** The one action that protects the most revenue today; null when nothing is urgent. */
   priority: PriorityAction | null;
+}
+
+/** A day of the dashboard's chart, in `currency`. */
+export interface RevenueDay {
+  /** YYYY-MM-DD, in the community's time zone. */
+  day: string;
+  /** Saved that day (direct saves, SPEC 6.4). */
+  saved: number;
+  /** What the members at high risk or leaving that day pay a month; null: no score that day. */
+  atRisk: number | null;
+}
+
+/** What the creator did once, from the dashboard's « Getting started » card. */
+export interface GettingStarted {
+  /** A Discord server is connected. */
+  discord: boolean;
+  /** The automatic mode is on, or the creator approved or made an action. */
+  automation: boolean;
+  /** The creator opened their members at risk. */
+  reviewed: boolean;
+  /** The creator saved their guardrails (Settings › Automations). */
+  guardrails: boolean;
 }
 
 export interface RiskDay {
@@ -534,6 +570,11 @@ export interface TimezoneAnswer {
  */
 export interface MemberRetentionView {
   creatorName: string | null;
+  /**
+   * The language the community speaks to its members (its messages' language, Settings ›
+   * Automations): the member view speaks it, whatever the member's browser.
+   */
+  locale: TemplateLocale;
   /** To open the payment page through Whop inside its iframe. */
   whopAppId: string | null;
   /** The Alumni offer's link (SPEC 5.9), for a member who leaves: stay in touch for free. */

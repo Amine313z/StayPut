@@ -997,7 +997,9 @@ describe('the buddies’ introductions (SPEC Phase 5, point 8)', () => {
       lea,
       hoursAgo(30),
     ]);
-    const prepared = await prepareActions(t.db, c, NOW);
+    // The member space off (V1), nobody is paired.
+    expect(await prepareActions(t.db, c, NOW)).toMatchObject({ planned: 0 });
+    const prepared = await prepareActions(t.db, c, NOW, { memberSpace: true });
     expect(prepared).toMatchObject({ planned: 2, scheduled: 2, blocked: 0 });
     const intros = await t.db.query<{ type: string; member_id: string; send_at: string }>(
       `select type, member_id, send_at::text as send_at from stayput.actions

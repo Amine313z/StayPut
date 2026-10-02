@@ -2,7 +2,6 @@
 /* Fonts served by StayPut itself (the CSP allows no other origin); only the Latin files load. */
 @import '@fontsource-variable/inter/wght.css';
 @import '@fontsource/space-grotesk/latin-600.css';
-@import '@fontsource/space-grotesk/latin-700.css';
 
 /* `dark:` follows the theme applied on <html> (theme-init.js, then src/theme.tsx). */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
@@ -10,9 +9,11 @@
 /*
  * The design tokens (docs/design-tokens.md, MOTION.md). Colors exist only here. Every text /
  * background pair the screens use reaches WCAG AA in both themes (test/contrast.test.ts
- * computes it). `-soft` tokens are the tinted backgrounds of badges and notices; their text is
- * the token of the same name. Dark is StayPut's own theme (the brand, sampled from the logo);
- * light keeps the same hierarchy.
+ * computes it). Dark is StayPut's own theme, sampled from the logo: one accent, mint on
+ * near-black, text in silver. Red is kept for what is urgent (a member leaving within 48 hours, a
+ * payment not recovered, an automation error, a destructive action), and then only as a small
+ * dot or badge. There is no amber: the old warning and serious tones are silver now, risk is
+ * said by the ring and its label, never by a color. Light keeps the same hierarchy.
  */
 :root {
   color-scheme: light;
@@ -22,34 +23,28 @@
   --surface-2: #eef3f1;
   --glow: #cdefe2;
   --text: #0b1512;
-  /* Secondary text (descriptions). */
+  /* UI text (silver-300's place in light). */
   --muted: #3f4b47;
   /* Labels and placeholders: on bg and surface only. */
   --subtle: #5c6864;
-  --border: rgb(11 21 18 / 0.12);
+  --border: rgb(23 105 79 / 0.14);
   --border-strong: rgb(23 105 79 / 0.45);
   --accent: #17694f;
   --accent-2: #2e8a6c;
   --accent-soft: #e0f2ea;
   --on-accent: #ffffff;
   --saved: #17694f;
+  /* Hero figures and the primary button's hover: the logo's gradient, top to bottom. */
+  --hero-from: #0b1512;
+  --hero-to: #17694f;
   --danger: #c92a2a;
   --danger-soft: #fdecec;
-  --warning: #8a5300;
-  --warning-soft: #fff3dc;
-  --serious: #c92a2a;
-  --serious-soft: #fdecec;
-  --info: #1c6577;
-  --info-soft: #e3f2f6;
-  /*
-   * The risk levels as marks (bars, rings, dots), never as text: distinct side by side, for
-   * colour-blind eyes too (dataviz validator: adjacent ΔE ≥ 15 normal, ≥ 8 simulated); each
-   * mark also has its level's name, icon and count.
-   */
-  --risk-departure: #a51d36;
-  --risk-high: #e5484d;
-  --risk-medium: #e8a23b;
-  --risk-low: #3e9b79;
+  --warning: #3f4b47;
+  --warning-soft: #eef3f1;
+  --serious: #3f4b47;
+  --serious-soft: #eef3f1;
+  --info: #17694f;
+  --info-soft: #e0f2ea;
   /* The brands' own colors, for their marks only (never text). */
   --brand-discord: #5865f2;
   --brand-telegram: #229ed9;
@@ -64,36 +59,43 @@
 
 [data-theme='dark'] {
   color-scheme: dark;
+  /* bg-deep: the page's edges; bg: bg-core, the main surface. */
   --bg-deep: #060908;
   --bg: #0b1512;
+  /* bg-elevated: cards and panels, at 60 % over the page (`bg-surface/60`). */
   --surface: #10201c;
   --surface-2: #142823;
+  /* bg-glow: the light behind the money saved. */
   --glow: #194a3b;
+  /* silver-100: names, amounts, titles. */
   --text: #fbfcfb;
+  /* silver-300: UI text. */
   --muted: #c0c7c4;
+  /* silver-500: labels, placeholders. */
   --subtle: #7f8a86;
-  --border: rgb(167 215 196 / 0.16);
+  /* 1 px borders: mint at 12 %; brightened to 40 % on hover. */
+  --border: rgb(204 247 231 / 0.12);
   --border-strong: rgb(204 247 231 / 0.4);
+  /* mint-100: the accent; mint-300: the second (chart lines, outlines). */
   --accent: #ccf7e7;
   --accent-2: #a7d7c4;
   --accent-soft: #143a30;
   --on-accent: #0b1512;
   --saved: #ccf7e7;
+  --hero-from: #fbfcfb;
+  --hero-to: #ccf7e7;
+  /* Urgent only (a dot, a small badge), never a figure, a card or a border. */
   --danger: #ff6b6b;
   --danger-soft: #3b1a1c;
-  --warning: #ffc56b;
-  --warning-soft: #3a2d14;
-  --serious: #ff6b6b;
-  --serious-soft: #3b1a1c;
-  --info: #9ecfdb;
-  --info-soft: #142b31;
-  --risk-departure: #c2364e;
-  --risk-high: #ff6b6b;
-  --risk-medium: #ffc56b;
-  --risk-low: #5dbb98;
+  --warning: #c0c7c4;
+  --warning-soft: #142823;
+  --serious: #c0c7c4;
+  --serious-soft: #142823;
+  --info: #a7d7c4;
+  --info-soft: #143a30;
   --brand-discord: #7983f5;
   --brand-telegram: #3fb0e6;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow: none;
   --shadow-lift: 0 12px 32px -16px rgb(0 0 0 / 0.7);
 }
 
@@ -121,10 +123,8 @@
   --color-serious-soft: var(--serious-soft);
   --color-info: var(--info);
   --color-info-soft: var(--info-soft);
-  --color-risk-departure: var(--risk-departure);
-  --color-risk-high: var(--risk-high);
-  --color-risk-medium: var(--risk-medium);
-  --color-risk-low: var(--risk-low);
+  --color-hero-from: var(--hero-from);
+  --color-hero-to: var(--hero-to);
   --color-discord: var(--brand-discord);
   --color-telegram: var(--brand-telegram);
   --shadow-card: var(--shadow);
@@ -136,21 +136,24 @@
   --font-display:
     'Space Grotesk', 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
     sans-serif;
+  --radius-card: 0.75rem;
 }
 
+/* UI text: Inter, 14 px, silver-300; names, amounts and titles say `text-fg` (silver-100). */
 body {
   background-color: var(--bg);
-  color: var(--text);
+  color: var(--muted);
   font-family: var(--font-sans);
+  font-size: 0.875rem;
   font-feature-settings: 'cv11', 'ss01';
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
 /*
- * The brand's light, used sparingly: a soft glow at the top and two thin diagonal streaks, as on
- * the logo's background. A fixed layer behind the page: it never moves with the content, and is
- * too faint to change the contrast of any text over it.
+ * The page: bg-core fading to bg-deep at its edges, and the logo's diagonal mint streak, the only
+ * decoration. A fixed layer behind the page: it never moves with the content, and is too faint
+ * to change the contrast of any text over it.
  */
 [data-theme='dark'] body::before {
   content: '';
@@ -159,7 +162,6 @@ body {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(70rem 36rem at 88% -12%, rgb(25 74 59 / 0.45), transparent 62%),
     linear-gradient(
       118deg,
       transparent 0 64%,
@@ -168,7 +170,7 @@ body {
       rgb(204 247 231 / 0.025) 71% 71.8%,
       transparent 71.8%
     ),
-    linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+    radial-gradient(120% 90% at 50% 0%, var(--bg) 40%, var(--bg-deep) 100%);
 }
 
 /* Figures line up in columns and do not jump when they change. */
@@ -176,19 +178,19 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* A hero figure: the money first, in the display face. */
+/* A hero figure: 40 px, Space Grotesk 600 (never heavier), tabular. */
 .metric-hero {
   font-family: var(--font-display);
-  font-weight: 700;
-  font-size: clamp(2.25rem, 1.6rem + 1.6vw, 3.25rem);
-  line-height: 1.05;
+  font-weight: 600;
+  font-size: 2.5rem;
+  line-height: 1.1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
-/* The one figure of a row that matters most (the money saved): a step larger. */
+/* The money saved: the largest figure of the page. */
 .metric-lead {
-  font-size: clamp(2.5rem, 1.75rem + 2vw, 3.5rem);
+  font-size: 3rem;
 }
 
 /* A figure of second rank, same face. */
@@ -197,6 +199,23 @@ body {
   font-weight: 600;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
+}
+
+/* A figure that got better: a short mint light; worse: dimmed a moment (never red). */
+.flash-good {
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 65%, transparent));
+}
+
+.flash-dim {
+  opacity: 0.55;
+}
+
+/* The logo's silver-to-mint gradient, top to bottom, on a hero figure. */
+.text-hero {
+  background-image: linear-gradient(180deg, var(--hero-from) 15%, var(--hero-to) 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* The small label above a figure or a block. */
@@ -218,28 +237,19 @@ body {
   );
 }
 
-/*
- * The light of the card that says what to do today: the brand's glow in its corner and one thin
- * streak, as on the logo. Decoration behind the text, never under it at full strength.
- */
-.priority-light {
-  background:
-    radial-gradient(
-      55% 150% at 100% 0%,
-      color-mix(in srgb, var(--glow) 55%, transparent),
-      transparent 70%
-    ),
-    linear-gradient(
-      118deg,
-      transparent 0 70%,
-      color-mix(in srgb, var(--accent) 7%, transparent) 70% 71.2%,
-      transparent 71.2%
-    );
-}
-
 /* A list that scrolls fades at its end: there is more below (its last item scrolls clear of it). */
 .fade-end {
   mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent);
+}
+
+/* The primary button: mint; on hover, the logo's gradient. One per screen. */
+.button-primary {
+  background-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.button-primary:hover:not(:disabled) {
+  background-image: linear-gradient(180deg, var(--hero-from), var(--hero-to));
 }
 
 /* A block still loading: its shape, and a light passing over it (transform only). */

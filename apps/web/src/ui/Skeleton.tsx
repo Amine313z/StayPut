@@ -6,13 +6,12 @@ export function Skeleton({ className = '' }: { className?: string }) {
   return <div aria-hidden="true" className={`skeleton ${className}`} />;
 }
 
-/** A card loading: a label, a figure, a line of context. */
+/** A figure loading: its label, then its value. */
 export function MetricSkeleton({ hero = false }: { hero?: boolean }) {
   return (
-    <div className="rounded-2xl border border-line bg-surface p-5 shadow-card">
+    <div className="rounded-xl border border-line bg-surface/60 p-5">
       <Skeleton className="h-3 w-28" />
-      <Skeleton className={`mt-4 ${hero ? 'h-12 w-40' : 'h-8 w-24'}`} />
-      <Skeleton className="mt-3 h-3 w-36" />
+      <Skeleton className={`mt-4 ${hero ? 'h-11 w-40' : 'h-8 w-24'}`} />
     </div>
   );
 }

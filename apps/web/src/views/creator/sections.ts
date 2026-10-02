@@ -9,11 +9,14 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react';
+import { memberSpaceEnabled } from '../../features';
 
 /**
- * The dashboard's structure (the founder, 2 October; the redesign's order): sections in a side
- * menu, each with its tabs on top when it has more than one page. A section's path follows `/dashboard/<company>/` (none for the first);
- * a tab's path follows its section's (none for the first, its home).
+ * The dashboard's structure (the redesign brief of 2 October): six sections in a side menu,
+ * Dashboard · Members · Automations · Analytics · Integrations · Settings, each with its tabs on
+ * top when it has more than one page. A section's path follows `/dashboard/<company>/` (none
+ * for the first); a tab's path follows its section's (none for the first, its home). The member
+ * space keeps its section and its settings in the code, shown only when it is on (features.ts).
  */
 export interface Section {
   id: SectionId;
@@ -21,11 +24,20 @@ export interface Section {
   label: MessageKey;
   description: MessageKey;
   Icon: LucideIcon;
-  tabs: readonly { path: string; label: MessageKey }[];
+  tabs: readonly Tab[];
+  /** Part of the member space: hidden while it is off. */
+  memberSpace?: boolean;
+}
+
+export interface Tab {
+  path: string;
+  label: MessageKey;
+  /** Part of the member space: hidden while it is off. */
+  memberSpace?: boolean;
 }
 
 export type SectionId =
-  'dashboard' | 'space' | 'members' | 'actions' | 'insights' | 'sources' | 'settings';
+  'dashboard' | 'members' | 'actions' | 'insights' | 'sources' | 'settings' | 'space';
 
 export const SECTIONS: readonly Section[] = [
   {
@@ -34,7 +46,6 @@ export const SECTIONS: readonly Section[] = [
     label: 'nav.dashboard',
     description: 'nav.dashboard.description',
     Icon: LayoutDashboard,
-    // One page (the full lists « Needs attention » and « New members » open from it).
     tabs: [{ path: '', label: 'tab.overview' }],
   },
   {
@@ -48,19 +59,6 @@ export const SECTIONS: readonly Section[] = [
       { path: 'never-contact', label: 'tab.neverContact' },
     ],
   },
-  {
-    id: 'space',
-    path: 'space',
-    label: 'nav.space',
-    description: 'nav.space.description',
-    Icon: Target,
-    tabs: [
-      { path: '', label: 'tab.overview' },
-      { path: 'cards', label: 'tab.testimonials' },
-      { path: 'preview', label: 'tab.memberView' },
-    ],
-  },
-
   {
     id: 'actions',
     path: 'actions',
@@ -105,12 +103,36 @@ export const SECTIONS: readonly Section[] = [
     description: 'nav.settings.description',
     Icon: SlidersHorizontal,
     tabs: [
-      { path: '', label: 'tab.riskScore' },
+      { path: '', label: 'tab.general' },
+      { path: 'risk', label: 'tab.riskScore' },
       { path: 'actions', label: 'nav.actions' },
-      { path: 'space', label: 'nav.space' },
+      { path: 'space', label: 'nav.space', memberSpace: true },
+    ],
+  },
+  {
+    id: 'space',
+    path: 'space',
+    label: 'nav.space',
+    description: 'nav.space.description',
+    Icon: Target,
+    memberSpace: true,
+    tabs: [
+      { path: '', label: 'tab.overview' },
+      { path: 'cards', label: 'tab.testimonials' },
+      { path: 'preview', label: 'tab.memberView' },
     ],
   },
 ];
+
+/** The sections the menu shows: the member space's only while it is on. */
+export function visibleSections(): readonly Section[] {
+  return SECTIONS.filter((section) => !section.memberSpace || memberSpaceEnabled());
+}
+
+/** A section's tabs as shown: the member space's only while it is on. */
+export function visibleTabs(section: Section): readonly Tab[] {
+  return section.tabs.filter((tab) => !tab.memberSpace || memberSpaceEnabled());
+}
 
 /** The section a path of the dashboard is in: by its first part, the dashboard's by default. */
 export function sectionOf(pathname: string, root: string): Section {

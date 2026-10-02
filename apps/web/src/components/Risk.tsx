@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useI18n } from '../i18n';
 import { LEVEL_LABELS, reasonText } from '../risk-text';
-import { Badge, type Tone } from '../ui/Badge';
+import { Badge } from '../ui/Badge';
 
 /**
  * The risk score of a member (SPEC Phase 3) as the team sees it: a level that always has an icon
@@ -24,54 +24,32 @@ import { Badge, type Tone } from '../ui/Badge';
  */
 
 interface LevelLook {
-  tone: Tone;
   label: MessageKey;
   Icon: LucideIcon;
-  /** The icon and the bar of the level (static class names: Tailwind reads them here). */
-  text: string;
-  fill: string;
 }
 
+/** Each level's name and icon. Risk is never said by a color: the ring and the words say it. */
 export const LEVELS: Readonly<Record<RiskLevel, LevelLook>> = {
-  scheduled_departure: {
-    tone: 'danger',
-    label: LEVEL_LABELS.scheduled_departure,
-    Icon: LogOut,
-    text: 'text-danger',
-    fill: 'bg-risk-departure',
-  },
-  high: {
-    tone: 'serious',
-    label: LEVEL_LABELS.high,
-    Icon: TriangleAlert,
-    text: 'text-serious',
-    fill: 'bg-risk-high',
-  },
-  medium: {
-    tone: 'warning',
-    label: LEVEL_LABELS.medium,
-    Icon: CircleAlert,
-    text: 'text-warning',
-    fill: 'bg-risk-medium',
-  },
-  low: {
-    tone: 'accent',
-    label: LEVEL_LABELS.low,
-    Icon: ShieldCheck,
-    text: 'text-accent',
-    fill: 'bg-risk-low',
-  },
+  scheduled_departure: { label: LEVEL_LABELS.scheduled_departure, Icon: LogOut },
+  high: { label: LEVEL_LABELS.high, Icon: TriangleAlert },
+  medium: { label: LEVEL_LABELS.medium, Icon: CircleAlert },
+  low: { label: LEVEL_LABELS.low, Icon: ShieldCheck },
 };
 
-/** The most urgent first. */
-export const LEVEL_ORDER: readonly RiskLevel[] = ['scheduled_departure', 'high', 'medium', 'low'];
+/** The small red dot of what is urgent (the brief: red as a dot or a small badge only). */
+export function UrgentDot() {
+  return <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-danger/70" />;
+}
 
-/** « High risk · 82 »; a departure is said without its score, 100 by rule. */
-export function RiskBadge({ risk }: { risk: MemberRisk }) {
+/**
+ * « High risk · 82 »; a departure is said without its score, 100 by rule. A silver outline:
+ * `urgent` (a departure within 48 hours) adds the red dot.
+ */
+export function RiskBadge({ risk, urgent = false }: { risk: MemberRisk; urgent?: boolean }) {
   const { t, number } = useI18n();
-  const { tone, label, Icon } = LEVELS[risk.level];
+  const { label, Icon } = LEVELS[risk.level];
   return (
-    <Badge tone={tone} icon={<Icon aria-hidden="true" className="size-3" />}>
+    <Badge icon={urgent ? <UrgentDot /> : <Icon aria-hidden="true" className="size-3" />}>
       {risk.level === 'scheduled_departure'
         ? t(label)
         : t('risk.badge', { level: t(label), score: number(risk.score) })}
@@ -113,11 +91,3 @@ export function RiskReasons({ reasons }: { reasons: readonly RiskReason[] }) {
     </ul>
   );
 }
-
-/** Where each level's row of the distribution leads in the members section. */
-export const LEVEL_FILTERS: Readonly<Record<RiskLevel, string>> = {
-  scheduled_departure: 'leaving',
-  high: 'high',
-  medium: 'medium',
-  low: 'low',
-};

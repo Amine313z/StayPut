@@ -1,4 +1,4 @@
-import type { CreatorMessagesResult, SyncRun } from '@stayput/core';
+import type { ActionSettingsView, CreatorMessagesResult, SyncRun } from '@stayput/core';
 import { isCreatorOfferKind } from '@stayput/core';
 import { ApiError, DEMO_API } from '../api';
 import { createWorld, type DemoWorld } from './world';
@@ -63,6 +63,13 @@ export async function answerDemo(method: string, path: string, body: unknown): P
     return { queued: demo.message(list) } satisfies CreatorMessagesResult;
   }
   if (method === 'POST' && route === 'actions/approve') return { approved: 0 };
+  if (method === 'POST' && route === 'getting-started/reviewed') {
+    demo.started('reviewed');
+    return { done: true };
+  }
+  if (method === 'PUT' && route === 'settings/actions') {
+    return answer(demo.saveSettings(body as ActionSettingsView));
+  }
   const offer = /^members\/([^/]+)\/offer$/.exec(route);
   if (method === 'POST' && offer) {
     const kind = (body as { kind?: unknown } | null)?.kind;

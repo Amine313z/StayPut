@@ -1,12 +1,14 @@
 import { useId, type ReactNode } from 'react';
+import { InfoTip } from './InfoTip';
 
 /**
- * A titled block of a screen: an icon, a title and a line of description on the left, actions
- * on the right, then the content.
+ * A titled block of a screen: an icon, a title (what it means behind its « i ») and a line of
+ * description on the left, actions on the right, then the content.
  */
 export function Card({
   title,
   description,
+  info,
   icon,
   actions,
   children,
@@ -14,6 +16,8 @@ export function Card({
 }: {
   title?: ReactNode;
   description?: ReactNode;
+  /** What the block shows and how it is counted, behind an « i » beside the title. */
+  info?: ReactNode;
   icon?: ReactNode;
   actions?: ReactNode;
   children?: ReactNode;
@@ -23,7 +27,7 @@ export function Card({
   return (
     <section
       aria-labelledby={title ? id : undefined}
-      className={`rounded-2xl border border-line bg-surface shadow-card ${className}`}
+      className={`rounded-xl border border-line bg-surface/60 shadow-card ${className}`}
     >
       {title ? (
         <header
@@ -36,10 +40,13 @@ export function Card({
               </span>
             ) : null}
             <div className="min-w-0">
-              <h2 id={id} className="font-semibold">
-                {title}
-              </h2>
-              {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
+              <div className="flex items-center gap-1.5">
+                <h2 id={id} className="font-semibold text-fg">
+                  {title}
+                </h2>
+                {info ? <InfoTip>{info}</InfoTip> : null}
+              </div>
+              {description ? <p className="mt-1 text-sm">{description}</p> : null}
             </div>
           </div>
           {actions ? (
