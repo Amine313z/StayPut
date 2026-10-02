@@ -213,7 +213,9 @@ notifications.
 - Progression : `courses:read`, `course_analytics:read`, `webhook_receive:courses`.
 - Annonces publiques : `chat:message:create`.
 - Rapport du lundi à l'équipe : `company:authorized_user:read`.
-- Affiliation : `affiliate:basic:read`, `affiliate:create`.
+- Affiliation : `affiliate:basic:read` (lire le lien d'un membre déjà affilié, pour sa carte
+  témoignage et l'invitation « départ vers affiliation »). `affiliate:create` n'est pas demandée :
+  un lien n'existe qu'avec une commission, que le créateur décide (`DECISIONS.md`, Phase 5).
 
 ## 11. Ce qui reste à vérifier, et ce qu'il faut pour le faire
 

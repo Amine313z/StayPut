@@ -7,6 +7,7 @@ import type {
   MemberSpaceView,
   ResultAnswer,
   ShareAnswer,
+  TestimonialCard,
   PlatformActivityView,
   ActionRow,
   ActionSettingsView,
@@ -1709,6 +1710,54 @@ describe('member view', () => {
     await vi.waitFor(() => expect(calls).toContain('DELETE /api/member/exp_E1/telegram'));
   });
 
+  it('gives a member who reached their goal their affiliate link, when Whop has one', async () => {
+    const accepted = leaving({
+      reason: 'goal_reached',
+      offer: { type: 'affiliate_invite', keep: 'never' },
+      outcome: 'accepted',
+      result: { status: 'applied' },
+    });
+    mockApi({
+      '/api/member/exp_E1/session': [memberSession],
+      '/api/member/exp_E1/retention': [accepted],
+      '/api/member/exp_E1/telegram?lang=en': [telegram({ available: false, link: null })],
+      '/api/member/exp_E1/space/affiliate': [
+        { status: 200, body: { url: 'https://whop.com/le-club/?a=lina' } },
+      ],
+    });
+    renderAt('/experiences/exp_E1');
+    expect(
+      await screen.findByText(
+        'Your affiliate link is ready: share it, every sign-up through it counts for you.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('https://whop.com/le-club/?a=lina')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
+  });
+
+  it('tells the member the details will come when Whop gives no affiliate link', async () => {
+    mockApi({
+      '/api/member/exp_E1/session': [memberSession],
+      '/api/member/exp_E1/retention': [
+        leaving({
+          reason: 'goal_reached',
+          offer: { type: 'affiliate_invite', keep: 'never' },
+          outcome: 'accepted',
+          result: { status: 'applied' },
+        }),
+      ],
+      '/api/member/exp_E1/telegram?lang=en': [telegram({ available: false, link: null })],
+      '/api/member/exp_E1/space/affiliate': [{ status: 200, body: { url: null } }],
+    });
+    renderAt('/experiences/exp_E1');
+    expect(
+      await screen.findByText(
+        'Thank you! You will soon get the details to recommend the community.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Copy' })).toBeNull();
+  });
+
   it('asks a leaving member why, and makes the offer for their reason', async () => {
     const calls = mockApi({
       '/api/member/exp_E1/session': [memberSession],
@@ -1988,6 +2037,8 @@ describe('member space', () => {
     fresh: [],
     rewards: { offered: null, received: [] },
     announce: null,
+    cards: [],
+    whopAppId: 'app_stayput',
     ...over,
   });
   const open = (answers: Record<string, Answer[]>, locale: Locale = 'en') => {
@@ -2217,6 +2268,165 @@ describe('member space', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start the trial again' }));
     expect(screen.getByRole('button', { name: /Train regularly/ })).toBeTruthy();
     expect(screen.queryByText(/^Earned /)).toBeNull();
+  });
+
+  it('makes a testimonial card of a result, with the affiliate link Whop gives', async () => {
+    const result = {
+      id: '5f0c3e1a-9b2d-4e8f-a1c3-d5e7f9b1c3d5',
+      value: 90.25,
+      recordedAt: '2026-10-01T09:00:00.000Z',
+      proof: 'justified' as const,
+    };
+    const card: TestimonialCard = {
+      proofId: '7c9e6679-7425-40de-944b-e07fc1f90ae7',
+      resultId: result.id,
+      level: 'justified',
+      url: 'https://stayput.test/v/7c9e6679-7425-40de-944b-e07fc1f90ae7',
+      display: {
+        community: 'Le Club',
+        locale: 'en',
+        goal: 'Reach my target weight',
+        unit: 'kg',
+        entry: 'total',
+        start: 92,
+        target: 85,
+        value: 90.25,
+        progress: 25,
+        recordedAt: result.recordedAt,
+        day: '2026-10-01',
+        publishedAt: '2026-10-01T10:00:00.000Z',
+        name: 'Lina',
+        affiliateUrl: 'https://whop.com/le-club/?a=lina',
+      },
+    };
+    const clipboard = { writeText: vi.fn(() => Promise.resolve()) };
+    Object.defineProperty(navigator, 'clipboard', { value: clipboard, configurable: true });
+    open({
+      '/api/member/exp_E1/space?lang=en': [
+        {
+          status: 200,
+          body: space({ goal: { ...WEIGHT, current: 90.25, progress: 25 }, results: [result] }),
+        },
+      ],
+      '/api/member/exp_E1/space/affiliate': [
+        { status: 200, body: { url: 'https://whop.com/le-club/?a=lina' } },
+      ],
+      'POST /api/member/exp_E1/space/card': [{ status: 200, body: card }],
+      [`DELETE /api/member/exp_E1/space/card/${card.proofId}`]: [
+        { status: 200, body: { removed: true } },
+      ],
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Make a card' }));
+    expect(
+      screen.getByRole<HTMLSelectElement>('combobox', { name: 'The result on the card' }).value,
+    ).toBe(result.id);
+    const link = screen.getByRole<HTMLInputElement>('textbox', {
+      name: 'Your affiliate link (optional)',
+    });
+    expect(await screen.findByText('Your affiliate link, found on Whop.')).toBeTruthy();
+    expect(link.value).toBe('https://whop.com/le-club/?a=lina');
+    // A link elsewhere than Whop: refused before anything is sent.
+    fireEvent.change(link, { target: { value: 'https://evil.example/' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Make my card' }));
+    expect(screen.getByText('Paste a whop.com link (https://whop.com/…).')).toBeTruthy();
+    expect(bodies.has('POST /api/member/exp_E1/space/card')).toBe(false);
+    fireEvent.change(link, { target: { value: ' https://whop.com/le-club/?a=lina ' } });
+    // The name shows only when the member ticks it.
+    const name = screen.getByRole<HTMLInputElement>('checkbox', { name: /Show my name/ });
+    expect(name.checked).toBe(false);
+    fireEvent.click(name);
+    fireEvent.click(screen.getByRole('button', { name: 'Make my card' }));
+
+    expect(await screen.findByRole('heading', { name: 'Your cards online' })).toBeTruthy();
+    expect(bodies.get('POST /api/member/exp_E1/space/card')).toEqual({
+      resultId: result.id,
+      showName: true,
+      affiliateUrl: 'https://whop.com/le-club/?a=lina',
+    });
+    // This browser draws no canvas: the page's link is there to share.
+    expect(
+      await screen.findByText(
+        'This browser cannot draw the card. Its page is online: share its link.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText(card.url)).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open its page/ }).getAttribute('href')).toBe(card.url);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy the link' }));
+    expect(await screen.findByText('Link copied')).toBeTruthy();
+    expect(clipboard.writeText).toHaveBeenCalledWith(card.url);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Take the page down' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, take it down' }));
+    expect(await screen.findByText('Page taken down: its QR code leads nowhere now.')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Your cards online' })).toBeNull();
+    Reflect.deleteProperty(navigator, 'clipboard');
+  });
+
+  it('draws the team a card in the trial, with its QR code, and publishes nothing', async () => {
+    // A canvas that draws nothing but answers: the card's drawing runs to its end.
+    const drawn: string[] = [];
+    const context = {
+      measureText: (text: string) => ({ width: text.length * 18 }),
+      fillText: (text: string) => drawn.push(text),
+      fillRect: vi.fn(),
+      beginPath: vi.fn(),
+      moveTo: vi.fn(),
+      arcTo: vi.fn(),
+      closePath: vi.fn(),
+      fill: vi.fn(),
+    };
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockImplementation(() => context as never);
+    const toDataURL = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
+      .mockReturnValue('data:image/png;base64,QUJD');
+    try {
+      const calls = open({
+        '/api/member/exp_E1/space?lang=en': [
+          { status: 200, body: space({ preview: true, known: false }) },
+        ],
+      });
+      fireEvent.click(await screen.findByRole('button', { name: /Train regularly/ }));
+      fireEvent.change(screen.getByRole('textbox', { name: 'Your target' }), {
+        target: { value: '8' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Set my goal' }));
+      fireEvent.change(await screen.findByRole('textbox', { name: 'How many more?' }), {
+        target: { value: '2' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Make a card' }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /Show my name/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Make my card' }));
+
+      const image = await screen.findByRole('img', {
+        name: 'Testimonial card: Train regularly, 25% of the goal',
+      });
+      expect(image.getAttribute('src')).toBe('data:image/png;base64,QUJD');
+      const download = screen.getByRole('link', { name: 'Download (PNG)' });
+      expect(download.getAttribute('href')).toBe('data:image/png;base64,QUJD');
+      expect(download.getAttribute('download')).toMatch(/^stayput-card-\d{4}-\d{2}-\d{2}\.png$/);
+      // The card writes its numbers with their unit joined by a no-break space.
+      expect(drawn.map((text) => text.replace(/\u00a0/g, ' '))).toEqual(
+        expect.arrayContaining([
+          'Train regularly',
+          '0 sessions → 2 sessions',
+          '25% of the goal (8 sessions)',
+          'Declared by the member',
+          'Scan to check it',
+          'StayPut',
+        ]) as unknown,
+      );
+      expect(drawn.some((text) => text.startsWith('By Your name · '))).toBe(true);
+      expect(screen.getByText('Trial: the card is drawn, its page is not published.')).toBeTruthy();
+      // Nothing published, no page to open.
+      expect(screen.queryByRole('link', { name: /Open its page/ })).toBeNull();
+      expect(calls.filter((c) => !c.startsWith('/'))).toEqual([]);
+    } finally {
+      getContext.mockRestore();
+      toDataURL.mockRestore();
+    }
   });
 
   it('reads a screenshot in the browser, and sends only its fingerprint and numbers', async () => {

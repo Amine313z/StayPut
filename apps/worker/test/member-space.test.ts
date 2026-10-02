@@ -2,9 +2,11 @@ import { goalProgress } from '@stayput/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUser } from '../src/db';
 import {
+  makeCard,
   planEarnedDays,
   readGoalProposals,
   readMemberSpace,
+  readPublicProof,
   recordOpen,
   recordResult,
   saveAnnounceTo,
@@ -12,6 +14,7 @@ import {
   saveGoalProposals,
   setGoal,
   shareMilestone,
+  unpublishCard,
 } from '../src/space';
 import { createTestDb, type TestDb } from './helpers/db';
 
@@ -475,6 +478,184 @@ describe('sharing a milestone in the community’s chat (migration 0023)', () =>
     // The creator turns them off: nothing more to offer.
     await saveAnnounceTo(t.db, c, null);
     expect((await space(c, user)).announce).toBeNull();
+  });
+});
+
+describe('the testimonial cards (migration 0024)', () => {
+  const ORIGIN = 'https://stayput.test';
+  const card = (
+    c: string,
+    user: string,
+    request: { resultId: string; showName: boolean; affiliateUrl: string | null },
+    when: Date,
+  ) => makeCard(t.db, c, user, request, when, ORIGIN);
+  const cardsOf = async (c: string, user: string) =>
+    (await readMemberSpace(t.db, c, user, { locale: 'fr', preview: false, origin: ORIGIN })).cards;
+
+  /** A goal with two results: one backed by a screenshot, then one declared. */
+  async function twoResults() {
+    const one = await community();
+    await setGoal(t.db, one.c, one.user, { ...CLIENTS, entry: 'total', target: 5000 }, NOW);
+    const goalId = (await space(one.c, one.user)).goal!.id;
+    const proof = { sha256: 'd'.repeat(64), numbers: [3250] };
+    await recordResult(t.db, one.c, one.user, { goalId, value: 3250, proof }, at(1));
+    // 00:30 on 2 October in Paris, still 1 October in UTC.
+    const late = new Date('2026-10-01T22:30:00Z');
+    await recordResult(t.db, one.c, one.user, { goalId, value: 4000 }, late);
+    const [declared, justified] = (await space(one.c, one.user)).results;
+    return { ...one, goalId, declared: declared!, justified: justified!, late };
+  }
+
+  it('shows what the member agreed to, frozen, with the proof the result has', async () => {
+    const { c, user, member, goalId, declared, justified, late } = await twoResults();
+    const first = await card(
+      c,
+      user,
+      { resultId: justified.id, showName: false, affiliateUrl: null },
+      at(5),
+    );
+    expect(first).toEqual({
+      proofId: expect.any(String) as string,
+      resultId: justified.id,
+      level: 'justified',
+      url: `${ORIGIN}/v/${first!.proofId}`,
+      display: {
+        community: 'Le Club',
+        locale: 'fr',
+        goal: 'Signer de nouveaux clients',
+        unit: 'clients',
+        entry: 'total',
+        start: 0,
+        target: 5000,
+        value: 3250,
+        progress: 65,
+        recordedAt: at(1).toISOString(),
+        day: '2026-10-01',
+        publishedAt: at(5).toISOString(),
+        name: null,
+        affiliateUrl: null,
+      },
+    });
+    // A declared result gets a declared proof; the name shows only when ticked; the day is the
+    // community's.
+    const second = await card(
+      c,
+      user,
+      { resultId: declared.id, showName: true, affiliateUrl: 'https://whop.com/le-club/?a=lina' },
+      at(6),
+    );
+    expect(second).toMatchObject({
+      level: 'declared',
+      display: {
+        value: 4000,
+        progress: 80,
+        recordedAt: late.toISOString(),
+        day: '2026-10-02',
+        name: 'Lina Martin',
+        affiliateUrl: 'https://whop.com/le-club/?a=lina',
+      },
+    });
+    // A card never makes a declared result look backed by a screenshot.
+    expect((await space(c, user)).results.map((r) => r.proof)).toEqual([null, 'justified']);
+    expect(await cardsOf(c, user)).toEqual([second, first]);
+
+    // What others saw never changes behind them: neither a new name nor a new title…
+    await t.db.query(`update stayput.members set display_name = 'Lina M.' where id = $1`, [member]);
+    await t.db.query(`update stayput.goals set title = 'Mes clients' where id = $1`, [goalId]);
+    expect(await readPublicProof(t.db, second!.proofId)).toEqual({
+      level: 'declared',
+      display: second!.display,
+    });
+    // …until the member makes that card again: the same page, as they choose now.
+    const again = await card(
+      c,
+      user,
+      { resultId: declared.id, showName: true, affiliateUrl: null },
+      at(7),
+    );
+    expect(again).toMatchObject({
+      proofId: second!.proofId,
+      display: { goal: 'Mes clients', name: 'Lina M.', affiliateUrl: null },
+    });
+    const proofs = await t.db.query<{ level: string }>(
+      'select level from stayput.proofs where company_id = $1 order by level',
+      [c],
+    );
+    expect(proofs).toEqual([{ level: 'declared' }, { level: 'justified' }]);
+  });
+
+  it('takes a page down for its member only, and leaves nothing public of it', async () => {
+    const { c, user, justified } = await twoResults();
+    const made = await card(
+      c,
+      user,
+      { resultId: justified.id, showName: true, affiliateUrl: null },
+      at(5),
+    );
+    const proofId = made!.proofId;
+    // Another member of the community.
+    await t.db.query(
+      `insert into stayput.members (id, company_id, user_id, display_name, status)
+       values ($1, $2, $3, 'Sam', 'joined')`,
+      [`mber_Other${n}`, c, `user_Other${n}`],
+    );
+    expect(await unpublishCard(t.db, c, `user_Other${n}`, proofId)).toBe(false);
+    expect(await readPublicProof(t.db, proofId)).not.toBeNull();
+
+    expect(await unpublishCard(t.db, c, user, proofId)).toBe(true);
+    expect(await readPublicProof(t.db, proofId)).toBeNull();
+    expect(await cardsOf(c, user)).toEqual([]);
+    const [row] = await t.db.query<{ public_display: unknown; level: string }>(
+      'select public_display, level from stayput.proofs where id = $1',
+      [proofId],
+    );
+    // The proof stays the result's; its page shows nothing.
+    expect(row).toEqual({ public_display: {}, level: 'justified' });
+  });
+
+  it('makes cards of the member’s own results, online while their community uses StayPut', async () => {
+    const mine = await twoResults();
+    const theirs = await community();
+    const request = { resultId: mine.justified.id, showName: true, affiliateUrl: null };
+    // Someone else's result, or another community's member: nothing.
+    expect(await card(theirs.c, theirs.user, request, at(5))).toBeNull();
+    expect(await card(mine.c, theirs.user, request, at(5))).toBeNull();
+    const made = await card(mine.c, mine.user, request, at(5));
+    expect(await readPublicProof(t.db, made!.proofId)).not.toBeNull();
+    // The community uninstalls StayPut: its pages go offline.
+    await t.db.query(
+      `update stayput.companies set status = 'uninstalled', uninstalled_at = $2 where id = $1`,
+      [mine.c, at(6).toISOString()],
+    );
+    expect(await readPublicProof(t.db, made!.proofId)).toBeNull();
+    expect(await readPublicProof(t.db, '00000000-0000-4000-8000-000000000000')).toBeNull();
+  });
+
+  it('keeps one proof per result when the same card is asked twice at once', async () => {
+    const { c, user, declared } = await twoResults();
+    const request = { resultId: declared.id, showName: false, affiliateUrl: null };
+    const [a, b] = await Promise.all([
+      card(c, user, request, at(5)),
+      card(c, user, request, at(5)),
+    ]);
+    expect(a!.proofId).toBe(b!.proofId);
+    const [count] = await t.db.query<{ n: number }>(
+      'select count(*)::int as n from stayput.proofs where company_id = $1 and result_id = $2',
+      [c, declared.id],
+    );
+    expect(count!.n).toBe(1);
+  });
+
+  it('shows the team no card in their preview', async () => {
+    const { c, user, justified } = await twoResults();
+    await card(c, user, { resultId: justified.id, showName: false, affiliateUrl: null }, at(5));
+    const preview = await readMemberSpace(t.db, c, user, {
+      locale: 'fr',
+      preview: true,
+      origin: ORIGIN,
+      whopAppId: 'app_stayput',
+    });
+    expect(preview).toMatchObject({ cards: [], whopAppId: 'app_stayput' });
   });
 });
 

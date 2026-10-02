@@ -1,6 +1,7 @@
 import {
   EXIT_REASONS,
   exitOffer,
+  type AffiliateLinkView,
   type AlumniReturn,
   type ExitOffer,
   type ExitReason,
@@ -214,7 +215,7 @@ function DepartureCard({
         ) : departure.outcome === 'declined' || !departure.offer ? (
           <p className="text-sm">{t('member.leaving.declined')}</p>
         ) : (
-          <OfferOutcome offer={departure.offer} result={departure.result} />
+          <OfferOutcome api={api} offer={departure.offer} result={departure.result} />
         )}
         {failed ? (
           <p role="alert" className="flex items-center gap-1.5 text-sm text-danger">
@@ -435,7 +436,15 @@ function useOfferText(offer: ExitOffer): {
 }
 
 /** What came of the offer the member accepted. */
-function OfferOutcome({ offer, result }: { offer: ExitOffer; result: OfferResult | null }) {
+function OfferOutcome({
+  api,
+  offer,
+  result,
+}: {
+  api: string;
+  offer: ExitOffer;
+  result: OfferResult | null;
+}) {
   const { t, plural, date } = useI18n();
   if (!result || result.status === 'waiting') {
     return (
@@ -472,7 +481,7 @@ function OfferOutcome({ offer, result }: { offer: ExitOffer; result: OfferResult
       applied = t('member.result.coaching');
       break;
     case 'affiliate_invite':
-      applied = t('member.result.affiliate');
+      applied = <AffiliateLink api={api} />;
       break;
   }
   return (
@@ -482,6 +491,36 @@ function OfferOutcome({ offer, result }: { offer: ExitOffer; result: OfferResult
         {result.kept ? <p>{t('member.result.kept')}</p> : null}
       </div>
     </Notice>
+  );
+}
+
+/**
+ * The affiliate invitation accepted: the member's own link when Whop has one (SPEC 5.6), to
+ * copy; otherwise the creator sends the details.
+ */
+function AffiliateLink({ api }: { api: string }) {
+  const { t } = useI18n();
+  const { state } = useApi<AffiliateLinkView>(`${api}/space/affiliate`);
+  const [copied, setCopied] = useState(false);
+  const url = state.status === 'ready' ? state.data.url : null;
+  if (!url) return <p>{t('member.result.affiliate')}</p>;
+  return (
+    <div className="space-y-2">
+      <p>{t('member.result.affiliateLink')}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <code className="rounded-lg border border-line bg-surface px-3 py-1.5 break-all select-all">
+          {url}
+        </code>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Copy aria-hidden="true" className="size-4" />}
+          onClick={() => void copy(url).then(setCopied)}
+        >
+          {t(copied ? 'member.result.copied' : 'member.result.copy')}
+        </Button>
+      </div>
+    </div>
   );
 }
 

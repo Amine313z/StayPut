@@ -1,6 +1,6 @@
 import type { MemberSpaceView } from '@stayput/core';
 import { describe, expect, it } from 'vitest';
-import { trialGoal, trialResult, trialStart } from '../src/trial';
+import { trialCard, trialGoal, trialResult, trialStart } from '../src/trial';
 
 /**
  * The team's trial of the member space, computed in the browser: it must answer as StayPut would
@@ -18,6 +18,8 @@ const preview: MemberSpaceView = {
   fresh: [],
   rewards: { offered: { at50: 3, at100: 7 }, received: [] },
   announce: null,
+  cards: [],
+  whopAppId: 'app_stayput',
 };
 
 describe('the trial', () => {
@@ -70,5 +72,69 @@ describe('the trial', () => {
       [100, 7],
     ]);
     expect(trialResult(done.space, { goalId, value: 5100 }, NOW, used)).toBeNull();
+  });
+
+  it('draws the card of a result as StayPut would, without publishing it', () => {
+    const start = trialStart({ ...preview, cards: [] });
+    const view = trialGoal(
+      start,
+      {
+        title: 'Revenue',
+        unit: '$',
+        category: 'income',
+        entry: 'total',
+        start: 1000,
+        target: 5000,
+        targetDate: '2026-12-31',
+      },
+      NOW,
+    );
+    const goalId = view.goal!.id;
+    const proof = { sha256: 'c'.repeat(64), numbers: [3000] };
+    const { space } = trialResult(view, { goalId, value: 3000, proof }, NOW, new Set())!;
+    const resultId = space.results[0]!.id;
+    const options = {
+      now: NOW,
+      origin: 'https://stayput.test',
+      proofId: '11111111-2222-4333-8444-555555555555',
+      locale: 'en' as const,
+      name: 'Your name',
+    };
+    expect(
+      trialCard(space, { resultId, showName: false, affiliateUrl: null }, options),
+    ).toMatchObject({
+      proofId: options.proofId,
+      resultId,
+      level: 'justified',
+      url: 'https://stayput.test/v/11111111-2222-4333-8444-555555555555',
+      display: {
+        community: null,
+        goal: 'Revenue',
+        unit: '$',
+        start: 1000,
+        target: 5000,
+        value: 3000,
+        // As StayPut counts it: half of the way from 1,000 to 5,000.
+        progress: 50,
+        name: null,
+        affiliateUrl: null,
+      },
+    });
+    const named = trialCard(
+      space,
+      { resultId, showName: true, affiliateUrl: 'https://whop.com/club/?a=jo' },
+      options,
+    );
+    expect(named?.display).toMatchObject({
+      name: 'Your name',
+      affiliateUrl: 'https://whop.com/club/?a=jo',
+    });
+    expect(named?.display.day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // A result the space does not show makes no card.
+    expect(
+      trialCard(space, { resultId: 'nope', showName: false, affiliateUrl: null }, options),
+    ).toBeNull();
+    // The trial starts again from no card.
+    expect(trialStart(space).cards).toEqual([]);
   });
 });

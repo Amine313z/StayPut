@@ -9,3 +9,4 @@ export * from './templates';
 export * from './offers';
 export * from './goals';
 export * from './announcements';
+export * from './testimonials';

@@ -7,6 +7,7 @@ import type {
   MemberSpaceView,
   ResultAnswer,
   ShareAnswer,
+  TestimonialCard,
   PlatformActivityView,
   ActionsPage,
   AccessLevel,
@@ -20,6 +21,7 @@ import type {
   SyncStatus,
 } from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
+import { createHash } from 'node:crypto';
 import { SignJWT, generateKeyPair, type CryptoKey } from 'jose';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AccessCache } from '../src/access';
@@ -125,6 +127,11 @@ function fakeWhop(
       }
       if (method !== 'GET' && (membership || path === '/promo_codes')) {
         return Promise.resolve({ id: 'promo_1' });
+      }
+      // A user's public profile: the username Whop searches affiliates by.
+      const user = /^\/users\/(user_[A-Za-z0-9]+)$/.exec(path)?.[1];
+      if (method === 'GET' && user) {
+        return Promise.resolve({ id: user, username: user.replace('user_', '') });
       }
       const experience = /^\/experiences\/(exp_[A-Za-z0-9]+)$/.exec(path)?.[1];
       const company = experience ? experiences[experience] : undefined;
@@ -2070,7 +2077,7 @@ describe('the member space (SPEC Phase 5)', () => {
   });
 
   /** A fitness community with its member Lina; `boss` is of the team. */
-  async function community(n: number) {
+  async function community(n: number, lists: Record<string, string> = {}) {
     const [company, experience] = [`biz_Spc${n}`, `exp_Spc${n}`];
     const env = setup(
       {
@@ -2078,7 +2085,7 @@ describe('the member space (SPEC Phase 5)', () => {
         [`user_boss${n}:${experience}`]: 'admin',
         [`user_boss${n}:${company}`]: 'admin',
       },
-      { experiences: { [experience]: company } },
+      { experiences: { [experience]: company }, lists },
     );
     await env.request(`/api/creator/${company}/session`, await asUser(`user_boss${n}`));
     await settle();
@@ -2274,6 +2281,176 @@ describe('the member space (SPEC Phase 5)', () => {
       targetDate: NOW.toISOString().slice(0, 10),
     };
     expect((await request(`${base}/goal`, json(boss, 'POST', goal))).status).toBe(403);
+  });
+
+  it('publishes the card of a member’s result, and its page until they take it down', async () => {
+    const { request, company, lina, boss, base } = await community(6);
+    const goal = {
+      title: 'Atteindre mon chiffre d’affaires <mensuel>',
+      unit: '€',
+      category: 'income',
+      entry: 'total',
+      start: 0,
+      target: 5000,
+      targetDate: new Date(NOW.getTime() + 90 * 86_400_000).toISOString().slice(0, 10),
+    };
+    const set = (await (
+      await request(`${base}/goal`, json(lina, 'POST', goal))
+    ).json()) as MemberSpaceView;
+    const proof = { sha256: 'c'.repeat(64), numbers: [3250] };
+    const recorded = (await (
+      await request(
+        `${base}/result?lang=fr`,
+        json(lina, 'POST', { goalId: set.goal!.id, value: 3250, proof }),
+      )
+    ).json()) as ResultAnswer;
+    expect(recorded.space).toMatchObject({ cards: [], whopAppId: APP_ID });
+    const resultId = recorded.space.results[0]!.id;
+    const ask = (init: RequestInit, body: unknown) =>
+      request(`${base}/card`, json(init, 'POST', body));
+
+    // The team previews the space: nothing goes online.
+    expect((await ask(boss, { resultId, showName: true, affiliateUrl: null })).status).toBe(403);
+    // A link elsewhere than Whop, or no result of the member's: refused.
+    for (const affiliateUrl of ['https://evil.example/?whop.com', 'javascript:alert(1)']) {
+      expect((await ask(lina, { resultId, showName: true, affiliateUrl })).status).toBe(400);
+    }
+    expect(
+      (
+        await ask(lina, {
+          resultId: '00000000-0000-4000-8000-000000000000',
+          showName: false,
+          affiliateUrl: null,
+        })
+      ).status,
+    ).toBe(404);
+
+    const made = await ask(lina, {
+      resultId,
+      showName: true,
+      affiliateUrl: 'https://whop.com/le-club/?a=lina6',
+    });
+    expect(made.status).toBe(200);
+    const card = (await made.json()) as TestimonialCard;
+    expect(card).toMatchObject({
+      resultId,
+      level: 'justified',
+      url: `http://localhost/v/${card.proofId}`,
+      display: {
+        goal: goal.title,
+        value: 3250,
+        progress: 65,
+        name: 'Name user_lina6',
+        affiliateUrl: 'https://whop.com/le-club/?a=lina6',
+        day: NOW.toISOString().slice(0, 10),
+      },
+    });
+    const seen = (await (await request(`${base}?lang=fr`, lina)).json()) as MemberSpaceView;
+    expect(seen.cards).toEqual([card]);
+
+    // The public page: anyone opens it, without signing in.
+    const pageOf = (headers: Record<string, string> = {}) =>
+      request(`/v/${card.proofId}`, { headers });
+    const open = await pageOf();
+    expect(open.status).toBe(200);
+    expect(open.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    const html = await open.text();
+    expect(html).toContain('<html lang="en">');
+    expect(html).toContain('Atteindre mon chiffre d’affaires &lt;mensuel&gt;');
+    expect(html).toContain('By Name user_lina6');
+    expect(html).toContain('✓ Backed by a screenshot');
+    expect(html).toContain(
+      '<a class="join" href="https://whop.com/le-club/?a=lina6" rel="noopener nofollow">',
+    );
+    expect(html).toContain('<span class="w65"></span>');
+    expect(html).not.toContain('<script');
+    // Its policy allows its own style, and nothing else.
+    const style = /<style>([\s\S]*)<\/style>/.exec(html)![1]!;
+    const digest = createHash('sha256').update(style).digest('base64');
+    expect(open.headers.get('content-security-policy')).toBe(
+      `default-src 'none'; style-src 'sha256-${digest}'; base-uri 'none'; form-action 'none'`,
+    );
+    // In the community's language.
+    await t.db.query(`update stayput.companies set locale = 'fr' where id = $1`, [company]);
+    await request(
+      `${base}/card`,
+      json(lina, 'POST', { resultId, showName: false, affiliateUrl: null }),
+    );
+    const french = await (await pageOf()).text();
+    expect(french).toContain('<html lang="fr">');
+    expect(french).toContain('Par un membre de la communauté');
+    expect(french).not.toContain('Name user_lina6');
+    expect(french).not.toContain('class="join"');
+
+    // Only the member takes it down.
+    const remove = (init: RequestInit, id: string) =>
+      request(`${base}/card/${id}`, { ...init, method: 'DELETE' });
+    expect((await remove(lina, 'not-a-proof')).status).toBe(400);
+    expect((await remove(lina, '00000000-0000-4000-8000-000000000000')).status).toBe(404);
+    expect((await remove(boss, card.proofId)).status).toBe(404);
+    const removed = await remove(lina, card.proofId);
+    expect(await removed.json()).toEqual({ removed: true });
+    expect(((await (await request(base, lina)).json()) as MemberSpaceView).cards).toEqual([]);
+    const gone = await pageOf({ 'accept-language': 'fr-FR,fr;q=0.9' });
+    expect(gone.status).toBe(404);
+    expect(await gone.text()).toContain('Cette page n’existe pas');
+    expect(await (await pageOf()).text()).toContain('This page does not exist');
+    expect((await request('/v/not-a-proof')).status).toBe(400);
+  });
+
+  it('offers the member’s affiliate link when Whop has one, never the team’s', async () => {
+    const affiliates = JSON.stringify({
+      data: [
+        { id: 'aff_Other', user: { id: 'user_lina70' } },
+        { id: 'aff_Lina', user: { id: 'user_lina7' } },
+      ],
+    });
+    const overrides = JSON.stringify({
+      data: [
+        { product_direct_link: null, checkout_direct_link: null },
+        {
+          product_direct_link: 'https://whop.com/le-club/?a=lina7',
+          checkout_direct_link: 'https://whop.com/checkout/plan_Club/?a=lina7',
+        },
+      ],
+    });
+    const { request, whop, lina, boss, base } = await community(7, {
+      '/affiliates': affiliates,
+      '/affiliates/aff_Lina/overrides': overrides,
+    });
+    expect(await (await request(`${base}/affiliate`, lina)).json()).toEqual({
+      url: 'https://whop.com/le-club/?a=lina7',
+    });
+    expect(whop.calls).toContain('GET /users/user_lina7');
+    const affiliateCalls = () => whop.listed.filter((path) => path.startsWith('/affiliates'));
+    expect(affiliateCalls()).toEqual(['/affiliates', '/affiliates/aff_Lina/overrides']);
+    // The team previews: no Whop call for them.
+    expect(await (await request(`${base}/affiliate`, boss)).json()).toEqual({ url: null });
+    expect(affiliateCalls()).toHaveLength(2);
+    // StayPut may not read affiliates: the member pastes their link.
+    whop.refusals['GET /users/user_lina7'] = new WhopApiError(403, 'forbidden', 'missing scope', {
+      method: 'GET',
+      path: '/users/user_lina7',
+    });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await (await request(`${base}/affiliate`, lina)).json()).toEqual({ url: null });
+    expect(errors).toHaveBeenCalledWith('Affiliate link not read:', expect.any(String));
+    errors.mockRestore();
+  });
+
+  it('gives no link for a member who is no affiliate, or whose commission has none', async () => {
+    const { request, lina, base } = await community(8, {
+      '/affiliates': JSON.stringify({ data: [{ id: 'aff_Lina8', user: { id: 'user_lina8' } }] }),
+      // A revenue share: Whop gives it no link.
+      '/affiliates/aff_Lina8/overrides': JSON.stringify({
+        data: [{ product_direct_link: null, checkout_direct_link: null }],
+      }),
+    });
+    expect(await (await request(`${base}/affiliate`, lina)).json()).toEqual({ url: null });
+    const other = await community(9);
+    expect(await (await other.request(`${other.base}/affiliate`, other.lina)).json()).toEqual({
+      url: null,
+    });
   });
 
   it('lets the creator write the goals proposed to members', async () => {

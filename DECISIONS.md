@@ -1145,3 +1145,48 @@ nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en
   manuel part au passage suivant).
 - **L'essai de l'équipe** montre la proposition de partage avec le texte, et dit qu'en essai rien
   n'est publié.
+
+### Les cartes témoignage et leur page publique (migration 0024)
+
+- **La carte est dessinée dans le navigateur du membre** (canvas, 1080 × 1350 : le portrait que
+  les réseaux montrent en entier), à partir d'un de ses résultats : l'objectif, le chemin
+  (« 0 € → 3 250 € »), la part de l'objectif et la cible, le niveau de preuve, la date, son nom
+  s'il l'a coché (décoché par défaut), un QR code vers sa page publique, et « et rejoindre
+  {communauté} » s'il a un lien d'affiliation. Ses couleurs sont les siennes, quel que soit le
+  thème de la page. Le QR code (`qrcode-generator` 2.0.4, licence MIT, sans dépendance, correction
+  M) a des modules en pixels entiers et une marge blanche de 4 modules : un lecteur indépendant
+  (jsQR) le décode en taille réelle et réduit à 35 %, avec l'adresse de production.
+- **Téléchargement en PNG** par une adresse `data:` (la politique de sécurité du site les
+  autorise déjà pour les images). Dans le cadre de Whop, un téléchargement peut être bloqué : la
+  carte s'affiche en image, que le membre enregistre d'un appui long ou d'un clic droit (c'est
+  écrit dessous). Le lien de la page se copie ou se sélectionne.
+- **La page publique `/v/:proofId`** est du HTML rendu par le Worker, sans script, dans la langue
+  de la communauté : le résultat, son niveau de preuve, sa date, une note qui explique les
+  niveaux, et le bouton « Rejoindre » vers le lien d'affiliation. Sa politique de sécurité
+  n'autorise que son propre style (son empreinte SHA-256 ; la largeur de la barre est une classe,
+  pas un style en ligne) ; `noindex`. Une preuve jamais publiée, retirée, ou d'une communauté qui
+  a désinstallé StayPut donne une page « Cette page n'existe pas » (404), dans la langue du
+  navigateur.
+- **Ce que la page montre est figé** quand le membre crée la carte (`proofs.public_display`) : un
+  nom ou un titre changé ensuite ne modifie pas une page que d'autres ont vue. Refaire la carte du
+  même résultat la met à jour, à la même adresse. La date est le jour du résultat dans le fuseau
+  de la communauté, pour que la carte et la page disent la même.
+- **Une preuve par résultat** (index unique de 0024) : celle de la capture (« appuyé par une
+  capture »), ou une preuve « déclarée » que la carte crée, en une seule instruction (deux
+  demandes au même moment font une seule preuve). Une carte ne fait jamais passer un résultat
+  déclaré pour appuyé.
+- **Retirer la page** vide ce qu'elle montre : son QR code ne mène plus à rien. L'image déjà
+  téléchargée reste chez le membre ; seul le membre peut retirer sa page.
+- **Le lien d'affiliation (SPEC 5.6)** : l'API permet de lire celui d'un membre déjà affilié
+  (`GET /users/{id}` pour son nom d'utilisateur, `GET /affiliates?account_id=…&query=…` pour
+  trouver l'affilié dont l'utilisateur est le membre, puis `GET /affiliates/{id}/overrides` :
+  le `product_direct_link` d'une commission par variante), avec la permission
+  `affiliate:basic:read`. Elle permet aussi de créer un affilié (`POST /affiliates`), mais un lien
+  n'existe qu'avec une commission (« override ») : c'est une décision d'argent du créateur,
+  StayPut ne crée donc rien. Sans lien lu, le membre colle le sien. Seules les adresses whop.com
+  (et ses sous-domaines, `sandbox.whop.com` compris) sont acceptées : une page publique n'envoie
+  jamais ailleurs. StayPut lit le lien à l'ouverture du formulaire de la carte (jamais pour
+  l'équipe), et le montre aussi au membre qui accepte l'invitation « départ vers affiliation »
+  (Phase 4) ; sans lien, ce membre lit toujours qu'il recevra les détails.
+- **L'essai de l'équipe** dessine la carte comme celle d'un membre (« Votre nom » à la place du
+  nom, sans nom de communauté) ; rien n'est publié, il n'y a pas de page à ouvrir.

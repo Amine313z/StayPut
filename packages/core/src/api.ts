@@ -2,6 +2,7 @@ import type { AccessLevel } from './access';
 import type { ActionType, BlockReason } from './actions';
 import type { CohortHorizon } from './analyses';
 import type { AnnounceTarget } from './announcements';
+import type { ProofLevel, TestimonialDisplay } from './testimonials';
 import type { BadgeCode, GoalCategory, GoalEntry, GoalProposal, Milestone } from './goals';
 import type { ExitOffer, ExitReason, OfferSettings } from './offers';
 import type { Niche, RiskLevel, RiskReason, RiskWeights } from './risk';
@@ -532,6 +533,28 @@ export interface MemberSpaceView {
    * chose nowhere.
    */
   announce: { locale: TemplateLocale; firstName: string | null; place: string } | null;
+  /** The member's testimonial cards online (SPEC Phase 5, points 6 and 7), the newest first. */
+  cards: TestimonialCard[];
+  /** To open a card's public page through Whop inside its iframe. */
+  whopAppId: string | null;
+}
+
+/** A testimonial card online: its public page, and what it shows. */
+export interface TestimonialCard {
+  proofId: string;
+  resultId: string | null;
+  level: ProofLevel;
+  /** The public page /v/:proofId. */
+  url: string;
+  display: TestimonialDisplay;
+}
+
+/**
+ * GET …/space/affiliate: the member's own affiliate link to the community, read from Whop (SPEC
+ * 5.6), to offer on their card; null when Whop gives none.
+ */
+export interface AffiliateLinkView {
+  url: string | null;
 }
 
 /** POST …/space/share: the member asks for their milestone to be announced. */

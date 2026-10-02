@@ -1,6 +1,7 @@
 import {
   BADGE_CODES,
   MILESTONES,
+  isProofLevel,
   parseAnnounceTarget,
   isBadgeCode,
   isGoalCategory,
@@ -11,6 +12,7 @@ import {
   proofJustifies,
   type AnnounceDestination,
   type BadgeCode,
+  type CardRequest,
   type EarnedBadge,
   type EarnedDaysSettings,
   type GoalInput,
@@ -20,10 +22,13 @@ import {
   type MemberGoal,
   type MemberSpaceView,
   type Milestone,
+  type ProofLevel,
   type ResultAnswer,
   type ResultEntry,
   type ShareRequest,
   type TemplateLocale,
+  type TestimonialCard,
+  type TestimonialDisplay,
 } from '@stayput/core';
 import { withUser, type Db, type TransactionalDb } from './db';
 
@@ -105,7 +110,15 @@ export async function readMemberSpace(
   db: Db,
   companyId: string,
   userId: string,
-  options: { locale: TemplateLocale; preview: boolean; fresh?: readonly BadgeCode[] },
+  options: {
+    locale: TemplateLocale;
+    preview: boolean;
+    fresh?: readonly BadgeCode[];
+    /** StayPut's own address, for the public pages of the cards. */
+    origin?: string;
+    /** The app's id, to open those pages through Whop. */
+    whopAppId?: string | null;
+  },
 ): Promise<MemberSpaceView> {
   const [row] = await db.query<{ space: SpaceRow }>(
     'select stayput.member_space($1, $2) as space',
@@ -128,6 +141,8 @@ export async function readMemberSpace(
       // The team sees what members are offered, never anyone's days.
       rewards: { offered: rewards.offered, received: [] },
       announce,
+      cards: [],
+      whopAppId: options.whopAppId ?? null,
     };
   }
   return {
@@ -154,7 +169,124 @@ export async function readMemberSpace(
     fresh: [...(options.fresh ?? [])],
     rewards,
     announce,
+    cards: await readCards(db, companyId, userId, options.origin ?? ''),
+    whopAppId: options.whopAppId ?? null,
   };
+}
+
+/** What stayput.member_cards and make_testimonial give of a card. */
+interface CardRow {
+  proofId?: string;
+  id?: string;
+  resultId?: string | null;
+  level: string;
+  display: Record<string, unknown>;
+}
+
+function cardOf(row: CardRow, origin: string): TestimonialCard | null {
+  const proofId = row.proofId ?? row.id;
+  const display = displayOf(row.display);
+  if (!proofId || !display || !isProofLevel(row.level)) return null;
+  return {
+    proofId,
+    resultId: row.resultId ?? null,
+    level: row.level,
+    url: `${origin}/v/${proofId}`,
+    display,
+  };
+}
+
+/** A card's public part as the database keeps it, read back with its types. */
+export function displayOf(value: Record<string, unknown>): TestimonialDisplay | null {
+  const text = (v: unknown) => (typeof v === 'string' ? v : null);
+  const goal = text(value.goal);
+  const unit = text(value.unit);
+  const recordedAt = text(value.recordedAt);
+  const publishedAt = text(value.publishedAt);
+  if (!goal || !unit || !recordedAt || !publishedAt) return null;
+  return {
+    community: text(value.community),
+    locale: value.locale === 'fr' ? 'fr' : 'en',
+    goal,
+    unit,
+    entry: isGoalEntry(value.entry) ? value.entry : 'total',
+    start: Number(value.start),
+    target: Number(value.target),
+    value: Number(value.value),
+    progress: Number(value.progress),
+    recordedAt: iso(recordedAt),
+    day:
+      typeof value.day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.day)
+        ? value.day
+        : iso(recordedAt).slice(0, 10),
+    publishedAt: iso(publishedAt),
+    name: text(value.name),
+    affiliateUrl: text(value.affiliateUrl),
+  };
+}
+
+async function readCards(
+  db: Db,
+  companyId: string,
+  userId: string,
+  origin: string,
+): Promise<TestimonialCard[]> {
+  const [row] = await db.query<{ cards: CardRow[] | null }>(
+    'select stayput.member_cards($1, $2) as cards',
+    [companyId, userId],
+  );
+  return (row?.cards ?? []).flatMap((card) => cardOf(card, origin) ?? []);
+}
+
+/** The member makes the card of one of their results: its public page goes online. */
+export async function makeCard(
+  db: Db,
+  companyId: string,
+  userId: string,
+  request: CardRequest,
+  now: Date,
+  origin: string,
+): Promise<TestimonialCard | null> {
+  const [row] = await db.query<{ card: CardRow | null }>(
+    'select stayput.make_testimonial($1, $2, $3::uuid, $4, $5, $6::timestamptz) as card',
+    [
+      companyId,
+      userId,
+      request.resultId,
+      request.showName,
+      request.affiliateUrl,
+      now.toISOString(),
+    ],
+  );
+  const card = row?.card;
+  return card ? cardOf({ ...card, resultId: request.resultId }, origin) : null;
+}
+
+/** The member takes a card's page down. */
+export async function unpublishCard(
+  db: Db,
+  companyId: string,
+  userId: string,
+  proofId: string,
+): Promise<boolean> {
+  const [row] = await db.query<{ removed: boolean }>(
+    'select stayput.unpublish_testimonial($1, $2, $3::uuid) as removed',
+    [companyId, userId, proofId],
+  );
+  return row?.removed === true;
+}
+
+/** A proof's public page: what its member agreed to show, or null. */
+export async function readPublicProof(
+  db: Db,
+  proofId: string,
+): Promise<{ level: ProofLevel; display: TestimonialDisplay } | null> {
+  const [row] = await db.query<{
+    proof: { level: string; display: Record<string, unknown> } | null;
+  }>('select stayput.public_proof($1::uuid) as proof', [proofId]);
+  const proof = row?.proof;
+  const display = proof ? displayOf(proof.display) : null;
+  return proof && display && isProofLevel(proof.level) ? { level: proof.level, display } : null;
 }
 
 /** Where a shared milestone goes and in which words; null when the creator chose nowhere. */

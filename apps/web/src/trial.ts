@@ -4,10 +4,13 @@ import {
   milestonesAt,
   proofJustifies,
   type BadgeCode,
+  type CardRequest,
   type GoalInput,
   type MemberSpaceView,
   type ResultAnswer,
   type ResultEntry,
+  type TemplateLocale,
+  type TestimonialCard,
 } from '@stayput/core';
 
 /**
@@ -26,6 +29,7 @@ export function trialStart(preview: MemberSpaceView): MemberSpaceView {
     badges: [],
     fresh: [],
     rewards: { offered: preview.rewards.offered, received: [] },
+    cards: [],
   };
 }
 
@@ -128,6 +132,49 @@ export function trialResult(
       badges: [...view.badges, ...badges.map((code) => ({ code, awardedAt: at }))],
       fresh: [],
       rewards: { offered, received: [...view.rewards.received, ...earned] },
+    },
+  };
+}
+
+/** A calendar day, YYYY-MM-DD, of the browser's time zone. */
+function dayOf(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+/**
+ * The card of a result in the trial: drawn as a member's would be, its page never published
+ * (`proofId` is a fresh id nobody can open). The trial knows neither the community's name nor
+ * the member's: `name` stands for theirs when they show it.
+ */
+export function trialCard(
+  view: MemberSpaceView,
+  request: CardRequest,
+  options: { now: Date; origin: string; proofId: string; locale: TemplateLocale; name: string },
+): TestimonialCard | null {
+  const goal = view.goal;
+  const result = view.results.find((r) => r.id === request.resultId);
+  if (!goal || !result) return null;
+  return {
+    proofId: options.proofId,
+    resultId: result.id,
+    level: result.proof ?? 'declared',
+    url: `${options.origin}/v/${options.proofId}`,
+    display: {
+      community: null,
+      locale: options.locale,
+      goal: goal.title,
+      unit: goal.unit,
+      entry: goal.entry,
+      start: goal.start,
+      target: goal.target,
+      value: result.value,
+      progress: goalProgress(goal.start, goal.target, result.value),
+      recordedAt: result.recordedAt,
+      day: dayOf(new Date(result.recordedAt)),
+      publishedAt: options.now.toISOString(),
+      name: request.showName ? options.name : null,
+      affiliateUrl: request.affiliateUrl,
     },
   };
 }

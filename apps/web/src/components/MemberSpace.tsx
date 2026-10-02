@@ -19,8 +19,10 @@ import {
   type ProofInput,
   type ResultAnswer,
   type ResultEntry,
+  type AffiliateLinkView,
   type ShareAnswer,
   type ShareRequest,
+  type TestimonialCard,
 } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
 import {
@@ -51,15 +53,17 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { postJson, useApi } from '../api';
+import { useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { deleteJson, getJson, postJson, useApi } from '../api';
 import { useI18n } from '../i18n';
 import { readScreenshot, type ReadingStage } from '../ocr';
-import { trialGoal, trialResult, trialStart } from '../trial';
+import { trialCard, trialGoal, trialResult, trialStart } from '../trial';
 import { Badge, Notice } from '../ui/Badge';
 import { Button, buttonClass } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { useWithUnit } from '../units';
 import { FIELD } from './SettingsParts';
+import { TestimonialCards, type CardBackend } from './Testimonial';
 
 /** What an answer brought, to celebrate it once. */
 interface Celebration {
@@ -78,7 +82,7 @@ interface Celebration {
  * Where the space's answers come from: StayPut for a member, the browser for the team's trial
  * (`current` is the space as shown, which the trial builds on).
  */
-interface SpaceBackend {
+interface SpaceBackend extends CardBackend {
   setGoal: (goal: GoalInput, current: MemberSpaceView) => Promise<MemberSpaceView>;
   recordResult: (entry: ResultEntry, current: MemberSpaceView) => Promise<ResultAnswer>;
   share: (request: ShareRequest) => Promise<ShareAnswer>;
@@ -93,6 +97,19 @@ interface SpaceBackend {
 export function MemberSpace({ api }: { api: string }) {
   const { t, locale } = useI18n();
   const { state, retry } = useApi<MemberSpaceView>(`${api}/space?lang=${locale}`);
+  const backend = useMemo<SpaceBackend>(
+    () => ({
+      setGoal: (goal) => postJson<MemberSpaceView>(`${api}/space/goal?lang=${locale}`, goal),
+      recordResult: (entry) => postJson<ResultAnswer>(`${api}/space/result?lang=${locale}`, entry),
+      share: (request) => postJson<ShareAnswer>(`${api}/space/share`, request),
+      makeCard: (request) => postJson<TestimonialCard>(`${api}/space/card`, request),
+      removeCard: async (proofId) => {
+        await deleteJson(`${api}/space/card/${encodeURIComponent(proofId)}`);
+      },
+      affiliateLink: async () => (await getJson<AffiliateLinkView>(`${api}/space/affiliate`)).url,
+    }),
+    [api, locale],
+  );
   if (state.status === 'loading') return null;
   if (state.status === 'error') {
     return (
@@ -119,29 +136,39 @@ export function MemberSpace({ api }: { api: string }) {
       />
     );
   }
-  const backend: SpaceBackend = {
-    setGoal: (goal) => postJson<MemberSpaceView>(`${api}/space/goal?lang=${locale}`, goal),
-    recordResult: (entry) => postJson<ResultAnswer>(`${api}/space/result?lang=${locale}`, entry),
-    share: (request) => postJson<ShareAnswer>(`${api}/space/share`, request),
-  };
   return <Space view={state.data} backend={backend} />;
 }
 
 /** For the team: the member space to try, computed in the browser, nothing recorded. */
 function TrialSpace({ preview }: { preview: MemberSpaceView }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [start, setStart] = useState(() => trialStart(preview));
   // The screenshots that backed a result in this trial: each backs one only, as in StayPut.
   const used = useRef(new Set<string>());
-  const backend: SpaceBackend = {
-    setGoal: (goal, current) => Promise.resolve(trialGoal(current, goal, new Date())),
-    recordResult: (entry, current) => {
-      const answer = trialResult(current, entry, new Date(), used.current);
-      return answer ? Promise.resolve(answer) : Promise.reject(new Error('no goal under way'));
-    },
-    // The trial posts nothing.
-    share: () => Promise.resolve({ status: 'simulated' }),
-  };
+  const backend = useMemo<SpaceBackend>(
+    () => ({
+      setGoal: (goal, current) => Promise.resolve(trialGoal(current, goal, new Date())),
+      recordResult: (entry, current) => {
+        const answer = trialResult(current, entry, new Date(), used.current);
+        return answer ? Promise.resolve(answer) : Promise.reject(new Error('no goal under way'));
+      },
+      // The trial posts nothing, and publishes no page.
+      share: () => Promise.resolve({ status: 'simulated' }),
+      makeCard: (request, current) => {
+        const card = trialCard(current, request, {
+          now: new Date(),
+          origin: window.location.origin,
+          proofId: crypto.randomUUID(),
+          locale,
+          name: t('card.trialName'),
+        });
+        return card ? Promise.resolve(card) : Promise.reject(new Error('no such result'));
+      },
+      removeCard: () => Promise.resolve(),
+      affiliateLink: () => Promise.resolve(null),
+    }),
+    [t, locale],
+  );
   return (
     <Space
       view={start}
@@ -279,20 +306,12 @@ function Space({
           )}
         </div>
       </Card>
+      {(goal && shown.results.length > 0) || shown.cards.length > 0 ? (
+        <TestimonialCards view={shown} backend={backend} trial={Boolean(trial)} />
+      ) : null}
       <BadgesCard badges={shown.badges} />
     </>
   );
-}
-
-/** A number with its unit, as people write them: « 3 000 € », « $3,000 », « 40 % ». */
-function useWithUnit(): (value: number, unit: string) => string {
-  const { number, locale } = useI18n();
-  return (value, unit) => {
-    const n = number(value);
-    if (unit === '%') return locale === 'fr' ? `${n}\u00a0%` : `${n}%`;
-    if (locale === 'en' && ['$', '€', '£'].includes(unit)) return `${unit}${n}`;
-    return `${n}\u00a0${unit}`;
-  };
 }
 
 const CATEGORY_LABELS: Readonly<Record<GoalCategory, MessageKey>> = {

@@ -9,12 +9,15 @@ import {
   isExitReason,
   isNiche,
   normalizeWeights,
+  isProofId,
   parseAnnounceTarget,
+  parseCardRequest,
   parseGoalInput,
   parseGoalProposals,
   parseResultEntry,
   timeZoneName,
   type AccessLevel,
+  type AffiliateLinkView,
   type CreatorSession,
   type DiscordChannelsUpdate,
   type HealthReport,
@@ -79,7 +82,9 @@ import { readInsights, readMembers, readRiskSettings, readSyncStatus } from './m
 import { answerSurvey, decideOffer, readRetention, retentionView } from './retention';
 import { REQUEST_RISK_BATCH, refreshDetection } from './risk';
 import { LATEST_MIGRATION } from './schema-version';
+import { goneProofPage, proofPage } from './public-proof';
 import {
+  makeCard,
   parseEarnedDays,
   parseShareRequest,
   planEarnedDays,
@@ -87,6 +92,7 @@ import {
   readEarnedDays,
   readGoalProposals,
   readMemberSpace,
+  readPublicProof,
   recordOpen,
   recordResult,
   saveAnnounceTo,
@@ -95,7 +101,9 @@ import {
   setGoal,
   shareMilestone,
   spaceLocale,
+  unpublishCard,
 } from './space';
+import { memberAffiliateLink } from './affiliate';
 import { announceChoices } from './announce';
 import {
   LOGIN_COOKIE,
@@ -1588,6 +1596,8 @@ export function createApp(deps: AppDeps) {
         locale: spaceLocale(c.req.query('lang')),
         preview,
         fresh,
+        origin: new URL(c.req.url).origin,
+        whopAppId: c.get('config').appId,
       }),
     );
   });
@@ -1622,6 +1632,8 @@ export function createApp(deps: AppDeps) {
         await readMemberSpace(db, companyId, userId, {
           locale: spaceLocale(c.req.query('lang')),
           preview: false,
+          origin: new URL(c.req.url).origin,
+          whopAppId: c.get('config').appId,
         }),
       );
     },
@@ -1671,6 +1683,8 @@ export function createApp(deps: AppDeps) {
         space: await readMemberSpace(db, companyId, userId, {
           locale: spaceLocale(c.req.query('lang')),
           preview: false,
+          origin: new URL(c.req.url).origin,
+          whopAppId: c.get('config').appId,
         }),
       };
       return c.json(answer);
@@ -1725,6 +1739,83 @@ export function createApp(deps: AppDeps) {
     },
   );
 
+  /**
+   * The member makes the testimonial card of one of their results (SPEC Phase 5, point 6): its
+   * public page goes online with only what they agreed to show.
+   */
+  app.post(
+    '/api/member/:experienceId/space/card',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      if (c.get('accessLevel') === 'admin') {
+        return apiError('forbidden', 'the team previews the member space, nothing is recorded');
+      }
+      const request = parseCardRequest(await c.req.json<unknown>().catch(() => null));
+      if (!request) {
+        return apiError(
+          'invalid_request',
+          'expected { resultId, showName, affiliateUrl: a whop.com address or null }',
+        );
+      }
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const card = await makeCard(
+        db,
+        companyId,
+        c.get('userId'),
+        request,
+        deps.now(),
+        new URL(c.req.url).origin,
+      );
+      return card ? c.json(card) : apiError('not_found', 'no such result of yours');
+    },
+  );
+
+  /** The member takes a card's page down. */
+  app.delete(
+    '/api/member/:experienceId/space/card/:proofId',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const proofId = c.req.param('proofId');
+      if (!isProofId(proofId)) return apiError('invalid_request', 'not a proof id');
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const removed = await unpublishCard(db, companyId, c.get('userId'), proofId);
+      return removed ? c.json({ removed }) : apiError('not_found', 'no such card of yours');
+    },
+  );
+
+  /**
+   * The member's own affiliate link, read from Whop (SPEC 5.6), to offer on their card. The team,
+   * who preview the space, get none.
+   */
+  app.get(
+    '/api/member/:experienceId/space/affiliate',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const none: AffiliateLinkView = { url: null };
+      if (c.get('accessLevel') === 'admin') return c.json(none);
+      const whop = deps.whopClient(c.get('config'), { maxRetries: 0 });
+      if (!whop) return c.json(none);
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const view: AffiliateLinkView = {
+        url: await memberAffiliateLink(whop, companyId, c.get('userId')),
+      };
+      return c.json(view);
+    },
+  );
+
   /** Linking one's Telegram account, so that one's messages in the community's groups count. */
   app.get('/api/member/:experienceId/telegram', authenticate, withDb, requireMember, async (c) => {
     const db = c.get('db');
@@ -1773,12 +1864,20 @@ export function createApp(deps: AppDeps) {
     return apiError('not_found', 'no public badge for this company');
   });
 
-  // The public page of a proof (SPEC Phase 5): route reserved until proofs exist.
-  app.get('/v/:proofId', (c) => {
-    if (!/^[0-9a-f-]{36}$/.test(c.req.param('proofId'))) {
-      return apiError('invalid_request', 'not a proof id');
+  /**
+   * The public page of a proof (SPEC Phase 5, point 7): what its member agreed to show, in the
+   * community's language; a plain « not here » page otherwise.
+   */
+  app.get('/v/:proofId', withDb, async (c) => {
+    const proofId = c.req.param('proofId');
+    if (!isProofId(proofId)) return apiError('invalid_request', 'not a proof id');
+    const db = c.get('db');
+    const proof = db ? await readPublicProof(db, proofId) : null;
+    if (!proof) {
+      const language = c.req.header('accept-language') ?? '';
+      return goneProofPage(/^fr\b/i.test(language) ? 'fr' : 'en');
     }
-    return apiError('not_found', 'no such proof');
+    return proofPage(proof);
   });
 
   app.notFound(() => apiError('not_found', 'no such route'));
