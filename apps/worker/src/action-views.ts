@@ -22,7 +22,7 @@ import {
   type TemplateLocale,
   type TemplateValues,
 } from '@stayput/core';
-import { followupMessage, followupOffer, renderActionMessage } from './actions';
+import { announcementOf, followupMessage, followupOffer, renderActionMessage } from './actions';
 import { withUser, type TransactionalDb } from './db';
 
 /**
@@ -106,8 +106,8 @@ export async function readActions(
     }>(
       `select a.id, a.type, a.status, a.trigger, a.member_id, m.display_name, a.send_at,
               a.sent_at, a.created_at, a.blocked_reason, a.result,
-              case when a.trigger in ('exit_survey', 'alumni', 'milestone') then a.content end
-                as content,
+              case when a.trigger in ('exit_survey', 'alumni', 'milestone', 'member_request')
+                   then a.content end as content,
               a.error_log -> -1 ->> 'error' as last_error,
               case when $3 <> 'history' and a.message_kind <> 'none'
                    then stayput.message_values(a.company_id, a.member_id, $4::timestamptz)
@@ -142,6 +142,16 @@ export async function readActions(
                 row.message_values,
               )
             : null;
+      // An announcement: where it goes, and its words (the member's first name, as members'
+      // messages write it).
+      const announcement =
+        row.type === 'milestone_announcement' && row.content
+          ? announcementOf(
+              company.locale,
+              row.content,
+              (row.display_name ?? '').split(' ')[0] || null,
+            )
+          : null;
       const step = row.type === 'alumni_followup' ? Number(row.content?.step) : 0;
       return [
         {
@@ -154,7 +164,9 @@ export async function readActions(
           sentAt: iso(row.sent_at),
           createdAt: iso(row.created_at) ?? '',
           blockedReason: isBlockReason(row.blocked_reason) ? row.blocked_reason : null,
-          message: preview ?? storedMessage(row.result) ?? null,
+          message: announcement
+            ? { title: announcement.channel, body: announcement.text }
+            : (preview ?? storedMessage(row.result) ?? null),
           note:
             row.status === 'failed'
               ? row.last_error

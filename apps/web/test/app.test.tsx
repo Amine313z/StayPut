@@ -2,9 +2,11 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import type {
   AccountsView,
   AlumniView,
+  AnnouncementsView,
   GoalProposalsView,
   MemberSpaceView,
   ResultAnswer,
+  ShareAnswer,
   PlatformActivityView,
   ActionRow,
   ActionSettingsView,
@@ -1309,6 +1311,15 @@ describe('analyses', () => {
   });
 });
 
+const NO_ANNOUNCEMENTS: AnnouncementsView = {
+  destination: null,
+  choices: [
+    { platform: 'discord', id: '920000000000000101', name: '#general', place: 'Le Club' },
+    { platform: 'telegram', id: '-100900', name: 'Le Club (groupe)', place: 'Telegram' },
+  ],
+  whopUnavailable: true,
+};
+
 const OTHER_GOALS: GoalProposalsView = {
   niche: 'other',
   custom: null,
@@ -1355,6 +1366,7 @@ describe('risk settings', () => {
       '/api/creator/biz_A1/earned-days': [
         { status: 200, body: { enabled: false, at50: 3, at100: 7 } },
       ],
+      '/api/creator/biz_A1/announcements': [{ status: 200, body: NO_ANNOUNCEMENTS }],
       ...answers,
     });
   const share = (name: string) =>
@@ -1442,6 +1454,34 @@ describe('risk settings', () => {
       enabled: true,
       at50: 5,
       at100: 7,
+    });
+  });
+
+  it('picks where the milestones are announced, among the places StayPut can post in', async () => {
+    settings({
+      'PUT /api/creator/biz_A1/announcements': [
+        {
+          status: 200,
+          body: {
+            ...NO_ANNOUNCEMENTS,
+            destination: NO_ANNOUNCEMENTS.choices[0]!,
+          } satisfies AnnouncementsView,
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    const where = await screen.findByRole<HTMLSelectElement>('combobox', { name: 'Where' });
+    expect([...where.options].map((o) => o.textContent)).toEqual([
+      'Nowhere (off)',
+      '#general · Le Club',
+      'Le Club (groupe)',
+    ]);
+    expect(screen.getByText(/Whop’s chats do not show/)).toBeTruthy();
+    fireEvent.change(where, { target: { value: 'discord:920000000000000101' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save where' }));
+    expect(await screen.findByText('Saved', { selector: 'span' })).toBeTruthy();
+    expect(bodies.get('PUT /api/creator/biz_A1/announcements')).toEqual({
+      destination: { platform: 'discord', id: '920000000000000101' },
     });
   });
 
@@ -1947,6 +1987,7 @@ describe('member space', () => {
     proposals: PROPOSALS,
     fresh: [],
     rewards: { offered: null, received: [] },
+    announce: null,
     ...over,
   });
   const open = (answers: Record<string, Answer[]>, locale: Locale = 'en') => {
@@ -2291,6 +2332,50 @@ describe('member space', () => {
     expect(await screen.findByText('A gift: 3 free days added to your access!')).toBeTruthy();
     expect(screen.getByText('7 free days at 100%')).toBeTruthy();
     expect(screen.getByText(/^3 free days received on .+ \(50% reached\)$/)).toBeTruthy();
+  });
+
+  it('offers to share a milestone, with the exact words, and says what came of it', async () => {
+    const announce = { locale: 'fr' as const, firstName: 'Lina', place: '#wins' };
+    open({
+      '/api/member/exp_E1/space?lang=en': [
+        {
+          status: 200,
+          body: space({ goal: { ...WEIGHT, current: 90.5, progress: 21 }, announce }),
+        },
+      ],
+      'POST /api/member/exp_E1/space/result?lang=en': [
+        {
+          status: 200,
+          body: {
+            milestones: [25],
+            badges: [],
+            achieved: false,
+            proof: null,
+            earnedDays: 0,
+            space: space({ goal: { ...WEIGHT, current: 90.25, progress: 25 }, announce }),
+          } satisfies ResultAnswer,
+        },
+      ],
+      'POST /api/member/exp_E1/space/share': [
+        { status: 200, body: { status: 'sent' } satisfies ShareAnswer },
+      ],
+    });
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Where are you now?' }), {
+      target: { value: '90.25' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Record' }));
+    expect(await screen.findByText('Share it with the community?')).toBeTruthy();
+    // The community's words, French here, whatever the member's language (the matcher reads
+    // the no-break space as a space).
+    expect(
+      screen.getByText('🎉 Lina a atteint 25 % de son objectif : « Reach my target weight » !'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Share it' }));
+    expect(await screen.findByText('Shared in #wins!')).toBeTruthy();
+    expect(bodies.get('POST /api/member/exp_E1/space/share')).toEqual({
+      goalId: WEIGHT.id,
+      percent: 25,
+    });
   });
 
   it('tells a member not read yet that their space comes', async () => {

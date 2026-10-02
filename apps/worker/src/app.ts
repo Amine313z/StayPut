@@ -9,6 +9,7 @@ import {
   isExitReason,
   isNiche,
   normalizeWeights,
+  parseAnnounceTarget,
   parseGoalInput,
   parseGoalProposals,
   parseResultEntry,
@@ -20,8 +21,10 @@ import {
   type AlumniView,
   type MemberRetentionView,
   type MemberSession,
+  type AnnouncementsView,
   type ResultAnswer,
   type RiskSettingsView,
+  type ShareAnswer,
   type SignInMethod,
   type SyncRun,
   type TimezoneAnswer,
@@ -78,17 +81,22 @@ import { REQUEST_RISK_BATCH, refreshDetection } from './risk';
 import { LATEST_MIGRATION } from './schema-version';
 import {
   parseEarnedDays,
+  parseShareRequest,
   planEarnedDays,
+  readAnnounceTo,
   readEarnedDays,
   readGoalProposals,
   readMemberSpace,
   recordOpen,
   recordResult,
+  saveAnnounceTo,
   saveEarnedDays,
   saveGoalProposals,
   setGoal,
+  shareMilestone,
   spaceLocale,
 } from './space';
+import { announceChoices } from './announce';
 import {
   LOGIN_COOKIE,
   LOGIN_TTL_SECONDS,
@@ -765,6 +773,66 @@ export function createApp(deps: AppDeps) {
       await saveEarnedDays(db, c.get('companyId'), settings);
       const saved = await readEarnedDays(db, c.get('userId'), c.get('companyId'));
       return saved ? c.json(saved) : apiError('not_found', 'no settings for this company');
+    },
+  );
+
+  /**
+   * Where the members' milestones are announced (SPEC Phase 5, point 4), and where they can be:
+   * the places StayPut can post in now.
+   */
+  async function announcements(
+    c: Context<AppEnv>,
+    db: ClosableDb,
+  ): Promise<AnnouncementsView | null> {
+    const destination = await readAnnounceTo(db, c.get('userId'), c.get('companyId'));
+    if (destination === undefined) return null;
+    const config = c.get('config');
+    const { choices, whopUnavailable } = await announceChoices(
+      db,
+      c.get('userId'),
+      c.get('companyId'),
+      { whop: deps.whopClient(config, { maxRetries: 0 }), discord: deps.discord(config) },
+    );
+    return { destination, choices, whopUnavailable };
+  }
+
+  app.get(
+    '/api/creator/:companyId/announcements',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const view = await announcements(c, db);
+      return view ? c.json(view) : apiError('not_found', 'no settings for this company');
+    },
+  );
+
+  /** The creator picks where, among the places StayPut can post in, or turns them off (null). */
+  app.put(
+    '/api/creator/:companyId/announcements',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ destination?: unknown }>().catch(() => null);
+      const target = body?.destination === null ? null : parseAnnounceTarget(body?.destination);
+      if (body?.destination !== null && !target) {
+        return apiError('invalid_request', 'expected { destination: { platform, id } or null }');
+      }
+      const view = await announcements(c, db);
+      if (!view) return apiError('not_found', 'no settings for this company');
+      const chosen = target
+        ? view.choices.find((d) => d.platform === target.platform && d.id === target.id)
+        : null;
+      if (target && !chosen) {
+        return apiError('invalid_request', 'StayPut cannot post there');
+      }
+      await saveAnnounceTo(db, c.get('companyId'), chosen ?? null);
+      return c.json({ ...view, destination: chosen ?? null } satisfies AnnouncementsView);
     },
   );
 
@@ -1606,6 +1674,54 @@ export function createApp(deps: AppDeps) {
         }),
       };
       return c.json(answer);
+    },
+  );
+
+  /**
+   * The member asks for their milestone to be announced in the community's chat (SPEC Phase 5,
+   * point 4): an action through the guardrails; in automatic mode it is posted now.
+   */
+  app.post(
+    '/api/member/:experienceId/space/share',
+    authenticate,
+    withDb,
+    requireMember,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      if (c.get('accessLevel') === 'admin') {
+        return apiError('forbidden', 'the team previews the member space, nothing is recorded');
+      }
+      const share = parseShareRequest(await c.req.json<unknown>().catch(() => null));
+      if (!share) return apiError('invalid_request', 'expected { goalId, percent }');
+      const companyId = await memberCompany(c);
+      if (companyId instanceof Response) return companyId;
+      const now = deps.now();
+      const shared = await shareMilestone(db, companyId, c.get('userId'), share, now);
+      if (!shared) return apiError('not_found', 'nothing to share there');
+      if (shared === 'duplicate') return c.json({ status: 'duplicate' } satisfies ShareAnswer);
+      await prepareActions(db, companyId, now);
+      const [row] = await db.query<{ status: string }>(
+        'select status from stayput.actions where id = $1',
+        [shared.id],
+      );
+      let outcome: string | null = row?.status ?? null;
+      if (outcome === 'scheduled') {
+        const config = c.get('config');
+        outcome = await executeAction(db, deps.whopClient(config), shared.id, now, {
+          discord: deps.discord(config),
+          telegram: deps.telegram(config),
+        });
+      }
+      const status: ShareAnswer['status'] =
+        outcome === 'sent' || outcome === 'simulated'
+          ? outcome
+          : outcome === 'blocked_by_guardrail' || outcome === 'cancelled'
+            ? 'blocked'
+            : outcome === 'failed' || outcome === 'retried'
+              ? 'failed'
+              : 'waiting';
+      return c.json({ status } satisfies ShareAnswer);
     },
   );
 

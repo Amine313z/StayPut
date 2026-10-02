@@ -2,9 +2,11 @@ import {
   DEFAULT_TEMPLATES,
   MESSAGE_KINDS,
   PROMO_VALID_DAYS,
+  announcementText,
   checkGuardrails,
   goldenHour,
   isActionType,
+  isAnnouncePlatform,
   nextLocalHour,
   outOfQuietHours,
   promoCode,
@@ -22,6 +24,14 @@ import {
 } from '@stayput/core';
 import { WhopApiError, type WhopClient } from '@stayput/whop';
 import type { Db } from './db';
+import { DiscordApiError, type DiscordClient } from './discord';
+import { TelegramApiError, type TelegramClient } from './telegram';
+
+/** The chats StayPut posts in for a creator (announcements): its bots, when set up. */
+export interface Platforms {
+  discord?: DiscordClient | null;
+  telegram?: TelegramClient | null;
+}
 
 /**
  * The actions of SPEC Phase 4, as the Worker runs them: plan them from the company's state
@@ -280,6 +290,7 @@ export async function runAction(
   action: DueAction,
   whop: WhopClient | null,
   now: number,
+  platforms: Platforms = {},
 ): Promise<Outcome> {
   if (action.globalKillSwitch)
     return { status: 'blocked_by_guardrail', reason: 'global_kill_switch' };
@@ -320,6 +331,7 @@ export async function runAction(
 
   if (OFFERS.has(type)) return runOffer(action, type as OfferType, whop);
   if (type === 'alumni_followup') return runAlumniFollowup(action, whop, now);
+  if (type === 'milestone_announcement') return runAnnouncement(action, whop, platforms);
   if (MESSAGE_KINDS[type] === 'none') {
     return { status: 'failed', error: `${type} is not run by StayPut`, retry: false };
   }
@@ -348,6 +360,60 @@ export async function runAction(
   ).then((outcome) =>
     outcome.status === 'sent' ? { status: 'sent', result: { message } } : outcome,
   );
+}
+
+/** An announcement's words, from its action: the member's first name, the goal, the milestone. */
+export function announcementOf(
+  locale: string,
+  content: Record<string, unknown>,
+  firstName: unknown,
+): { text: string; channel: string } | null {
+  const goal = content.goal_title;
+  const percent = Number(content.percent);
+  const channel = content.channel ?? content.channel_id;
+  if (typeof goal !== 'string' || !(percent > 0) || typeof channel !== 'string') return null;
+  const text = announcementText(locale === 'fr' ? 'fr' : 'en', {
+    firstName: typeof firstName === 'string' && firstName ? firstName : null,
+    goal,
+    percent,
+  });
+  return { text, channel };
+}
+
+/**
+ * A milestone the member asked to share (SPEC Phase 5, point 4), posted where the creator chose:
+ * a Whop chat channel, a Discord channel (mentioning nobody), a Telegram group.
+ */
+async function runAnnouncement(
+  action: DueAction,
+  whop: WhopClient | null,
+  platforms: Platforms,
+): Promise<Outcome> {
+  const platform = action.content.platform;
+  const channelId = action.content.channel_id;
+  const words = announcementOf(action.locale, action.content, action.values.first_name);
+  if (!isAnnouncePlatform(platform) || typeof channelId !== 'string' || !words) {
+    return { status: 'failed', error: 'not an announcement', retry: false };
+  }
+  const result = { text: words.text, platform, channel: words.channel };
+  if (action.dryRun) return { status: 'simulated', result };
+  let post: (() => Promise<unknown>) | null = null;
+  if (platform === 'whop' && whop) {
+    post = () =>
+      whop.request('POST', '/messages', {
+        body: { channel_id: channelId, content: words.text },
+        idempotencyKey: `stayput-action-${action.id}`,
+      });
+  } else if (platform === 'discord' && platforms.discord) {
+    const discord = platforms.discord;
+    post = () => discord.sendMessage(channelId, words.text, action.id.replace(/-/g, ''));
+  } else if (platform === 'telegram' && platforms.telegram) {
+    const telegram = platforms.telegram;
+    post = () => telegram.sendMessage(channelId, words.text);
+  }
+  if (!post) return { status: 'failed', error: `${platform} is not set up`, retry: false };
+  const outcome = await callWhop(action, post);
+  return outcome.status === 'sent' ? { status: 'sent', result } : outcome;
 }
 
 const OFFERS: ReadonlySet<ActionType> = new Set([
@@ -576,6 +642,15 @@ async function callWhop(action: DueAction, call: () => Promise<unknown>): Promis
         retry: transient && action.attempts + 1 < MAX_ATTEMPTS,
       };
     }
+    // Discord's and Telegram's errors (an announcement) carry their HTTP status the same way.
+    if (error instanceof DiscordApiError || error instanceof TelegramApiError) {
+      const transient = error.status === 0 || error.status === 429 || error.status >= 500;
+      return {
+        status: 'failed',
+        error: error.message,
+        retry: transient && action.attempts + 1 < MAX_ATTEMPTS,
+      };
+    }
     return {
       status: 'failed',
       error: error instanceof Error ? error.message : 'unknown error',
@@ -593,13 +668,14 @@ export async function executeAction(
   whop: WhopClient | null,
   actionId: string,
   now: Date,
+  platforms: Platforms = {},
 ): Promise<string | null> {
   const [row] = await db.query<{ action: DueAction | null }>(
     'select stayput.due_action($1::uuid, $2::timestamptz) as action',
     [actionId, now.toISOString()],
   );
   if (!row?.action) return null;
-  return finish(db, row.action, await runAction(row.action, whop, now.getTime()), now);
+  return finish(db, row.action, await runAction(row.action, whop, now.getTime(), platforms), now);
 }
 
 /** Keeps what came of an action: its result, a retry an hour later, or its postponement. */
@@ -637,6 +713,7 @@ export async function executeDueActions(
   whop: WhopClient | null,
   now: Date,
   limit = EXECUTE_BATCH,
+  platforms: Platforms = {},
 ): Promise<Record<string, number>> {
   const at = now.toISOString();
   const [row] = await db.query<{ actions: DueAction[] | null }>(
@@ -645,7 +722,12 @@ export async function executeDueActions(
   );
   const counts: Record<string, number> = {};
   for (const action of row?.actions ?? []) {
-    const key = await finish(db, action, await runAction(action, whop, now.getTime()), now);
+    const key = await finish(
+      db,
+      action,
+      await runAction(action, whop, now.getTime(), platforms),
+      now,
+    );
     counts[key] = (counts[key] ?? 0) + 1;
   }
   return counts;

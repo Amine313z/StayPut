@@ -1,6 +1,7 @@
 import type { WhopClient } from '@stayput/whop';
 import type { ClosableDb } from './db';
 import type { DiscordClient } from './discord';
+import type { TelegramClient } from './telegram';
 import type { Config } from './env';
 import { refreshStats, replayWebhooks, runActions, scoreMembers, syncWithWhop } from './jobs';
 
@@ -17,6 +18,8 @@ export interface JobContext {
   syncWhop: WhopClient | null;
   /** Discord's API with StayPut's bot, when the Discord module is set up. */
   discord?: DiscordClient | null;
+  /** Telegram's Bot API with StayPut's bot, when the Telegram module is set up. */
+  telegram?: TelegramClient | null;
   /** The time the run was scheduled for: jobs never read the clock themselves. */
   now: Date;
 }

@@ -9,6 +9,8 @@ import {
   type DueAction,
   type ScheduleContext,
 } from '../src/actions';
+import { DiscordApiError, type DiscordClient } from '../src/discord';
+import type { TelegramClient } from '../src/telegram';
 import { createTestDb, type TestDb } from './helpers/db';
 
 // 1 October 2026, 10:00 in Paris.
@@ -850,5 +852,132 @@ describe('the company time zone', () => {
     expect(await zone(c, 'Mars/Olympus', false)).toBeNull();
     expect((await state(c))?.timezone).toBe('Europe/Paris');
     await expect(zone('biz_Nobody', 'Europe/Paris', false)).rejects.toThrow(/unknown company/);
+  });
+});
+
+describe('the announcement of a milestone (SPEC Phase 5, point 4)', () => {
+  const announcement = (over: Partial<DueAction> = {}): DueAction => ({
+    id: '7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6',
+    companyId: 'biz_X',
+    createdAt: '2026-10-01T08:00:00.000Z',
+    type: 'milestone_announcement',
+    attempts: 0,
+    content: {
+      platform: 'discord',
+      channel_id: '920000000000000002',
+      channel: '#wins',
+      goal_title: 'Signer 10 clients',
+      percent: 50,
+    },
+    globalKillSwitch: false,
+    killSwitch: false,
+    dryRun: false,
+    locale: 'fr',
+    timezone: 'Europe/Paris',
+    quietHoursStart: 22,
+    quietHoursEnd: 8,
+    experienceId: 'exp_X',
+    templates: {},
+    member: { userId: 'user_X', doNotContact: false, joined: true },
+    payment: null,
+    membership: null,
+    values: { first_name: 'Lina' },
+    ...over,
+  });
+  const text = '🎉 Lina a atteint 50 % de son objectif : « Signer 10 clients » !';
+  // At 23:00 in Paris: an announcement is no message to the member, quiet hours do not hold it.
+  const at = Date.parse('2026-10-01T21:00:00Z');
+
+  it('posts on Discord, mentioning nobody, at any hour', async () => {
+    const posted: [string, string, string][] = [];
+    const discord = {
+      sendMessage: (channel: string, content: string, nonce: string) => {
+        posted.push([channel, content, nonce]);
+        return Promise.resolve();
+      },
+    } as unknown as DiscordClient;
+    expect(await runAction(announcement(), null, at, { discord })).toEqual({
+      status: 'sent',
+      result: { text, platform: 'discord', channel: '#wins' },
+    });
+    expect(posted).toEqual([['920000000000000002', text, '7f3c2a109b4e4c1d8e2fa1b2c3d4e5f6']]);
+  });
+
+  it('posts in a Telegram group, or a Whop chat with its idempotency key', async () => {
+    const sent: [string, string][] = [];
+    const telegram = {
+      sendMessage: (chat: string, content: string) => {
+        sent.push([chat, content]);
+        return Promise.resolve();
+      },
+    } as unknown as TelegramClient;
+    const content = { ...announcement().content, platform: 'telegram', channel_id: '-1009' };
+    expect(await runAction(announcement({ content }), null, at, { telegram })).toMatchObject({
+      status: 'sent',
+    });
+    expect(sent).toEqual([['-1009', text]]);
+
+    const calls: { path: string; body: unknown; key?: string }[] = [];
+    const whop = {
+      request: (
+        _method: string,
+        path: string,
+        options: { body: unknown; idempotencyKey: string },
+      ) => {
+        calls.push({ path, body: options.body, key: options.idempotencyKey });
+        return Promise.resolve({});
+      },
+    } as unknown as WhopClient;
+    const chat = { ...announcement().content, platform: 'whop', channel_id: 'chat_Wins1' };
+    await runAction(announcement({ content: chat, locale: 'en' }), whop, at);
+    expect(calls).toEqual([
+      {
+        path: '/messages',
+        body: {
+          channel_id: 'chat_Wins1',
+          content: '🎉 Lina reached 50% of their goal: “Signer 10 clients”!',
+        },
+        key: 'stayput-action-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6',
+      },
+    ]);
+  });
+
+  it('is simulated in test mode, stopped like any action, and says what is missing', async () => {
+    expect(await runAction(announcement({ dryRun: true }), null, at)).toEqual({
+      status: 'simulated',
+      result: { text, platform: 'discord', channel: '#wins' },
+    });
+    expect(await runAction(announcement({ killSwitch: true }), null, at)).toEqual({
+      status: 'blocked_by_guardrail',
+      reason: 'kill_switch',
+    });
+    expect(
+      await runAction(
+        announcement({ member: { userId: 'user_X', doNotContact: true, joined: true } }),
+        null,
+        at,
+      ),
+    ).toEqual({ status: 'blocked_by_guardrail', reason: 'do_not_contact' });
+    // No Discord bot set up: nothing to post with, final.
+    expect(await runAction(announcement(), null, at)).toEqual({
+      status: 'failed',
+      error: 'discord is not set up',
+      retry: false,
+    });
+  });
+
+  it('tries Discord again after an outage, never after a refusal', async () => {
+    const failing = (status: number) =>
+      ({
+        sendMessage: () => Promise.reject(new DiscordApiError(status, `POST: ${status}`)),
+      }) as unknown as DiscordClient;
+    expect(await runAction(announcement(), null, at, { discord: failing(503) })).toMatchObject({
+      status: 'failed',
+      retry: true,
+    });
+    expect(await runAction(announcement(), null, at, { discord: failing(403) })).toMatchObject({
+      status: 'failed',
+      retry: false,
+    });
   });
 });

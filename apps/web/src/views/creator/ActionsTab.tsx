@@ -23,6 +23,7 @@ import {
   Inbox,
   LogOut,
   Mail,
+  Megaphone,
   MessageCircleHeart,
   OctagonPause,
   OctagonX,
@@ -78,6 +79,7 @@ const TYPES: Readonly<Record<ActionType, { label: MessageKey; Icon: LucideIcon }
   high_risk_message: { label: 'actions.type.high_risk_message', Icon: MessageCircleHeart },
   welcome_message: { label: 'actions.type.welcome_message', Icon: Sparkles },
   alumni_followup: { label: 'actions.type.alumni_followup', Icon: Mail },
+  milestone_announcement: { label: 'actions.type.milestone_announcement', Icon: Megaphone },
 };
 
 const TRIGGERS: Readonly<Record<string, MessageKey>> = {
@@ -87,6 +89,7 @@ const TRIGGERS: Readonly<Record<string, MessageKey>> = {
   score_high: 'actions.trigger.score_high',
   activation_radar: 'actions.trigger.activation_radar',
   exit_survey: 'actions.trigger.exit_survey',
+  member_request: 'actions.trigger.member_request',
 };
 
 const STATUSES: Readonly<Record<ActionStatus, { label: MessageKey; tone: Tone }>> = {

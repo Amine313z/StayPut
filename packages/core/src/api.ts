@@ -1,6 +1,7 @@
 import type { AccessLevel } from './access';
 import type { ActionType, BlockReason } from './actions';
 import type { CohortHorizon } from './analyses';
+import type { AnnounceTarget } from './announcements';
 import type { BadgeCode, GoalCategory, GoalEntry, GoalProposal, Milestone } from './goals';
 import type { ExitOffer, ExitReason, OfferSettings } from './offers';
 import type { Niche, RiskLevel, RiskReason, RiskWeights } from './risk';
@@ -525,6 +526,49 @@ export interface MemberSpaceView {
     offered: { at50: number; at100: number } | null;
     received: { percent: Milestone; days: number; at: string }[];
   };
+  /**
+   * Sharing a milestone in the community's chat (SPEC Phase 5, point 4): where it goes and in
+   * which words (the community's language, the member's first name); null when the creator
+   * chose nowhere.
+   */
+  announce: { locale: TemplateLocale; firstName: string | null; place: string } | null;
+}
+
+/** POST …/space/share: the member asks for their milestone to be announced. */
+export interface ShareRequest {
+  goalId: string;
+  percent: Milestone;
+}
+
+/**
+ * What came of it: `sent`, posted; `waiting`, the creator approves it first (manual mode);
+ * `simulated`, test mode; `blocked`, a guardrail stopped it; `failed`, the chat refused it;
+ * `duplicate`, this milestone was shared already.
+ */
+export interface ShareAnswer {
+  status: 'sent' | 'waiting' | 'simulated' | 'blocked' | 'failed' | 'duplicate';
+}
+
+/** A place an announcement can go, as the creator picks it. */
+export interface AnnounceDestination extends AnnounceTarget {
+  /** The channel's or the group's name. */
+  name: string | null;
+  /** Where it is: the Discord server, the Telegram group's kind, Whop. */
+  place: string | null;
+}
+
+/** GET and PUT /api/creator/:companyId/announcements */
+export interface AnnouncementsView {
+  destination: AnnounceDestination | null;
+  /** Where StayPut can post now: Discord channels it may write in, Telegram groups, Whop chats. */
+  choices: AnnounceDestination[];
+  /** Whop's chats could not be listed (most often, a permission missing). */
+  whopUnavailable: boolean;
+}
+
+/** PUT /api/creator/:companyId/announcements: null turns the announcements off. */
+export interface AnnouncementsUpdate {
+  destination: AnnounceTarget | null;
 }
 
 export interface MemberGoal {

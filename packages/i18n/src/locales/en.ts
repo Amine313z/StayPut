@@ -377,6 +377,16 @@ export const en = {
   'space.rewards.received.other': '{count} free days received on {date} ({percent} reached)',
   'space.celebrate.days.one': 'A gift: {count} free day added to your access!',
   'space.celebrate.days.other': 'A gift: {count} free days added to your access!',
+  'space.share.title': 'Share it with the community?',
+  'space.share.where':
+    'Posted in {place}, as it reads below. Only your first name, your goal and this milestone: never your numbers.',
+  'space.share.action': 'Share it',
+  'space.share.sent': 'Shared in {place}!',
+  'space.share.waiting': 'Your announcement goes out as soon as the team approves it.',
+  'space.share.simulated': 'The community is in test mode: nothing is posted for now.',
+  'space.share.trial': 'Trial: nothing is posted.',
+  'space.share.failed': 'The announcement could not go out. The team sees why.',
+  'space.share.duplicate': 'This milestone is shared already.',
   'space.unknown.title': 'Your space is getting ready',
   'space.unknown.body':
     'StayPut is reading your membership from Whop. Come back in a few minutes to set your goal.',
@@ -577,6 +587,22 @@ export const en = {
   'lessons.empty': 'No lesson completed over the last 90 days.',
   'lessons.showAll': 'Show all ({count})',
 
+  'announce.title': 'Announcements of the milestones',
+  'announce.body':
+    'When a member reaches a milestone, StayPut offers them to share it in your community’s chat. They see the exact words first; only their first name, their goal and the milestone are posted, never their numbers.',
+  'announce.where': 'Where',
+  'announce.none': 'Nowhere (off)',
+  'announce.group.whop': 'Whop chats',
+  'announce.group.discord': 'Discord',
+  'announce.group.telegram': 'Telegram',
+  'announce.whopUnavailable':
+    'Whop’s chats do not show: StayPut needs the permission to read them (chat:read). To post in one, it also needs chat:message:create.',
+  'announce.whopPermission':
+    'To post in a Whop chat, StayPut needs the permission chat:message:create.',
+  'announce.empty':
+    'No place yet: connect Discord or Telegram in Sources, or give StayPut Whop’s chat permissions.',
+  'announce.save': 'Save where',
+  'announce.saved': 'Saved',
   'earnedDays.title': 'Earned days',
   'earnedDays.body':
     'Reward the milestones your members reach with free days on their membership: the first time each member reaches 50% and 100% of a goal.',
@@ -708,6 +734,7 @@ export const en = {
   'actions.type.high_risk_message': 'Golden-hour message',
   'actions.type.welcome_message': 'Welcome message',
   'actions.type.alumni_followup': 'Alumni follow-up',
+  'actions.type.milestone_announcement': 'Milestone announced',
   'actions.trigger.payment_requires_action': 'A payment waits for confirmation',
   'actions.trigger.payment_failed': 'A payment failed',
   'actions.trigger.cancel_at_period_end': 'Cancellation scheduled',
@@ -715,6 +742,7 @@ export const en = {
   'actions.trigger.activation_radar': 'New member who has not started',
   'actions.trigger.exit_survey': 'Answer to the departure survey',
   'actions.trigger.milestone': '{percent} of a goal reached',
+  'actions.trigger.member_request': 'at the member’s request',
   'actions.trigger.alumni': '{days} days after leaving, in the Alumni',
   'actions.status.proposed': 'To approve',
   'actions.status.approved': 'Approved',

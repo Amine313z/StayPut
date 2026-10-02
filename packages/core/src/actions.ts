@@ -28,7 +28,9 @@ export type ActionType =
   /** The activation radar: a new member who has not started. */
   | 'welcome_message'
   /** A former member in the Alumni offer, 7, 30 and 60 days after leaving. */
-  | 'alumni_followup';
+  | 'alumni_followup'
+  /** A member's milestone, announced in the community's chat at their request (SPEC Phase 5). */
+  | 'milestone_announcement';
 
 export const ACTION_TYPES: readonly ActionType[] = [
   'payment_retry',
@@ -43,6 +45,7 @@ export const ACTION_TYPES: readonly ActionType[] = [
   'high_risk_message',
   'welcome_message',
   'alumni_followup',
+  'milestone_announcement',
 ];
 
 export function isActionType(value: unknown): value is ActionType {
@@ -72,6 +75,8 @@ export const MESSAGE_KINDS: Readonly<Record<ActionType, MessageKind>> = {
   high_risk_message: 'relance',
   welcome_message: 'relance',
   alumni_followup: 'relance',
+  // A public message the member asked for, in the community's chat: not one to them.
+  milestone_announcement: 'none',
 };
 
 /** The creator's guardrails (company_settings), and the company's time zone. */

@@ -1,6 +1,7 @@
 import {
   BADGE_CODES,
   MILESTONES,
+  parseAnnounceTarget,
   isBadgeCode,
   isGoalCategory,
   isGoalEntry,
@@ -8,6 +9,7 @@ import {
   nicheGoalProposals,
   parseGoalProposals,
   proofJustifies,
+  type AnnounceDestination,
   type BadgeCode,
   type EarnedBadge,
   type EarnedDaysSettings,
@@ -20,6 +22,7 @@ import {
   type Milestone,
   type ResultAnswer,
   type ResultEntry,
+  type ShareRequest,
   type TemplateLocale,
 } from '@stayput/core';
 import { withUser, type Db, type TransactionalDb } from './db';
@@ -60,6 +63,8 @@ export function spaceLocale(value: unknown): TemplateLocale {
 }
 
 const iso = (value: string) => new Date(value).toISOString();
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 const isMilestone = (value: number): value is Milestone =>
   (MILESTONES as readonly number[]).includes(value);
@@ -109,6 +114,7 @@ export async function readMemberSpace(
   const space = row?.space;
   const proposals = proposalsOf(space?.niche ?? null, space?.proposals ?? null, options.locale);
   const rewards = await readRewards(db, companyId, userId);
+  const announce = await readAnnounce(db, companyId, userId);
   // The team previews: what a member chooses from, nothing of their own.
   if (!space || options.preview) {
     return {
@@ -121,6 +127,7 @@ export async function readMemberSpace(
       fresh: [],
       // The team sees what members are offered, never anyone's days.
       rewards: { offered: rewards.offered, received: [] },
+      announce,
     };
   }
   return {
@@ -146,7 +153,88 @@ export async function readMemberSpace(
     proposals,
     fresh: [...(options.fresh ?? [])],
     rewards,
+    announce,
   };
+}
+
+/** Where a shared milestone goes and in which words; null when the creator chose nowhere. */
+async function readAnnounce(
+  db: Db,
+  companyId: string,
+  userId: string,
+): Promise<MemberSpaceView['announce']> {
+  const [row] = await db.query<{
+    announce: { locale: string; firstName: string | null; place: string } | null;
+  }>('select stayput.member_announce($1, $2) as announce', [companyId, userId]);
+  const announce = row?.announce;
+  if (!announce) return null;
+  return {
+    locale: announce.locale === 'fr' ? 'fr' : 'en',
+    firstName: announce.firstName,
+    place: announce.place,
+  };
+}
+
+/**
+ * The member asks for their milestone to be announced (migration 0023): the action's id, or
+ * `duplicate` when it was shared already, or null when it cannot be (nowhere to announce, not
+ * their goal, a milestone not reached).
+ */
+export async function shareMilestone(
+  db: Db,
+  companyId: string,
+  userId: string,
+  share: ShareRequest,
+  now: Date,
+): Promise<{ id: string } | 'duplicate' | null> {
+  const [row] = await db.query<{ shared: { id?: string; duplicate?: boolean } | null }>(
+    'select stayput.share_milestone($1, $2, $3::uuid, $4, $5::timestamptz) as shared',
+    [companyId, userId, share.goalId, share.percent, now.toISOString()],
+  );
+  const shared = row?.shared;
+  if (!shared) return null;
+  if (shared.duplicate) return 'duplicate';
+  return typeof shared.id === 'string' ? { id: shared.id } : null;
+}
+
+/** A milestone to share, as the member sent it. */
+export function parseShareRequest(value: unknown): ShareRequest | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const item = value as Record<string, unknown>;
+  if (typeof item.goalId !== 'string' || !UUID.test(item.goalId)) return null;
+  const percent = Number(item.percent);
+  return isMilestone(percent) ? { goalId: item.goalId, percent } : null;
+}
+
+/** Where the creator chose to announce the milestones, read as the creator (under RLS). */
+export async function readAnnounceTo(
+  db: TransactionalDb,
+  userId: string,
+  companyId: string,
+): Promise<AnnounceDestination | null | undefined> {
+  const [row] = await withUser(db, userId, (tx) =>
+    tx.query<{ announce_to: Record<string, unknown> | null }>(
+      'select s.announce_to from stayput.company_settings s where s.company_id = $1',
+      [companyId],
+    ),
+  );
+  // undefined: no settings for this company at all.
+  if (!row) return undefined;
+  const target = parseAnnounceTarget(row.announce_to);
+  if (!target || !row.announce_to) return null;
+  const text = (value: unknown) => (typeof value === 'string' ? value : null);
+  return { ...target, name: text(row.announce_to.name), place: text(row.announce_to.place) };
+}
+
+export async function saveAnnounceTo(
+  db: Db,
+  companyId: string,
+  destination: AnnounceDestination | null,
+): Promise<void> {
+  await db.query('select stayput.save_announce_to($1, $2::text::jsonb)', [
+    companyId,
+    destination ? JSON.stringify(destination) : null,
+  ]);
 }
 
 /** The earned days the creator offers (null: none), and those the member received. */

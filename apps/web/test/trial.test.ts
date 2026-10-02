@@ -17,6 +17,7 @@ const preview: MemberSpaceView = {
   proposals: [],
   fresh: [],
   rewards: { offered: { at50: 3, at100: 7 }, received: [] },
+  announce: null,
 };
 
 describe('the trial', () => {

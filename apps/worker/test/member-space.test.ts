@@ -7,9 +7,11 @@ import {
   readMemberSpace,
   recordOpen,
   recordResult,
+  saveAnnounceTo,
   saveEarnedDays,
   saveGoalProposals,
   setGoal,
+  shareMilestone,
 } from '../src/space';
 import { createTestDb, type TestDb } from './helpers/db';
 
@@ -411,6 +413,68 @@ describe('the earned days (migration 0022)', () => {
       member,
     ]);
     expect((await space(c, user)).rewards.received).toEqual([]);
+  });
+});
+
+describe('sharing a milestone in the community’s chat (migration 0023)', () => {
+  const wins = {
+    platform: 'discord' as const,
+    id: '920000000000000002',
+    name: '#wins',
+    place: 'Le Club',
+  };
+
+  it('needs a place the creator chose, and a milestone of the member’s own goal', async () => {
+    const { c, user, member } = await community();
+    await setGoal(t.db, c, user, CLIENTS, NOW);
+    const goalId = (await space(c, user)).goal!.id;
+    await recordResult(t.db, c, user, { goalId, value: 5 }, at(1));
+    // Nowhere chosen: nothing to offer, nothing to share.
+    expect((await space(c, user)).announce).toBeNull();
+    expect(await shareMilestone(t.db, c, user, { goalId, percent: 50 }, at(2))).toBeNull();
+
+    await saveAnnounceTo(t.db, c, wins);
+    expect((await space(c, user)).announce).toEqual({
+      locale: 'fr',
+      firstName: 'Lina',
+      place: '#wins',
+    });
+    // 75 % is not reached yet.
+    expect(await shareMilestone(t.db, c, user, { goalId, percent: 75 }, at(2))).toBeNull();
+    const shared = await shareMilestone(t.db, c, user, { goalId, percent: 50 }, at(2));
+    expect(shared).toEqual({ id: expect.any(String) as string });
+    expect(await shareMilestone(t.db, c, user, { goalId, percent: 50 }, at(3))).toBe('duplicate');
+    const [action] = await t.db.query<{
+      type: string;
+      trigger: string;
+      status: string;
+      message_kind: string;
+      content: Record<string, unknown>;
+    }>(
+      `select type, trigger, status, message_kind, content from stayput.actions
+        where company_id = $1 and member_id = $2`,
+      [c, member],
+    );
+    expect(action).toEqual({
+      type: 'milestone_announcement',
+      trigger: 'member_request',
+      status: 'proposed',
+      message_kind: 'none',
+      content: {
+        platform: 'discord',
+        channel_id: '920000000000000002',
+        channel: '#wins',
+        goal_id: goalId,
+        goal_title: 'Signer de nouveaux clients',
+        percent: 50,
+      },
+    });
+    // Another member's goal: never.
+    const other = await community();
+    expect(await shareMilestone(t.db, c, other.user, { goalId, percent: 50 }, at(2))).toBeNull();
+    // The creator turns them off: nothing more to offer.
+    await saveAnnounceTo(t.db, c, null);
+    expect((await space(c, user)).announce).toBeNull();
   });
 });
 

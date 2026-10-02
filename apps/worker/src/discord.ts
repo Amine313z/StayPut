@@ -8,6 +8,7 @@ export const DISCORD_API_BASE_URL = 'https://discord.com/api/v10';
 
 const ADMINISTRATOR = 1n << 3n;
 const VIEW_CHANNEL = 1n << 10n;
+const SEND_MESSAGES = 1n << 11n;
 const READ_MESSAGE_HISTORY = 1n << 16n;
 
 /** All the bot asks of a server: View Channels and Read Message History. */
@@ -37,6 +38,8 @@ export interface DiscordChannel {
   category: string | null;
   /** The bot can see the channel and read its history (roles and overwrites computed). */
   readable: boolean;
+  /** The bot can post in it: where a milestone can be announced (SPEC Phase 5). */
+  writable?: boolean;
 }
 
 export interface DiscordClient {
@@ -57,6 +60,11 @@ export interface DiscordClient {
   guildChannels(guildId: string): Promise<DiscordChannel[]>;
   /** The bot leaves a server (the creator disconnected it). */
   leaveGuild(guildId: string): Promise<void>;
+  /**
+   * The bot posts a message, mentioning nobody. `nonce` makes Discord refuse a second post of
+   * the same message within minutes (a retry after a lost answer).
+   */
+  sendMessage(channelId: string, content: string, nonce: string): Promise<void>;
   /** A Discord account's display name and username (GET /users/{id}). */
   user(userId: string): Promise<{ name: string | null; username: string | null }>;
   /** The application's id and its bot's user id, read once per isolate. */
@@ -83,12 +91,17 @@ export function createDiscordClient(options: {
   const send: Fetch = options.fetch ?? ((input, init) => fetch(input, init));
   let application: Promise<{ id: string; botId: string }> | null = null;
 
-  async function call(method: string, path: string): Promise<string> {
+  async function call(method: string, path: string, body?: unknown): Promise<string> {
     let response: Response;
     try {
       response = await send(`${DISCORD_API_BASE_URL}${path}`, {
         method,
-        headers: { Authorization: `Bot ${options.botToken}`, 'User-Agent': USER_AGENT },
+        headers: {
+          Authorization: `Bot ${options.botToken}`,
+          'User-Agent': USER_AGENT,
+          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
     } catch (cause) {
       throw new DiscordApiError(0, cause instanceof Error ? cause.message : String(cause));
@@ -153,6 +166,14 @@ export function createDiscordClient(options: {
     },
     async leaveGuild(guildId) {
       await call('DELETE', `/users/@me/guilds/${snowflake(guildId)}`);
+    },
+    async sendMessage(channelId, content, nonce) {
+      await call('POST', `/channels/${snowflake(channelId)}/messages`, {
+        content,
+        allowed_mentions: { parse: [] },
+        nonce: nonce.slice(0, 25),
+        enforce_nonce: true,
+      });
     },
     async user(userId) {
       const user = await json<{ global_name?: unknown; username?: unknown }>(
@@ -229,7 +250,7 @@ export function readableChannels(input: {
   for (const role of input.botRoles) base |= rolePermissions.get(role) ?? 0n;
   const administrator = (base & ADMINISTRATOR) === ADMINISTRATOR;
 
-  const canRead = (channel: RawChannel) => {
+  const allowed = (channel: RawChannel, needed: bigint) => {
     if (administrator) return true;
     const overwrites = new Map(readOverwrites(channel).map((o) => [`${o.type}:${o.id}`, o]));
     let permissions = base;
@@ -247,7 +268,6 @@ export function readableChannels(input: {
     permissions = (permissions & ~deny) | allow;
     const own = overwrites.get(`1:${input.botId}`);
     if (own) permissions = (permissions & ~own.deny) | own.allow;
-    const needed = VIEW_CHANNEL | READ_MESSAGE_HISTORY;
     return (permissions & needed) === needed;
   };
 
@@ -275,7 +295,8 @@ export function readableChannels(input: {
         id: c.id as string,
         name: typeof c.name === 'string' ? c.name : '',
         category: parent && typeof parent.name === 'string' ? parent.name : null,
-        readable: canRead(c),
+        readable: allowed(c, VIEW_CHANNEL | READ_MESSAGE_HISTORY),
+        writable: allowed(c, VIEW_CHANNEL | SEND_MESSAGES),
       };
     });
 }

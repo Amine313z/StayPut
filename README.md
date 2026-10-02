@@ -12,14 +12,14 @@ il a sauvé.
 
 ## État
 
-| Phase                          | Statut                                                     |
-| ------------------------------ | ---------------------------------------------------------- |
-| 0. Vérification de l'API Whop  | Validée le 30/09/2026                                      |
-| 1. Fondations                  | Validée le 01/10/2026                                      |
-| 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation  |
-| 3. Détection (score de risque) | Faite, en attente de validation                            |
-| 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les droits  |
-| 5. Espace membre               | En cours : objectifs, preuves, badges, jours mérités faits |
+| Phase                          | Statut                                                               |
+| ------------------------------ | -------------------------------------------------------------------- |
+| 0. Vérification de l'API Whop  | Validée le 30/09/2026                                                |
+| 1. Fondations                  | Validée le 01/10/2026                                                |
+| 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation            |
+| 3. Détection (score de risque) | Faite, en attente de validation                                      |
+| 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les droits            |
+| 5. Espace membre               | En cours : objectifs, preuves, badges, jours mérités, annonces faits |
 
 ## Architecture
 
@@ -227,7 +227,10 @@ badges (premier résultat, première preuve, 7 jours d'affilée, chaque jalon), 
 (Tesseract.js) et propose les nombres qu'il y voit ; seuls l'empreinte de l'image et ces nombres
 partent, jamais l'image. Si le créateur les allume (Réglages → Jours mérités), un jalon atteint
 offre des jours gratuits sur l'abonnement (3 à 50 %, 7 à 100 % par défaut), une fois par membre
-et par jalon, par les garde-fous comme toute action.
+et par jalon, par les garde-fous comme toute action. Si le créateur choisit un endroit
+(Réglages → Annonces des jalons : un chat Whop, un salon Discord, un groupe Telegram), le membre
+peut partager un jalon atteint avec la communauté, après avoir vu le texte exact (son prénom,
+son objectif et le jalon, jamais ses chiffres).
 Chaque ouverture de l'espace et chaque résultat comptent comme de l'activité dans le score. Le
 créateur choisit les objectifs proposés dans **Réglages** (ceux de sa niche par défaut) ; dans
 la vue membre, l'équipe essaie l'espace sans rien enregistrer. Détails : `DECISIONS.md`,

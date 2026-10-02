@@ -4,6 +4,7 @@ import {
   GOAL_TITLE_MAX,
   GOAL_UNIT_MAX,
   MILESTONES,
+  announcementText,
   parseLocaleNumber,
   proofJustifies,
   type BadgeCode,
@@ -18,6 +19,8 @@ import {
   type ProofInput,
   type ResultAnswer,
   type ResultEntry,
+  type ShareAnswer,
+  type ShareRequest,
 } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
 import {
@@ -34,6 +37,7 @@ import {
   LifeBuoy,
   LoaderCircle,
   Lock,
+  Megaphone,
   Mountain,
   PartyPopper,
   PenLine,
@@ -77,6 +81,7 @@ interface Celebration {
 interface SpaceBackend {
   setGoal: (goal: GoalInput, current: MemberSpaceView) => Promise<MemberSpaceView>;
   recordResult: (entry: ResultEntry, current: MemberSpaceView) => Promise<ResultAnswer>;
+  share: (request: ShareRequest) => Promise<ShareAnswer>;
 }
 
 /**
@@ -117,6 +122,7 @@ export function MemberSpace({ api }: { api: string }) {
   const backend: SpaceBackend = {
     setGoal: (goal) => postJson<MemberSpaceView>(`${api}/space/goal?lang=${locale}`, goal),
     recordResult: (entry) => postJson<ResultAnswer>(`${api}/space/result?lang=${locale}`, entry),
+    share: (request) => postJson<ShareAnswer>(`${api}/space/share`, request),
   };
   return <Space view={state.data} backend={backend} />;
 }
@@ -133,6 +139,8 @@ function TrialSpace({ preview }: { preview: MemberSpaceView }) {
       const answer = trialResult(current, entry, new Date(), used.current);
       return answer ? Promise.resolve(answer) : Promise.reject(new Error('no goal under way'));
     },
+    // The trial posts nothing.
+    share: () => Promise.resolve({ status: 'simulated' }),
   };
   return (
     <Space
@@ -228,6 +236,19 @@ function Space({
             <CelebrationNotice
               celebration={celebration}
               onClose={() => setClosed(celebrationKey)}
+              share={
+                shown.announce &&
+                goal &&
+                (celebration.achieved || celebration.milestones.length > 0)
+                  ? {
+                      announce: shown.announce,
+                      goal,
+                      percent: celebration.achieved ? 100 : celebration.milestones.at(-1)!,
+                      trial: Boolean(trial),
+                      send: backend.share,
+                    }
+                  : null
+              }
             />
           ) : null}
           {!goal || choosing ? (
@@ -1091,6 +1112,75 @@ function BadgesCard({ badges }: { badges: EarnedBadge[] }) {
   );
 }
 
+/** A milestone the member may share, and how. */
+interface ShareOffer {
+  announce: NonNullable<MemberSpaceView['announce']>;
+  goal: MemberGoal;
+  percent: Milestone;
+  /** The team's trial: nothing is posted. */
+  trial: boolean;
+  send: (request: ShareRequest) => Promise<ShareAnswer>;
+}
+
+const SHARE_OUTCOMES: Readonly<Record<ShareAnswer['status'], MessageKey>> = {
+  sent: 'space.share.sent',
+  waiting: 'space.share.waiting',
+  simulated: 'space.share.simulated',
+  blocked: 'space.share.failed',
+  failed: 'space.share.failed',
+  duplicate: 'space.share.duplicate',
+};
+
+/**
+ * Sharing a milestone in the community's chat (SPEC Phase 5, point 4): the exact words first,
+ * in the community's language, then one tap. Nothing goes without it.
+ */
+function SharePrompt({ offer }: { offer: ShareOffer }) {
+  const { t } = useI18n();
+  const [state, setState] = useState<'idle' | 'sending' | 'error' | ShareAnswer['status']>('idle');
+  const words = announcementText(offer.announce.locale, {
+    firstName: offer.announce.firstName,
+    goal: offer.goal.title,
+    percent: offer.percent,
+  });
+  if (state !== 'idle' && state !== 'sending' && state !== 'error') {
+    const key = offer.trial ? 'space.share.trial' : SHARE_OUTCOMES[state];
+    return (
+      <p className="mt-2 flex items-center gap-1.5 font-medium">
+        <Megaphone aria-hidden="true" className="size-4 shrink-0" />
+        {t(key, { place: offer.announce.place })}
+      </p>
+    );
+  }
+  return (
+    <div className="mt-3 space-y-2 rounded-lg border border-line bg-surface p-3">
+      <p className="font-medium">{t('space.share.title')}</p>
+      <blockquote className="rounded-md bg-surface-2 px-3 py-2">{words}</blockquote>
+      <p className="text-muted">{t('space.share.where', { place: offer.announce.place })}</p>
+      <Button
+        size="sm"
+        loading={state === 'sending'}
+        icon={<Megaphone aria-hidden="true" className="size-4" />}
+        onClick={() => {
+          setState('sending');
+          offer.send({ goalId: offer.goal.id, percent: offer.percent }).then(
+            (answer) => setState(answer.status),
+            () => setState('error'),
+          );
+        }}
+      >
+        {t('space.share.action')}
+      </Button>
+      {state === 'error' ? (
+        <p role="alert" className="flex items-center gap-1.5 text-danger">
+          <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
+          {t('common.failed')}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 const PROOF_OUTCOMES: Readonly<Record<NonNullable<ResultAnswer['proof']>, MessageKey>> = {
   justified: 'space.proof.justified',
   declared: 'space.proof.declared',
@@ -1101,9 +1191,12 @@ const PROOF_OUTCOMES: Readonly<Record<NonNullable<ResultAnswer['proof']>, Messag
 function CelebrationNotice({
   celebration,
   onClose,
+  share,
 }: {
   celebration: Celebration;
   onClose: () => void;
+  /** The milestone to share with the community, when the creator chose where. */
+  share: ShareOffer | null;
 }) {
   const { t, plural, percent } = useI18n();
   const highest = celebration.milestones.at(-1);
@@ -1139,6 +1232,7 @@ function CelebrationNotice({
                 {line}
               </p>
             ))}
+            {share ? <SharePrompt offer={share} /> : null}
           </div>
           <button
             type="button"

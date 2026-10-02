@@ -26,6 +26,7 @@ export default {
         whop: deps.whopClient(config),
         syncWhop: deps.whopClient(config, { maxRetries: 0 }),
         discord: deps.discord(config),
+        telegram: deps.telegram(config),
         now: new Date(controller.scheduledTime),
       });
     } finally {

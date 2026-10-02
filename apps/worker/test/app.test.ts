@@ -1,10 +1,12 @@
 import type {
   AccountsView,
   AlumniView,
+  AnnouncementsView,
   GoalProposalsView,
   MemberRetentionView,
   MemberSpaceView,
   ResultAnswer,
+  ShareAnswer,
   PlatformActivityView,
   ActionsPage,
   AccessLevel,
@@ -147,6 +149,11 @@ function fakeWhop(
     listPageRaw(path: string) {
       listed.push(path);
       return Promise.resolve(lists[path] ?? EMPTY_PAGE);
+    },
+    listPage(path: string) {
+      listed.push(path);
+      const page = JSON.parse(lists[path] ?? EMPTY_PAGE) as { data: unknown[] };
+      return Promise.resolve({ items: page.data, nextCursor: null });
     },
   } as unknown as WhopClient;
   return { client, calls, listed, writes, refusals };
@@ -761,6 +768,7 @@ describe('Discord and Telegram', () => {
         left.push(guildId);
         return Promise.resolve();
       },
+      sendMessage: () => Promise.resolve(),
       user: (userId) =>
         Promise.resolve(
           userId === '940000000000000001'
@@ -2292,5 +2300,183 @@ describe('the member space (SPEC Phase 5)', () => {
     expect(back.custom).toBeNull();
     // A member is no creator.
     expect((await request(url, lina)).status).toBe(403);
+  });
+});
+
+describe('announcing the milestones (SPEC Phase 5, point 4)', () => {
+  const json = (init: RequestInit, method: string, body: unknown) => ({
+    ...init,
+    method,
+    headers: { ...init.headers, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const MODULES: Env = {
+    ...ENV,
+    DISCORD_BOT_TOKEN: 'discord-bot-token',
+    DISCORD_CLIENT_SECRET: 'discord-secret',
+    TELEGRAM_BOT_TOKEN: '123456:telegram-token',
+  };
+
+  it('lets the creator pick where, and the member share their milestone there', async () => {
+    const [company, experience] = ['biz_Ann1', 'exp_Ann1'];
+    const posted: { channel: string; text: string }[] = [];
+    const discord = {
+      guildChannels: () =>
+        Promise.resolve([
+          {
+            id: '920000000000000101',
+            name: 'general',
+            category: null,
+            readable: true,
+            writable: true,
+          },
+          {
+            id: '920000000000000102',
+            name: 'staff',
+            category: null,
+            readable: true,
+            writable: false,
+          },
+        ]),
+      sendMessage: (channel: string, text: string) => {
+        posted.push({ channel, text });
+        return Promise.resolve();
+      },
+    } as unknown as DiscordClient;
+    const env = setup(
+      {
+        [`user_lina9:${experience}`]: 'customer',
+        [`user_boss9:${experience}`]: 'admin',
+        [`user_boss9:${company}`]: 'admin',
+      },
+      {
+        experiences: { [experience]: company },
+        discord,
+        lists: {
+          '/chat_channels': JSON.stringify({
+            data: [{ id: 'chat_Wins1', experience: { id: 'exp_Chat1', name: 'Victoires' } }],
+            page_info: { end_cursor: null, has_next_page: false },
+          }),
+        },
+      },
+    );
+    const request = (path: string, init: RequestInit = {}) => env.request(path, init, MODULES);
+    const boss = await asUser('user_boss9');
+    const lina = await asUser('user_lina9');
+    await request(`/api/creator/${company}/session`, boss);
+    await settle();
+    await t.db.query(`update stayput.companies set mode = 'auto', locale = 'fr' where id = $1`, [
+      company,
+    ]);
+    await t.db.query(
+      `insert into stayput.discord_guilds (guild_id, company_id, name, connected_at)
+       values ('910000000000000901', $1, 'Le Club', now())`,
+      [company],
+    );
+    await t.db.query(
+      `insert into stayput.telegram_chats (chat_id, company_id, title, connected_at)
+       values ('-100900', $1, 'Le Club (groupe)', now())`,
+      [company],
+    );
+    await t.db.query('select stayput.ingest_page($1, $2, null, $3::text::jsonb)', [
+      company,
+      'members',
+      JSON.stringify(
+        page([
+          member('mber_Ann1', 'user_lina9', { user: { id: 'user_lina9', name: 'Lina Martin' } }),
+        ]),
+      ),
+    ]);
+
+    const url = `/api/creator/${company}/announcements`;
+    const view = (await (await request(url, boss)).json()) as AnnouncementsView;
+    expect(view).toEqual({
+      destination: null,
+      choices: [
+        { platform: 'whop', id: 'chat_Wins1', name: 'Victoires', place: 'Whop' },
+        { platform: 'discord', id: '920000000000000101', name: '#general', place: 'Le Club' },
+        { platform: 'telegram', id: '-100900', name: 'Le Club (groupe)', place: 'Telegram' },
+      ],
+      whopUnavailable: false,
+    });
+    // Never a place StayPut cannot post in.
+    expect(
+      (
+        await request(
+          url,
+          json(boss, 'PUT', { destination: { platform: 'discord', id: '920000000000000102' } }),
+        )
+      ).status,
+    ).toBe(400);
+    const saved = (await (
+      await request(
+        url,
+        json(boss, 'PUT', { destination: { platform: 'discord', id: '920000000000000101' } }),
+      )
+    ).json()) as AnnouncementsView;
+    expect(saved.destination).toEqual({
+      platform: 'discord',
+      id: '920000000000000101',
+      name: '#general',
+      place: 'Le Club',
+    });
+
+    // The member reaches 50 %, sees where and in which words, and shares it.
+    const base = `/api/member/${experience}/space`;
+    const goal = {
+      title: 'Signer de nouveaux clients',
+      unit: 'clients',
+      category: 'clients',
+      entry: 'add',
+      start: 0,
+      target: 10,
+      targetDate: new Date(NOW.getTime() + 90 * 86_400_000).toISOString().slice(0, 10),
+    };
+    const set = (await (
+      await request(`${base}/goal`, json(lina, 'POST', goal))
+    ).json()) as MemberSpaceView;
+    expect(set.announce).toEqual({ locale: 'fr', firstName: 'Lina', place: '#general' });
+    const goalId = set.goal!.id;
+    await request(`${base}/result`, json(lina, 'POST', { goalId, value: 5 }));
+    const shared = (await (
+      await request(`${base}/share`, json(lina, 'POST', { goalId, percent: 50 }))
+    ).json()) as ShareAnswer;
+    expect(shared).toEqual({ status: 'sent' });
+    expect(posted).toEqual([
+      {
+        channel: '920000000000000101',
+        text: '🎉 Lina a atteint 50\u00a0% de son objectif : « Signer de nouveaux clients » !',
+      },
+    ]);
+    expect(
+      await (await request(`${base}/share`, json(lina, 'POST', { goalId, percent: 50 }))).json(),
+    ).toEqual({ status: 'duplicate' });
+    // A milestone not reached, or the team: nothing.
+    expect(
+      (await request(`${base}/share`, json(lina, 'POST', { goalId, percent: 75 }))).status,
+    ).toBe(404);
+    expect(
+      (await request(`${base}/share`, json(boss, 'POST', { goalId, percent: 50 }))).status,
+    ).toBe(403);
+    // The creator sees it in the history, with its words.
+    const history = (await (
+      await request(`/api/creator/${company}/actions?view=history`, boss)
+    ).json()) as ActionsPage;
+    expect(history.actions.find((a) => a.type === 'milestone_announcement')).toMatchObject({
+      status: 'sent',
+      trigger: 'member_request',
+      message: {
+        title: '#general',
+        body: '🎉 Lina a atteint 50\u00a0% de son objectif : « Signer de nouveaux clients » !',
+      },
+    });
+    // Turned off.
+    expect(
+      (
+        (await (
+          await request(url, json(boss, 'PUT', { destination: null }))
+        ).json()) as AnnouncementsView
+      ).destination,
+    ).toBeNull();
   });
 });

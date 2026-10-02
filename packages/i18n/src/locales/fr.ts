@@ -384,6 +384,16 @@ export const fr: Messages = {
   'space.rewards.received.other': '{count} jours offerts reçus le {date} ({percent} atteints)',
   'space.celebrate.days.one': 'Cadeau : {count} jour offert ajouté à votre accès !',
   'space.celebrate.days.other': 'Cadeau : {count} jours offerts ajoutés à votre accès !',
+  'space.share.title': 'Le partager avec la communauté ?',
+  'space.share.where':
+    'Publié dans {place}, tel qu’écrit ci-dessous. Seulement votre prénom, votre objectif et ce jalon : jamais vos chiffres.',
+  'space.share.action': 'Partager',
+  'space.share.sent': 'C’est partagé dans {place} !',
+  'space.share.waiting': 'Votre annonce part dès que l’équipe l’a validée.',
+  'space.share.simulated': 'La communauté est en mode test : rien n’est publié pour l’instant.',
+  'space.share.trial': 'Essai : rien n’est publié.',
+  'space.share.failed': 'L’annonce n’a pas pu partir. L’équipe voit pourquoi.',
+  'space.share.duplicate': 'Ce jalon est déjà partagé.',
   'space.unknown.title': 'Votre espace se prépare',
   'space.unknown.body':
     'StayPut lit votre adhésion sur Whop. Revenez dans quelques minutes pour fixer votre objectif.',
@@ -591,6 +601,22 @@ export const fr: Messages = {
   'lessons.empty': 'Aucune leçon terminée sur les 90 derniers jours.',
   'lessons.showAll': 'Tout afficher ({count})',
 
+  'announce.title': 'Annonces des jalons',
+  'announce.body':
+    'Quand un membre atteint un jalon, StayPut lui propose de le partager dans le chat de votre communauté. Il voit d’abord le texte exact ; seuls son prénom, son objectif et le jalon sont publiés, jamais ses chiffres.',
+  'announce.where': 'Où',
+  'announce.none': 'Nulle part (désactivé)',
+  'announce.group.whop': 'Chats Whop',
+  'announce.group.discord': 'Discord',
+  'announce.group.telegram': 'Telegram',
+  'announce.whopUnavailable':
+    'Les chats Whop n’apparaissent pas : StayPut a besoin de la permission de les lire (chat:read). Pour y publier, il lui faut aussi chat:message:create.',
+  'announce.whopPermission':
+    'Pour publier dans un chat Whop, StayPut a besoin de la permission chat:message:create.',
+  'announce.empty':
+    'Aucun endroit pour l’instant : reliez Discord ou Telegram dans Sources, ou donnez à StayPut les permissions du chat Whop.',
+  'announce.save': 'Enregistrer l’endroit',
+  'announce.saved': 'Enregistré',
   'earnedDays.title': 'Jours mérités',
   'earnedDays.body':
     'Récompensez les jalons que vos membres atteignent par des jours gratuits sur leur abonnement : la première fois que chaque membre atteint 50 % et 100 % d’un objectif.',
@@ -724,6 +750,7 @@ export const fr: Messages = {
   'actions.type.high_risk_message': 'Message à l’heure d’or',
   'actions.type.welcome_message': 'Message d’accueil',
   'actions.type.alumni_followup': 'Suivi Alumni',
+  'actions.type.milestone_announcement': 'Jalon annoncé',
   'actions.trigger.payment_requires_action': 'Un paiement attend une validation',
   'actions.trigger.payment_failed': 'Un paiement a échoué',
   'actions.trigger.cancel_at_period_end': 'Annulation programmée',
@@ -731,6 +758,7 @@ export const fr: Messages = {
   'actions.trigger.activation_radar': 'Nouveau membre qui n’a pas commencé',
   'actions.trigger.exit_survey': 'Réponse au questionnaire de départ',
   'actions.trigger.milestone': '{percent} d’un objectif atteints',
+  'actions.trigger.member_request': 'à la demande du membre',
   'actions.trigger.alumni': '{days} jours après son départ, dans l’Alumni',
   'actions.status.proposed': 'À valider',
   'actions.status.approved': 'Validée',

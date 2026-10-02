@@ -1117,3 +1117,31 @@ nouveau passage en caisse ; Whop permet aussi de le réserver aux abonnements en
   décevrait).
 - **L'essai de l'équipe** montre les jours mérités comme un membre les recevrait en mode
   automatique.
+
+### Les annonces des jalons (migration 0023)
+
+- **Le créateur choisit où** (Réglages → « Annonces des jalons », rien par défaut) parmi les
+  endroits où StayPut peut publier maintenant : les chats Whop de la communauté (lus avec
+  `chat:read` ; y publier demande en plus `chat:message:create`, à ajouter avec les autres
+  permissions), les salons des serveurs Discord reliés où le bot peut écrire (Voir le salon et
+  Envoyer des messages, calculés comme Discord : rôles, puis exceptions du salon), les groupes
+  Telegram reliés. Le serveur refuse un endroit qui n'est pas dans cette liste. Le bot Discord
+  n'a pas demandé « Envoyer des messages » à son installation : il écrit là où @everyone (ou son
+  rôle) le peut, ce qui est le cas des salons ouverts de la plupart des serveurs.
+- **Le membre décide** : après un jalon (ou l'objectif atteint), la fête lui propose « Le
+  partager avec la communauté ? » avec le texte exact, dans la langue de la communauté. Seuls
+  son prénom, le titre de son objectif et le jalon sont publiés, jamais ses chiffres (un revenu
+  ne regarde que lui). Une fois par objectif et par jalon.
+- **Une action comme les autres** (`milestone_announcement`, déclencheur `member_request`) :
+  arrêts, « ne jamais contacter », mode test (simulée, le membre lit que la communauté est en
+  mode test), mode manuel (elle attend la validation du créateur, le membre le lit). Pas
+  d'heures de silence : ce n'est pas un message au membre. Le créateur la voit dans l'onglet
+  Actions avec son texte et l'endroit.
+- **Sur Discord, personne n'est mentionné** (`allowed_mentions` vide), et un `nonce` empêche une
+  double publication si la réponse de Discord se perd ; sur Whop, la clé d'idempotence habituelle.
+  Une panne (5xx, 429, réseau) est retentée comme les autres actions ; un refus (permission
+  absente) est définitif et visible dans l'onglet Actions.
+- **La tâche horaire** sait désormais publier sur Discord et Telegram (une action validée en mode
+  manuel part au passage suivant).
+- **L'essai de l'équipe** montre la proposition de partage avec le texte, et dit qu'en essai rien
+  n'est publié.

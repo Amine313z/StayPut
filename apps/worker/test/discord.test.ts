@@ -147,10 +147,37 @@ describe('the Discord client', () => {
     });
     const client = createDiscordClient({ botToken: 't', fetch: discord.fetch });
     expect(await client.guildChannels(GUILD)).toEqual([
-      { id: '404', name: 'announcements', category: null, readable: true },
-      { id: '401', name: 'general', category: 'Community', readable: true },
-      { id: '402', name: 'staff', category: 'Community', readable: false },
+      { id: '404', name: 'announcements', category: null, readable: true, writable: false },
+      { id: '401', name: 'general', category: 'Community', readable: true, writable: false },
+      { id: '402', name: 'staff', category: 'Community', readable: false, writable: false },
     ]);
+  });
+
+  it('posts a message that mentions nobody, once per nonce', async () => {
+    const discord = fakeDiscord({
+      'POST /api/v10/channels/940000000000000401/messages': () => json({ id: '9001' }),
+    });
+    const client = createDiscordClient({ botToken: 't', fetch: discord.fetch });
+    await client.sendMessage(
+      '940000000000000401',
+      '🎉 Lina reached 50% of their goal!',
+      'a'.repeat(32),
+    );
+    expect(discord.calls[0]).toMatchObject({
+      method: 'POST',
+      url: '/api/v10/channels/940000000000000401/messages',
+    });
+    expect(discord.calls[0]!.headers.get('content-type')).toBe('application/json');
+    expect(JSON.parse(discord.calls[0]!.body)).toEqual({
+      content: '🎉 Lina reached 50% of their goal!',
+      allowed_mentions: { parse: [] },
+      nonce: 'a'.repeat(25),
+      enforce_nonce: true,
+    });
+    // A channel the bot may not write in: Discord's refusal, with its status.
+    await expect(client.sendMessage('940000000000000402', 'x', 'n')).rejects.toMatchObject({
+      status: 404,
+    });
   });
 
   it('exchanges the code for the server, then revokes the token it got', async () => {
@@ -237,6 +264,21 @@ describe('readableChannels', () => {
         [{ id: GUILD, type: 0, allow: '0', deny: '66560' }],
       ),
     ).toBe(true);
+  });
+
+  it('tells the channels the bot may post in: View Channel and Send Messages', () => {
+    const writable = (roles: { id: string; permissions: string }[], overwrites: unknown[] = []) =>
+      readableChannels({ ...base, roles, channels: [channel(overwrites)] })[0]!.writable;
+    // @everyone may write by default in most servers: the bot does too.
+    expect(writable([{ id: GUILD, permissions: String(1024 + 2048) }])).toBe(true);
+    expect(writable([{ id: GUILD, permissions: DISCORD_BOT_PERMISSIONS }])).toBe(false);
+    // A channel where only the staff writes.
+    expect(
+      writable(
+        [{ id: GUILD, permissions: String(1024 + 2048) }],
+        [{ id: GUILD, type: 0, allow: '0', deny: '2048' }],
+      ),
+    ).toBe(false);
   });
 
   it('reads permission sets beyond 53 bits', () => {

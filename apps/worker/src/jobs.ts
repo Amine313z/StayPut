@@ -1,4 +1,4 @@
-import { executeDueActions, prepareActions } from './actions';
+import { EXECUTE_BATCH, executeDueActions, prepareActions } from './actions';
 import type { CronJob } from './cron';
 import { scoreDueCompanies } from './risk';
 import { SYNC_REQUEST_BUDGET, summarize, syncDueCompanies } from './sync';
@@ -80,7 +80,7 @@ export const scoreMembers: CronJob = {
  */
 export const runActions: CronJob = {
   name: 'actions',
-  async run({ db, whop, now }) {
+  async run({ db, whop, discord, telegram, now }) {
     if (!db) return;
     const companies = await db.query<{ id: string }>(
       `select id from stayput.companies where status = 'active' and not is_demo order by id`,
@@ -93,7 +93,7 @@ export const runActions: CronJob = {
         );
       }
     }
-    const ran = await executeDueActions(db, whop, now);
+    const ran = await executeDueActions(db, whop, now, EXECUTE_BATCH, { discord, telegram });
     if (Object.keys(ran).length > 0) console.info(`Actions run: ${JSON.stringify(ran)}.`);
   },
 };
