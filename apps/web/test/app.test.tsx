@@ -1808,6 +1808,15 @@ describe('the member space in the dashboard', () => {
         card.url,
       );
       expect(screen.getByText('And 7 more online.')).toBeTruthy();
+      // Beside it, a QR code made to be scanned on the screen: whole pixels per module.
+      const qr = screen.getByRole('img', {
+        name: 'QR code of the card’s page: Reach 3,000 € a month',
+      });
+      const side = Number(qr.getAttribute('width'));
+      const modules = Number(qr.getAttribute('viewBox')!.split(' ')[2]);
+      expect(side).toBeGreaterThanOrEqual(180);
+      expect(side % modules).toBe(0);
+      expect(screen.getByText('Scan it with your phone: the card’s page opens.')).toBeTruthy();
       // The team never takes a member’s card down.
       expect(screen.queryByRole('button', { name: /Take the page down/ })).toBeNull();
       // Members helping members: the buddies on, the challenges off, and where to set them.

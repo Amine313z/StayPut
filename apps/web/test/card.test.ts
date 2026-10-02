@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { VALUE_MAX, fitValue } from '../src/card';
+import { QR_QUIET, VALUE_MAX, fitValue, qrModules } from '../src/card';
+import { modulePath } from '../src/components/QrCode';
 
 /** Inter's bold letters average about 0.6 of the font's size. */
 const measure = (size: number, text: string) => text.length * size * 0.6;
@@ -47,5 +48,17 @@ describe('the result line of a testimonial card', () => {
       size: VALUE_MAX,
       lines: ['0 kg → 12 kg'],
     });
+  });
+});
+
+describe('the QR code to scan on a screen', () => {
+  it('draws one unit square per dark module, after the quiet zone', () => {
+    const modules = qrModules('https://stayput.example/v/7c9e6679-7425-40de-944b-e07fc1f90ae7');
+    const path = modulePath(modules);
+    const squares = path.match(/M\d+ \d+h1v1h-1z/g) ?? [];
+    expect(squares).toHaveLength(modules.flat().filter(Boolean).length);
+    // The top-left finder pattern starts right after the quiet zone.
+    expect(path.startsWith(`M${QR_QUIET} ${QR_QUIET}h1v1h-1z`)).toBe(true);
+    expect(path).not.toMatch(/M[0-3] /);
   });
 });

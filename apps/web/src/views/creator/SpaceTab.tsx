@@ -8,6 +8,7 @@ import {
   IdCard,
   LifeBuoy,
   NotebookPen,
+  ScanLine,
   Target,
   Users,
 } from 'lucide-react';
@@ -15,6 +16,7 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { MemberRetention } from '../../components/MemberRetention';
 import { MemberSpace } from '../../components/MemberSpace';
+import { QrCode } from '../../components/QrCode';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { CardPicture, useCardImage } from '../../components/Testimonial';
 import { useApi } from '../../api';
@@ -141,7 +143,7 @@ function PublishedCards({
         <p className="text-sm text-muted">{t('spaceTab.cards.none')}</p>
       ) : (
         <div className="space-y-4">
-          <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <ul className="space-y-6">
             {cards.latest.map((card) => (
               <li key={card.proofId}>
                 <PublishedCard card={card} whopAppId={whopAppId} />
@@ -163,41 +165,55 @@ function PublishedCard({ card, whopAppId }: { card: TestimonialCard; whopAppId: 
   const drawn = useCardImage(card);
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   return (
-    <div className="space-y-2">
-      <CardPicture card={card} drawn={drawn} className="max-w-60" />
-      <p className="text-sm">
-        <span className="font-medium">{card.display.goal}</span>
-        <span className="text-muted">
-          {` · ${withUnit(card.display.value, card.display.unit)} · ${date(
-            new Date(`${card.display.day}T12:00:00`),
-          )}`}
-        </span>
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <ExternalButton href={card.url} whopAppId={whopAppId} variant="secondary" size="sm">
-          {t('card.open')}
-        </ExternalButton>
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={<Copy aria-hidden="true" className="size-4" />}
-          onClick={() => {
-            navigator.clipboard.writeText(card.url).then(
-              () => setCopy('copied'),
-              () => setCopy('failed'),
-            );
-          }}
-        >
-          {t('card.copy')}
-        </Button>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+      <CardPicture card={card} drawn={drawn} className="max-w-56" />
+      <div className="min-w-0 space-y-3">
+        <p className="text-sm">
+          <span className="font-medium">{card.display.goal}</span>
+          <span className="text-muted">
+            {` · ${withUnit(card.display.value, card.display.unit)} · ${date(
+              new Date(`${card.display.day}T12:00:00`),
+            )}`}
+          </span>
+        </p>
+        {/* The card's own QR code is too small on a screen: this one is made to be scanned. */}
+        <figure className="space-y-2">
+          <QrCode
+            value={card.url}
+            size={180}
+            label={t('spaceTab.cards.qr', { goal: card.display.goal })}
+          />
+          <figcaption className="flex items-center gap-1.5 text-sm text-muted">
+            <ScanLine aria-hidden="true" className="size-4 shrink-0" />
+            {t('spaceTab.cards.scan')}
+          </figcaption>
+        </figure>
+        <div className="flex flex-wrap items-center gap-2">
+          <ExternalButton href={card.url} whopAppId={whopAppId} variant="secondary" size="sm">
+            {t('card.open')}
+          </ExternalButton>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Copy aria-hidden="true" className="size-4" />}
+            onClick={() => {
+              navigator.clipboard.writeText(card.url).then(
+                () => setCopy('copied'),
+                () => setCopy('failed'),
+              );
+            }}
+          >
+            {t('card.copy')}
+          </Button>
+        </div>
+        <p role="status" className="text-sm">
+          {copy === 'copied' ? (
+            <span className="text-accent">{t('card.copied')}</span>
+          ) : copy === 'failed' ? (
+            <span className="text-warning">{t('card.copyFailed')}</span>
+          ) : null}
+        </p>
       </div>
-      <p role="status" className="text-sm">
-        {copy === 'copied' ? (
-          <span className="text-accent">{t('card.copied')}</span>
-        ) : copy === 'failed' ? (
-          <span className="text-warning">{t('card.copyFailed')}</span>
-        ) : null}
-      </p>
     </div>
   );
 }

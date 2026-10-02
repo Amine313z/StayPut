@@ -818,6 +818,8 @@ export const en = {
     'The cards your members put online. Each QR code leads to a public page that shows the result is real.',
   'spaceTab.cards.none':
     'No card yet. A member makes theirs in their space, from one of their results.',
+  'spaceTab.cards.qr': 'QR code of the card’s page: {goal}',
+  'spaceTab.cards.scan': 'Scan it with your phone: the card’s page opens.',
   'spaceTab.cards.more.one': 'And {count} more online.',
   'spaceTab.cards.more.other': 'And {count} more online.',
   'spaceTab.help.title': 'Members helping members',

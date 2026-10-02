@@ -131,7 +131,7 @@ const FONTS = {
 
 /** The QR code's square: at most this wide, whole pixels per module, a quiet zone of four. */
 const QR_MAX = 300;
-const QR_QUIET = 4;
+export const QR_QUIET = 4;
 
 /**
  * The result's line (« 0 sessions → 12 sessions »), never cut: as big as it fits on one line, down

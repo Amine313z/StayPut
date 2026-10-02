@@ -838,6 +838,8 @@ export const fr: Messages = {
     'Les cartes que vos membres ont mises en ligne. Chaque QR code mène à une page publique qui montre que le résultat est réel.',
   'spaceTab.cards.none':
     'Aucune carte pour l’instant. Un membre crée la sienne dans son espace, à partir d’un de ses résultats.',
+  'spaceTab.cards.qr': 'QR code de la page de la carte : {goal}',
+  'spaceTab.cards.scan': 'Scannez-le avec votre téléphone : la page de la carte s’ouvre.',
   'spaceTab.cards.more.one': 'Et {count} de plus en ligne.',
   'spaceTab.cards.more.other': 'Et {count} de plus en ligne.',
   'spaceTab.help.title': 'Entraide entre membres',
