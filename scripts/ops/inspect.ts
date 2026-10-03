@@ -204,6 +204,75 @@ async function main() {
         );
       }
     }
+    // How long the blocks of Integrations › Activity take to read (the founder's « stays on
+    // Loading… », brief v4 §9.6), read as the team reads them (role stayput_user, a verified
+    // admin's id, never printed), twice each, and the calls to Discord or Telegram a read makes
+    // before it answers. Durations and counts only; nothing is written.
+    const [readers] = await sql`
+      select to_regprocedure('stayput.platform_people(text, timestamptz)') is not null as present`;
+    const [admin] = readers?.present
+      ? await sql`
+          select user_id from stayput.company_admins
+           where company_id = ${id as string} and verified_at is not null
+           order by verified_at limit 1`
+      : [];
+    if (admin) {
+      const timings: Record<string, unknown>[] = [];
+      await sql.begin(async (tx) => {
+        await tx`select set_config('role', 'stayput_user', true),
+                        set_config('stayput.user_id', ${admin.user_id as string}, true)`;
+        const reads: [string, () => Promise<{ view: string | null }[]>][] = [
+          [
+            'activity',
+            () => tx`select stayput.platform_activity(${id as string}, now())::text as view`,
+          ],
+          [
+            'accounts',
+            () => tx`select stayput.platform_accounts_view(${id as string})::text as view`,
+          ],
+          [
+            'people',
+            () => tx`select stayput.platform_people(${id as string}, now())::text as view`,
+          ],
+        ];
+        for (const [block, read] of reads) {
+          const durations: number[] = [];
+          let size = 0;
+          let answered = false;
+          for (let pass = 0; pass < 2; pass++) {
+            const start = performance.now();
+            const [row] = await read();
+            durations.push(Math.round(performance.now() - start));
+            size = row?.view?.length ?? 0;
+            answered = row?.view != null;
+          }
+          timings.push({
+            block,
+            first_ms: durations[0],
+            again_ms: durations[1],
+            kb: Math.round((size / 1024) * 10) / 10,
+            answered,
+          });
+        }
+      });
+      out();
+      table(timings);
+      out();
+      table(
+        await sql`
+          select (select count(*) from stayput.accounts_without_names(${id as string}, 10))
+                   as names_to_ask,
+                 (select count(*) from stayput.discord_guilds g
+                   where g.company_id = ${id as string}
+                     and (g.member_count_at is null
+                          or g.member_count_at < now() - interval '10 minutes'))
+                 + (select count(*) from stayput.telegram_chats t
+                     where t.company_id = ${id as string} and t.left_at is null
+                       and (t.member_count_at is null
+                            or t.member_count_at < now() - interval '10 minutes'))
+                   as places_to_count`,
+      );
+    }
     // The Alumni offer (migration 0018): which steps of its creation are done on Whop, and who
     // entered, left or came back; its follow-ups (0019) and the return codes they made. Counts
     // only.
