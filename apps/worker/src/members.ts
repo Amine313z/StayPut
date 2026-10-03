@@ -2,6 +2,7 @@ import {
   COHORT_HORIZONS,
   FAILED_PAYMENT_STATUSES,
   LIVE_MEMBERSHIP_STATUSES,
+  MEMBER_PAYMENTS_LIMIT,
   RISK_LEVELS,
   analyzeCohorts,
   isAccessLevel,
@@ -10,6 +11,8 @@ import {
   type CohortCounts,
   type CohortHorizon,
   type InsightsReport,
+  type MemberDetail,
+  type MemberPlatformActivity,
   type MemberRisk,
   type MemberRow,
   type MembersPage,
@@ -357,6 +360,154 @@ function toMemberRow(r: MemberSqlRow): MemberRow {
         : null,
     risk: toMemberRisk(r),
   };
+}
+
+/** What counts as activity on Whop itself (Discord and Telegram messages have their own type). */
+const WHOP_ACTIVITY = `('message', 'reaction', 'forum_post', 'lesson_completed')`;
+
+/**
+ * One member's drawer (brief v4 §9.3), as the Whop user under RLS: their score over the last 30
+ * days of the community's calendar, their memberships (the one that counts first, as the list
+ * shows it), their latest payments, and what they did on Whop, Discord and Telegram (the last
+ * two only once connected). Null when the member is not the company's.
+ */
+export async function readMemberDetail(
+  db: TransactionalDb,
+  userId: string,
+  companyId: string,
+  memberId: string,
+  now: Date,
+): Promise<MemberDetail | null> {
+  const at = now.toISOString();
+  return withUser(db, userId, async (tx) => {
+    const [member] = await tx.query<{
+      discord_linked: boolean;
+      telegram_linked: boolean;
+      discord: boolean;
+      telegram: boolean;
+    }>(
+      `select m.discord_user_id is not null as discord_linked,
+              m.telegram_user_id is not null as telegram_linked,
+              exists (select 1 from stayput.discord_guilds g where g.company_id = m.company_id)
+                as discord,
+              exists (select 1 from stayput.telegram_chats t where t.company_id = m.company_id)
+                as telegram
+         from stayput.members m
+        where m.company_id = $1 and m.id = $2`,
+      [companyId, memberId],
+    );
+    if (!member) return null;
+    const scores = await tx.query<{ day: Date | string; score: number }>(
+      `select s.day, s.score
+         from stayput.risk_scores s
+         join stayput.companies c on c.id = s.company_id
+        where s.company_id = $1 and s.member_id = $2
+          and s.day > ($3::timestamptz at time zone coalesce(c.timezone, 'UTC'))::date - 30
+        order by s.day`,
+      [companyId, memberId, at],
+    );
+    const memberships = await tx.query<{
+      id: string;
+      status: string;
+      price: number | null;
+      currency: string | null;
+      billing_period_days: number | null;
+      cancel_at_period_end: boolean;
+      current_period_end: Date | string | null;
+      whop_created_at: Date | string | null;
+    }>(
+      `select id, status, price::float8 as price, currency, billing_period_days,
+              cancel_at_period_end, current_period_end, whop_created_at
+         from stayput.memberships
+        where company_id = $1 and member_id = $2
+        order by status = any(string_to_array($3, ',')) desc,
+                 current_period_end desc nulls last, whop_created_at desc nulls last, id`,
+      [companyId, memberId, live],
+    );
+    const payments = await tx.query<{
+      id: string;
+      status: string;
+      amount: number;
+      currency: string;
+      whop_created_at: Date | string;
+      failure_reason: string | null;
+    }>(
+      `select id, status, amount::float8 as amount, currency, whop_created_at, failure_reason
+         from stayput.payments
+        where company_id = $1 and member_id = $2
+        order by whop_created_at desc, id
+        limit $3`,
+      [companyId, memberId, MEMBER_PAYMENTS_LIMIT],
+    );
+    const [activity] = await tx.query<{
+      whop: number;
+      whop_last: Date | string | null;
+      discord: number;
+      discord_last: Date | string | null;
+      telegram: number;
+      telegram_last: Date | string | null;
+    }>(
+      `select count(*) filter (where type in ${WHOP_ACTIVITY} and occurred_at >= $3::timestamptz)::int
+                as whop,
+              max(occurred_at) filter (where type in ${WHOP_ACTIVITY}) as whop_last,
+              count(*) filter (where type = 'discord_message'
+                                 and occurred_at >= $3::timestamptz)::int as discord,
+              max(occurred_at) filter (where type = 'discord_message') as discord_last,
+              count(*) filter (where type = 'telegram_message'
+                                 and occurred_at >= $3::timestamptz)::int as telegram,
+              max(occurred_at) filter (where type = 'telegram_message') as telegram_last
+         from stayput.activity_events
+        where company_id = $1 and member_id = $2`,
+      [companyId, memberId, new Date(now.getTime() - 30 * 86_400_000).toISOString()],
+    );
+    const platforms: MemberPlatformActivity[] = [
+      {
+        platform: 'whop',
+        events: activity?.whop ?? 0,
+        lastAt: iso(activity?.whop_last ?? null),
+        linked: true,
+      },
+    ];
+    if (member.discord) {
+      platforms.push({
+        platform: 'discord',
+        events: activity?.discord ?? 0,
+        lastAt: iso(activity?.discord_last ?? null),
+        linked: member.discord_linked,
+      });
+    }
+    if (member.telegram) {
+      platforms.push({
+        platform: 'telegram',
+        events: activity?.telegram ?? 0,
+        lastAt: iso(activity?.telegram_last ?? null),
+        linked: member.telegram_linked,
+      });
+    }
+    return {
+      memberId,
+      scores: scores.map((s) => ({ day: day(s.day), score: s.score })),
+      memberships: memberships.map((ms) => ({
+        id: ms.id,
+        status: ms.status,
+        price: ms.price,
+        currency: ms.currency,
+        billingPeriodDays: ms.billing_period_days,
+        cancelAtPeriodEnd: ms.cancel_at_period_end,
+        currentPeriodEnd: iso(ms.current_period_end),
+        startedAt: iso(ms.whop_created_at),
+      })),
+      payments: payments.map((p) => ({
+        id: p.id,
+        status: p.status,
+        amount: p.amount,
+        currency: p.currency,
+        at: iso(p.whop_created_at)!,
+        failureReason: p.failure_reason,
+      })),
+      platforms,
+    };
+  });
 }
 
 /** Lessons shown at most in the insights, the flagged ones first. */

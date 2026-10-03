@@ -356,12 +356,17 @@ body::before {
 }
 
 /*
- * The dimmed page behind a window (ui/Dialog.tsx, ui/Drawer.tsx): black at 70 %, frosted. Written
- * in full: an older browser's ::backdrop does not inherit the tokens.
+ * The dimmed page behind a window (ui/Dialog.tsx): black at 70 %, frosted; behind a drawer
+ * (ui/Drawer.tsx), black at 50 % (brief v4 §14). Written in full: an older browser's ::backdrop
+ * does not inherit the tokens.
  */
 dialog::backdrop {
   background-color: rgb(5 6 7 / 0.7);
   backdrop-filter: blur(6px);
+}
+
+dialog.drawer::backdrop {
+  background-color: rgb(5 6 7 / 0.5);
 }
 
 /* Less motion asked for: no light passing over loading blocks. */

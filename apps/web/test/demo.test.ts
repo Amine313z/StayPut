@@ -5,6 +5,7 @@ import { createWorld } from '../src/demo/world';
 import { balanceWindow, savedOver } from '../src/views/creator/balance';
 
 const NOW = Date.parse('2026-10-02T10:00:00.000Z');
+const sum = (values: readonly number[]) => values.reduce((total, v) => total + v, 0);
 
 describe('the demo community', () => {
   const world = createWorld(NOW);
@@ -181,6 +182,48 @@ describe('the demo community', () => {
     expect(demo.integrations.discord.servers.map((s) => s.guildId)).not.toContain(server!.guildId);
     // The group goes, rather than staying « removed » (the bot is gone from it).
     expect(demo.integrations.telegram.groups.map((g) => g.chatId)).not.toContain(group!.chatId);
+  });
+
+  it('opens each member’s drawer on what their row says (§13: one story)', () => {
+    const demo = createWorld(NOW);
+    for (const row of demo.members.members) {
+      const detail = demo.memberDetail(row.id)!;
+      // The score ends on today's; none before a member is scored.
+      if (row.risk) expect(detail.scores.at(-1)?.score).toBe(row.risk.score);
+      else expect(detail.scores).toEqual([]);
+      expect(detail.scores.length).toBeLessThanOrEqual(30);
+      // The latest payment is the row's, and every payment is the plan's price.
+      if (row.lastPayment) {
+        expect(detail.payments[0]).toMatchObject({
+          status: row.lastPayment.status,
+          at: row.lastPayment.at,
+          amount: row.membership?.price,
+        });
+      } else expect(detail.payments).toEqual([]);
+      expect(detail.memberships.map((m) => m.status)).toEqual(
+        row.membership ? [row.membership.status] : [],
+      );
+      // What they did, place by place, adds up to their row's 30 days.
+      const total = row.activity.messages + row.activity.reactions + row.activity.posts;
+      expect(sum(detail.platforms.map((p) => p.events))).toBeLessThanOrEqual(
+        total + row.activity.lessons,
+      );
+      expect(detail.platforms.map((p) => p.platform)).toEqual(['whop', 'discord', 'telegram']);
+    }
+    // Sarah's last payment failed: it heads her payments.
+    const sarah = joined.find((m) => m.name === 'Sarah Cohen')!;
+    expect(demo.memberDetail(sarah.id)?.payments[0]).toMatchObject({
+      status: 'failed',
+      failureReason: 'Card declined',
+    });
+    // Margaux's Discord account still waits to be tied: nothing counted for her there yet.
+    const margaux = joined.find((m) => m.name === 'Margaux Picard')!;
+    expect(demo.memberDetail(margaux.id)?.platforms[1]).toMatchObject({
+      platform: 'discord',
+      linked: false,
+      events: 0,
+    });
+    expect(demo.memberDetail('mber_nobody')).toBeNull();
   });
 
   it('remembers what the creator did until the page is reloaded', () => {

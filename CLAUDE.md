@@ -77,7 +77,10 @@ Guidance for Claude Code in this repository.
   founder then ordered: the Whop-style balance and « Needs attention » (done), the Activity
   « Loading… » bug (done), the Guide, tour and welcome (§10–11, done: `src/guide.ts`,
   `components/guide/`, migration 0030 `welcomed_at`, routes `/mode` and
-  `/getting-started/welcomed`; `/demo?welcome` shows the welcome), then Members (§9.3). Before
+  `/getting-started/welcomed`; `/demo?welcome` shows the welcome), then Members (§9.3, done: a
+  compact sortable table and a drawer per member, `src/members.ts` for the states and orders,
+  `components/MemberTable.tsx` / `MemberDrawer.tsx`, read-only route `GET /members/:memberId`,
+  no migration; the address keeps `filter`, `q`, `sort`, `dir` and the open `member`). Before
   it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard

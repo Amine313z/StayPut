@@ -1,5 +1,6 @@
 import {
   DEFAULT_OFFERS,
+  MEMBER_PAYMENTS_LIMIT,
   choosePriority,
   type ActionSettingsView,
   type CreatorOfferKind,
@@ -9,6 +10,9 @@ import {
   type FeedItem,
   type GettingStarted,
   type IntegrationsStatus,
+  type MemberDetail,
+  type MemberDetailPayment,
+  type MemberPlatformActivity,
   type MemberRow,
   type MembersPage,
   type RevenueDay,
@@ -318,6 +322,8 @@ export interface DemoWorld {
   /** A Discord server or a Telegram group taken off (Integrations). */
   disconnect: (platform: 'discord' | 'telegram', id: string) => void;
   syncNow: () => void;
+  /** A member's drawer (Members): null for no member of the demo. */
+  memberDetail: (memberId: string) => MemberDetail | null;
 }
 
 /** The demo community as of `now`. */
@@ -727,7 +733,126 @@ export function createWorld(now: number): DemoWorld {
     },
   };
 
+  /**
+   * A member's drawer, from the member as every page shows them: their score day by day since
+   * they joined (rising to today's for those drifting away, steady for the others), the
+   * membership of their row, a payment each period back to when they joined (the latest one their
+   * row's), and what they did on Whop and on the Discord and Telegram accounts StayPut knows.
+   */
+  const memberDetail = (memberId: string): MemberDetail | null => {
+    const index = rows.findIndex((m) => m.id === memberId);
+    const row = rows[index];
+    const p = PEOPLE[index];
+    if (!row || !p) return null;
+    const own = seeded(20_261_003 + index * 7_919);
+    const tag = String(index + 1).padStart(2, '0');
+    const risk = row.risk;
+    const start = !risk
+      ? 0
+      : risk.level === 'scheduled_departure'
+        ? 48 + own() * 14
+        : risk.level === 'high'
+          ? risk.score - 32 - own() * 10
+          : risk.level === 'medium'
+            ? risk.score - 14
+            : risk.score + 4;
+    const scores = risk
+      ? Array.from({ length: 30 }, (_, i) => i)
+          .filter((i) => 29 - i < p.joined)
+          .map((i) => {
+            const t = i / 29;
+            const noise = (own() - 0.5) * 6;
+            const score =
+              i === 29
+                ? risk.score
+                : Math.max(
+                    0,
+                    Math.min(100, Math.round(start + (risk.score - start) * t * t + noise)),
+                  );
+            return { day: localDay(new Date(now - (29 - i) * DAY)), score };
+          })
+      : [];
+    const plan = p.plan ? PLANS[p.plan] : null;
+    const payments: MemberDetailPayment[] = [];
+    if (plan && row.lastPayment) {
+      const last = Date.parse(row.lastPayment.at);
+      const first = row.joinedAt ? Date.parse(row.joinedAt) : last;
+      payments.push({
+        id: `pay_demo${tag}p0`,
+        status: row.lastPayment.status,
+        amount: plan.price,
+        currency: 'usd',
+        at: row.lastPayment.at,
+        failureReason: row.lastPayment.failureReason,
+      });
+      for (
+        let moment = last - plan.days * DAY;
+        moment >= first - DAY && payments.length < MEMBER_PAYMENTS_LIMIT;
+        moment -= plan.days * DAY
+      ) {
+        payments.push({
+          id: `pay_demo${tag}p${payments.length}`,
+          status: 'succeeded',
+          amount: plan.price,
+          currency: 'usd',
+          at: new Date(moment).toISOString(),
+          failureReason: null,
+        });
+      }
+    }
+    const accounts = pages.memberPlatforms(memberId);
+    const elsewhere = accounts.discord.messages + accounts.telegram.messages;
+    const onWhop =
+      Math.max(0, row.activity.messages - elsewhere) +
+      row.activity.reactions +
+      row.activity.posts +
+      row.activity.lessons;
+    const platforms: MemberPlatformActivity[] = [
+      {
+        platform: 'whop',
+        events: onWhop,
+        lastAt: onWhop > 0 ? row.lastActivityAt : null,
+        linked: true,
+      },
+    ];
+    for (const platform of ['discord', 'telegram'] as const) {
+      const connected =
+        platform === 'discord'
+          ? integrations.discord.servers.length > 0
+          : integrations.telegram.groups.length > 0;
+      if (!connected) continue;
+      const account = accounts[platform];
+      platforms.push({
+        platform,
+        events: account.messages,
+        lastAt: account.lastAt === null ? null : new Date(account.lastAt).toISOString(),
+        linked: account.linked,
+      });
+    }
+    return {
+      memberId,
+      scores,
+      memberships: row.membership
+        ? [
+            {
+              id: `mem_demo${tag}`,
+              status: row.membership.status,
+              price: row.membership.price,
+              currency: row.membership.currency,
+              billingPeriodDays: row.membership.billingPeriodDays,
+              cancelAtPeriodEnd: row.membership.cancelAtPeriodEnd,
+              currentPeriodEnd: row.membership.currentPeriodEnd,
+              startedAt: row.joinedAt,
+            },
+          ]
+        : [],
+      payments,
+      platforms,
+    };
+  };
+
   return {
+    memberDetail,
     session: {
       companyId: DEMO_COMPANY_ID,
       userId: 'user_demo',

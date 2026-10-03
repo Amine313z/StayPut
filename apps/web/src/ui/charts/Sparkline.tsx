@@ -18,29 +18,32 @@ export function Sparkline({
   format,
   summary,
   height = 96,
+  max,
 }: {
   points: readonly SparkPoint[];
   format: (value: number) => string;
   summary: string;
   height?: number;
+  /** The top of the scale (a score's 100); else the highest point. */
+  max?: number;
 }) {
   const gradient = useId();
   const [hover, setHover] = useState<number | null>(null);
   const width = 320;
   const pad = { top: 8, bottom: 6, side: 4 };
   const geometry = useMemo(() => {
-    const max = Math.max(1, ...points.map((p) => p.value));
+    const top = max ?? Math.max(1, ...points.map((p) => p.value));
     const step = points.length > 1 ? (width - pad.side * 2) / (points.length - 1) : 0;
     const xy = points.map((p, i) => ({
       x: pad.side + i * step,
-      y: pad.top + (1 - p.value / max) * (height - pad.top - pad.bottom),
+      y: pad.top + (1 - p.value / top) * (height - pad.top - pad.bottom),
     }));
     const line = xy
       .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
       .join('');
     const area = `${line}L${xy.at(-1)?.x ?? 0} ${height}L${xy[0]?.x ?? 0} ${height}Z`;
     return { xy, line, area, step };
-  }, [points, height, pad.bottom, pad.side, pad.top]);
+  }, [points, height, max, pad.bottom, pad.side, pad.top]);
   const at = hover === null ? null : geometry.xy[hover];
   const point = hover === null ? null : points[hover];
   return (

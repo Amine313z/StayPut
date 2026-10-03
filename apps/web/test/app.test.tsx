@@ -20,6 +20,7 @@ import type {
   DiscordChannelChoice,
   InsightsReport,
   IntegrationsStatus,
+  MemberDetail,
   MemberRetentionView,
   MemberRisk,
   MemberRow,
@@ -380,8 +381,119 @@ const NOBODY: MembersPage = {
   members: [],
 };
 
+/** Members' states hang on the day (inactive after 14 days…): their tests read them on Oct 1. */
+function onOct1() {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date('2026-10-01T12:00:00.000Z'));
+}
+
+/** The drawer of the member without a name: leaving on Oct 20, their last payment failed. */
+const DETAIL_LEAVING: MemberDetail = {
+  memberId: 'mber_2',
+  scores: [
+    { day: '2026-09-02', score: 40 },
+    { day: '2026-09-20', score: 85 },
+    { day: '2026-10-01', score: 100 },
+  ],
+  memberships: [
+    {
+      id: 'mem_2',
+      status: 'active',
+      price: 49,
+      currency: 'usd',
+      billingPeriodDays: 30,
+      cancelAtPeriodEnd: true,
+      currentPeriodEnd: '2026-10-20T10:00:00.000Z',
+      startedAt: '2026-07-01T10:00:00.000Z',
+    },
+    {
+      id: 'mem_2old',
+      status: 'expired',
+      price: 29,
+      currency: 'usd',
+      billingPeriodDays: 30,
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: '2026-06-30T10:00:00.000Z',
+      startedAt: '2026-05-31T10:00:00.000Z',
+    },
+  ],
+  payments: [
+    {
+      id: 'pay_23',
+      status: 'failed',
+      amount: 49,
+      currency: 'usd',
+      at: '2026-09-20T10:00:00.000Z',
+      failureReason: 'Card declined',
+    },
+    {
+      id: 'pay_22',
+      status: 'succeeded',
+      amount: 49,
+      currency: 'usd',
+      at: '2026-08-20T10:00:00.000Z',
+      failureReason: null,
+    },
+    {
+      id: 'pay_21',
+      status: 'failed',
+      amount: 49,
+      currency: 'usd',
+      at: '2026-07-20T10:00:00.000Z',
+      failureReason: null,
+    },
+  ],
+  platforms: [
+    { platform: 'whop', events: 0, lastAt: null, linked: true },
+    { platform: 'discord', events: 2, lastAt: '2026-09-29T10:00:00.000Z', linked: true },
+    { platform: 'telegram', events: 1, lastAt: '2026-09-28T10:00:00.000Z', linked: false },
+  ],
+};
+
+/** Bruno's drawer: quiet for three weeks, on Whop only. */
+const DETAIL_BRUNO: MemberDetail = {
+  memberId: 'mber_3',
+  scores: [
+    { day: '2026-09-30', score: 70 },
+    { day: '2026-10-01', score: 78 },
+  ],
+  memberships: [
+    {
+      id: 'mem_3',
+      status: 'active',
+      price: 49,
+      currency: 'usd',
+      billingPeriodDays: 30,
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: '2026-10-15T10:00:00.000Z',
+      startedAt: '2026-06-01T10:00:00.000Z',
+    },
+  ],
+  payments: [
+    {
+      id: 'pay_31',
+      status: 'succeeded',
+      amount: 49,
+      currency: 'usd',
+      at: '2026-09-15T10:00:00.000Z',
+      failureReason: null,
+    },
+  ],
+  platforms: [{ platform: 'whop', events: 4, lastAt: '2026-09-10T10:00:00.000Z', linked: true }],
+};
+
+/** A drawer with nothing in it yet. */
+const DETAIL_EMPTY = (memberId: string): MemberDetail => ({
+  memberId,
+  scores: [],
+  memberships: [],
+  payments: [],
+  platforms: [{ platform: 'whop', events: 0, lastAt: null, linked: true }],
+});
+
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   window.localStorage.clear();
@@ -835,30 +947,221 @@ describe('creator view', () => {
     expect(screen.queryByRole('button', { name: /^Getting started/ })).toBeNull();
   });
 
-  it('shows what StayPut collected about each member, and the risk with why', async () => {
+  it('shows each member on one line: the ring, one word for their state, what they pay', async () => {
+    onOct1();
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1/members');
-    const alice = (await screen.findByText('Alice Martin')).closest('li')!;
-    expect(alice.textContent).toContain('Low risk · 3');
-    expect(alice.textContent).toContain('No reaction in 14 days');
-    expect(alice.textContent).toContain('Active · $49.00 per month · renews on Oct 15, 2026');
-    expect(alice.textContent).toContain('Last payment: $49.00 on Sep 15, 2026');
-    expect(alice.textContent).toContain('Last 30 days: 6 messages, 1 reaction, 0 posts, 0 lessons');
-    const unnamed = screen.getByText('Member without a name').closest('li')!;
-    expect(unnamed.textContent).toContain('Leaving');
-    expect(unnamed.textContent).toContain('ends on Oct 20, 2026');
-    expect(screen.getByText('Payment failed: $49.00 on Sep 20, 2026').className).toContain(
-      'text-danger',
+    const table = await screen.findByRole('table', { name: 'All members' });
+    // Every column has a name and sorts; the bell's column is named for screen readers alone.
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual([
+      'Member',
+      'Risk',
+      'Status',
+      'MRR',
+      'Last activity',
+      'Next renewal',
+      'Do not contact',
+    ]);
+    const risk = within(table).getByRole('columnheader', { name: 'Risk' });
+    expect(risk.getAttribute('aria-sort')).toBe('descending');
+    // The most at risk first, as the Worker reads them.
+    const rows = within(table).getAllByRole('row').slice(1);
+    // The name (a button), then each column's words.
+    const cells = (row: HTMLElement) => {
+      const [who, ...rest] = within(row).getAllByRole('cell');
+      return [
+        within(who!).getByRole('button').textContent,
+        ...rest.map((cell) => cell.textContent),
+      ];
+    };
+    expect(rows.map(cells)).toEqual([
+      ['Member without a name', '100', 'UrgentLeaving', '$49.00/mo', 'Never', 'Ends Oct 20', ''],
+      ['Bruno Petit', '78', 'Inactive', '$49.00/mo', '3 weeks ago', 'Oct 15', ''],
+      ['Denis Moreau', '52', 'Active', '$49.00/mo', 'yesterday', 'Oct 15', ''],
+      ['Chloé Dubois', '12', 'Inactive', '$49.00/mo', 'Never', 'Oct 15', ''],
+      ['Alice Martin', '3', 'Active', '$49.00/mo', 'yesterday', 'Oct 15', ''],
+    ]);
+    // On a phone, the status and what they pay under the name.
+    expect(within(rows[0]!).getAllByRole('cell')[0]!.textContent).toBe(
+      'Member without a nameUrgentLeaving$49.00/mo',
     );
-    expect(unnamed.textContent).toContain('No activity recorded yet.');
-    const denis = screen.getByText('Denis Moreau').closest('li')!;
-    expect(denis.textContent).toContain('Medium risk · 52');
-    expect(denis.textContent).toContain('Activity down 56% this week');
-    expect(denis.textContent).toContain('Support ticket open for 3 days');
-    const chloe = screen.getByText('Chloé Dubois').closest('li')!;
-    expect(chloe.textContent).toContain('New, not started yet');
-    expect(chloe.textContent).toContain('No activity since joining, 4 days ago');
-    expect(chloe.textContent).toContain('No lesson or result for 4 days');
+    // The ring says the level and the score; the name opens the drawer.
+    expect(within(rows[1]!).getByRole('img').getAttribute('aria-label')).toBe('High risk · 78');
+    expect(within(rows[0]!).getByRole('img').getAttribute('aria-label')).toBe('Leaving');
+    expect(
+      within(rows[1]!)
+        .getByRole('button', { name: 'Open Bruno Petit' })
+        .getAttribute('aria-haspopup'),
+    ).toBe('dialog');
+    // The state in white words; the red dot only for what is urgent (a payment not recovered).
+    const status = within(rows[0]!).getAllByRole('cell')[2]!;
+    expect(status.className).toContain('text-fg');
+    expect(status.querySelector('[class*="bg-urgent"]')).not.toBeNull();
+    expect(
+      within(rows[1]!).getAllByRole('cell')[2]!.querySelector('[class*="bg-urgent"]'),
+    ).toBeNull();
+  });
+
+  it('sorts by every column, the most telling way first, and opens in the order a link asks for', async () => {
+    onOct1();
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/members');
+    const table = await screen.findByRole('table', { name: 'All members' });
+    const names = () =>
+      within(table)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => within(within(row).getAllByRole('cell')[0]!).getByRole('button').textContent);
+    const sortBy = (column: string) =>
+      fireEvent.click(
+        within(within(table).getByRole('columnheader', { name: column })).getByRole('button'),
+      );
+    // By name, A to Z; again, Z to A. Who has none comes last either way.
+    sortBy('Member');
+    expect(names()).toEqual([
+      'Alice Martin',
+      'Bruno Petit',
+      'Chloé Dubois',
+      'Denis Moreau',
+      'Member without a name',
+    ]);
+    expect(
+      within(table).getByRole('columnheader', { name: 'Member' }).getAttribute('aria-sort'),
+    ).toBe('ascending');
+    sortBy('Member');
+    expect(names()).toEqual([
+      'Denis Moreau',
+      'Chloé Dubois',
+      'Bruno Petit',
+      'Alice Martin',
+      'Member without a name',
+    ]);
+    // The most pressing state first: leaving, then inactive, then active.
+    sortBy('Status');
+    expect(names()).toEqual([
+      'Member without a name',
+      'Bruno Petit',
+      'Chloé Dubois',
+      'Denis Moreau',
+      'Alice Martin',
+    ]);
+    // The most recent first; never active last.
+    sortBy('Last activity');
+    expect(names()).toEqual([
+      'Denis Moreau',
+      'Alice Martin',
+      'Bruno Petit',
+      'Member without a name',
+      'Chloé Dubois',
+    ]);
+    // The soonest renewal first.
+    sortBy('Next renewal');
+    expect(names()).toEqual([
+      'Bruno Petit',
+      'Denis Moreau',
+      'Chloé Dubois',
+      'Alice Martin',
+      'Member without a name',
+    ]);
+    cleanup();
+    onOct1();
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/members?sort=member&dir=desc');
+    const linked = await screen.findByRole('table', { name: 'All members' });
+    expect(
+      within(linked).getByRole('columnheader', { name: 'Member' }).getAttribute('aria-sort'),
+    ).toBe('descending');
+    expect(
+      within(linked)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => within(row).getAllByRole('button')[0]!.textContent)[0],
+    ).toBe('Denis Moreau');
+  });
+
+  it('opens a member’s drawer from their row: why, what to do, the score, the payments, where', async () => {
+    onOct1();
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/members/mber_2': [{ status: 200, body: DETAIL_LEAVING }],
+    });
+    renderAt('/dashboard/biz_A1/members');
+    const table = await screen.findByRole('table', { name: 'All members' });
+    fireEvent.click(within(table).getAllByRole('row')[1]!);
+    const drawer = await screen.findByRole('dialog', { name: 'Member without a name' });
+    expect(within(drawer).getByText('Member since Jul 1, 2026')).toBeTruthy();
+    // Where they stand: the ring, the level, what they pay, when they leave.
+    expect(within(drawer).getByRole('img', { name: 'Leaving' })).toBeTruthy();
+    expect(drawer.textContent).toContain('$49.00/mo·Ends Oct 20');
+    const section = (name: string) => within(drawer).getByRole('region', { name });
+    expect(section('Why').textContent).toBe('WhyLeaves on Oct 20, 2026No activity this week');
+    expect(
+      within(section('Quick actions'))
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Message', 'Pause', 'Offer']);
+    // The score day by day, from 0 to 100.
+    expect(within(section('Risk over 30 days')).getByRole('img').getAttribute('aria-label')).toBe(
+      'Risk score over the last 30 days: from 40 to 100.',
+    );
+    expect(section('Risk over 30 days').textContent).toContain('Sep 2Oct 1');
+    expect(section('Subscription').textContent).toBe(
+      'Subscription' +
+        'Active · $49.00 per month · ends on Oct 20, 2026' +
+        'Since Jul 1, 2026' +
+        'Expired · $29.00 per month · ended on Jun 30, 2026',
+    );
+    // The latest payment failed and was not recovered: the red dot, its reason; not the old one.
+    const payments = within(section('Payments')).getAllByRole('listitem');
+    expect(payments.map((payment) => payment.textContent)).toEqual([
+      'UrgentFailed· Sep 20, 2026$49.00Card declined',
+      'Paid· Aug 20, 2026$49.00',
+      'Failed· Jul 20, 2026$49.00',
+    ]);
+    expect(payments[2]!.querySelector('[class*="bg-urgent"]')).toBeNull();
+    expect(
+      within(section('Activity over 30 days'))
+        .getAllByRole('listitem')
+        .map((platform) => platform.textContent),
+    ).toEqual([
+      'Whop0 interactionsNo activity recorded yet.',
+      'Discord2 interactionsLast active 2 days ago',
+      'Telegram1 interactionAccount not tied yet',
+    ]);
+    const never = within(drawer).getByRole('switch', { name: 'Do not contact' });
+    expect(never.getAttribute('aria-checked')).toBe('false');
+    expect(
+      within(drawer).getByText('StayPut may contact this member, within your limits.'),
+    ).toBeTruthy();
+    expect(calls).toContain('/api/creator/biz_A1/members/mber_2');
+    // Closed: gone, and the table is still there.
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('table', { name: 'All members' })).toBeTruthy();
+  });
+
+  it('says in a line when a member’s history did not load, and tries again', async () => {
+    onOct1();
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/members/mber_2': [
+        new TypeError('offline'),
+        { status: 200, body: DETAIL_LEAVING },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/members?member=mber_2');
+    const drawer = await screen.findByRole('dialog', { name: 'Member without a name' });
+    expect(await within(drawer).findByText('This member’s history did not load.')).toBeTruthy();
+    // What the row already says stays: why, what to do, the subscription.
+    expect(within(drawer).getByRole('region', { name: 'Why' })).toBeTruthy();
+    expect(within(drawer).getByRole('region', { name: 'Subscription' })).toBeTruthy();
+    expect(within(drawer).queryByRole('region', { name: 'Payments' })).toBeNull();
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Retry' }));
+    expect(await within(drawer).findByRole('region', { name: 'Payments' })).toBeTruthy();
   });
 
   it('keeps the facts of Whop before the first scores', async () => {
@@ -877,9 +1180,10 @@ describe('creator view', () => {
   });
 
   it('filters the members by risk level and finds one by name, accents aside', async () => {
+    onOct1();
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1/members');
-    await screen.findByText('Alice Martin');
+    await screen.findByRole('table', { name: 'All members' });
     const names = () =>
       [
         'Member without a name',
@@ -887,51 +1191,85 @@ describe('creator view', () => {
         'Denis Moreau',
         'Chloé Dubois',
         'Alice Martin',
-      ].filter((name) => screen.queryByText(name) !== null);
+      ].filter((name) => screen.queryByRole('button', { name: `Open ${name}` }) !== null);
+    // Each chip says how many it keeps.
+    expect(
+      within(screen.getByRole('group', { name: 'Show' }))
+        .getAllByRole('button')
+        .map((chip) => chip.textContent),
+    ).toEqual(['All5', 'Leaving1', 'High1', 'Medium1', 'Low2', 'New inactive1', 'Gone0']);
     fireEvent.click(screen.getByRole('button', { name: /^Leaving/ }));
-    expect(names()).toEqual(['Member without a name']);
+    await vi.waitFor(() => expect(names()).toEqual(['Member without a name']));
+    expect(screen.getByRole('button', { name: /^Leaving/ }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
     fireEvent.click(screen.getByRole('button', { name: /^High/ }));
-    expect(names()).toEqual(['Bruno Petit']);
+    await vi.waitFor(() => expect(names()).toEqual(['Bruno Petit']));
     fireEvent.click(screen.getByRole('button', { name: /^Low/ }));
-    expect(names()).toEqual(['Chloé Dubois', 'Alice Martin']);
-    fireEvent.click(screen.getByRole('button', { name: /^New, inactive/ }));
-    expect(names()).toEqual(['Chloé Dubois']);
+    await vi.waitFor(() => expect(names()).toEqual(['Chloé Dubois', 'Alice Martin']));
+    fireEvent.click(screen.getByRole('button', { name: /^New inactive/ }));
+    await vi.waitFor(() => expect(names()).toEqual(['Chloé Dubois']));
     fireEvent.click(screen.getByRole('button', { name: /^All/ }));
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search a member' }), {
       target: { value: 'ALÎCE' },
     });
-    expect(names()).toEqual(['Alice Martin']);
+    await vi.waitFor(() => expect(names()).toEqual(['Alice Martin']));
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search a member' }), {
       target: { value: 'nobody' },
     });
-    expect(screen.getByText('No member matches.')).toBeTruthy();
+    expect(await screen.findByText('No member matches.')).toBeTruthy();
   });
 
-  it('keeps a member off every action, and says when that was not saved', async () => {
+  it('keeps a member off every action from their drawer, and says when that was not saved', async () => {
+    onOct1();
+    const listed: MembersPage = {
+      ...MEMBERS,
+      members: MEMBERS.members.map((m) => (m.id === 'mber_3' ? { ...m, doNotContact: true } : m)),
+    };
     mockApi({
       ...dashboard(),
+      // Read again once the switch is saved: Bruno is on the list.
+      '/api/creator/biz_A1/members': [
+        { status: 200, body: MEMBERS },
+        { status: 200, body: listed },
+      ],
+      '/api/creator/biz_A1/members/mber_3': [{ status: 200, body: DETAIL_BRUNO }],
       'PUT /api/creator/biz_A1/members/mber_3/contact': [
         { status: 200, body: { doNotContact: true } },
         new Error('offline'),
       ],
     });
-    renderAt('/dashboard/biz_A1/members?filter=high');
-    await screen.findByText('Bruno Petit');
-    const never = screen.getByRole('button', { name: 'Never contact' });
-    expect(never.getAttribute('aria-pressed')).toBe('false');
+    // A link opens the drawer at once.
+    renderAt('/dashboard/biz_A1/members?filter=high&member=mber_3');
+    const drawer = await screen.findByRole('dialog', { name: 'Bruno Petit' });
     expect(
-      screen.getByText('StayPut may contact this member, within the guardrails.'),
-    ).toBeTruthy();
+      within(within(drawer).getByRole('region', { name: 'Activity over 30 days' }))
+        .getAllByRole('listitem')
+        .map((platform) => platform.textContent),
+    ).toEqual(['Whop4 interactionsLast active 3 weeks ago']);
+    const never = within(drawer).getByRole('switch', { name: 'Do not contact' });
+    expect(never.getAttribute('aria-checked')).toBe('false');
+    expect(within(drawer).getByRole('button', { name: 'Message Bruno Petit' })).toBeTruthy();
     fireEvent.click(never);
-    await vi.waitFor(() => expect(never.getAttribute('aria-pressed')).toBe('true'));
+    await vi.waitFor(() => expect(never.getAttribute('aria-checked')).toBe('true'));
     const put = 'PUT /api/creator/biz_A1/members/mber_3/contact';
     expect(bodies.get(put)).toEqual({ doNotContact: true });
     expect(headersOf.get(put)?.get('x-stayput-csrf')).toBe('1');
-    expect(screen.getByText('StayPut takes no action of any kind for this member.')).toBeTruthy();
+    // The one sentence that says what it means, here only; nothing left to do for them.
+    expect(
+      within(drawer).getByText('StayPut takes no action of any kind for this member.'),
+    ).toBeTruthy();
+    expect(within(drawer).queryByRole('region', { name: 'Quick actions' })).toBeNull();
     // Not saved: it says so, and the switch stays as it was.
     fireEvent.click(never);
-    expect(await screen.findByText('Not saved. Try again.')).toBeTruthy();
-    expect(never.getAttribute('aria-pressed')).toBe('true');
+    expect(await within(drawer).findByText('Not saved. Try again.')).toBeTruthy();
+    expect(never.getAttribute('aria-checked')).toBe('true');
+    // Closed: the members were read again, Bruno's row wears the bell.
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    const bruno = screen.getByRole('row', { name: /Bruno Petit/ });
+    expect(within(bruno).getAllByRole('cell').at(-1)!.textContent).toBe('Do not contact');
+    expect(within(bruno).getAllByRole('cell').at(-1)!.querySelector('svg')).not.toBeNull();
   });
 
   it('opens on the level a link asks for', async () => {
@@ -1084,8 +1422,12 @@ describe('creator view', () => {
   });
 
   it('speaks French', async () => {
-    mockApi(dashboard());
-    renderAt('/dashboard/biz_A1/members', 'fr');
+    onOct1();
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/members/mber_3': [{ status: 200, body: DETAIL_BRUNO }],
+    });
+    renderAt('/dashboard/biz_A1/members?member=mber_3', 'fr');
     expect(await screen.findByRole('heading', { name: 'Membres', level: 1 })).toBeTruthy();
     expect(document.documentElement.lang).toBe('fr');
     // The sections and the tabs in French too.
@@ -1108,24 +1450,45 @@ describe('creator view', () => {
         within(screen.getByRole('navigation', { name: 'Onglets : Membres' }))
           .getAllByRole('link')
           .map((link) => link.textContent),
-      ).toEqual(['Tous les membres5', 'Ne jamais contacter0']),
+      ).toEqual(['Tous les membres5', 'Ne pas contacter0']),
     );
-    const alice = (await screen.findByText('Alice Martin')).closest('li')!;
-    expect(alice.textContent).toContain('Active · 49,00 $ par mois');
-    expect(alice.textContent).toContain(
-      '30 derniers jours : 6 messages, 1 réaction, 0 post, 0 leçon',
+    // Bruno's drawer: why, in French.
+    const drawer = await screen.findByRole('dialog', { name: 'Bruno Petit' });
+    expect(within(drawer).getByRole('img', { name: 'Risque élevé · 78' })).toBeTruthy();
+    expect(within(drawer).getByRole('region', { name: 'Pourquoi' }).textContent).toBe(
+      'PourquoiAucune activité depuis 21 joursDernière leçon terminée : « 3. Charts », il y a 25 jours',
     );
-    const bruno = screen.getByText('Bruno Petit').closest('li')!;
-    expect(bruno.textContent).toContain('Risque élevé · 78');
-    expect(bruno.textContent).toContain('Aucune activité depuis 21 jours');
-    expect(bruno.textContent).toContain('Dernière leçon terminée : « 3. Charts », il y a 25 jours');
-    const unnamed = screen.getByText('Membre sans nom').closest('li')!;
-    expect(unnamed.textContent).toContain('Départ programmé');
-    expect(unnamed.textContent).toContain('Part le 20 oct. 2026');
-    expect(unnamed.textContent).toContain('Aucune activité cette semaine');
-    expect(screen.getByText('Denis Moreau').closest('li')!.textContent).toMatch(
-      /Activité en baisse de 56\s% cette semaine/,
-    );
+    expect(within(drawer).getByRole('switch', { name: 'Ne pas contacter' })).toBeTruthy();
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Fermer' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // The table in French: the columns, the states, the amounts.
+    const table = screen.getByRole('table', { name: 'Tous les membres' });
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((header) => header.textContent),
+    ).toEqual([
+      'Membre',
+      'Risque',
+      'Statut',
+      'MRR',
+      'Dernière activité',
+      'Prochain renouvellement',
+      'Ne pas contacter',
+    ]);
+    const unnamed = screen.getByRole('row', { name: /Membre sans nom/ });
+    expect(
+      within(unnamed)
+        .getAllByRole('cell')
+        .slice(2, 6)
+        .map((cell) => cell.textContent),
+    ).toEqual(['UrgentSur le départ', '49,00\u00a0$/mois', 'Jamais', 'Fin le 20 oct.']);
+    expect(
+      within(screen.getByRole('row', { name: /Bruno Petit/ }))
+        .getAllByRole('cell')
+        .slice(2, 5)
+        .map((cell) => cell.textContent),
+    ).toEqual(['Inactif', '49,00\u00a0$/mois', 'il y a 3 semaines']);
   });
 
   it('tells a non-admin the dashboard is for the team', async () => {
@@ -1141,7 +1504,8 @@ describe('creator view', () => {
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 
-  it('lists the members on the « never contact » list in their own tab', async () => {
+  it('lists the members on the « do not contact » list in their own tab, in the same table', async () => {
+    onOct1();
     mockApi(
       dashboard({
         ...MEMBERS,
@@ -1151,18 +1515,28 @@ describe('creator view', () => {
       }),
     );
     renderAt('/dashboard/biz_A1/members/never-contact');
-    const list = (await screen.findByRole('heading', { name: 'Never contact', level: 2 })).closest(
-      'section',
-    )!;
-    expect(within(list).getByText('Alice Martin')).toBeTruthy();
-    expect(within(list).queryByText('Bruno Petit')).toBeNull();
+    const table = await screen.findByRole('table', { name: 'Do not contact' });
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(1);
+    expect(within(rows[0]!).getByRole('button', { name: 'Open Alice Martin' })).toBeTruthy();
+    expect(within(rows[0]!).getAllByRole('cell').at(-1)!.textContent).toBe('Do not contact');
+    // The tab's title is not said again inside it (brief v4 §9.1).
+    expect(screen.queryByRole('heading', { name: 'Do not contact' })).toBeNull();
     await vi.waitFor(() =>
       expect(
         within(screen.getByRole('navigation', { name: 'Members tabs' }))
           .getAllByRole('link')
           .map((link) => link.textContent),
-      ).toEqual(['All members5', 'Never contact1']),
+      ).toEqual(['All members5', 'Do not contact1']),
     );
+    cleanup();
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/members/never-contact');
+    expect(
+      await screen.findByText(
+        'No member is on this list. Open a member in All members to add them.',
+      ),
+    ).toBeTruthy();
   });
 
   it('opens a section’s first tab for an address it does not know', async () => {
@@ -3651,20 +4025,27 @@ describe('the creator’s frame', () => {
     expect(window.localStorage.getItem('stayput.menu.collapsed')).toBe('0');
   });
 
-  it('finds a member from the top bar, accents aside, and opens them in Members', async () => {
-    mockApi(dashboard());
+  it('finds a member from the top bar, accents aside, and opens their drawer in Members', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/members/mber_5': [{ status: 200, body: DETAIL_EMPTY('mber_5') }],
+    });
     renderAt('/dashboard/biz_A1');
     await screen.findByText('Bruno Petit');
     const search = screen.getByRole('combobox', { name: 'Find a member' });
     fireEvent.change(search, { target: { value: 'chloe' } });
     const option = await screen.findByRole('option', { name: 'Chloé Dubois' });
     fireEvent.click(within(option).getByRole('button'));
-    expect(await screen.findByRole('heading', { name: 'Members', level: 1 })).toBeTruthy();
-    expect(screen.getByPlaceholderText<HTMLInputElement>('Search a member').value).toBe(
-      'Chloé Dubois',
-    );
+    const drawer = await screen.findByRole('dialog', { name: 'Chloé Dubois' });
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByRole('heading', { name: 'Members', level: 1 })).toBeTruthy();
+    // Nobody by that name: Enter searches the words in Members.
     fireEvent.change(search, { target: { value: 'zzz' } });
     expect(await screen.findByText('No member by that name.')).toBeTruthy();
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(await screen.findByText('No member matches.')).toBeTruthy();
+    expect(screen.getByPlaceholderText<HTMLInputElement>('Search a member').value).toBe('zzz');
   });
 
   it('changes the language in Settings › General only, at once, and remembers it', async () => {

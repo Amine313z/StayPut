@@ -5,6 +5,7 @@ import {
   canOpenCreatorView,
   canOpenMemberView,
   isCompanyId,
+  isMemberId,
   isExperienceId,
   isCreatorOfferKind,
   isExitReason,
@@ -86,7 +87,13 @@ import {
   readMemberTelegram,
   type LinkContext,
 } from './integrations';
-import { readInsights, readMembers, readRiskSettings, readSyncStatus } from './members';
+import {
+  readInsights,
+  readMemberDetail,
+  readMembers,
+  readRiskSettings,
+  readSyncStatus,
+} from './members';
 import {
   answerSurvey,
   decideCreatorOffer,
@@ -782,6 +789,31 @@ export function createApp(deps: AppDeps) {
     if (!db) return apiError('not_configured', 'the database is not configured');
     return c.json(await readMembers(db, c.get('userId'), c.get('companyId'), deps.now()));
   });
+
+  /**
+   * One member's drawer (brief v4 §9.3): their score over 30 days, memberships, payments and
+   * activity by platform.
+   */
+  app.get(
+    '/api/creator/:companyId/members/:memberId',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const memberId = c.req.param('memberId');
+      if (!isMemberId(memberId)) return apiError('invalid_request', 'not a member id');
+      const detail = await readMemberDetail(
+        db,
+        c.get('userId'),
+        c.get('companyId'),
+        memberId,
+        deps.now(),
+      );
+      return detail ? c.json(detail) : apiError('not_found', 'no such member here');
+    },
+  );
 
   /** The home of the dashboard (SPEC Phase 6.2): the money first, the action of the day. */
   app.get('/api/creator/:companyId/dashboard', authenticate, withDb, requireCreator, async (c) => {

@@ -2069,3 +2069,82 @@ officiel, français dans la langue française).
   raccourcir.
 - La taille du halo de la visite change pendant ses 400 ms (un seul élément fixe, hors de toute
   mise en page) : c'est la seule animation qui n'est pas que transform et opacité.
+
+## 2026-10-03 — La page Membres : un tableau compact et le tiroir du membre (brief v4 §9.3)
+
+### Le tableau
+
+- Une ligne par membre (deux sur téléphone, l'état et le montant sous le nom) : avatar et nom,
+  anneau de risque, état en un mot (Leaving · Payment failed · Inactive · Active ; Team et Gone
+  pour l'équipe et ceux qui sont partis), MRR (« $49.00/mo », « Free »), dernière activité
+  (« 3 weeks ago », « Never »), prochain renouvellement (« Oct 15 », « Ends Oct 20 » pour un
+  départ). Les colonnes apparaissent selon la place (requêtes de conteneur) : jamais de défilement
+  horizontal.
+- Chaque colonne se trie. Le premier clic trie dans le sens le plus parlant (risque, MRR,
+  activité : du plus grand ; nom, état, renouvellement : du premier), le second inverse. Ce
+  qu'une colonne ne peut pas dire (pas de score, pas d'abonnement) va toujours à la fin ; à
+  égalité, l'ordre du Worker (le plus à risque d'abord). L'adresse garde le filtre (`filter`), la
+  recherche (`q`), le tri (`sort`, `dir`) et le membre ouvert (`member`).
+- Les états viennent d'un seul endroit (`apps/web/src/members.ts`) : parti > équipe > départ
+  programmé > paiement échoué non rattrapé > inactif (rien depuis 14 jours, le seuil par défaut
+  du score ; un nouveau qui n'a encore rien fait ne devient « inactif » qu'au bout de 3 jours) >
+  actif. Le point rouge : paiement non rattrapé ou départ dans les 48 heures, jamais l'équipe ni
+  un membre parti. Le mot reste blanc (§6).
+- Les puces (All, Leaving, High, Medium, Low, New inactive, Gone), chacune avec son nombre,
+  restent collées sous la barre du haut avec la recherche ; la pastille glisse vers la puce
+  choisie et la liste se fond en 200 ms. « Leaving » compte aussi une résiliation programmée
+  avant le premier score (les faits de Whop, comme « Needs attention ») ; High, Medium, Low et New
+  inactive ne gardent que les membres encore là.
+- « Do not contact » : une cloche barrée dans sa colonne, seulement quand c'est actif ; la phrase
+  qui l'explique n'est que dans le tiroir. L'onglet « Do not contact » montre la même table,
+  filtrée ; un membre retiré de la liste s'en replie.
+- Le titre « Members » n'est plus répété dans une carte (§9.1) : la page est la rubrique.
+
+### Le tiroir
+
+- Un clic sur une ligne (Entrée sur le nom, ou ⌘K) ouvre le tiroir à droite : l'anneau et le
+  niveau, l'état, ce que le membre paie, la date de départ ; « Why » (les raisons du score) ; les
+  actions rapides (Message, Pause, Offer, les mêmes que sur le tableau de bord) ; le score sur
+  30 jours (courbe de 0 à 100, jours du calendrier de la communauté) ; l'abonnement (depuis
+  quand, puis les précédents) ; les 12 derniers paiements (point rouge sur le dernier s'il a
+  échoué) ; l'activité sur 30 jours par plateforme (Whop, puis Discord et Telegram une fois
+  connectés ; « Account not tied yet » quand StayPut ne connaît pas le compte du membre) ;
+  l'interrupteur « Do not contact » et sa phrase.
+- Nouvelle route en lecture seule `GET /api/creator/:companyId/members/:memberId`
+  (`readMemberDetail`, sous RLS comme le reste ; 400 pour un identifiant mal formé, 404 pour un
+  membre d'une autre communauté). **Pas de migration.**
+- **Écart avec l'ordre du brief** (« reasons, score sparkline, subscription and payment history,
+  activity by platform, quick actions, toggle ») : les actions rapides viennent juste après les
+  raisons. On ouvre un membre pour agir, et l'historique (jusqu'à 12 paiements) les pousserait
+  hors de l'écran. L'interrupteur reste en dernier.
+- Un membre sur la liste « Do not contact » n'a plus d'actions rapides (le Worker les refuse de
+  toute façon) ; l'équipe et les membres partis n'ont ni raisons, ni actions, ni interrupteur.
+- Les sections entrent l'une après l'autre ; derrière un tiroir, la page est assombrie à 50 %
+  (§14 ; 70 % reste pour les fenêtres).
+
+### Le mouvement (§14)
+
+- Les dix premières lignes apparaissent à 30 ms d'écart ; au survol, une ligne monte de 2 px sur
+  black-700 (200 ms) ; une ligne arrivée après coup a un liseré turquoise à gauche (600 ms) ; une
+  ligne qui part se replie (250 ms). Les anneaux se dessinent en 700 ms, à 40 ms d'écart.
+- « Needs attention » suit désormais les mêmes règles de liste : liseré turquoise de 600 ms (au
+  lieu d'une lueur de 1,2 s) et repli en 250 ms (au lieu de 120 ms).
+
+### Une seule formulation (§12)
+
+- « Never contact » devient partout « Do not contact » / « Ne pas contacter », et la phrase de
+  l'interrupteur dit « within your limits » (« dans vos limites ») au lieu de « guardrails ». Le
+  filtre « New, inactive » devient « New inactive », « Left » devient « Gone » (« Partis »).
+
+### Corrigé en passant
+
+- Un abonnement terminé (« Expired », « Canceled ») ne dit plus « renews on » mais « ended on ».
+- ⌘K ouvre directement le tiroir du membre trouvé (avant : la liste filtrée sur son nom) ;
+  Entrée sans résultat cherche les mots dans Membres.
+- Un membre sans nom a l'icône de personne dans le tableau, pas les initiales de « Member
+  without a name ».
+
+### Incertain
+
+- Sur téléphone, la barre collante (puces + recherche) prend deux lignes, environ 130 px.
+- L'en-tête des colonnes n'est pas collant : seules les puces et la recherche le sont.

@@ -87,6 +87,14 @@ export interface DemoPages {
    * Which platform it was; null when they are on neither.
    */
   noteMessage: (memberId: string, at: number, preferred: AccountPlatform) => AccountPlatform | null;
+  /**
+   * A member's own accounts on Discord and Telegram (a member's drawer): whether StayPut knows
+   * one there, and what it wrote over 30 days. An account still waiting for its member is not
+   * theirs yet: its messages are not counted for them.
+   */
+  memberPlatforms: (
+    memberId: string,
+  ) => Record<AccountPlatform, { linked: boolean; messages: number; lastAt: number | null }>;
   riskSettings: () => RiskSettingsView;
   saveRiskSettings: (next: RiskSettingsView) => RiskSettingsView;
   alumni: () => AlumniView;
@@ -768,7 +776,20 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     followed: Boolean(followed),
   }));
 
+  const memberPlatforms = (memberId: string) => {
+    const of = (platform: AccountPlatform) => {
+      const mine = on(platform).filter((a) => a.status === 'member' && a.member?.id === memberId);
+      return {
+        linked: mine.length > 0,
+        messages: sum(mine.map((a) => a.messages)),
+        lastAt: latest(mine),
+      };
+    };
+    return { discord: of('discord'), telegram: of('telegram') };
+  };
+
   return {
+    memberPlatforms,
     actions: (view) => ({
       view,
       counts: {

@@ -1,4 +1,4 @@
-/* global document, getComputedStyle */
+/* global document, getComputedStyle, window */
 /**
  * Inspect (.github/workflows/inspect.yml): the deployed demo in a real browser, as a creator sees
  * it. Says whether StayPut's fonts loaded (Satoshi for the numbers and titles, Geist for the UI:
@@ -7,9 +7,11 @@
  * balance's amount (brief v4 §13), who comes first in « Needs attention », whether every block of
  * Integrations › Activity is past « Loading… » within 5 seconds (§9.6), whether the guide shows
  * its five cards and pictures, the tour lights up its five places and the welcome has its four
- * steps (§10), and what the browser complained about; keeps screenshots of the Dashboard
- * (desktop, the balance, phone, the chart's tooltip), of the Activity tab, of the guide, of each
- * step of the tour and of the welcome. Fails when any of these is wrong. Reads nothing private:
+ * steps (§10), whether Members is a one-line-a-row table whose columns sort, whose chips stay on
+ * top and whose rows open a 420 px drawer (§9.3), and what the browser complained about; keeps
+ * screenshots of the Dashboard (desktop, the balance, phone, the chart's tooltip), of the
+ * Activity tab, of the guide, of each step of the tour, of the welcome, and of Members and a
+ * member's drawer (desktop and phone). Fails when any of these is wrong. Reads nothing private:
  * the demo is answered in the browser.
  *
  *   node look.mjs https://stayput.example.workers.dev <out dir>
@@ -208,6 +210,85 @@ for (let step = 1; step <= 4; step += 1) {
     await welcome.getByRole('button', { name: step === 1 ? 'Get started' : 'Next' }).click();
   }
 }
+
+// Members (§9.3): the table, its sticky chips, a chip, a column's order, a member's drawer.
+await desktop.page.goto(`${base}/demo/members`, { waitUntil: 'domcontentloaded' });
+const members = desktop.page.getByRole('table', { name: 'All members' });
+await members.waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(1_500);
+const rowsOf = () =>
+  desktop.page.evaluate(() =>
+    [...document.querySelectorAll('[role=table] [role=rowgroup]:last-child > [role=row]')].map(
+      (row) => [...row.querySelectorAll('[role=cell]')].map((cell) => cell.textContent.trim()),
+    ),
+  );
+report.members = await desktop.page.evaluate(() => {
+  const rows = [
+    ...document.querySelectorAll('[role=table] [role=rowgroup]:last-child > [role=row]'),
+  ];
+  return {
+    columns: [...document.querySelectorAll('[role=columnheader]')]
+      .map((header) => header.textContent.trim())
+      .filter(Boolean),
+    rows: rows.length,
+    first: rows[0]?.querySelector('[role=cell] button')?.textContent ?? null,
+    heights: rows.slice(0, 10).map((row) => Math.round(row.getBoundingClientRect().height)),
+    cutHeaders: [...document.querySelectorAll('[role=columnheader] button span')].filter(
+      (span) => span.scrollWidth > span.clientWidth,
+    ).length,
+    // A state is white words: red only as a small dot (brief v4 §6).
+    redWords: rows.filter((row) => {
+      const status = row.querySelectorAll('[role=cell]')[2];
+      return status && getComputedStyle(status).color === 'rgb(255, 92, 92)';
+    }).length,
+    urgentDots: document.querySelectorAll('[role=table] [class*="bg-urgent"]').length,
+  };
+});
+await desktop.page.screenshot({ path: `${out}/members-1440.png` });
+await desktop.page.mouse.wheel(0, 900);
+await desktop.page.waitForTimeout(700);
+report.members.chipsTop = await desktop.page.evaluate(() =>
+  Math.round(
+    document
+      .querySelector('[role=group][aria-label="Show"]')
+      .closest('.sticky')
+      .getBoundingClientRect().top,
+  ),
+);
+await desktop.page.screenshot({ path: `${out}/members-1440-scrolled.png` });
+await desktop.page.mouse.wheel(0, -5_000);
+await desktop.page.getByRole('button', { name: /^High/ }).click();
+await desktop.page.waitForTimeout(800);
+report.members.high = (await rowsOf()).length;
+await desktop.page.screenshot({ path: `${out}/members-1440-high.png` });
+await desktop.page.getByRole('button', { name: /^All/ }).click();
+await desktop.page.waitForTimeout(800);
+await members.getByRole('columnheader', { name: 'MRR' }).getByRole('button').click();
+await desktop.page.waitForTimeout(500);
+const amounts = (await rowsOf()).map((cells) =>
+  /^\$/.test(cells[3] ?? '') ? Number(cells[3].replace(/[^\d.]/g, '')) : -1,
+);
+report.members.byMrr = amounts.slice(0, 5);
+report.members.sortedByMrr = amounts.every(
+  (amount, index) => index === 0 || amount === -1 || amount <= amounts[index - 1],
+);
+await members.getByRole('row').nth(1).click();
+const drawer = desktop.page.getByRole('dialog');
+await drawer.waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(1_800);
+report.members.drawer = await drawer.evaluate((dialog) => ({
+  width: Math.round(dialog.getBoundingClientRect().width),
+  sections: [...dialog.querySelectorAll('section h3')].map((title) => title.textContent),
+  scoreDrawn: Boolean(dialog.querySelector('figure svg[role=img] path')),
+  doNotContact: dialog.querySelector('[role=switch]')?.getAttribute('aria-checked') ?? null,
+}));
+await desktop.page.screenshot({ path: `${out}/members-drawer-1440.png` });
+await desktop.page.evaluate(() =>
+  document.querySelector('dialog[open] .overflow-y-auto').scrollTo(0, 99_999),
+);
+await desktop.page.waitForTimeout(800);
+await desktop.page.screenshot({ path: `${out}/members-drawer-1440-end.png` });
+await drawer.getByRole('button', { name: 'Close' }).click();
 await desktop.context.close();
 
 const phone = await open({ width: 390, height: 844 });
@@ -225,6 +306,18 @@ for (let step = 1; step <= 5; step += 1) {
   }
   if (step < 5) await phoneTour.getByRole('button', { name: 'Next' }).click();
 }
+await phone.page.goto(`${base}/demo/members`, { waitUntil: 'domcontentloaded' });
+const phoneMembers = phone.page.getByRole('table', { name: 'All members' });
+await phoneMembers.waitFor({ timeout: 30_000 });
+await phone.page.waitForTimeout(1_500);
+report.members.phoneOverflow = await phone.page.evaluate(
+  () => document.scrollingElement.scrollWidth - window.innerWidth,
+);
+await phone.page.screenshot({ path: `${out}/members-390.png` });
+await phoneMembers.getByRole('row').nth(1).click();
+await phone.page.getByRole('dialog').waitFor({ timeout: 30_000 });
+await phone.page.waitForTimeout(1_500);
+await phone.page.screenshot({ path: `${out}/members-drawer-390.png` });
 await phone.context.close();
 await browser.close();
 
@@ -249,12 +342,30 @@ const ok =
   report.guide.showMe === 5 &&
   report.tour.length === 5 &&
   report.tour.every((step) => step.lit) &&
-  report.welcome.length === 4;
+  report.welcome.length === 4 &&
+  report.members.columns.join(' | ') ===
+    'Member | Risk | Status | MRR | Last activity | Next renewal | Do not contact' &&
+  report.members.rows > 0 &&
+  report.members.first === 'Hugo Bernard' &&
+  report.members.heights.every((height) => height <= 60) &&
+  report.members.cutHeaders === 0 &&
+  report.members.redWords === 0 &&
+  report.members.urgentDots > 0 &&
+  report.members.chipsTop === 64 &&
+  report.members.high > 0 &&
+  report.members.sortedByMrr &&
+  report.members.drawer.width === 420 &&
+  ['Why', 'Quick actions', 'Risk over 30 days', 'Payments', 'Activity over 30 days'].every(
+    (title) => report.members.drawer.sections.includes(title),
+  ) &&
+  report.members.drawer.scoreDrawn &&
+  report.members.drawer.doNotContact === 'false' &&
+  report.members.phoneOverflow <= 0;
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing or does not end on the balance, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, or the guide, the tour or the welcome is not whole: see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing or does not end on the balance, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide, the tour or the welcome is not whole, or Members or its drawer is not as the brief says: see the report above.',
   );
   process.exitCode = 1;
 }

@@ -7,9 +7,9 @@ import { buttonClass } from './Button';
 
 /**
  * A panel that slides in from the right on the drawers' spring (brief v4 §14), 420 px on an
- * elevated surface: the browser's own modal <dialog>, so the page behind is out of reach and
- * Escape closes it, like its « Close » button and a click beside it. It exists only while open:
- * the parent shows it, and removes it on `onClose`.
+ * elevated surface, the page behind dimmed to 50 % black: the browser's own modal <dialog>, so
+ * the page behind is out of reach and Escape closes it, like its « Close » button and a click
+ * beside it. It exists only while open: the parent shows it, and removes it on `onClose`.
  */
 export function Drawer({
   title,
@@ -40,7 +40,7 @@ export function Drawer({
       onClick={(event) => {
         if (event.target === event.currentTarget) close();
       }}
-      className="ms-auto me-0 my-0 h-dvh max-h-dvh w-[min(420px,100vw)] max-w-none overflow-hidden border-0 border-s border-line bg-transparent p-0 text-fg"
+      className="drawer ms-auto me-0 my-0 h-dvh max-h-dvh w-[min(420px,100vw)] max-w-none overflow-hidden border-0 border-s border-line bg-transparent p-0 text-fg"
     >
       <motion.div
         initial={{ x: '100%' }}

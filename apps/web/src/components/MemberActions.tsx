@@ -44,6 +44,7 @@ export function MemberActions({
   api,
   testMode,
   offers = true,
+  wide = false,
   onDone,
 }: {
   member: MemberRow;
@@ -51,6 +52,8 @@ export function MemberActions({
   testMode: boolean;
   /** Pause and Offer beside Message (a newcomer is only welcomed). */
   offers?: boolean;
+  /** Pause and Offer say their words whatever the room (a member's drawer). */
+  wide?: boolean;
   /** Something was queued: the figures and the feed may have changed. */
   onDone: () => void;
 }) {
@@ -112,7 +115,9 @@ export function MemberActions({
             title={t('dash.act.pauseLabel', { name })}
             icon={<PauseCircle aria-hidden="true" className="size-4" />}
           >
-            <span className="sr-only @2xl/list:not-sr-only">{t('dash.act.pause')}</span>
+            <span className={wide ? '' : 'sr-only @2xl/list:not-sr-only'}>
+              {t('dash.act.pause')}
+            </span>
           </Button>
           <Button
             variant="secondary"
@@ -122,7 +127,9 @@ export function MemberActions({
             title={t('dash.act.offerLabel', { name })}
             icon={<Gift aria-hidden="true" className="size-4" />}
           >
-            <span className="sr-only @2xl/list:not-sr-only">{t('dash.act.offer')}</span>
+            <span className={wide ? '' : 'sr-only @2xl/list:not-sr-only'}>
+              {t('dash.act.offer')}
+            </span>
           </Button>
         </>
       )}

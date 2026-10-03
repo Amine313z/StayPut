@@ -18,6 +18,10 @@ export const DURATION = {
   hover: 0.2,
   /** A section, a list item, a toggle. */
   standard: 0.3,
+  /** A list item folding away, the rows below closing up (brief v4 §14). */
+  collapse: 0.25,
+  /** A new list item's turquoise edge, lit then gone (brief v4 §14). */
+  flash: 0.6,
   /** A page coming in. */
   page: 0.45,
   /** A number counting up from 0 the first time it shows. */

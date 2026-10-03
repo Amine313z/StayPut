@@ -62,7 +62,7 @@ couleurs, polices et animations suivent [`docs/design-tokens.md`](./docs/design-
 | Rubrique (EN · FR)            | Onglets                                             |
 | ----------------------------- | --------------------------------------------------- |
 | Dashboard · Tableau de bord   | une page                                            |
-| Members · Membres             | Tous les membres · Ne jamais contacter              |
+| Members · Membres             | Tous les membres · Ne pas contacter                 |
 | Automations · Automatisations | À valider · Programmées · Historique · Offre Alumni |
 | Analytics · Analyses          | Cohortes · Leçons                                   |
 | Integrations · Intégrations   | Whop · Discord · Telegram · Activité                |
@@ -76,6 +76,13 @@ jour en un bouton (approuver, relancer les paiements échoués, proposer une pau
 urgents avec Écrire / Pause / Offre, et ce que StayPut a fait en 30 jours. Tant que la mise en
 route n'est pas finie, la pastille « Getting started » (Discord, première automatisation,
 membres à risque passés en revue, limites) s'affiche sous le titre.
+
+La page Membres est un tableau compact, une ligne par membre : son anneau de risque, son état en
+un mot (Leaving · Payment failed · Inactive · Active), ce qu'il paie par mois, sa dernière
+activité et son prochain renouvellement. Chaque colonne se trie ; les puces de filtre et la
+recherche restent en haut pendant le défilement. Une ligne ouvre le tiroir du membre : pourquoi
+il est à risque, les actions rapides, son score sur 30 jours, son abonnement et ses paiements,
+son activité par plateforme, et l'interrupteur « Ne pas contacter ».
 
 Chaque onglet a son adresse (`/dashboard/<communauté>/<rubrique>/<onglet>`) ; une adresse
 inconnue ouvre le premier onglet de sa rubrique, et les anciennes (`/actions?view=history`)

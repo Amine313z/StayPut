@@ -14,6 +14,8 @@ uses the same few gestures, from `apps/web/src/motion.ts` (Motion, `motion/react
 | `micro`    | 120 ms                           | press, focus, an item leaving a list               |
 | `hover`    | 200 ms                           | a hover                                            |
 | `standard` | 300 ms                           | a section, a row, a toggle                         |
+| `collapse` | 250 ms                           | a list item folding away, the rows closing up      |
+| `flash`    | 600 ms                           | a new list item's turquoise edge                   |
 | `page`     | 450 ms                           | a page coming in                                   |
 | `count`    | 900 ms                           | a number counting up from 0 the first time         |
 | `change`   | 600 ms                           | a number moving from its old value to a new one    |
@@ -56,14 +58,20 @@ No bounce on data: a figure lands where it is, once.
 - **Choices side by side** (a period, as small pills): the chosen one's pill slides to it
   (300 ms). The side menu's 2 px turquoise bar slides to the open section the same way.
 - **Progress** (« Getting started »): the bar grows from the left (`scaleX`).
-- **Lists** (« Needs attention »): a member who joins the list slides in with a short turquoise
-  pulse (1.2 s, opacity only); one who leaves it folds away (opacity, scale 0.98, 120 ms) and the
-  rows below close up. On hover a row lifts 2 px while a surface fades in behind it.
+- **Lists** (« Needs attention », the Members table): a member who joins the list comes in with
+  a turquoise edge on its left that lights and fades (600 ms, opacity only); one who leaves it
+  folds away in 250 ms and the rows below close up. On hover a row lifts 2 px while black-700
+  fades in behind it (200 ms).
+- **The Members table** (brief v4 §9.3): its first ten rows fade in 30 ms apart (the others are
+  there at once), their rings drawing 40 ms apart; the filter chips' pill slides to the chosen
+  one (300 ms) and the list cross-fades (200 ms); a new order moves the rows at once.
 - **Buttons**: press scales to 0.98; while working, a spinner takes the label's place without
   changing the button's size (the label stays for screen readers); on success a check mark
   shows for 1.2 s.
 - **Drawers**: slide in from the right on the spring (stiffness 380, damping 32); the page
-  behind dims.
+  behind dims to 50 % black (a window's, 70 %); a member's drawer brings its sections in 60 ms
+  apart, its activity bars growing from the left (`scaleX`, 700 ms). Switches move their knob
+  on the same spring.
 - **The guide** (brief v4 §10): its panel is a drawer; its cards come in 60 ms apart. Each
   card's picture loops a few seconds (4 to 4.5 s), then pauses 1 s, transform and opacity only,
   and plays only while it is on screen: out of sight it waits on its first frame (it starts

@@ -11,6 +11,7 @@ const ID_PATTERNS = {
   product: /^prod_[A-Za-z0-9]{1,64}$/,
   plan: /^plan_[A-Za-z0-9]{1,64}$/,
   payment: /^pay_[A-Za-z0-9]{1,64}$/,
+  member: /^mber_[A-Za-z0-9]{1,64}$/,
 } as const;
 
 export type WhopIdKind = keyof typeof ID_PATTERNS;
@@ -22,3 +23,4 @@ export function isWhopId(kind: WhopIdKind, value: unknown): value is string {
 export const isCompanyId = (value: unknown): value is string => isWhopId('company', value);
 export const isUserId = (value: unknown): value is string => isWhopId('user', value);
 export const isExperienceId = (value: unknown): value is string => isWhopId('experience', value);
+export const isMemberId = (value: unknown): value is string => isWhopId('member', value);

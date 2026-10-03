@@ -5,6 +5,7 @@ import type {
   FeedView,
   AnnouncementsView,
   GoalProposalsView,
+  MemberDetail,
   MemberRetentionView,
   MemberSpaceView,
   ResultAnswer,
@@ -2252,6 +2253,23 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     );
     // The limits were not looked at: « Getting started » still asks for them.
     expect(row).toEqual({ dry_run: false, guardrails: null });
+  });
+
+  it('opens a member’s drawer for the team only: their membership and their payments', async () => {
+    const env = await departing(14);
+    const boss = await env.boss();
+    const read = (memberId: string, as: RequestInit = boss) =>
+      env.request(`/api/creator/${env.company}/members/${memberId}`, as);
+    const detail = (await (await read('mber_Ret14')).json()) as MemberDetail;
+    expect(detail).toMatchObject({ memberId: 'mber_Ret14', scores: [], payments: [] });
+    expect(detail.memberships).toEqual([
+      expect.objectContaining({ id: 'mem_Ret14', price: 49, cancelAtPeriodEnd: true }),
+    ]);
+    // Whop only: the community connected neither Discord nor Telegram.
+    expect(detail.platforms.map((p) => p.platform)).toEqual(['whop']);
+    expect((await read('mber_Ret14', env.ana)).status).toBe(403);
+    expect((await read('mber_Nobody')).status).toBe(404);
+    expect((await read('not-a-member')).status).toBe(400);
   });
 
   it('keeps the welcome seen once, and changes only the mode from it, for the team only', async () => {

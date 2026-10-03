@@ -36,6 +36,7 @@ import { attentionReasons } from '../../components/MemberRows';
 import { LEVELS } from '../../components/Risk';
 import { ErrorPanel } from '../../components/Status';
 import { useI18n } from '../../i18n';
+import { URGENT_MS, monthlyOf } from '../../members';
 import { STAGGER, ease, itemVariants } from '../../motion';
 import { reasonText } from '../../risk-text';
 import { ActionButton } from '../../ui/ActionButton';
@@ -55,9 +56,6 @@ import { balanceWindow, monthOverMonth, savedOver, type MonthCompare } from './b
 
 /** Members in « Needs attention »: the most urgent only, the others in Members. */
 export const ATTENTION_LIMIT = 5;
-
-/** A departure this close is urgent: the red dot (the brief: within 48 hours). */
-const URGENT_MS = 48 * 3_600_000;
 
 /** A departure this close comes first in « Needs attention » (brief v4 §13: within 7 days). */
 const FIRST_MS = 7 * 86_400_000;
@@ -666,16 +664,6 @@ function Priority({
   );
 }
 
-/** A membership's price brought back to a month (the Worker's monthlyPrice). */
-function monthlyOf(membership: MemberRow['membership']): number | null {
-  if (!membership?.price || !membership.billingPeriodDays) return null;
-  const days = membership.billingPeriodDays;
-  if (days >= 28 && days <= 31) return membership.price;
-  if (days === 7) return (membership.price * 52) / 12;
-  if (days >= 365 && days <= 366) return membership.price / 12;
-  return (membership.price * 30) / days;
-}
-
 export interface Urgency {
   member: MemberRow;
   /** Leaving within 48 hours, or a payment failed and not recovered: the red dot. */
@@ -797,24 +785,26 @@ function NeedsAttention({
           <EmptyState inset body={t('attention.none')} />
         ) : (
           <Stagger as="ul" className="@container/list divide-y divide-line">
-            {/* The first rows come in with the page; one that shows up later slides in with a
-                turquoise pulse, one that goes folds away while the others move up (MOTION.md). */}
+            {/* The first rows come in with the page; one that shows up later comes in with a
+                turquoise edge (600 ms), one that goes folds away while the others close up
+                (250 ms, MOTION.md). */}
             <AnimatePresence initial={false} mode="popLayout">
               {shown.map((item, index) => (
                 <motion.li
                   key={item.member.id}
                   layout
                   variants={itemVariants}
-                  exit={{ opacity: 0, scale: 0.98, transition: ease('micro') }}
+                  exit={{ opacity: 0, transition: ease('collapse') }}
+                  transition={{ layout: ease('collapse') }}
                   className="relative"
                 >
                   {firstIds !== null && !firstIds.has(item.member.id) ? (
                     <motion.span
                       aria-hidden="true"
-                      className="pointer-events-none absolute inset-0 rounded-xl bg-turq-300/10"
+                      className="pointer-events-none absolute inset-y-2 -start-3 w-0.5 rounded-full bg-turq-300"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: [0, 1, 0] }}
-                      transition={ease('draw')}
+                      transition={ease('flash')}
                     />
                   ) : null}
                   <AttentionRow

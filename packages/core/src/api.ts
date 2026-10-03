@@ -338,6 +338,55 @@ export interface MemberRow {
 }
 
 /**
+ * GET /api/creator/:companyId/members/:memberId: what a member's drawer shows beside their row
+ * (brief v4 §9.3): their score day by day, their memberships and payments, what they did where.
+ */
+export interface MemberDetail {
+  memberId: string;
+  /** The score of each of the last 30 days (the day's last), oldest first; none before a score. */
+  scores: { day: string; score: number }[];
+  /** Their memberships, the one that counts first. */
+  memberships: MemberDetailMembership[];
+  /** Their payments, the latest first (MEMBER_PAYMENTS_LIMIT at most). */
+  payments: MemberDetailPayment[];
+  /** What they did over 30 days, place by place: Whop, then Discord and Telegram if connected. */
+  platforms: MemberPlatformActivity[];
+}
+
+export interface MemberDetailMembership {
+  id: string;
+  status: string;
+  price: number | null;
+  currency: string | null;
+  billingPeriodDays: number | null;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: string | null;
+  startedAt: string | null;
+}
+
+export interface MemberDetailPayment {
+  id: string;
+  status: string;
+  amount: number;
+  currency: string;
+  at: string;
+  failureReason: string | null;
+}
+
+export interface MemberPlatformActivity {
+  platform: 'whop' | 'discord' | 'telegram';
+  /** Over 30 days. Whop: messages, reactions, posts and lessons; elsewhere: messages. */
+  events: number;
+  /** Their last activity there, however old. */
+  lastAt: string | null;
+  /** StayPut knows their account there (always on Whop): what they write there counts. */
+  linked: boolean;
+}
+
+/** Payments a member's drawer shows at most, the latest first. */
+export const MEMBER_PAYMENTS_LIMIT = 12;
+
+/**
  * GET /api/creator/:companyId/integrations: the activity sources beside Whop (SPEC Phase 2, 5,
  * and the Telegram decision of 2026-10-01).
  */

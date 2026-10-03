@@ -75,6 +75,12 @@ export async function answerDemo(method: string, path: string, body: unknown): P
         return answer(pages.accounts());
     }
     if (/^discord\/[^/]+\/channels$/.test(route)) return answer(pages.discordChannels());
+    const member = /^members\/([^/]+)$/.exec(route);
+    if (member) {
+      const detail = demo.memberDetail(decodeURIComponent(member[1]!));
+      if (!detail) throw new ApiError('not_found', 'no such member here');
+      return answer(detail);
+    }
   }
   if (method === 'POST' && route === 'sync') {
     demo.syncNow();

@@ -368,7 +368,8 @@ function onMac(): boolean {
 
 /**
  * Finds a member by name among those the dashboard read; ⌘K (Ctrl K) from anywhere puts the
- * cursor in it. Enter or a click opens the members with that name searched.
+ * cursor in it. Enter or a click opens that member's drawer in Members; Enter with no one found
+ * opens Members with the words searched.
  */
 function MemberSearch({ root, members }: { root: string; members: readonly MemberRow[] }) {
   const { t } = useI18n();
@@ -401,10 +402,10 @@ function MemberSearch({ root, members }: { root: string; members: readonly Membe
       window.removeEventListener('keydown', shortcut);
     };
   }, []);
-  const go = (name: string) => {
+  const go = (search: { member: string } | { q: string }) => {
     setOpen(false);
     setQuery('');
-    void navigate(`${root}/members?q=${encodeURIComponent(name)}`);
+    void navigate(`${root}/members?${new URLSearchParams(search).toString()}`);
   };
   return (
     <div ref={box} className="relative hidden md:block">
@@ -432,7 +433,9 @@ function MemberSearch({ root, members }: { root: string; members: readonly Membe
         }}
         onBlur={() => setFocused(false)}
         onKeyDown={(event) => {
-          if (event.key === 'Enter' && query.trim()) go(found[0]?.name ?? query.trim());
+          if (event.key === 'Enter' && query.trim()) {
+            go(found[0] ? { member: found[0].id } : { q: query.trim() });
+          }
           if (event.key === 'Escape') setOpen(false);
         }}
         className="h-8 w-56 rounded-lg border border-line bg-surface ps-9 pe-14 text-[0.8125rem] text-fg transition-colors duration-150 placeholder:text-subtle hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent lg:w-72"
@@ -462,7 +465,7 @@ function MemberSearch({ root, members }: { root: string; members: readonly Membe
                 <li key={member.id} role="option" aria-selected={false}>
                   <button
                     type="button"
-                    onClick={() => go(member.name ?? '')}
+                    onClick={() => go({ member: member.id })}
                     className="flex w-full items-center rounded-lg px-3 py-2 text-start text-sm hover:bg-surface-3 focus-visible:outline-2 focus-visible:outline-accent"
                   >
                     {member.name}
