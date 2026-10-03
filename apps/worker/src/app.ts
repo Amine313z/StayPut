@@ -1247,6 +1247,51 @@ export function createApp(deps: AppDeps) {
   );
 
   /**
+   * The first-run welcome (brief v4 §10) was gone through or closed: it does not open by itself
+   * again, on any device, for anyone on the team (the first time is kept).
+   */
+  app.post(
+    '/api/creator/:companyId/getting-started/welcomed',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const [row] = await db.query<{ done: boolean }>(
+        'select stayput.getting_started_done($1, $2, $3::timestamptz) as done',
+        [c.get('companyId'), 'welcomed', deps.now().toISOString()],
+      );
+      return c.json({ done: row?.done ?? false });
+    },
+  );
+
+  /**
+   * « Automatic or manual? » (the welcome, brief v4 §10): the mode only, as « Turn off » changes
+   * the test mode only; the limits do not count as « set » by it. In automatic mode, what waits
+   * goes through the guardrails now.
+   */
+  app.post('/api/creator/:companyId/mode', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const body = await c.req.json<unknown>().catch(() => null);
+    const mode = (body as { mode?: unknown } | null)?.mode;
+    if (mode !== 'auto' && mode !== 'manual') {
+      return apiError('invalid_request', 'expected { mode: "auto" | "manual" }');
+    }
+    const companyId = c.get('companyId');
+    const current = await readActionSettings(db, c.get('userId'), companyId);
+    if (!current) return apiError('not_found', 'no settings for this company');
+    const next = { ...current, mode };
+    await db.query('select stayput.save_action_settings($1, $2::text::jsonb)', [
+      companyId,
+      JSON.stringify(next),
+    ]);
+    if (mode === 'auto') runActionsInBackground(c, companyId, deps.now());
+    return c.json(next);
+  });
+
+  /**
    * The creator's time zone, as their browser reports it: kept while the company has none of its
    * own yet (the quiet hours and the golden hour are the creator's local hours), then changed
    * only in the action settings. Answers the zone in effect.

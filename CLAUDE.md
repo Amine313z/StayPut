@@ -73,7 +73,11 @@ Guidance for Claude Code in this repository.
 - **Design v4** (brief « Complete redesign prompt (v4) », 2026-10-03, DECISIONS.md « Refonte du
   design, v4 »): ten steps, one stop with a screenshot after each; step 1 done (amounts always
   with symbol and cents, `$247.00` / `247,00 $`; every number in Satoshi via `.num` / `.metric*`;
-  labels in sentence case; the UI language kept per community, `/demo` always English). Before
+  labels in sentence case; the UI language kept per community, `/demo` always English). The
+  founder then ordered: the Whop-style balance and « Needs attention » (done), the Activity
+  « Loading… » bug (done), the Guide, tour and welcome (§10–11, done: `src/guide.ts`,
+  `components/guide/`, migration 0030 `welcomed_at`, routes `/mode` and
+  `/getting-started/welcomed`; `/demo?welcome` shows the welcome), then Members (§9.3). Before
   it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard

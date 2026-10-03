@@ -43,15 +43,17 @@ export function SectionLayout({ id }: { id: SectionId }) {
         ) : null}
       </header>
       {tabs.length < 2 ? null : (
-        <NavTabs
-          label={t('nav.tabs', { section: t(section.label) })}
-          items={tabs.map((tab) => ({
-            to: sectionHref(data.root, section, tab.path),
-            end: tab.path === '',
-            label: t(tab.label),
-            ...(counts[tab.path] === undefined ? {} : { count: number(counts[tab.path]!) }),
-          }))}
-        />
+        <div data-tour="tabs">
+          <NavTabs
+            label={t('nav.tabs', { section: t(section.label) })}
+            items={tabs.map((tab) => ({
+              to: sectionHref(data.root, section, tab.path),
+              end: tab.path === '',
+              label: t(tab.label),
+              ...(counts[tab.path] === undefined ? {} : { count: number(counts[tab.path]!) }),
+            }))}
+          />
+        </div>
       )}
       <motion.div
         key={location.pathname}

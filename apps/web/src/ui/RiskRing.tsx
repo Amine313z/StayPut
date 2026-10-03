@@ -25,6 +25,7 @@ export function RiskRing({
     <span
       role="img"
       aria-label={label}
+      data-risk-ring=""
       className="relative inline-flex shrink-0 items-center justify-center"
       style={{ width: size, height: size }}
     >

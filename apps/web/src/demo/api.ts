@@ -147,6 +147,14 @@ export async function answerDemo(method: string, path: string, body: unknown): P
     return { done: true };
   }
   if (method === 'POST' && route === 'test-mode/off') return answer(demo.testModeOff());
+  if (method === 'POST' && route === 'getting-started/welcomed') return { done: true };
+  if (method === 'POST' && route === 'mode') {
+    const mode = (body as { mode?: unknown } | null)?.mode;
+    if (mode !== 'auto' && mode !== 'manual') {
+      throw new ApiError('invalid_request', 'expected { mode: "auto" | "manual" }');
+    }
+    return answer(demo.setMode(mode));
+  }
   if (method === 'PUT' && route === 'settings/actions') {
     return answer(demo.saveSettings(body as ActionSettingsView));
   }

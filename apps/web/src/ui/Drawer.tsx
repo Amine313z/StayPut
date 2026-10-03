@@ -2,11 +2,11 @@ import { X } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { useI18n } from '../i18n';
-import { ease } from '../motion';
+import { SPRING } from '../motion';
 import { buttonClass } from './Button';
 
 /**
- * A panel that slides in from the right (MOTION.md: 250 ms, the brand's easing), 420 px on an
+ * A panel that slides in from the right on the drawers' spring (brief v4 §14), 420 px on an
  * elevated surface: the browser's own modal <dialog>, so the page behind is out of reach and
  * Escape closes it, like its « Close » button and a click beside it. It exists only while open:
  * the parent shows it, and removes it on `onClose`.
@@ -45,7 +45,7 @@ export function Drawer({
       <motion.div
         initial={{ x: '100%' }}
         animate={{ x: 0 }}
-        transition={ease('standard')}
+        transition={SPRING}
         className="flex h-full flex-col bg-surface-2"
       >
         <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">

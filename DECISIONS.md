@@ -1986,3 +1986,86 @@ n'ont rien écrit, 1 506 messages là où la page Membres en compte 511 sur les 
 - Des tests échouent si les tuiles ne sont plus la somme des comptes, si un membre a plus de
   messages sur Discord et Telegram que dans ses propres chiffres, ou si le direct ne compte pas
   un message partout.
+
+## 2026-10-03 — Le Guide, la visite et l'accueil (brief v4 §10 et §11)
+
+Troisième point de la liste du fondateur. Les textes sont ceux du §11, mot pour mot (anglais
+officiel, français dans la langue française).
+
+### Le Guide
+
+- Le bouton « Guide » de la barre du haut ouvre un panneau de 420 px à droite, qui arrive sur le
+  ressort des tiroirs (raideur 380, amortissement 32 ; tous les tiroirs l'ont désormais, comme le
+  dit le §14). Cinq cartes validées, chacune avec sa petite animation en boucle (4 à 4,5 s puis
+  1 s de pause, transform et opacité seulement, en pause hors de l'écran, immobile si l'appareil
+  demande moins de mouvement) et « Show me ». Puis « What do you want to do? » et ses quatre
+  raccourcis, puis « Replay the tour ». Plus de carte « mode test » : le mode test garde sa fine
+  barre en haut de chaque écran.
+- « Show me » ouvre la page et éclaire l'endroit (page assombrie, halo turquoise, le titre de la
+  carte et « Got it ») : qui va partir → « Needs attention » ; les garder → le choix
+  Automatique / Manuel (Réglages › Automatisations) ; l'argent gardé → le montant du mois ; le
+  contrôle → les limites ; Discord et Telegram → l'invitation à connecter (ou les onglets des
+  plateformes quand l'une l'est déjà).
+- Les raccourcis mènent à l'écran qui le fait, sans bloquer la page : « See who is about to
+  leave » → Membres filtrés sur « Leaving » ; « Turn on payment retries » → le champ « Retries per
+  failed payment » (un halo s'allume 2 s et le curseur s'y place) ; « Connect Discord or
+  Telegram » → Intégrations ; « Set my limits » → les limites. Quand la page Automatisations aura
+  ses règles (étape 7), les relances de paiement y pointeront.
+- Depuis un vrai tableau de bord, « Explore with demo data » reste tout en bas, sur une ligne :
+  c'est le seul chemin vers la démo depuis l'application.
+
+### La visite (5 étapes)
+
+- Le montant du mois → l'action du jour → l'anneau de risque du premier membre → Automatisations
+  → Intégrations (sur téléphone, « More », où se trouve Intégrations). Page assombrie à 70 %,
+  halo turquoise de 2 px, Next / Back / Skip (et les flèches, Échap). Le halo et la bulle
+  glissent d'un endroit à l'autre en 400 ms ; un clic sur la page assombrie ne fait rien (rien ne
+  s'arrête par erreur). « $0.00 » du premier texte est écrit dans la devise de la communauté.
+- Un endroit absent (une page qui charge) est attendu 5 secondes ; s'il ne vient pas, la bulle
+  reste au milieu de la page assombrie : ce qu'elle dit reste vrai.
+
+### L'accueil (premier lancement, 4 étapes)
+
+- Bienvenue → Discord ou Telegram (facultatif, chaque connexion en un clic, « Connected » une
+  fois fait) → Automatique ou manuel (enregistré sur « Next ») → le premier audit : les membres
+  à risque et les revenus qu'ils menacent, les chiffres mêmes du tableau de bord, qui comptent
+  depuis 0. Il se termine sur la visite ou le tableau de bord.
+- Il s'ouvre seul la première fois qu'une communauté ouvre StayPut, quel que soit l'appareil ou
+  la personne de l'équipe, puis plus jamais une fois parcouru ou fermé (« Skip », Échap).
+  Migration **0030** : `company_settings.welcomed_at`, enregistré par `getting_started_done`
+  comme les étapes de « Getting started » (la première fois seulement). Conséquence : il
+  s'ouvrira une fois dans la communauté du fondateur après ce déploiement.
+- Routes : `POST /getting-started/welcomed` ; `POST /mode` (le mode seul, comme « Turn off » ne
+  change que le mode test : les limites ne comptent pas comme réglées).
+- La démo ne l'ouvre jamais seule (elle s'ouvre sur son tableau de bord) ; `/demo?welcome`
+  l'ouvre, pour le voir et pour les captures.
+
+### Intégrations sans Discord ni Telegram
+
+- L'onglet Whop (l'entrée des Intégrations) et l'onglet Activity montrent l'état vide du §11 :
+  « StayPut only sees what happens on Whop. », la phrase, les trois bénéfices, « Connect
+  Discord » (le seul bouton principal de la page) et « Connect Telegram », chacun directement vers
+  l'ajout du bot.
+- La phrase de confidentialité est désormais la même partout (Intégrations, Guide, accueil) :
+  « StayPut never reads what members write: only who wrote and when. » C'est exact : le bot ne
+  garde que l'auteur (son nom, pour reconnaître le membre) et l'heure, jamais le texte.
+
+### Une seule formulation
+
+- Les deux modes se décrivent partout comme la carte 2 : « StayPut acts on its own, within your
+  limits. » / « StayPut asks you first: you approve each action. » (avant : « guardrails »,
+  « Actions tab »).
+
+### Corrigé en passant
+
+- Démo : « Disconnect » sur un groupe Telegram le laissait affiché « retiré » au lieu de le
+  retirer, comme le fait le Worker ; le bouton revenait sans fin.
+
+### À valider
+
+- **Trois lignes par carte** : à 420 px, les textes validés font 3, 4, 3, 4 et 6 lignes en anglais
+  (4, 5, 4, 4, 6 en français), plus « 2-minute setup. » et la phrase de confidentialité sous la
+  carte 5. Les textes sont gardés mot pour mot ; pour tenir en trois lignes il faudrait les
+  raccourcir.
+- La taille du halo de la visite change pendant ses 400 ms (un seul élément fixe, hors de toute
+  mise en page) : c'est la seule animation qui n'est pas que transform et opacité.

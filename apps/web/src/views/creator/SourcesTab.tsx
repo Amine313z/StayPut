@@ -1,7 +1,8 @@
 import type { AccountPlatform, IntegrationsStatus } from '@stayput/core';
-import { Activity, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { AccountsCard } from '../../components/AccountsCard';
+import { ConnectInvite } from '../../components/ConnectInvite';
 import { DiscordCard } from '../../components/DiscordCard';
 import { PeopleCard } from '../../components/PeopleCard';
 import { PlatformActivityCard } from '../../components/PlatformActivityCard';
@@ -9,7 +10,6 @@ import { ErrorPanel, Loading } from '../../components/Status';
 import { SyncPanel } from '../../components/SyncPanel';
 import { TelegramCard } from '../../components/TelegramCard';
 import { useI18n } from '../../i18n';
-import { EmptyState } from '../../ui/EmptyState';
 import { useCreatorData } from '../CreatorView';
 
 /**
@@ -17,15 +17,25 @@ import { useCreatorData } from '../CreatorView';
  * connects them), then the activity they bring. Only who wrote and when is ever kept.
  */
 
-/** Integrations › Whop: the synchronization with Whop, and what StayPut keeps of it. */
+/**
+ * Integrations › Whop: the synchronization with Whop, and what StayPut keeps of it. While neither
+ * Discord nor Telegram is connected, first what StayPut misses without them (brief v4 §11).
+ */
 export function WhopTab() {
-  const { sync } = useCreatorData();
+  const { sync, integrations, root } = useCreatorData();
+  const status = integrations.state.status === 'ready' ? integrations.state.data : null;
   return (
     <div className="space-y-6">
+      {status && !connected(status) ? <ConnectInvite status={status} root={root} /> : null}
       <SyncPanel sync={sync} />
       <Privacy />
     </div>
   );
+}
+
+/** Discord or Telegram brings activity: a server or a group is connected. */
+function connected(status: IntegrationsStatus): boolean {
+  return status.discord.servers.length > 0 || status.telegram.groups.length > 0;
 }
 
 /** Integrations › Discord: the servers StayPut reads, and connecting one. */
@@ -75,8 +85,7 @@ export function TelegramTab() {
  * their accounts to tie to members.
  */
 export function ActivityTab() {
-  const { t } = useI18n();
-  const { api, integrations, members } = useCreatorData();
+  const { api, integrations, members, root } = useCreatorData();
   // New messages may come from accounts to tie; tying one moves its messages.
   const [accountsKey, setAccountsKey] = useState(0);
   const [activityKey, setActivityKey] = useState(0);
@@ -89,14 +98,7 @@ export function ActivityTab() {
           ...(status.discord.servers.length > 0 ? (['discord'] as const) : []),
           ...(status.telegram.groups.length > 0 ? (['telegram'] as const) : []),
         ];
-        if (platforms.length === 0) {
-          return (
-            <EmptyState
-              icon={<Activity aria-hidden="true" className="size-5" />}
-              body={t('activity.connectFirst')}
-            />
-          );
-        }
+        if (platforms.length === 0) return <ConnectInvite status={status} root={root} />;
         return (
           <div className="space-y-6">
             <PlatformActivityCard

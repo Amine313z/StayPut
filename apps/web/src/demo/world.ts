@@ -310,6 +310,8 @@ export interface DemoWorld {
   saveSettings: (next: ActionSettingsView) => ActionSettingsView;
   /** « Turn off » on the test-mode banner: the test mode only, the limits untouched. */
   testModeOff: () => ActionSettingsView;
+  /** « Automatic or manual? » in the welcome: the mode only. */
+  setMode: (mode: ActionSettingsView['mode']) => ActionSettingsView;
   /** « Pause » or « Offer »: refused when one is open, when the member cannot be contacted. */
   offer: (memberId: string, kind: CreatorOfferKind) => CreatorOfferMade | { error: string };
   setContact: (memberId: string, doNotContact: boolean) => boolean | null;
@@ -794,6 +796,8 @@ export function createWorld(now: number): DemoWorld {
         riskHistory,
         revenueHistory,
         gettingStarted: { ...gettingStarted },
+        // The demo opens on its dashboard: its welcome only with `?welcome` (brief v4 §10).
+        welcomed: true,
         priority: choosePriority({
           mode: settings.mode,
           pending: pages.pending(),
@@ -871,6 +875,11 @@ export function createWorld(now: number): DemoWorld {
       settings.dryRun = false;
       return settings;
     },
+    setMode: (mode) => {
+      settings.mode = mode;
+      if (mode === 'auto') gettingStarted.automation = true;
+      return settings;
+    },
     setContact: (id, doNotContact) => {
       const member = memberOf(id);
       if (!member) return null;
@@ -881,9 +890,8 @@ export function createWorld(now: number): DemoWorld {
       if (platform === 'discord') {
         integrations.discord.servers = integrations.discord.servers.filter((s) => s.guildId !== id);
       } else {
-        integrations.telegram.groups = integrations.telegram.groups.map((g) =>
-          g.chatId === id ? { ...g, active: false } : g,
-        );
+        // As the Worker does (disconnect_telegram_chat): the group goes, the bot leaves it.
+        integrations.telegram.groups = integrations.telegram.groups.filter((g) => g.chatId !== id);
       }
     },
     syncNow: () => {

@@ -334,6 +334,7 @@ const HOME: DashboardView = {
   ],
   revenueHistory: REVENUE_HISTORY,
   gettingStarted: { discord: true, automation: true, reviewed: true, guardrails: true },
+  welcomed: true,
   priority: { kind: 'message', memberIds: ['mber_3'], revenue: 49 },
 };
 
@@ -3734,20 +3735,6 @@ describe('the creator’s frame', () => {
     expect(within(developer).getByRole('button', { name: 'Copy' })).toBeTruthy();
   });
 
-  it('opens the guide from the top bar, and leads to the demo', async () => {
-    mockApi(dashboard());
-    renderAt('/dashboard/biz_A1');
-    fireEvent.click(await screen.findByRole('button', { name: 'Guide' }));
-    const guide = await screen.findByRole('dialog', { name: 'How StayPut works' });
-    expect(guide.textContent).toContain('The risk score');
-    expect(guide.textContent).toContain('Each payment counts once.');
-    expect(
-      within(guide).getByRole('link', { name: 'Explore with demo data' }).getAttribute('href'),
-    ).toBe('/demo?from=%2Fdashboard%2Fbiz_A1');
-    fireEvent.click(within(guide).getByRole('button', { name: 'Close' }));
-    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  });
-
   it('lists the other sections under « More » on a phone', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
@@ -3759,6 +3746,228 @@ describe('the creator’s frame', () => {
         .getAllByRole('link')
         .map((link) => link.textContent),
     ).toEqual(['Integrations', 'Settings']);
+  });
+});
+
+describe('the guide (brief v4 §10)', () => {
+  it('opens five cards in the validated words, then four shortcuts and the tour', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Guide' }));
+    const guide = await screen.findByRole('dialog', { name: 'Guide' });
+    expect(
+      within(guide)
+        .getAllByRole('heading', { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual([
+      'Who is about to leave',
+      'Keep them, automatically',
+      'See the money you kept',
+      'You stay in control',
+      'Connect Discord and Telegram',
+      'What do you want to do?',
+    ]);
+    expect(guide.textContent).toContain(
+      'StayPut watches every member for you. When someone goes quiet, misses a payment or schedules a cancellation, they show up here with the reason. You never have to dig.',
+    );
+    expect(guide.textContent).toContain(
+      'StayPut never reads what members write: only who wrote and when.',
+    );
+    expect(within(guide).getAllByRole('button', { name: 'Show me' })).toHaveLength(5);
+    // Each card loops its picture while on screen; nothing here says how StayPut computes.
+    expect(guide.querySelectorAll('[data-loop]')).toHaveLength(5);
+    expect(guide.textContent).not.toMatch(/Test mode|direct|influenced|Guardrails/i);
+    expect(
+      [
+        'See who is about to leave',
+        'Turn on payment retries',
+        'Connect Discord or Telegram',
+        'Set my limits',
+      ].map((name) => within(guide).getByRole('button', { name }).textContent),
+    ).toHaveLength(4);
+    expect(within(guide).getByRole('button', { name: 'Replay the tour' })).toBeTruthy();
+    // From a real dashboard, the way into the demo stays, at the bottom.
+    expect(
+      within(guide).getByRole('link', { name: 'Explore with demo data' }).getAttribute('href'),
+    ).toBe('/demo?from=%2Fdashboard%2Fbiz_A1');
+    fireEvent.click(within(guide).getByRole('button', { name: 'Close' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('runs the tour: five places, Next, Back and the arrows, Done at the end', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Guide' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Replay the tour' }));
+    const tour = await screen.findByRole('dialog', { name: 'Tour of StayPut' });
+    expect(tour.textContent).toContain('1 of 5');
+    expect(within(tour).getByRole('heading').textContent).toBe('Revenue saved · This month');
+    expect(tour.textContent).toContain(
+      'This is what StayPut earned you this month. It starts at $0.00 and grows with every member saved.',
+    );
+    // Its places are marked on the dashboard and in the menu.
+    for (const place of ['hero', 'priority', 'attention', 'nav-actions', 'nav-sources']) {
+      expect(document.querySelector(`[data-tour="${place}"]`), place).not.toBeNull();
+    }
+    expect(within(tour).queryByRole('button', { name: 'Back' })).toBeNull();
+    fireEvent.click(within(tour).getByRole('button', { name: 'Next' }));
+    expect(tour.textContent).toContain('2 of 5');
+    expect(tour.textContent).toContain(
+      'One thing to do today. Click it, StayPut handles the rest.',
+    );
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(tour.textContent).toContain('0 means safe, 100 means leaving. Hover to see why.');
+    fireEvent.click(within(tour).getByRole('button', { name: 'Back' }));
+    expect(tour.textContent).toContain('2 of 5');
+    fireEvent.click(within(tour).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(tour).getByRole('button', { name: 'Next' }));
+    expect(within(tour).getByRole('heading').textContent).toBe('Automations');
+    expect(tour.textContent).toContain(
+      'Decide what StayPut does on its own. Start with payment retries: zero risk, instant results.',
+    );
+    fireEvent.click(within(tour).getByRole('button', { name: 'Next' }));
+    expect(tour.textContent).toContain('5 of 5');
+    expect(tour.textContent).toContain(
+      'Connect Discord or Telegram: that’s where your members talk. Without it, StayPut only sees half of what’s going on.',
+    );
+    fireEvent.click(within(tour).getByRole('button', { name: 'Done' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('stops the tour on Skip or Escape', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Guide' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Replay the tour' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Replay the tour' }));
+    const tour = await screen.findByRole('dialog', { name: 'Tour of StayPut' });
+    fireEvent.click(within(tour).getByRole('button', { name: 'Skip' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('shows a card’s place on its page, and goes straight to a shortcut’s screen', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/settings/actions': [
+        { status: 200, body: ACTION_SETTINGS },
+        { status: 200, body: ACTION_SETTINGS },
+      ],
+    });
+    renderAt('/dashboard/biz_A1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Guide' }));
+    const guide = await screen.findByRole('dialog', { name: 'Guide' });
+    fireEvent.click(within(guide).getAllByRole('button', { name: 'Show me' })[1]!);
+    // « Keep them, automatically »: Settings › Automations, where the mode is chosen.
+    const shown = await screen.findByRole('dialog', { name: 'Keep them, automatically' });
+    expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeTruthy();
+    await vi.waitFor(() => expect(document.querySelector('[data-tour="mode"]')).not.toBeNull());
+    expect(document.querySelector('[data-tour="limits"]')).not.toBeNull();
+    expect(document.querySelector('[data-tour="retries"] input')).not.toBeNull();
+    fireEvent.click(within(shown).getByRole('button', { name: 'Got it' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'See who is about to leave' }));
+    expect(await screen.findByRole('heading', { name: 'Members', level: 1 })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('welcomes a new community in four steps, saves the mode, reveals the audit, then tours', async () => {
+    const calls = mockApi({
+      ...dashboard(MEMBERS, INTEGRATIONS, { ...HOME, welcomed: false }),
+      'POST /api/creator/biz_A1/mode': [
+        { status: 200, body: { ...ACTION_SETTINGS, mode: 'auto' } },
+      ],
+      'POST /api/creator/biz_A1/getting-started/welcomed': [{ status: 200, body: { done: true } }],
+    });
+    renderAt('/dashboard/biz_A1');
+    const welcome = await screen.findByRole('dialog', { name: 'Welcome to StayPut' });
+    expect(welcome.textContent).toContain('Who is about to leave');
+    fireEvent.click(within(welcome).getByRole('button', { name: 'Get started' }));
+    // Discord or Telegram, optional, each in one tap; what StayPut reads, said as everywhere.
+    expect(
+      await within(welcome).findByRole('heading', { name: 'Connect Discord or Telegram' }),
+    ).toBeTruthy();
+    expect(welcome.textContent).toContain('Optional');
+    expect(
+      within(welcome).getByRole('link', { name: 'Connect Discord' }).getAttribute('href'),
+    ).toBe(INTEGRATIONS.discord.install!.url);
+    expect(
+      within(welcome).getByRole('link', { name: 'Connect Telegram' }).getAttribute('href'),
+    ).toBe(INTEGRATIONS.telegram.addToGroup!.url);
+    expect(welcome.textContent).toContain(
+      'StayPut never reads what members write: only who wrote and when.',
+    );
+    fireEvent.click(within(welcome).getByRole('button', { name: 'Next' }));
+    // Automatic or manual: the community's mode first, the choice saved on Next.
+    const choice = await within(welcome).findByRole('radiogroup', { name: 'Automatic or manual?' });
+    expect(within(choice).getByRole<HTMLInputElement>('radio', { name: /^Manual/ }).checked).toBe(
+      true,
+    );
+    fireEvent.click(within(choice).getByRole('radio', { name: /^Automatic/ }));
+    fireEvent.click(within(welcome).getByRole('button', { name: 'Next' }));
+    // The first audit: the dashboard's own figures.
+    expect(await within(welcome).findByRole('heading', { name: 'Your first audit' })).toBeTruthy();
+    expect(bodies.get('POST /api/creator/biz_A1/mode')).toEqual({ mode: 'auto' });
+    await vi.waitFor(() => expect(welcome.textContent).toContain('$98.00'));
+    expect(welcome.textContent).toContain('members at risk');
+    expect(welcome.textContent).toContain('threatened');
+    expect(welcome.textContent).toContain('The most urgent come first on your dashboard.');
+    fireEvent.click(within(welcome).getByRole('button', { name: 'Take the tour' }));
+    expect(await screen.findByRole('dialog', { name: 'Tour of StayPut' })).toBeTruthy();
+    // Seen: it never opens by itself again.
+    expect(calls).toContain('POST /api/creator/biz_A1/getting-started/welcomed');
+  });
+
+  it('closes the welcome for good on Skip, and never opens it in the demo unless asked', async () => {
+    const calls = mockApi({
+      ...dashboard(MEMBERS, INTEGRATIONS, { ...HOME, welcomed: false }),
+      'POST /api/creator/biz_A1/getting-started/welcomed': [{ status: 200, body: { done: true } }],
+    });
+    renderAt('/dashboard/biz_A1');
+    const welcome = await screen.findByRole('dialog', { name: 'Welcome to StayPut' });
+    fireEvent.click(within(welcome).getByRole('button', { name: 'Skip' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(calls).toContain('POST /api/creator/biz_A1/getting-started/welcomed');
+    cleanup();
+
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo');
+    expect(await screen.findByText('Atlas Trading Club')).toBeTruthy();
+    await screen.findByRole('heading', { name: 'Needs attention' }, { timeout: 3_000 });
+    expect(screen.queryByRole('dialog', { name: 'Welcome to StayPut' })).toBeNull();
+    cleanup();
+    renderAt('/demo?welcome');
+    expect(
+      await screen.findByRole('dialog', { name: 'Welcome to StayPut' }, { timeout: 3_000 }),
+    ).toBeTruthy();
+  });
+
+  it('says what StayPut misses without Discord or Telegram, with the two ways to connect', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/sources');
+    const invite = (
+      await screen.findByRole('heading', { name: 'StayPut only sees what happens on Whop.' })
+    ).closest('section')!;
+    expect(invite.textContent).toContain(
+      'Connect Discord or Telegram to spot members who are drifting away where they actually talk.',
+    );
+    for (const benefit of [
+      'Earlier detection',
+      'Messages at the right time',
+      'A more accurate score',
+    ]) {
+      expect(invite.textContent).toContain(benefit);
+    }
+    expect(within(invite).getByRole('link', { name: 'Connect Discord' }).getAttribute('href')).toBe(
+      INTEGRATIONS.discord.install!.url,
+    );
+    expect(
+      within(invite).getByRole('link', { name: 'Connect Telegram' }).getAttribute('href'),
+    ).toBe(INTEGRATIONS.telegram.addToGroup!.url);
   });
 });
 

@@ -212,7 +212,7 @@ export const fr: Messages = {
   'sources.unlinkedAuthors.one': '{count} auteur récent non relié à un membre',
   'sources.unlinkedAuthors.other': '{count} auteurs récents non reliés à un membre',
   'sources.privacy':
-    'StayPut ne lit jamais ce qui est écrit : seulement qui a écrit (son nom, pour reconnaître le membre) et quand. Déconnecter une source fait partir son bot.',
+    'StayPut ne lit jamais ce que les membres écrivent : seulement qui a écrit, et quand.',
   'sync.badge.never': 'En attente',
   'members.description':
     'Tous les membres que StayPut a lus dans Whop, les plus susceptibles de partir d’abord, avec les raisons, leur abonnement, leurs paiements et leur activité.',
@@ -823,8 +823,6 @@ export const fr: Messages = {
   'neverContact.description':
     'Les membres pour qui StayPut ne fait rien, d’aucune sorte. Retirez un membre de la liste depuis sa ligne.',
   'neverContact.none': 'Aucun membre sur cette liste.',
-  'activity.connectFirst':
-    'Connectez un serveur Discord ou un groupe Telegram : leur activité et les personnes qui y sont s’affichent ici.',
 
   'spaceTab.figures': 'Votre espace membre en chiffres',
   'spaceTab.goals': 'Objectifs en cours',
@@ -991,10 +989,9 @@ export const fr: Messages = {
     'Comment les actions partent, et les limites que StayPut ne franchit jamais.',
   'actionSettings.mode': 'Mode',
   'actionSettings.mode.manual': 'Manuel',
-  'actionSettings.mode.manual.hint': 'Vous validez chaque action dans l’onglet Actions.',
+  'actionSettings.mode.manual.hint': 'StayPut vous demande d’abord : vous approuvez chaque action.',
   'actionSettings.mode.auto': 'Automatique',
-  'actionSettings.mode.auto.hint':
-    'Les actions partent seules dès que les garde-fous le permettent.',
+  'actionSettings.mode.auto.hint': 'StayPut agit seul, dans vos limites.',
   'actionSettings.dryRun': 'Mode test',
   'actionSettings.dryRun.hint': 'Tout est calculé et visible dans l’historique, rien n’est envoyé.',
   'actionSettings.killSwitch': 'Arrêt d’urgence',
@@ -1062,22 +1059,82 @@ export const fr: Messages = {
   'shell.searchNone': 'Aucun membre à ce nom.',
   'shell.communityFallback': 'Votre communauté',
 
-  'help.title': 'Comment marche StayPut',
-  'help.lead': 'Quatre choses à savoir, en bref.',
-  'help.risk.title': 'Le score de risque',
-  'help.risk.body':
-    'Chaque heure, StayPut note chaque membre de 0 à 100 sur ce qu’il fait : activité, progression, paiements, une annulation. Les raisons accompagnent toujours le score.',
-  'help.saved.title': 'Revenus sauvés',
-  'help.saved.body':
-    'Direct : un paiement échoué rattrapé, une annulation retirée, une pause qui se termine, un retour avec le code de StayPut. Influencé : un renouvellement après un message auquel le membre a réagi. Chaque paiement ne compte qu’une fois.',
-  'help.guardrails.title': 'Garde-fous',
-  'help.guardrails.body':
-    'Rien ne part sans passer vos limites : messages par membre, heures calmes, relances de paiement, codes promo, jours offerts. Vous les réglez dans Réglages.',
-  'help.test.title': 'Mode test',
-  'help.test.body':
-    'Tant qu’il est actif, StayPut calcule tout et n’envoie rien : chaque action apparaît comme simulée.',
-  'help.demo': 'Explorer avec des données de démo',
-  'help.demoHint': 'Une communauté imaginaire, pour voir chaque écran rempli.',
+  'guide.title': 'Guide',
+  'guide.who.title': 'Qui est sur le point de partir',
+  'guide.who.body':
+    'StayPut surveille chaque membre à votre place. Quand quelqu’un devient silencieux, rate un paiement ou programme une annulation, il apparaît ici avec la raison. Vous n’avez rien à chercher.',
+  'guide.keep.title': 'Les garder, automatiquement',
+  'guide.keep.body':
+    'Un paiement échoué est relancé. Un membre qui part se voit proposer une pause ou quelques jours offerts. Un membre silencieux reçoit un message à l’heure où il est habituellement en ligne. Vous choisissez : StayPut agit seul, ou vous demande d’abord.',
+  'guide.money.title': 'Voir l’argent que vous avez gardé',
+  'guide.money.body':
+    'Chaque membre que StayPut fait revenir est compté, avec l’action qui l’a sauvé. Un seul chiffre vous dit ce que StayPut vous a rapporté ce mois-ci. Rien n’est compté deux fois.',
+  'guide.control.title': 'Vous gardez le contrôle',
+  'guide.control.body':
+    'StayPut ne spamme jamais. Un message par membre tous les 5 jours, pas de messages la nuit, un plafond de réductions, et une liste de membres à ne jamais contacter. Tout se règle dans Réglages.',
+  'guide.connect.title': 'Connectez Discord et Telegram',
+  'guide.connect.body':
+    'Vos membres parlent sur Discord ou Telegram, pas sur Whop. Sans cette connexion, StayPut ne voit qu’une partie de leur activité et peut rater quelqu’un qui décroche. Une fois connecté, StayPut voit qui est actif et quand, et un membre qui se tait est repéré des semaines avant qu’il n’annule.',
+  'guide.connect.setup': 'Connexion en 2 minutes.',
+  'guide.showMe': 'Montrez-moi',
+  'guide.gotIt': 'Compris',
+  'guide.todo': 'Que voulez-vous faire ?',
+  'guide.do.leaving': 'Voir qui va partir',
+  'guide.do.retries': 'Activer les relances de paiement',
+  'guide.do.connect': 'Connecter Discord ou Telegram',
+  'guide.do.limits': 'Régler mes limites',
+  'guide.replay': 'Revoir la visite',
+  'guide.demo': 'Explorer avec des données de démo',
+
+  'tour.label': 'Visite de StayPut',
+  'tour.step': '{step} sur {total}',
+  'tour.back': 'Retour',
+  'tour.next': 'Suivant',
+  'tour.skip': 'Passer',
+  'tour.done': 'Terminé',
+  'tour.hero':
+    'Voici ce que StayPut vous a rapporté ce mois-ci. Ça commence à {zero} et ça monte à chaque membre sauvé.',
+  'tour.priority': 'Une seule chose à faire aujourd’hui. Cliquez, StayPut s’occupe du reste.',
+  'tour.risk': '0 veut dire en sécurité, 100 veut dire sur le départ. Survolez pour voir pourquoi.',
+  'tour.automations':
+    'Décidez ce que StayPut fait tout seul. Commencez par les relances de paiement : zéro risque, résultats immédiats.',
+  'tour.integrations':
+    'Connectez Discord ou Telegram : c’est là que vos membres parlent. Sans ça, StayPut ne voit que la moitié de ce qui se passe.',
+
+  'welcome.label': 'Bienvenue dans StayPut',
+  'welcome.step': 'Étape {step} sur {total}',
+  'welcome.skip': 'Passer',
+  'welcome.back': 'Retour',
+  'welcome.next': 'Suivant',
+  'welcome.hello.body':
+    'StayPut repère les membres sur le point de partir, les garde, et vous montre l’argent sauvé.',
+  'welcome.hello.start': 'Commencer',
+  'welcome.connect.optional': 'Facultatif',
+  'welcome.connect.body':
+    'C’est là que vos membres parlent. Sans ça, StayPut ne voit que la moitié de ce qui se passe.',
+  'welcome.connect.done': 'Connecté',
+  'welcome.mode.title': 'Automatique ou manuel ?',
+  'welcome.mode.body': 'Vous choisissez : StayPut agit seul, ou vous demande d’abord.',
+  'welcome.mode.later': 'Vous pourrez changer d’avis à tout moment dans Réglages.',
+  'welcome.audit.title': 'Votre premier audit',
+  'welcome.audit.members.one': 'membre à risque',
+  'welcome.audit.members.other': 'membres à risque',
+  'welcome.audit.threatened': 'menacés',
+  'welcome.audit.found': 'Les plus urgents passent en premier sur votre tableau de bord.',
+  'welcome.audit.none':
+    'Personne n’est à risque aujourd’hui. StayPut continue de veiller, chaque heure.',
+  'welcome.audit.reading': 'StayPut lit vos membres. Les chiffres s’affichent d’eux-mêmes.',
+  'welcome.audit.tour': 'Faire la visite',
+  'welcome.audit.dashboard': 'Aller au tableau de bord',
+
+  'connect.title': 'StayPut ne voit que ce qui se passe sur Whop.',
+  'connect.body':
+    'Connectez Discord ou Telegram pour repérer les membres qui décrochent là où ils parlent vraiment.',
+  'connect.benefit.earlier': 'Détection plus tôt',
+  'connect.benefit.timing': 'Messages au bon moment',
+  'connect.benefit.score': 'Score plus juste',
+  'connect.discord': 'Connecter Discord',
+  'connect.telegram': 'Connecter Telegram',
 
   'demo.badge': 'Données de démo',
   'demo.notice':

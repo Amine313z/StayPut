@@ -46,8 +46,12 @@ sur chaque table. Le Worker s'y connecte par Hyperdrive. Budget : 0 €.
 Noir, turquoise clair et blanc, en thème sombre seulement ; les chiffres et les titres en
 Satoshi, le reste en Geist. Un menu de rubriques sur le côté, qui se replie sur ses icônes ; en
 haut, le logo de StayPut, la communauté (nom et logo lus chez Whop), la recherche d'un membre
-(⌘K ou Ctrl K) et le **Guide**. Quand le mode test est actif, une fine barre le dit, avec
-« Désactiver ». La langue (English par défaut, Français) se change **uniquement** dans
+(⌘K ou Ctrl K) et le **Guide** : cinq cartes animées (qui va partir, les garder, l'argent gardé,
+le contrôle, Discord et Telegram), chacune avec « Montrez-moi » qui ouvre la page et en éclaire
+l'endroit, quatre raccourcis et une visite en cinq étapes. La première fois qu'une communauté
+ouvre StayPut, un accueil en quatre étapes : bienvenue, Discord ou Telegram, automatique ou
+manuel, premier audit (puis la visite). Quand le mode test est actif, une fine barre le dit,
+avec « Désactiver ». La langue (English par défaut, Français) se change **uniquement** dans
 Réglages › Général, et n'est retenue que pour l'app de cette communauté : la démo s'ouvre
 toujours en anglais. Les montants s'écrivent comme sur Whop, symbole et centimes compris
 (« $247.00 », « 247,00 $ »). L'identifiant brut de la communauté (`biz_…`) n'apparaît que dans
@@ -195,7 +199,8 @@ imaginaire (« Atlas Trading Club ») : rien n'y est réel, rien n'est envoyé, 
 nécessaire. 36 membres (39 avec ceux qui sont partis), 90 jours d'historique, des annulations,
 des paiements échoués et la pastille « Getting started » à 2 étapes sur 4 (elle se coche quand
 on visite Membres et qu'on enregistre les limites). Pour les captures de l'App Store et pour montrer StayPut ; dans l'app, le Guide
-y mène par « Explorer avec des données de démo ».
+y mène par « Explorer avec des données de démo ». La démo ne montre pas l'accueil d'elle-même :
+`/demo?welcome` l'ouvre.
 
 ### Discord et Telegram (optionnels, gratuits)
 

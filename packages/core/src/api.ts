@@ -157,6 +157,8 @@ export interface DashboardView {
   revenueHistory: RevenueDay[];
   /** The « Getting started » steps; the card is gone once all four are done. */
   gettingStarted: GettingStarted;
+  /** The first-run welcome was seen (brief v4 §10): it opens by itself only before. */
+  welcomed: boolean;
   /** The one action that protects the most revenue today; null when nothing is urgent. */
   priority: PriorityAction | null;
 }

@@ -62,7 +62,18 @@ No bounce on data: a figure lands where it is, once.
 - **Buttons**: press scales to 0.98; while working, a spinner takes the label's place without
   changing the button's size (the label stays for screen readers); on success a check mark
   shows for 1.2 s.
-- **Drawers**: slide in from the right; the page behind dims.
+- **Drawers**: slide in from the right on the spring (stiffness 380, damping 32); the page
+  behind dims.
+- **The guide** (brief v4 §10): its panel is a drawer; its cards come in 60 ms apart. Each
+  card's picture loops a few seconds (4 to 4.5 s), then pauses 1 s, transform and opacity only,
+  and plays only while it is on screen: out of sight it waits on its first frame (it starts
+  again without a jump), and with less motion asked it shows its telling frame, still.
+- **The tour and « Show me »**: the page dims to 70 % black around the lit place, which wears a
+  2 px turquoise halo; from one place to the next the halo and the card glide in 400 ms; the
+  first place fades in where it is. A scroll or a new window size moves them at once. A
+  shortcut's light (no dimming, nothing stopped) comes on, holds and fades in 2 s.
+- **The welcome**: the window springs in; its steps cross-fade with a 12 px slide; its four
+  progress segments grow from the left (`scaleX`); the audit's figures count up from 0.
 - **Toasts**: slide in at the bottom right, stack, leave after 4 s.
 - **Loading**: every block shows its own shape on black-700 with a black-600 light passing over
   it; never an empty box, never a page-wide spinner. Never longer than 5 seconds: then the
@@ -80,9 +91,9 @@ are switched off with Tailwind's `motion-reduce:`.
 ## Performance
 
 - Animate only `transform` and `opacity`. Never width, height, top or left on a list or a chart:
-  use `scaleX`/`scaleY` from the baseline instead. Two exceptions, both outside any layout: the
-  width of the single clip rectangle that draws a chart in (one SVG attribute), and a ring's
-  `pathLength`.
+  use `scaleX`/`scaleY` from the baseline instead. Three exceptions, all outside any layout: the
+  width of the single clip rectangle that draws a chart in (one SVG attribute), a ring's
+  `pathLength`, and the size of the tour's halo while it glides (one fixed element, 400 ms).
 - A figure's light is a blurred copy whose opacity moves, never an animated `filter` or
   `text-shadow`: the blur is drawn once.
 - Charts are drawn by StayPut itself in SVG (`ui/charts/`), a few kilobytes: no chart library
@@ -103,4 +114,5 @@ are switched off with Tailwind's `motion-reduce:`.
 The tests read what the screens say, not how they move: `apps/web/test/setup.ts` sets
 `MotionGlobalConfig.skipAnimations`, so every animation lands on its end at once. The live site
 is checked in a real browser by the « look » job of Inspect (`scripts/ops/look.mjs`): fonts
-loaded, chart drawn, screenshots of the Dashboard.
+loaded, chart drawn, the guide's pictures, the tour's five places lit, screenshots of the
+Dashboard, the guide, the tour and the welcome.

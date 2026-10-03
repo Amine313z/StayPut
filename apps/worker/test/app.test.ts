@@ -2254,6 +2254,50 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     expect(row).toEqual({ dry_run: false, guardrails: null });
   });
 
+  it('keeps the welcome seen once, and changes only the mode from it, for the team only', async () => {
+    const env = await departing(13, { dryRun: true, mode: 'manual' });
+    const boss = await env.boss();
+    const post = (path: string, as: RequestInit, body: unknown = {}) =>
+      env.request(`/api/creator/${env.company}/${path}`, json(as, 'POST', body));
+    const welcomed = async () =>
+      (
+        await t.db.query<{ at: string | null }>(
+          `select welcomed_at::text as at from stayput.company_settings where company_id = $1`,
+          [env.company],
+        )
+      )[0]?.at ?? null;
+    // A member of the community is not the team.
+    expect((await post('getting-started/welcomed', env.ana)).status).toBe(403);
+    expect((await post('mode', env.ana, { mode: 'auto' })).status).toBe(403);
+    expect(await welcomed()).toBeNull();
+
+    expect(await (await post('getting-started/welcomed', boss)).json()).toEqual({ done: true });
+    const first = await welcomed();
+    expect(first).not.toBeNull();
+    // The first time is kept.
+    expect((await post('getting-started/welcomed', boss)).status).toBe(200);
+    expect(await welcomed()).toBe(first);
+
+    expect((await post('mode', boss, { mode: 'yolo' })).status).toBe(400);
+    expect((await post('mode', boss, null)).status).toBe(400);
+    expect(await (await post('mode', boss, { mode: 'auto' })).json()).toMatchObject({
+      mode: 'auto',
+      dryRun: true,
+    });
+    await settle();
+    const [row] = await t.db.query<{ mode: string; dry_run: boolean; guardrails: string | null }>(
+      `select c.mode, s.dry_run, s.guardrails_saved_at as guardrails
+         from stayput.companies c join stayput.company_settings s on s.company_id = c.id
+        where c.id = $1`,
+      [env.company],
+    );
+    // The mode only: the test mode stays on, and the limits were not looked at.
+    expect(row).toEqual({ mode: 'auto', dry_run: true, guardrails: null });
+    expect(await (await post('mode', boss, { mode: 'manual' })).json()).toMatchObject({
+      mode: 'manual',
+    });
+  });
+
   it('asks why, makes the offer for the reason, and keeps the membership only with consent', async () => {
     const { read, answer, decide, whop, company, request, boss } = await departing(1);
     expect(await read()).toMatchObject({

@@ -6,12 +6,12 @@ import {
   Ellipsis,
   LogOut,
   Search,
-  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
+import { pageHref, type GuideCard, type Targets } from '../guide';
 import { useI18n } from '../i18n';
 import { ease } from '../motion';
 import { readPreference, writePreference } from '../storage';
@@ -21,10 +21,13 @@ import { StayPutMark } from '../ui/BrandIcons';
 import { Button, buttonClass } from '../ui/Button';
 import { CommunityMark } from '../ui/CommunityMark';
 import { Dialog } from '../ui/Dialog';
-import { Drawer } from '../ui/Drawer';
 import { MetricSkeleton, Skeleton } from '../ui/Skeleton';
 import { useToast } from '../ui/Toast';
 import { sectionHref, sectionOf, visibleSections, type Section } from '../views/creator/sections';
+import { GuideContext, type GuideControls } from './guide/context';
+import { GuidePanel } from './guide/GuidePanel';
+import { Flash } from './guide/Spotlight';
+import { ShowMe, Tour } from './guide/Tour';
 import { failureText } from './MemberActions';
 import { SignOut } from './SignOut';
 
@@ -73,25 +76,101 @@ export function CreatorShell({
       return !current;
     });
   };
+  const { currency } = useI18n();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // The guide (brief v4 §10): its panel, and what it lights up (the tour, a card's place, a
+  // shortcut's control). Only one at a time: opening one closes the others.
+  const [panel, setPanel] = useState(false);
+  const [spot, setSpot] = useState<Spot | null>(null);
+  const guide: GuideControls = {
+    openGuide: () => {
+      setSpot(null);
+      setPanel(true);
+    },
+    startTour: () => {
+      setPanel(false);
+      if (pathname !== root) void navigate(root);
+      setSpot({ kind: 'tour', index: 0 });
+    },
+    showMe: (card) => {
+      setPanel(false);
+      void navigate(pageHref(root, card.page));
+      setSpot({ kind: 'show', card });
+    },
+    go: (shortcut) => {
+      setPanel(false);
+      void navigate(pageHref(root, shortcut.page));
+      setSpot(
+        shortcut.targets.length > 0
+          ? { kind: 'flash', targets: shortcut.targets, at: Date.now() }
+          : null,
+      );
+    },
+  };
+  // « It starts at $0.00 »: in the community's currency, the one most of its members pay in.
+  const zero = currency(0, mainCurrency(members));
   return (
-    <div className="min-h-dvh">
-      <TopBar session={session} root={root} members={members} demo={demo} />
-      <div className="md:flex">
-        <Sidebar session={session} root={root} collapsed={collapsed} onToggle={toggle} />
-        {/* The light behind the hero number may spread wider than the page: never a scrollbar. */}
-        <div className="min-w-0 flex-1 overflow-x-clip">
-          <main className="mx-auto w-full max-w-[1280px] px-4 pt-8 pb-28 sm:px-6 md:pb-12">
-            {demo ? <DemoNotice /> : null}
-            {testMode && onTurnOffTestMode ? (
-              <TestModeBanner onTurnOff={onTurnOffTestMode} />
-            ) : null}
-            {children}
-          </main>
+    <GuideContext.Provider value={guide}>
+      <div className="min-h-dvh">
+        <TopBar
+          session={session}
+          root={root}
+          members={members}
+          demo={demo}
+          onGuide={guide.openGuide}
+        />
+        <div className="md:flex">
+          <Sidebar session={session} root={root} collapsed={collapsed} onToggle={toggle} />
+          {/* The light behind the hero number may spread wider than the page: never a scrollbar. */}
+          <div className="min-w-0 flex-1 overflow-x-clip">
+            <main className="mx-auto w-full max-w-[1280px] px-4 pt-8 pb-28 sm:px-6 md:pb-12">
+              {demo ? <DemoNotice /> : null}
+              {testMode && onTurnOffTestMode ? (
+                <TestModeBanner onTurnOff={onTurnOffTestMode} />
+              ) : null}
+              {children}
+            </main>
+          </div>
         </div>
+        <PhoneBar root={root} />
       </div>
-      <PhoneBar root={root} />
-    </div>
+      {panel ? <GuidePanel root={root} demo={demo} onClose={() => setPanel(false)} /> : null}
+      {spot?.kind === 'tour' ? (
+        <Tour
+          index={spot.index}
+          zero={zero}
+          onIndex={(index) => setSpot({ kind: 'tour', index })}
+          onClose={() => setSpot(null)}
+        />
+      ) : null}
+      {spot?.kind === 'show' ? <ShowMe card={spot.card} onClose={() => setSpot(null)} /> : null}
+      {spot?.kind === 'flash' ? (
+        <Flash key={spot.at} targets={spot.targets} onDone={() => setSpot(null)} />
+      ) : null}
+    </GuideContext.Provider>
   );
+}
+
+/** What the guide lights up: the tour at a step, a card's place, a shortcut's control. */
+type Spot =
+  | { kind: 'tour'; index: number }
+  | { kind: 'show'; card: GuideCard }
+  | { kind: 'flash'; targets: Targets; at: number };
+
+/** The currency most of the members pay in (US dollars when nobody pays yet). */
+function mainCurrency(members: readonly MemberRow[]): string {
+  const counts = new Map<string, number>();
+  for (const member of members) {
+    const code = member.membership?.currency?.toUpperCase();
+    if (code) counts.set(code, (counts.get(code) ?? 0) + 1);
+  }
+  let best = 'USD';
+  let most = 0;
+  for (const [code, count] of counts) {
+    if (count > most) [best, most] = [code, count];
+  }
+  return best;
 }
 
 function TopBar({
@@ -99,14 +178,15 @@ function TopBar({
   root,
   members,
   demo,
+  onGuide,
 }: {
   session: CreatorSession;
   root: string;
   members: readonly MemberRow[];
   demo: boolean;
+  onGuide: () => void;
 }) {
   const { t } = useI18n();
-  const [help, setHelp] = useState(false);
   const name = session.companyName;
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
@@ -143,17 +223,12 @@ function TopBar({
         </Link>
         <div className="ms-auto flex items-center gap-2">
           <MemberSearch root={root} members={members} />
-          <button
-            type="button"
-            onClick={() => setHelp(true)}
-            className={buttonClass('secondary', 'sm')}
-          >
+          <button type="button" onClick={onGuide} className={buttonClass('secondary', 'sm')}>
             <BookOpen aria-hidden="true" className="size-4" />
             {t('shell.guide')}
           </button>
         </div>
       </div>
-      {help ? <GuidePanel root={root} demo={demo} onClose={() => setHelp(false)} /> : null}
     </header>
   );
 }
@@ -250,6 +325,7 @@ function NavItem({
     <Link
       to={href}
       aria-current={active ? 'page' : undefined}
+      data-tour={`nav-${section.id}`}
       className={`group relative flex h-10 items-center gap-3 rounded-lg text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         collapsed ? 'justify-center' : 'px-3'
       } ${active ? 'text-fg' : 'text-muted hover:text-fg'}`}
@@ -402,46 +478,6 @@ function MemberSearch({ root, members }: { root: string; members: readonly Membe
 }
 
 /**
- * The guide (top bar), a panel at the side: how StayPut works in four short answers, and, from a
- * real dashboard, the way to the demo community. Its cards with their animations, the shortcuts
- * and the tour come with the « Onboarding + Guide panel » step of the brief.
- */
-function GuidePanel({ root, demo, onClose }: { root: string; demo: boolean; onClose: () => void }) {
-  const { t } = useI18n();
-  const parts = [
-    ['help.risk.title', 'help.risk.body'],
-    ['help.saved.title', 'help.saved.body'],
-    ['help.guardrails.title', 'help.guardrails.body'],
-    ['help.test.title', 'help.test.body'],
-  ] as const;
-  return (
-    <Drawer title={t('help.title')} description={t('help.lead')} onClose={onClose}>
-      <dl className="space-y-5">
-        {parts.map(([title, body]) => (
-          <div key={title}>
-            <dt className="font-medium text-fg">{t(title)}</dt>
-            <dd className="mt-1 text-sm">{t(body)}</dd>
-          </div>
-        ))}
-      </dl>
-      {demo ? null : (
-        <div className="mt-6 space-y-3 rounded-xl border border-line p-4">
-          <p className="text-sm">{t('help.demoHint')}</p>
-          <Link
-            to={`/demo?from=${encodeURIComponent(root)}`}
-            onClick={onClose}
-            className={buttonClass('secondary', 'sm')}
-          >
-            <Sparkles aria-hidden="true" className="size-4" />
-            {t('help.demo')}
-          </Link>
-        </div>
-      )}
-    </Drawer>
-  );
-}
-
-/**
  * Test mode (brief v3 §7): a slim bar outlined in turquoise on top of every screen, its words
  * muted, and « Turn off » (asked once more: from then on StayPut really sends).
  */
@@ -528,6 +564,7 @@ function PhoneBar({ root }: { root: string }) {
                 <Link
                   to={sectionHref(root, section)}
                   aria-current={active ? 'page' : undefined}
+                  data-tour={`nav-${section.id}`}
                   className={`flex flex-col items-center gap-1 px-1 py-2.5 text-[0.6875rem] font-medium ${
                     active ? 'text-turq-300' : 'text-subtle'
                   }`}
@@ -543,6 +580,7 @@ function PhoneBar({ root }: { root: string }) {
               type="button"
               onClick={() => setMore(true)}
               aria-current={inOthers ? 'page' : undefined}
+              data-tour="nav-more"
               className={`flex w-full flex-col items-center gap-1 px-1 py-2.5 text-[0.6875rem] font-medium ${
                 inOthers ? 'text-turq-300' : 'text-subtle'
               }`}

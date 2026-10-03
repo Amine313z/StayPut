@@ -217,6 +217,7 @@ describe('the home of the dashboard', () => {
         { day: days(-1).slice(0, 10), departure: 1, high: 2, medium: 0, low: 1 },
       ],
       gettingStarted: { discord: false, automation: false, reviewed: false, guardrails: false },
+      welcomed: false,
       // Approving the survey protects 99 a month; messaging Lea (Calm: never contact) 49.
       priority: { kind: 'approve', actions: 1, members: 1, revenue: 99 },
     });
@@ -280,6 +281,17 @@ describe('the home of the dashboard', () => {
       reviewed: true,
       guardrails: true,
     });
+    // The welcome was not seen yet: it opens by itself (brief v4 §10).
+    expect(view?.welcomed).toBe(false);
+    await t.db.query(`select stayput.getting_started_done($1, 'welcomed', $2::timestamptz)`, [
+      C,
+      days(-1),
+    ]);
+    expect((await readDashboard(t.db, 'user_Owner', C, NOW))?.welcomed).toBe(true);
+    await t.db.query(
+      `update stayput.company_settings set welcomed_at = null where company_id = $1`,
+      [C],
+    );
     await t.db.query(`update stayput.companies set mode = 'auto' where id = $1`, [C]);
     expect((await readDashboard(t.db, 'user_Owner', C, NOW))?.gettingStarted.automation).toBe(true);
     await t.db.query(`update stayput.companies set mode = 'manual' where id = $1`, [C]);

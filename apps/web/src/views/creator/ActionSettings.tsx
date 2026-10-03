@@ -281,7 +281,7 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
       description={t('actionSettings.description')}
     >
       <form onSubmit={(event) => void submit(event)} className="divide-y divide-line" noValidate>
-        <Row label={t('actionSettings.mode')} labelId={`${ids}-mode`}>
+        <Row label={t('actionSettings.mode')} labelId={`${ids}-mode`} tour="mode">
           <div
             role="radiogroup"
             aria-labelledby={`${ids}-mode`}
@@ -435,7 +435,7 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
           </div>
         </Row>
 
-        <Row label={t('actionSettings.caps')} labelId={`${ids}-caps`}>
+        <Row label={t('actionSettings.caps')} labelId={`${ids}-caps`} tour="limits">
           <div role="group" aria-labelledby={`${ids}-caps`} className="space-y-3">
             <div className="grid gap-4 sm:grid-cols-2">
               {CAP_NAMES.map((cap) => (
@@ -447,6 +447,7 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
                   invalid={capValue(cap, draft.caps[cap]) === null}
                   min={CAPS[cap][0]}
                   max={CAPS[cap][1]}
+                  tour={cap === 'maxPaymentRetries' ? 'retries' : undefined}
                   onChange={(value) =>
                     edit((current) => ({ ...current, caps: { ...current.caps, [cap]: value } }))
                   }

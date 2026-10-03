@@ -36,12 +36,14 @@ export async function readDashboard(
       dry_run: boolean;
       guardrails: boolean;
       reviewed: boolean;
+      welcomed: boolean;
       discord: boolean;
       acted: boolean;
     }>(
       `select c.mode, coalesce(c.timezone, 'UTC') as zone, coalesce(s.dry_run, false) as dry_run,
               s.guardrails_saved_at is not null as guardrails,
               s.at_risk_reviewed_at is not null as reviewed,
+              s.welcomed_at is not null as welcomed,
               exists (select 1 from stayput.discord_guilds g where g.company_id = c.id) as discord,
               exists (select 1 from stayput.actions a
                        where a.company_id = c.id
@@ -376,6 +378,7 @@ export async function readDashboard(
         reviewed: company.reviewed,
         guardrails: company.guardrails,
       },
+      welcomed: company.welcomed,
       priority: choosePriority({
         mode: company.mode,
         pending: {

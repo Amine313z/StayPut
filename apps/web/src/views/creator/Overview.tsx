@@ -26,8 +26,10 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { postJson, useApi, useReloadOnChange, type Loadable } from '../../api';
+import { useGuide } from '../../components/guide/context';
+import { Welcome } from '../../components/guide/Welcome';
 import { MemberActions, failureText } from '../../components/MemberActions';
 import { MemberListRow } from '../../components/MemberListRow';
 import { attentionReasons } from '../../components/MemberRows';
@@ -73,7 +75,8 @@ type Period = (typeof PERIODS)[number];
  * another; StayPut's mark at 3 % in the bottom right corner.
  */
 export function Overview() {
-  const { api, root, members, sync, testMode } = useCreatorData();
+  const { api, root, members, sync, testMode, integrations, demo } = useCreatorData();
+  const guide = useGuide();
   const dashboard = useApi<DashboardView>(`${api}/dashboard`);
   // New data from Whop: the figures again.
   useReloadOnChange(sync.status?.lastSyncAt, dashboard.reload);
@@ -83,9 +86,40 @@ export function Overview() {
     dashboard.reload();
     members.reload();
   };
+  // The welcome (brief v4 §10): by itself the first time a community opens StayPut (never in the
+  // demo, which opens on its dashboard), or asked for with `?welcome`.
+  const [search, setSearch] = useSearchParams();
+  const asked = search.has('welcome');
+  const [welcomed, setWelcomed] = useState(false);
+  const welcome = !welcomed && (asked || (view !== null && !view.welcomed && !demo));
+  const closeWelcome = (then: 'tour' | 'dashboard') => {
+    setWelcomed(true);
+    if (asked) {
+      setSearch(
+        (current) => {
+          current.delete('welcome');
+          return current;
+        },
+        { replace: true },
+      );
+    }
+    // The mode may have changed, and with it the action of the day.
+    dashboard.reload();
+    if (then === 'tour') guide.startTour();
+  };
 
   return (
     <div className="relative">
+      {welcome ? (
+        <Welcome
+          view={view}
+          integrations={integrations.state.status === 'ready' ? integrations.state.data : null}
+          api={api}
+          root={root}
+          importing={importing}
+          onClose={closeWelcome}
+        />
+      ) : null}
       {view && !setupDone(view.gettingStarted) ? (
         <div className="-mt-3 mb-8">
           <Setup steps={view.gettingStarted} root={root} />
@@ -111,7 +145,9 @@ export function Overview() {
               <BalanceHero view={view} />
             </StaggerItem>
             <StaggerItem>
-              <Priority view={view} api={api} root={root} testMode={testMode.on} onDone={acted} />
+              <div data-tour="priority">
+                <Priority view={view} api={api} root={root} testMode={testMode.on} onDone={acted} />
+              </div>
             </StaggerItem>
           </>
         )}
@@ -274,21 +310,24 @@ function BalanceHero({ view }: { view: DashboardView | null }) {
         style={{ left: -260, top: -300 }}
       />
       <div className="min-w-0 [grid-area:balance]">
-        {view ? (
-          <>
-            <MetricHero
-              better="up"
-              label={t('dash.saved')}
-              tip={t('dash.saved.info')}
-              value={monthTotal}
-              format={money}
-              empty={t('dash.noRevenue')}
-            />
-            {compare ? <Delta compare={compare} money={money} /> : null}
-          </>
-        ) : (
-          <MetricSkeleton hero />
-        )}
+        {/* The tour lights up the amount and its words, not the room left beside them. */}
+        <div data-tour="hero" className="w-fit max-w-full">
+          {view ? (
+            <>
+              <MetricHero
+                better="up"
+                label={t('dash.saved')}
+                tip={t('dash.saved.info')}
+                value={monthTotal}
+                format={money}
+                empty={t('dash.noRevenue')}
+              />
+              {compare ? <Delta compare={compare} money={money} /> : null}
+            </>
+          ) : (
+            <MetricSkeleton hero />
+          )}
+        </div>
       </div>
       <div className="justify-self-end [grid-area:period]">
         <Segmented
@@ -737,7 +776,7 @@ function NeedsAttention({
     );
   }
   return (
-    <section aria-labelledby={titleId}>
+    <section aria-labelledby={titleId} data-tour="attention">
       <header className="flex items-center justify-between gap-3">
         <h2 id={titleId} className="title-section">
           {t('attention.title')}

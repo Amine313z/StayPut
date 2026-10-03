@@ -163,6 +163,26 @@ describe('the demo community', () => {
     });
   });
 
+  it('opens on its dashboard, and keeps the welcome’s choice of mode', () => {
+    const demo = createWorld(NOW);
+    // The demo never welcomes by itself (`/demo?welcome` asks for it).
+    expect(demo.dashboard().welcomed).toBe(true);
+    expect(demo.setMode('auto')).toMatchObject({ mode: 'auto' });
+    expect(demo.dashboard().mode).toBe('auto');
+    expect(demo.setMode('manual').mode).toBe('manual');
+  });
+
+  it('takes a Discord server or a Telegram group off, as the Worker does', () => {
+    const demo = createWorld(NOW);
+    const [server] = demo.integrations.discord.servers;
+    const [group] = demo.integrations.telegram.groups;
+    demo.disconnect('discord', server!.guildId);
+    demo.disconnect('telegram', group!.chatId);
+    expect(demo.integrations.discord.servers.map((s) => s.guildId)).not.toContain(server!.guildId);
+    // The group goes, rather than staying « removed » (the bot is gone from it).
+    expect(demo.integrations.telegram.groups.map((g) => g.chatId)).not.toContain(group!.chatId);
+  });
+
   it('remembers what the creator did until the page is reloaded', () => {
     const demo = createWorld(NOW);
     const target = joined.find((m) => m.name === 'Théo Fontaine')!.id;

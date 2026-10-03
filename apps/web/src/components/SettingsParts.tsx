@@ -11,15 +11,21 @@ export function Row({
   label,
   htmlFor,
   labelId,
+  tour,
   children,
 }: {
   label: string;
   htmlFor?: string;
   labelId?: string;
+  /** The place the guide may light up (`data-tour`, guide.ts). */
+  tour?: string;
   children: ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-2 py-5 first:pt-0 md:grid-cols-[14rem_minmax(0,1fr)] md:gap-8">
+    <div
+      data-tour={tour}
+      className="grid grid-cols-1 gap-2 py-5 first:pt-0 md:grid-cols-[14rem_minmax(0,1fr)] md:gap-8"
+    >
       {htmlFor ? (
         <label htmlFor={htmlFor} className="text-sm font-semibold">
           {label}
@@ -41,6 +47,7 @@ export function NumberField({
   invalid,
   min,
   max,
+  tour,
   onChange,
 }: {
   id: string;
@@ -49,10 +56,12 @@ export function NumberField({
   invalid: boolean;
   min: number;
   max: number;
+  /** The place the guide may light up (`data-tour`, guide.ts). */
+  tour?: string;
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div data-tour={tour} className="flex flex-col gap-1">
       <label htmlFor={id} className="text-sm">
         {label}
       </label>

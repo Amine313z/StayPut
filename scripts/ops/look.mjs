@@ -5,10 +5,12 @@
  * no fallback rendering), which font every figure and text is drawn in, whether the amounts carry
  * their cents and the demo opened in English, whether the chart drew its data and ends on the
  * balance's amount (brief v4 §13), who comes first in « Needs attention », whether every block of
- * Integrations › Activity is past « Loading… » within 5 seconds (§9.6), and what the browser
- * complained about; keeps screenshots of the Dashboard (desktop, the balance, phone, the chart's
- * tooltip) and of the Activity tab. Fails when any of these is wrong. Reads nothing private: the
- * demo is answered in the browser.
+ * Integrations › Activity is past « Loading… » within 5 seconds (§9.6), whether the guide shows
+ * its five cards and pictures, the tour lights up its five places and the welcome has its four
+ * steps (§10), and what the browser complained about; keeps screenshots of the Dashboard
+ * (desktop, the balance, phone, the chart's tooltip), of the Activity tab, of the guide, of each
+ * step of the tour and of the welcome. Fails when any of these is wrong. Reads nothing private:
+ * the demo is answered in the browser.
  *
  *   node look.mjs https://stayput.example.workers.dev <out dir>
  */
@@ -155,10 +157,74 @@ report.activity = {
   slow: await desktop.page.getByText('This is taking longer than usual.').count(),
 };
 await desktop.page.screenshot({ path: `${out}/integrations-activity.png`, fullPage: true });
+
+// The guide (brief v4 §10): a 420 px panel, five cards with their pictures, four shortcuts.
+await desktop.page.goto(`${base}/demo`, { waitUntil: 'domcontentloaded' });
+await desktop.page.getByText('Revenue saved · This month').first().waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(2_500);
+await desktop.page.getByRole('button', { name: 'Guide' }).click();
+const guide = desktop.page.getByRole('dialog', { name: 'Guide' });
+await guide.waitFor();
+await desktop.page.waitForTimeout(1_800);
+report.guide = await guide.evaluate((panel) => ({
+  width: Math.round(panel.getBoundingClientRect().width),
+  cards: [...panel.querySelectorAll('li h3')].map((title) => title.textContent),
+  pictures: panel.querySelectorAll('[data-loop]').length,
+  playing: panel.querySelectorAll('[data-loop="play"]').length,
+  showMe: [...panel.querySelectorAll('button')].filter((b) => b.textContent === 'Show me').length,
+}));
+await desktop.page.screenshot({ path: `${out}/guide-1440.png` });
+await guide.evaluate((panel) => panel.querySelector('.overflow-y-auto')?.scrollTo(0, 99_999));
+await desktop.page.waitForTimeout(1_500);
+await desktop.page.screenshot({ path: `${out}/guide-1440-end.png` });
+
+// The tour: five places, each lit (the halo found its place) and said in the validated words.
+await guide.getByRole('button', { name: 'Replay the tour' }).click();
+const tour = desktop.page.getByRole('dialog', { name: 'Tour of StayPut' });
+await tour.waitFor();
+report.tour = [];
+for (let step = 1; step <= 5; step += 1) {
+  await desktop.page.waitForTimeout(1_000);
+  report.tour.push({
+    step,
+    title: await tour.getByRole('heading').textContent(),
+    lit: (await desktop.page.locator('[data-spot="halo"]').count()) === 1,
+  });
+  await desktop.page.screenshot({ path: `${out}/tour-${step}.png` });
+  await tour.getByRole('button', { name: step < 5 ? 'Next' : 'Done' }).click();
+}
+
+// The welcome, four steps (`?welcome`: the demo never opens it by itself).
+await desktop.page.goto(`${base}/demo?welcome`, { waitUntil: 'domcontentloaded' });
+const welcome = desktop.page.getByRole('dialog').first();
+await welcome.waitFor({ timeout: 30_000 });
+report.welcome = [];
+for (let step = 1; step <= 4; step += 1) {
+  await desktop.page.waitForTimeout(step === 4 ? 2_000 : 900);
+  report.welcome.push(await welcome.getByRole('heading').first().textContent());
+  await desktop.page.screenshot({ path: `${out}/welcome-${step}.png` });
+  if (step === 3) await welcome.getByRole('radio', { name: /^Automatic/ }).check({ force: true });
+  if (step < 4) {
+    await welcome.getByRole('button', { name: step === 1 ? 'Get started' : 'Next' }).click();
+  }
+}
 await desktop.context.close();
 
 const phone = await open({ width: 390, height: 844 });
 await phone.page.screenshot({ path: `${out}/dashboard-390-full.png`, fullPage: true });
+// On a phone, the tour's last place is « More » (Integrations is under it).
+await phone.page.getByRole('button', { name: 'Guide' }).click();
+await phone.page.waitForTimeout(1_200);
+await phone.page.screenshot({ path: `${out}/guide-390.png` });
+await phone.page.getByRole('button', { name: 'Replay the tour' }).click();
+const phoneTour = phone.page.getByRole('dialog', { name: 'Tour of StayPut' });
+for (let step = 1; step <= 5; step += 1) {
+  await phone.page.waitForTimeout(900);
+  if (step === 1 || step === 5) {
+    await phone.page.screenshot({ path: `${out}/tour-390-${step}.png` });
+  }
+  if (step < 5) await phoneTour.getByRole('button', { name: 'Next' }).click();
+}
 await phone.context.close();
 await browser.close();
 
@@ -176,12 +242,19 @@ const ok =
   /^[+−]\$[\d,]+\.\d{2} vs last month$/.test(report.balance.delta ?? '') &&
   report.balance.periods.join(' ') === '7D 30D 90D' &&
   report.firstNeedingAttention === 'Hugo Bernard' &&
-  report.activity.loadingAfter5s === 0;
+  report.activity.loadingAfter5s === 0 &&
+  report.guide.width === 420 &&
+  report.guide.cards.length === 5 &&
+  report.guide.pictures === 5 &&
+  report.guide.showMe === 5 &&
+  report.tour.length === 5 &&
+  report.tour.every((step) => step.lit) &&
+  report.welcome.length === 4;
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing or does not end on the balance, « Needs attention » is out of order, or a block of Integrations › Activity still says « Loading… » after 5 seconds: see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing or does not end on the balance, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, or the guide, the tour or the welcome is not whole: see the report above.',
   );
   process.exitCode = 1;
 }
