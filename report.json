@@ -1,0 +1,415 @@
+{
+  "fonts": {
+    "satoshi": true,
+    "geist": true,
+    "numbersInSatoshi": true,
+    "textInGeist": true,
+    "numbers": {
+      "heroAmount": [
+        "Satoshi",
+        "Satoshi"
+      ],
+      "secondaryAmounts": [
+        "Satoshi",
+        "Satoshi",
+        "Satoshi",
+        "Satoshi"
+      ],
+      "figures": [
+        "Satoshi",
+        "Satoshi",
+        "Satoshi",
+        "Satoshi"
+      ],
+      "axis": [
+        "Satoshi",
+        "Satoshi",
+        "Satoshi",
+        "Satoshi"
+      ]
+    },
+    "text": {
+      "body": [
+        "Geist Variable"
+      ],
+      "labels": [
+        "Geist Variable",
+        "Geist Variable"
+      ],
+      "menu": [
+        "Geist Variable",
+        "Geist Variable",
+        "Geist Variable",
+        "Geist Variable"
+      ]
+    },
+    "language": "en"
+  },
+  "chart": {
+    "days": 30,
+    "nonZeroSaved": 24,
+    "atRiskDays": 30,
+    "linesDrawn": 2
+  },
+  "hero": [
+    "$247.00",
+    "$731.17",
+    "9"
+  ],
+  "amountsWithCents": true,
+  "balance": {
+    "amount": "$247.00",
+    "chartEnds": "$247.00",
+    "periodClimbs": true,
+    "monthMark": "Oct 1",
+    "monthStart": "Oct 1",
+    "delta": "+$98.00 vs last month",
+    "periods": [
+      "7D",
+      "30D",
+      "90D"
+    ]
+  },
+  "firstNeedingAttention": "Margaux Picard",
+  "attentionRow": {
+    "atRest": "0",
+    "hovered": "1"
+  },
+  "activity": {
+    "loadingAfter5s": 0,
+    "slow": 0,
+    "byMembers": [
+      "367 by members",
+      "61 by members"
+    ]
+  },
+  "guide": {
+    "width": 420,
+    "cards": [
+      "Who is about to leave",
+      "Keep them, automatically",
+      "See the money you kept",
+      "You stay in control",
+      "Connect Discord and Telegram"
+    ],
+    "pictures": 5,
+    "playing": 3,
+    "showMe": 5
+  },
+  "tour": [
+    {
+      "place": "hero-amount",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "right",
+      "title": "Revenue saved · This month"
+    },
+    {
+      "place": "priority-action",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Priority action today"
+    },
+    {
+      "place": "risk-ring",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Risk score"
+    },
+    {
+      "place": "rule-payment-retry",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "right",
+      "title": "Automations"
+    },
+    {
+      "place": "connect-discord",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Integrations"
+    }
+  ],
+  "tourEnd": {
+    "path": "/demo",
+    "scrollY": 0
+  },
+  "showMe": [
+    {
+      "place": "attention-row",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Who is about to leave"
+    },
+    {
+      "place": "rule-payment-retry",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "right",
+      "title": "Keep them, automatically"
+    },
+    {
+      "place": "hero-amount",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "right",
+      "title": "See the money you kept"
+    },
+    {
+      "place": "limits",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "You stay in control"
+    },
+    {
+      "place": "connect-discord",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Connect Discord and Telegram"
+    }
+  ],
+  "welcome": [
+    "Welcome to StayPut",
+    "Connect Discord or Telegram",
+    "Automatic or manual?",
+    "Your first audit"
+  ],
+  "members": {
+    "columns": [
+      "Member",
+      "Risk",
+      "Status",
+      "MRR",
+      "Last activity",
+      "Next renewal",
+      "Do not contact"
+    ],
+    "rows": 39,
+    "first": "Hugo Bernard",
+    "heights": [
+      53,
+      53,
+      53,
+      53,
+      53,
+      53,
+      53,
+      53,
+      53,
+      53
+    ],
+    "cutHeaders": 0,
+    "redWords": 0,
+    "urgentDots": 6,
+    "chipsTop": 64,
+    "search": {
+      "value": "hugo",
+      "rows": [
+        "HBHugo BernardLeaving$149.00/mo"
+      ],
+      "address": "hugo"
+    },
+    "high": 6,
+    "byMrr": [
+      149,
+      149,
+      149,
+      149,
+      149
+    ],
+    "sortedByMrr": true,
+    "drawer": {
+      "width": 420,
+      "left": 1005,
+      "right": 1425,
+      "window": 1440,
+      "pageLocked": true,
+      "sections": [
+        "Why",
+        "Quick actions",
+        "Risk over 30 days",
+        "Subscription",
+        "Payments",
+        "Activity over 30 days"
+      ],
+      "scoreDrawn": true,
+      "doNotContact": "false"
+    },
+    "phoneOverflow": -15
+  },
+  "story": {
+    "juliette": [
+      "JCJuliette CaronPaused · resumes Nov 2$149.00/mo",
+      "49",
+      "Paused · resumes Nov 2",
+      "$149.00/mo",
+      "6 days ago",
+      "Nov 2",
+      "",
+      ""
+    ],
+    "hugo": [
+      "HBHugo BernardLeaving$149.00/mo",
+      "100",
+      "Leaving",
+      "$149.00/mo",
+      "last week",
+      "Ends Oct 29",
+      "",
+      ""
+    ],
+    "kevin": [
+      "KNKevin NguyenLeaving$39.17/mo",
+      "100",
+      "Leaving",
+      "$39.17/mo",
+      "6 days ago",
+      "Ends May 13, 2027",
+      "",
+      ""
+    ],
+    "sarah": [
+      "SCSarah CohenUrgentPayment failed$149.00/mo",
+      "88",
+      "UrgentPayment failed",
+      "$149.00/mo",
+      "last week",
+      "Unpaid since Oct 3",
+      "",
+      ""
+    ],
+    "paul": [
+      "PHPaul HenryGone$49.00/mo",
+      "–",
+      "Gone",
+      "$49.00/mo",
+      "last week",
+      "–",
+      "",
+      ""
+    ],
+    "julietteDrawer": [
+      "Paused · resumes Nov 2·$149.00/mo",
+      "Paused · $149.00 per month · resumes on Nov 2, 2026"
+    ]
+  },
+  "history": [
+    {
+      "member": "Lou Marchand",
+      "outcome": "No reply yet"
+    },
+    {
+      "member": "Clara Faure",
+      "outcome": "Recovered $49.00"
+    },
+    {
+      "member": "Sarah Cohen",
+      "outcome": "Still failing"
+    },
+    {
+      "member": "Elena Novak",
+      "outcome": "Still failing"
+    },
+    {
+      "member": "Juliette Caron",
+      "outcome": "Paused until Nov 2"
+    },
+    {
+      "member": "Pauline Giraud",
+      "outcome": "Came back"
+    },
+    {
+      "member": "Rose Gauthier",
+      "outcome": "No reply yet"
+    },
+    {
+      "member": "Victor Leclerc",
+      "outcome": "Came back"
+    },
+    {
+      "member": "Arthur Lemoine",
+      "outcome": "Recovered $49.00"
+    },
+    {
+      "member": "Tom Barbier",
+      "outcome": "No reply yet"
+    },
+    {
+      "member": "Benoît Lacroix",
+      "outcome": "No reply yet"
+    },
+    {
+      "member": "Sofia Ricci",
+      "outcome": "Recovered $49.00"
+    }
+  ],
+  "queue": {
+    "before": [
+      "6",
+      "6"
+    ],
+    "after": [
+      "5",
+      "5"
+    ]
+  },
+  "phoneTour": [
+    {
+      "place": "hero-amount",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Revenue saved · This month"
+    },
+    {
+      "place": "priority-action",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "top",
+      "title": "Priority action today"
+    },
+    {
+      "place": "risk-ring",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "top",
+      "title": "Risk score"
+    },
+    {
+      "place": "rule-payment-retry",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Automations"
+    },
+    {
+      "place": "connect-discord",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Integrations"
+    }
+  ],
+  "problems": []
+}
