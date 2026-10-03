@@ -1199,6 +1199,7 @@ export const en = {
   'member.subscription.title': 'Your membership',
   'member.subscription.welcome': 'What concerns your membership, in one place.',
   'member.allSet': 'Your membership is all set: nothing needs you here.',
+  'chart.reading': '{day}: {figures}',
   'chart.day': 'Day',
   'dash.saved.info':
     'Payments recovered, cancellations withdrawn and pauses ended this month. Each counts once.',
@@ -1207,8 +1208,11 @@ export const en = {
     '{departures} leaving, {high} at high risk. Scored every hour, from 0 to 100.',
   'dash.chart.title': 'Revenue saved vs at risk',
   'dash.chart.info':
-    'Saved: added up from the 1st of each month, so today is this month’s amount. At risk: what members at risk paid a month.',
-  'dash.chart.saved': 'Saved',
+    'Saved in period: added up from the first day shown, so the line only climbs; the vertical line marks where this month starts. At risk: what members at risk paid a month.',
+  'dash.chart.saved': 'Saved in period',
+  'dash.chart.savedThisMonth': 'Saved this month',
+  'dash.chart.savedIn': 'Saved in {month}',
+  'dash.chart.monthToDate': 'Saved in the month',
   'dash.chart.atRisk': 'At risk',
   'dash.chart.period': 'Period',
   'dash.chart.days.one': '{count}D',

@@ -573,7 +573,7 @@ describe('creator view', () => {
       'Against the same day last month, Sep 1: $49.00 saved then.',
       'What the members leaving or at high risk pay each month, out of $245.00.',
       '1 leaving, 1 at high risk. Scored every hour, from 0 to 100.',
-      'Saved: added up from the 1st of each month, so today is this month’s amount. At risk: what members at risk paid a month.',
+      'Saved in period: added up from the first day shown, so the line only climbs; the vertical line marks where this month starts. At risk: what members at risk paid a month.',
     ]);
     // As Whop writes a balance: the month so far, then against the same days last month,
     // turquoise when ahead.
@@ -863,15 +863,24 @@ describe('creator view', () => {
     expect(summary()).toBe(
       'Over the last 30 days, StayPut saved $247.00; the revenue at risk went from $147.00 to $98.00 a month.',
     );
-    // Today the line ends on the hero's figure: the month's balance, from its 1st.
     const rows = () => within(chart).getAllByRole('row');
+    const headers = within(chart)
+      .getAllByRole('columnheader')
+      .map((header) => header.textContent);
+    expect(headers).toEqual(['Day', 'Saved in period', 'Saved in the month', 'At risk']);
+    // The period's money adds up from its first day: it ends today on what the 30 days saved,
+    // the month's on the hero's figure.
     expect(rows()).toHaveLength(31);
-    expect(rows()[30]!.textContent).toBe('Oct 1, 2026$98.00$98.00');
-    expect(rows()[29]!.textContent).toBe('Sep 30, 2026$198.00$147.00');
+    expect(rows()[1]!.textContent).toBe('Sep 2, 2026$0.00$49.00$147.00');
+    expect(rows()[29]!.textContent).toBe('Sep 30, 2026$149.00$198.00$147.00');
+    expect(rows()[30]!.textContent).toBe('Oct 1, 2026$247.00$98.00$98.00');
+    // Where the month starts, marked: today is the 1st.
+    expect(chart.querySelector('[data-chart="month-start"]')?.textContent).toBe('Oct 1');
     // Before the first scores, no risk figure rather than a zero.
     fireEvent.click(within(periods).getByRole('radio', { name: '90D' }));
     expect(rows()).toHaveLength(91);
-    expect(rows()[1]!.textContent).toBe('Jul 4, 2026$0.00—');
+    expect(rows()[1]!.textContent).toBe('Jul 4, 2026$0.00$0.00—');
+    expect(rows()[90]!.textContent).toBe('Oct 1, 2026$296.00$98.00$98.00');
     fireEvent.click(within(periods).getByRole('radio', { name: '7D' }));
     expect(summary()).toBe(
       'Over the last 7 days, StayPut saved $247.00; the revenue at risk went from $147.00 to $98.00 a month.',
@@ -880,11 +889,17 @@ describe('creator view', () => {
     const plot = within(chart).getByRole('group', { name: 'Revenue saved vs at risk' });
     const said = () => chart.querySelector('[aria-live]')?.textContent;
     fireEvent.focus(plot);
-    expect(said()).toBe('Oct 1, 2026: Saved $98.00, At risk $98.00');
+    expect(said()).toBe(
+      'Oct 1, 2026: Saved in period $247.00, Saved this month $98.00, At risk $98.00',
+    );
     fireEvent.keyDown(plot, { key: 'ArrowLeft' });
-    expect(said()).toBe('Sep 30, 2026: Saved $198.00, At risk $147.00');
+    expect(said()).toBe(
+      'Sep 30, 2026: Saved in period $149.00, Saved in September $198.00, At risk $147.00',
+    );
     fireEvent.keyDown(plot, { key: 'Home' });
-    expect(said()).toBe('Sep 25, 2026: Saved $49.00, At risk $147.00');
+    expect(said()).toBe(
+      'Sep 25, 2026: Saved in period $0.00, Saved in September $49.00, At risk $147.00',
+    );
     fireEvent.keyDown(plot, { key: 'Escape' });
     expect(said()).toBe('');
     // The members at risk, hidden and shown again from the legend.
@@ -894,6 +909,68 @@ describe('creator view', () => {
     expect(legend.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(legend);
     expect(legend.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('puts each day’s saves on that day and never goes down, in English and in French', async () => {
+    // As the Worker sends them (its days are the community's, tested there): a save at 23:30
+    // on 30 September, one at 00:30 on 1 October, one on the 2nd; today is 3 October.
+    const history: RevenueDay[] = Array.from({ length: 95 }, (_, i) => {
+      const day = new Date(Date.UTC(2026, 6, 1) + i * 86_400_000).toISOString().slice(0, 10);
+      const saved = { '2026-09-30': 149, '2026-10-01': 49, '2026-10-02': 49 }[day] ?? 0;
+      return { day, saved, atRisk: 147 };
+    });
+    const home = {
+      ...HOME,
+      saved: { ...HOME.saved, thisMonth: { ...HOME.saved.thisMonth, direct: 98 } },
+      revenueHistory: history,
+    };
+    for (const [locale, words] of [
+      [
+        'en',
+        {
+          table: 'Revenue saved vs at risk',
+          oct1: 'Oct 1, 2026: Saved in period $198.00, Saved this month $49.00, At risk $147.00',
+          sep30:
+            'Sep 30, 2026: Saved in period $149.00, Saved in September $149.00, At risk $147.00',
+          marker: 'Oct 1',
+        },
+      ],
+      [
+        'fr',
+        {
+          table: 'Revenus sauvés et revenus à risque',
+          oct1: '1 oct. 2026 : Sauvé sur la période 198,00 $, Sauvé ce mois-ci 49,00 $, À risque 147,00 $',
+          sep30:
+            '30 sept. 2026 : Sauvé sur la période 149,00 $, Sauvé en septembre 149,00 $, À risque 147,00 $',
+          marker: '1 oct.',
+        },
+      ],
+    ] as const) {
+      mockApi({
+        ...dashboard(MEMBERS, INTEGRATIONS, home),
+        [`/api/creator/biz_A1/integrations?lang=${locale}`]: [{ status: 200, body: INTEGRATIONS }],
+      });
+      renderAt('/dashboard/biz_A1', locale);
+      const chart = (await screen.findByRole('table', { name: words.table })).closest('section')!;
+      expect(chart.querySelector('[data-chart="month-start"]')?.textContent).toBe(words.marker);
+      // The table's figures never go down, and end on what the period saved.
+      const inPeriod = within(chart)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => Number(row.querySelectorAll('td')[0]!.textContent.replace(/[^\d]/g, '')));
+      expect(inPeriod).toEqual([...inPeriod].sort((a, b) => a - b));
+      expect(inPeriod.at(-1)).toBe(24_700);
+      // Each save on its own day: 1 October has its 00:30 save, 30 September its 23:30 one.
+      const plot = within(chart).getByRole('group', { name: words.table });
+      const said = () => chart.querySelector('[aria-live]')?.textContent?.replace(/\s/g, ' ');
+      fireEvent.focus(plot);
+      fireEvent.keyDown(plot, { key: 'ArrowLeft' });
+      fireEvent.keyDown(plot, { key: 'ArrowLeft' });
+      expect(said()).toBe(words.oct1);
+      fireEvent.keyDown(plot, { key: 'ArrowLeft' });
+      expect(said()).toBe(words.sep30);
+      cleanup();
+    }
   });
 
   it('puts « Getting started » under the title, folded from two steps done, gone when done', async () => {

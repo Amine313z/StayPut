@@ -159,7 +159,10 @@ export async function readDashboard(
       [companyId, at],
     );
 
-    // Saved this month and last month, in the community's own calendar.
+    // Saved this month and last month, in the community's own calendar: the months begin at
+    // midnight there, and a save counts up to now included, as on the chart. A save keeps the
+    // currency of its payment, which Whop writes in lowercase (`usd`): compared in capitals, as
+    // the memberships' and the chart's.
     const savedRows = await tx.query<{
       currency: string;
       category: 'direct' | 'influenced';
@@ -173,12 +176,12 @@ export async function readDashboard(
                 (date_trunc('month', ($2::timestamptz at time zone $3) - interval '1 month')
                   at time zone $3) as last_start
        )
-       select v.currency, v.category, v.saved_at >= b.this_start as this_month,
+       select upper(v.currency) as currency, v.category, v.saved_at >= b.this_start as this_month,
               round(sum(v.amount), 2)::float8 as amount, count(*)::int as saves
          from stayput.saves v, bounds b
         where v.company_id = $1 and v.saved_at >= b.last_start
-          and v.saved_at < $2::timestamptz
-        group by v.currency, v.category, this_month`,
+          and v.saved_at <= $2::timestamptz
+        group by upper(v.currency), v.category, this_month`,
       [companyId, at, company.zone],
     );
     const savedCurrency =

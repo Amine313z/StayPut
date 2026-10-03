@@ -65,6 +65,15 @@ export function smoothPath(points: readonly XY[]): string {
 }
 
 /**
+ * An SVG path through the points in straight steps, for points read densely off a curve: it
+ * keeps exactly what the points do (flat where they are equal, never beyond them).
+ */
+export function polylinePath(points: readonly XY[]): string {
+  const r = (value: number) => Math.round(value * 10) / 10;
+  return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${r(p.x)} ${r(p.y)}`).join('');
+}
+
+/**
  * The curve through `values` (one a day) read at `count` evenly spaced places, first and last
  * included: every period becomes the same number of points, so a 7-day line can turn into a
  * 90-day one (its path keeps its shape of commands) instead of being drawn again.

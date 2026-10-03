@@ -1,6 +1,7 @@
 import {
   DEFAULT_OFFERS,
   MEMBER_PAYMENTS_LIMIT,
+  addDays,
   choosePriority,
   type ActionSettingsView,
   type CreatorOfferKind,
@@ -20,9 +21,11 @@ import {
   type RiskLevel,
   type RiskReason,
   type SyncStatus,
+  monthStart,
+  zonedDay,
 } from '@stayput/core';
 import { DEMO_COMPANY_ID } from '../api';
-import { createDemoPages, localDay, type DemoPages } from './pages';
+import { createDemoPages, type DemoPages } from './pages';
 
 /**
  * The demo community (/demo): an imaginary trading community of 36 members (39 with those who
@@ -40,6 +43,8 @@ const CURRENCY = 'USD';
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+/** How many days back the chart may reach: from the 1st of the month 89 days ago, 120 at most. */
+const HISTORY_REACH = 124;
 
 /** What a member pays: per month, per month for VIPs, or once a year. */
 const PLANS = {
@@ -326,8 +331,12 @@ export interface DemoWorld {
   memberDetail: (memberId: string) => MemberDetail | null;
 }
 
-/** The demo community as of `now`. */
-export function createWorld(now: number): DemoWorld {
+/**
+ * The demo community as of `now`, in `zone`'s calendar: the visitor's own time zone, as a
+ * community StayPut opens in a creator's browser starts with (Settings › Automations › Time
+ * zone), so every date the demo shows falls on the same day.
+ */
+export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
   const random = seeded(20_261_002);
   const between = ([low, high]: Range) => low + Math.floor(random() * (high - low + 1));
   const at = (ago: number) => new Date(now - ago).toISOString();
@@ -460,7 +469,7 @@ export function createWorld(now: number): DemoWorld {
       ? atRiskMembers.length + levelCount('medium') + levelCount('low')
       : 30 + Math.floor(i / 5);
     return {
-      day: localDay(day),
+      day: zonedDay(day.getTime(), zone),
       departure: departures,
       high: Math.max(0, atRisk - departures),
       medium,
@@ -470,62 +479,64 @@ export function createWorld(now: number): DemoWorld {
 
   // The money StayPut saved, payment by payment: each member's plan, once.
   const savesMade = SAVES.map((save) => ({ ...save, amount: planPrice(save.name) }));
-  const monthOf = (moment: Date) => moment.getFullYear() * 12 + moment.getMonth();
-  const thisMonth = monthOf(new Date(now));
-  const savedIn = (month: number) =>
-    savesMade
-      .filter((save) => monthOf(new Date(now - save.ago)) === month)
-      .reduce((total, save) => total + save.amount, 0);
-  const savesThisMonth = savesMade.filter(
-    (save) => monthOf(new Date(now - save.ago)) === thisMonth,
-  ).length;
-  const savedByDay = new Map<string, number>();
-  for (const save of savesMade) {
-    const day = localDay(new Date(now - save.ago));
-    savedByDay.set(day, (savedByDay.get(day) ?? 0) + save.amount);
-  }
-  // The chart's days, as the Worker sends them: from the 1st of the month 89 days ago up to
-  // today, so that each month's balance adds up from its 1st.
-  const today = localDay(new Date(now));
-  const historyDays: string[] = [];
-  const start = new Date(now - 89 * DAY);
-  for (
-    const cursor = new Date(start.getFullYear(), start.getMonth(), 1, 12);
-    localDay(cursor) <= today;
-    cursor.setDate(cursor.getDate() + 1)
-  ) {
-    historyDays.push(localDay(cursor));
-  }
-  // What the members at risk paid each month: today, the figure of the hero row; before, a member
-  // crossing into high risk or out of it a few times a week, at their plan's price, so the total
-  // moves by steps; higher three months ago, before StayPut was at work. Counted back from today,
-  // each step toward that slope when the total has drifted from it.
-  const lastDay = historyDays.length - 1;
-  const atRiskByDay: number[] = [];
-  atRiskByDay[lastDay] = atRiskRevenue;
-  for (let i = lastDay - 1; i >= 0; i--) {
-    const trend = 1_180 - ((1_180 - atRiskRevenue) * i) / lastDay;
-    let value = atRiskByDay[i + 1]!;
+  // What the members at risk paid each month, `k` days before today: today, the figure of the
+  // hero row; before, a member crossing into high risk or out of it a few times a week, at their
+  // plan's price, so the total moves by steps; higher three months ago, before StayPut was at
+  // work. Counted back from today, each step toward that slope when the total has drifted from it.
+  // Drawn once, far enough back for any chart: its days only depend on the time zone.
+  const atRiskBack: number[] = [atRiskRevenue];
+  for (let k = 1; k < HISTORY_REACH; k++) {
+    const trend = atRiskRevenue + ((1_180 - atRiskRevenue) * k) / (HISTORY_REACH - 1);
+    let value = atRiskBack[k - 1]!;
     if (random() < 0.3) {
       const gap = trend - value;
       const price = Math.abs(gap) > 100 && random() < 0.4 ? monthly('vip') : monthly('monthly');
       const up = Math.abs(gap) > price / 2 ? gap > 0 : random() < 0.5;
       value += up ? price : -price;
     }
-    atRiskByDay[i] = round(Math.max(atRiskRevenue * 0.8, value));
+    atRiskBack.push(round(Math.max(atRiskRevenue * 0.8, value)));
   }
-  const revenueHistory: RevenueDay[] = historyDays.map((day, i) => ({
-    day,
-    saved: savedByDay.get(day) ?? 0,
-    atRisk: atRiskByDay[i]!,
-  }));
-  // The members saved in the chart's last 30 days, each once: their plans are its 30-day total.
-  const last30 = new Set(revenueHistory.slice(-30).map((entry) => entry.day));
-  const savedMembers30d = new Set(
-    savesMade
-      .filter((save) => last30.has(localDay(new Date(now - save.ago))))
-      .map((save) => save.name),
-  ).size;
+  /**
+   * The money saved in the community's calendar (Settings › Automations › Time zone), as the
+   * Worker counts it: each save on its day there, the month beginning at midnight there; the
+   * chart's days from the 1st of the month 89 days ago up to today.
+   */
+  const calendar = (zone: string) => {
+    const dayOf = (save: { ago: number }) => zonedDay(now - save.ago, zone);
+    const today = zonedDay(now, zone);
+    const month = today.slice(0, 7);
+    const lastMonth = addDays(monthStart(today), -1).slice(0, 7);
+    const savedByDay = new Map<string, number>();
+    for (const save of savesMade) {
+      savedByDay.set(dayOf(save), (savedByDay.get(dayOf(save)) ?? 0) + save.amount);
+    }
+    const days: string[] = [];
+    for (let day = monthStart(addDays(today, -89)); day <= today; day = addDays(day, 1)) {
+      days.push(day);
+    }
+    const revenueHistory: RevenueDay[] = days.map((day, i) => ({
+      day,
+      saved: round(savedByDay.get(day) ?? 0),
+      atRisk: atRiskBack[days.length - 1 - i]!,
+    }));
+    const savedIn = (key: string) =>
+      round(
+        savesMade
+          .filter((save) => dayOf(save).startsWith(key))
+          .reduce((total, save) => total + save.amount, 0),
+      );
+    // The members saved in the chart's last 30 days, each once: their plans are its 30-day total.
+    const last30 = new Set(days.slice(-30));
+    return {
+      revenueHistory,
+      thisMonth: savedIn(month),
+      lastMonth: savedIn(lastMonth),
+      savesThisMonth: savesMade.filter((save) => dayOf(save).startsWith(month)).length,
+      savedMembers30d: new Set(
+        savesMade.filter((save) => last30.has(dayOf(save))).map((save) => save.name),
+      ).size,
+    };
+  };
   const gettingStarted: GettingStarted = {
     discord: true,
     automation: true,
@@ -661,7 +672,7 @@ export function createWorld(now: number): DemoWorld {
     locale: 'en',
     dryRun: false,
     killSwitch: false,
-    timezone: 'Europe/Paris',
+    timezone: zone,
     quietHoursStart: 22,
     quietHoursEnd: 8,
     defaultSendHour: 19,
@@ -769,7 +780,7 @@ export function createWorld(now: number): DemoWorld {
                     0,
                     Math.min(100, Math.round(start + (risk.score - start) * t * t + noise)),
                   );
-            return { day: localDay(new Date(now - (29 - i) * DAY)), score };
+            return { day: zonedDay(now - (29 - i) * DAY, zone), score };
           })
       : [];
     const plan = p.plan ? PLANS[p.plan] : null;
@@ -875,6 +886,8 @@ export function createWorld(now: number): DemoWorld {
     pages,
     dashboard: () => {
       const current = Date.now();
+      // The community's calendar as Settings › Automations says now.
+      const days = calendar(settings.timezone);
       // Members at high risk no message reached (or will) within 5 days, as the Worker counts.
       const planned = pages.reached();
       const unreached = joined
@@ -891,8 +904,8 @@ export function createWorld(now: number): DemoWorld {
         currency: CURRENCY,
         saved: {
           // And two renewals after a message (influenced), counted apart.
-          thisMonth: { direct: savedIn(thisMonth), influenced: 98, saves: savesThisMonth + 2 },
-          lastMonth: { direct: savedIn(thisMonth - 1) },
+          thisMonth: { direct: days.thisMonth, influenced: 98, saves: days.savesThisMonth + 2 },
+          lastMonth: { direct: days.lastMonth },
           otherCurrencies: false,
         },
         monthlyRevenue: revenue,
@@ -914,12 +927,12 @@ export function createWorld(now: number): DemoWorld {
           paymentRetries: 7,
           offers: 5,
           pauses: 6,
-          saved: savedMembers30d,
+          saved: days.savedMembers30d,
         },
         mode: settings.mode,
         testMode: settings.dryRun,
         riskHistory,
-        revenueHistory,
+        revenueHistory: days.revenueHistory,
         gettingStarted: { ...gettingStarted },
         // The demo opens on its dashboard: its welcome only with `?welcome` (brief v4 §10).
         welcomed: true,

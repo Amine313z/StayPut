@@ -51,11 +51,22 @@ export interface Translator {
   day: (value: Date) => string;
   /** A calendar month, « September 2026 » (read in UTC: `2026-09-01` is September anywhere). */
   month: (value: Date) => string;
+  /**
+   * A day of a community's calendar (`YYYY-MM-DD`, its time zone's day), written as it is
+   * whatever the reader's time zone: « Oct 1, 2026 », « 1 oct. 2026 ».
+   */
+  calendarDate: (day: string) => string;
+  /** The same without its year: « Oct 1 », « 1 oct. ». */
+  calendarDay: (day: string) => string;
+  /** Its month alone: « September », « septembre ». */
+  calendarMonth: (day: string) => string;
   /** A moment: the date and the time, in the browser's time zone. */
   dateTime: (value: Date) => string;
   /** How long ago (or in how long): « 5 minutes ago », « il y a 2 heures », « hier ». */
   relative: (value: Date, now?: Date) => string;
 }
+
+const DAY_MS = 86_400_000;
 
 // From the largest unit down: the first one that fits gives « 3 days ago » rather than « 72 h ».
 const UNITS: readonly [Intl.RelativeTimeFormatUnit, number][] = [
@@ -80,6 +91,15 @@ export function createTranslator(locale: Locale): Translator {
     timeZone: 'UTC',
   });
   const moments = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
+  // A calendar day is read at noon UTC and written in UTC: the same day in every time zone.
+  const keyDates = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' });
+  const keyDays = new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+  const keyMonths = new Intl.DateTimeFormat(locale, { month: 'long', timeZone: 'UTC' });
+  const noonOf = (day: string) => new Date(`${day}T12:00:00Z`);
   const relatives = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
 
   const fill = (text: string, params?: Params) =>
@@ -112,9 +132,19 @@ export function createTranslator(locale: Locale): Translator {
     date: (value) => dates.format(value),
     day: (value) => days.format(value),
     month: (value) => months.format(value),
+    calendarDate: (day) => keyDates.format(noonOf(day)),
+    calendarDay: (day) => keyDays.format(noonOf(day)),
+    calendarMonth: (day) => keyMonths.format(noonOf(day)),
     dateTime: (value) => moments.format(value),
     relative: (value, now = new Date()) => {
       const elapsed = value.getTime() - now.getTime();
+      // Days are counted on the calendar, as every date the app shows: 41 hours before this
+      // evening is « yesterday », never « 2 days ago ».
+      if (Math.abs(elapsed) >= DAY_MS && Math.abs(elapsed) < 7 * DAY_MS) {
+        const midnight = (moment: Date) =>
+          Date.UTC(moment.getFullYear(), moment.getMonth(), moment.getDate());
+        return relatives.format(Math.round((midnight(value) - midnight(now)) / DAY_MS), 'day');
+      }
       for (const [unit, ms] of UNITS) {
         if (Math.abs(elapsed) >= ms) return relatives.format(Math.round(elapsed / ms), unit);
       }

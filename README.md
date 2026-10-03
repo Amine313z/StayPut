@@ -72,7 +72,9 @@ couleurs, polices et animations suivent [`docs/design-tokens.md`](./docs/design-
 
 La page d'accueil répond à une seule question, « Est-ce que je perds de l'argent, et que faire
 aujourd'hui ? » : un bloc pour l'argent (sauvé ce mois-ci, à risque, membres à risque, et la
-courbe de l'argent sauvé face à l'argent à risque sur 7, 30 ou 90 jours), l'action prioritaire du
+courbe de l'argent sauvé face à l'argent à risque sur 7, 30 ou 90 jours : l'argent sauvé
+s'additionne depuis le premier jour affiché, la courbe ne fait que monter, un trait marque le 1er
+du mois, et chaque jour est celui du fuseau de la communauté), l'action prioritaire du
 jour en un bouton (approuver, relancer les paiements échoués, proposer une pause, écrire ; jamais
 « rien d'urgent » tant qu'un paiement échoué ou un départ demeure), les cinq membres les plus
 urgents avec Écrire / Pause / Offre, et ce que StayPut a fait en 30 jours. Tant que la mise en

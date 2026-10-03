@@ -51,10 +51,14 @@ No bounce on data: a figure lands where it is, once.
 - **Charts**: the lines draw in from the left in 1.2 s (one clip reveals them), then the area
   fades in (400 ms) and today's dot appears, pulsing every 2.4 s (scale 1 → 1.8, opacity 0.6 →
   0). A new period (7, 30, 90 days) is not drawn again: the curve turns into the new one in
-  500 ms (every period is read at the same 90 places of a monotone curve, so the paths match
-  point for point), today's dot gliding with it. The hairline, the dots on the lines, the
+  500 ms (every period is read at the same 631 places of a monotone curve, so the paths match
+  point for point; 630 steps is a multiple of 7, 30 and 90, so each day ends on one of them and
+  a line climbs within the day of a save, never before), today's dot gliding with it. The
+  balance's « Oct 1 » mark (where the month starts) fades in at its new place in 500 ms; its
+  date steps aside (200 ms) while a day is read. The hairline, the dots on the lines, the
   tooltip and the day under the pointer follow it (or the arrow keys) with 80 ms of smoothing.
-- **Tooltips** (a label's, a chart's): fade in in 120 ms, two lines at most.
+- **Tooltips** (a label's, a chart's): fade in in 120 ms; a label's says two lines at most, a
+  chart's one line per figure, the value first.
 - **Choices side by side** (a period, as small pills): the chosen one's pill slides to it
   (300 ms). The side menu's 2 px turquoise bar slides to the open section the same way.
 - **Progress** (« Getting started »): the bar grows from the left (`scaleX`).

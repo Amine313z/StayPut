@@ -6,7 +6,7 @@ import type {
   RiskSettingsView,
   SyncRun,
 } from '@stayput/core';
-import { ACTION_VIEWS, isCreatorOfferKind } from '@stayput/core';
+import { ACTION_VIEWS, isCreatorOfferKind, timeZoneName } from '@stayput/core';
 import { ApiError, DEMO_API } from '../api';
 import { createWorld, type DemoWorld } from './world';
 
@@ -23,8 +23,17 @@ export const DEMO_WRITE_MS = 600;
 
 let world: DemoWorld | null = null;
 
+/** The visitor's time zone: the demo community's, as StayPut gives a new community its creator's. */
+function visitorZone(): string {
+  try {
+    return timeZoneName(Intl.DateTimeFormat().resolvedOptions().timeZone) ?? 'Europe/Paris';
+  } catch {
+    return 'Europe/Paris';
+  }
+}
+
 function current(): DemoWorld {
-  world ??= createWorld(Date.now());
+  world ??= createWorld(Date.now(), visitorZone());
   // What members did since the last answer: every page tells the same community.
   world.advance(Date.now());
   return world;

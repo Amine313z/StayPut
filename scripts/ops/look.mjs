@@ -185,7 +185,7 @@ report.chart = await desktop.page.evaluate(() => {
   return {
     days: rows.length,
     nonZeroSaved: values.filter((v) => v[0] && !/^\$0(\.00)?$/.test(v[0])).length,
-    atRiskDays: values.filter((v) => v[1] && v[1] !== '—').length,
+    atRiskDays: values.filter((v) => v[2] && v[2] !== '—').length,
     linesDrawn: lines.filter((path) => (path.getAttribute('d') ?? '').length > 20).length,
   };
 });
@@ -194,14 +194,27 @@ report.hero = await desktop.page.evaluate(() =>
 );
 // Amounts as Whop writes them (brief v4 §7): the symbol and the cents, « $247.00 ».
 report.amountsWithCents = report.hero.slice(0, 2).every((text) => /^\$[\d,]+\.\d{2}$/.test(text));
-// The balance (brief v4 §8, §13): one number for the amount and the end of its line, the
-// difference with last month under it, 7D / 30D / 90D; the most urgent member first.
+// The balance (brief v4 §8, §13, fix prompt v4.1 block 2): the month's amount is where the
+// chart's month ends today; the period's money only climbs; « Oct 1 » marks where the month
+// starts; the difference with last month under it, 7D / 30D / 90D; the most urgent member first.
 const balance = desktop.page.getByRole('region', { name: 'Your money this month' });
 report.balance = await balance.evaluate((section) => {
   const rows = [...section.querySelectorAll('table tbody tr')];
+  const cents = (text) => Math.round(Number((text ?? '').replace(/[^\d.]/g, '')) * 100);
+  const inPeriod = rows.map((row) => cents(row.querySelectorAll('td')[0]?.textContent));
+  const today = new Date();
   return {
     amount: section.querySelector('dd')?.textContent ?? null,
-    chartEnds: rows.at(-1)?.querySelector('td')?.textContent ?? null,
+    chartEnds: rows.at(-1)?.querySelectorAll('td')[1]?.textContent ?? null,
+    periodClimbs: inPeriod.length > 0 && inPeriod.every((v, i) => i === 0 || v >= inPeriod[i - 1]),
+    monthMark: section.querySelector('[data-chart="month-start"]')?.textContent ?? null,
+    // Shown over 30 days unless today is the 31st (the 1st is then 30 days back).
+    monthStart:
+      today.getDate() <= 30
+        ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(
+            new Date(today.getFullYear(), today.getMonth(), 1),
+          )
+        : null,
     delta:
       [...section.querySelectorAll('p')]
         .find((p) => / vs last month/.test(p.textContent ?? ''))
@@ -221,12 +234,24 @@ await balance.screenshot({ path: `${out}/dashboard-balance.png` });
 const chart = desktop.page.getByRole('group', { name: 'Revenue saved vs at risk' });
 const box = await chart.boundingBox();
 if (box) {
+  const clip = { x: box.x - 90, y: box.y - 130, width: box.width + 120, height: box.height + 190 };
   await desktop.page.mouse.move(box.x + box.width * 0.72, box.y + box.height / 2);
   await desktop.page.waitForTimeout(400);
-  await desktop.page.screenshot({
-    path: `${out}/dashboard-chart-hover.png`,
-    clip: { x: box.x - 90, y: box.y - 130, width: box.width + 120, height: box.height + 190 },
-  });
+  await desktop.page.screenshot({ path: `${out}/dashboard-chart-hover.png`, clip });
+  // The month's first day: its point stands at the end of the day the mark starts.
+  const mark = await desktop.page.locator('[data-chart="month-start"]').boundingBox();
+  if (mark) {
+    await desktop.page.mouse.move(mark.x + box.width / 30, box.y + box.height / 2);
+    await desktop.page.waitForTimeout(400);
+    await desktop.page.screenshot({ path: `${out}/dashboard-chart-month-start.png`, clip });
+  }
+  await desktop.page.mouse.move(0, 0);
+  // The other periods: the same money added up from their own first day.
+  for (const days of ['7D', '90D', '30D']) {
+    await balance.getByRole('radio', { name: days }).click();
+    await desktop.page.waitForTimeout(1_000);
+    if (days !== '30D') await balance.screenshot({ path: `${out}/dashboard-balance-${days}.png` });
+  }
 }
 // Integrations › Activity: no block may still say « Loading… » after 5 seconds (brief v4 §9.6).
 await desktop.page.goto(`${base}/demo/sources/activity`, { waitUntil: 'domcontentloaded' });
@@ -426,6 +451,8 @@ const ok =
   report.chart.linesDrawn >= 2 &&
   report.balance.amount !== null &&
   report.balance.amount === report.balance.chartEnds &&
+  report.balance.periodClimbs &&
+  report.balance.monthMark === report.balance.monthStart &&
   /^[+−]\$[\d,]+\.\d{2} vs last month$/.test(report.balance.delta ?? '') &&
   report.balance.periods.join(' ') === '7D 30D 90D' &&
   report.firstNeedingAttention === 'Hugo Bernard' &&
@@ -465,7 +492,7 @@ writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing or does not end on the balance, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members or its drawer is not as the brief says: see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members or its drawer is not as the brief says: see the report above.',
   );
   process.exitCode = 1;
 }

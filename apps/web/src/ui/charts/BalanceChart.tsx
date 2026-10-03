@@ -11,7 +11,7 @@ import {
 import { useI18n } from '../../i18n';
 import { DURATION, EASE, ease } from '../../motion';
 import { LabelTip } from '../LabelTip';
-import { monotoneSample, smoothPath } from './curve';
+import { monotoneSample, polylinePath } from './curve';
 import { CHART } from './theme';
 
 /** The plot's own units: as wide as it likes (the SVG stretches), as tall as it is drawn. */
@@ -20,8 +20,12 @@ const W = 1000;
 const H = 220;
 /** Room above the highest point, so the line and its dot never touch the top. */
 const HEADROOM = 1.15;
-/** Every period is drawn with this many points: 7, 30 and 90 days turn into one another. */
-const SAMPLES = 90;
+/**
+ * Every period is drawn with this many points, so 7, 30 and 90 days turn into one another; 630
+ * steps is a multiple of each period's days, so the end of every day is one of the points: the
+ * line climbs within the day of a save, never a little before it.
+ */
+export const SAMPLES = 631;
 
 export interface BalancePoint {
   /** The day in full, for the tooltip and the table: « Oct 3, 2026 ». */
@@ -46,13 +50,18 @@ function fillGaps(values: readonly (number | null)[]): number[] | null {
 }
 
 /**
- * The money saved drawn the way Whop draws a balance (brief v4 §8): no box, no grid, no value
- * axis; a 2 px turquoise line over a turquoise area fading out, a dotted baseline, a dot that
- * pulses on today. The members at risk are a thin dashed line on the same scale, shown or hidden
- * from the legend. Hover, touch or the arrow keys: a hairline, a dot on the curve and a compact
- * tooltip, the day under the line. MOTION.md: the line draws in (1.2 s), its area fades in
- * after it, a new period turns the curve into the new one (500 ms) instead of drawing it again.
- * Screen readers get a sentence and the table of the figures.
+ * The money saved drawn the way Whop draws a balance (brief v4 §8, fix prompt v4.1 block 2): no
+ * box, no grid, no value axis; a 2 px turquoise line over a turquoise area fading out, a dotted
+ * baseline, a dot that pulses on today. The line adds up what the period saved: it starts at
+ * $0.00 on the left edge, the start of the period's first day, each day's point stands at the end
+ * of its day, and a monotone curve takes it from one to the next, so it never dips, never bulges
+ * between two equal days, never goes under the baseline. A hairline marks where the current month
+ * starts (« Oct 1 »): what the line climbs after it is the hero's month. The members at risk are a
+ * thin dashed line on the same scale, shown or hidden from the legend. Hover, touch or the arrow
+ * keys: a hairline, a dot on the curve and a compact tooltip (the period's total, the month's,
+ * the members at risk), the day under the line. MOTION.md: the line draws in (1.2 s), its area
+ * fades in after it, a new period turns the curve into the new one (500 ms) instead of drawing it
+ * again. Screen readers get a sentence and the table of the figures.
  */
 export function BalanceChart({
   label,
@@ -60,6 +69,8 @@ export function BalanceChart({
   period,
   points,
   saved,
+  month,
+  marker,
   atRisk,
   format,
 }: {
@@ -70,8 +81,17 @@ export function BalanceChart({
   /** The period shown (a change morphs the curve). */
   period: string;
   points: readonly BalancePoint[];
+  /** What the period saved up to the end of each day: never less than the day before. */
   saved: { label: string; values: readonly number[]; info?: ReactNode };
-  atRisk: { label: string; values: readonly (number | null)[] } | null;
+  /**
+   * Each day's month balance (« Saved this month », « Saved in September »), in the tooltip and
+   * the table; `label` names its column.
+   */
+  month: { label: string; labels: readonly string[]; values: readonly number[] };
+  /** The day the current month starts on (« Oct 1 »), marked at its start; null: none shown. */
+  marker: { index: number; label: string } | null;
+  /** `before`: the day before the period, where the dashed line starts. */
+  atRisk: { label: string; values: readonly (number | null)[]; before: number | null } | null;
   format: (value: number) => string;
 }) {
   const { t } = useI18n();
@@ -83,39 +103,48 @@ export function BalanceChart({
   const [showRisk, setShowRisk] = useState(true);
   const n = points.length;
   const riskShown = showRisk && atRisk !== null && atRisk.values.some((v) => v !== null);
+  /** Across the plot: the start of the period's first day is 0, the end of today is 1. */
+  const along = (boundary: number) => (n > 0 ? boundary / n : 0);
+  /** A day's point: the end of its day. */
+  const share = (index: number) => along(index + 1);
 
   const geometry = useMemo(() => {
-    const riskValues = atRisk ? fillGaps(atRisk.values) : null;
-    const max = Math.max(1, ...saved.values, ...(riskShown && riskValues ? riskValues : []));
+    // One more value than days: the period's start, nothing saved yet.
+    const line = [0, ...saved.values];
+    const risk = atRisk ? [atRisk.before, ...atRisk.values] : null;
+    const riskValues = risk ? fillGaps(risk) : null;
+    const max = Math.max(1, ...line, ...(riskShown && riskValues ? riskValues : []));
     const top = max * HEADROOM;
     const y = (value: number) => H - (Math.max(0, value) / top) * H;
+    // The monotone curve through the days, read densely: it never dips, never bulges between
+    // two equal days, never goes under the baseline.
     const path = (values: readonly number[]) =>
-      smoothPath(
+      polylinePath(
         monotoneSample(values, SAMPLES).map((value, k) => ({
           x: (k / (SAMPLES - 1)) * W,
           y: y(value),
         })),
       );
-    const line = path(saved.values);
-    const first = atRisk ? atRisk.values.findIndex((value) => value !== null) : -1;
+    const drawn = path(line);
+    const first = risk ? risk.findIndex((value) => value !== null) : -1;
     return {
       top,
-      line,
-      area: `${line}L${W} ${H}L0 ${H}Z`,
+      line: drawn,
+      area: `${drawn}L${W} ${H}L0 ${H}Z`,
       risk: riskValues
-        ? { line: path(riskValues), from: n > 1 ? (Math.max(0, first) / (n - 1)) * W : 0 }
+        ? { line: path(riskValues), from: (n > 0 ? Math.max(0, first) / n : 0) * W }
         : null,
     };
   }, [saved.values, atRisk, riskShown, n]);
 
-  const share = (index: number) => (n > 1 ? index / (n - 1) : 1);
   const yOf = (value: number) => (1 - Math.max(0, value) / geometry.top) * H;
   const measure = () => setWidth(plot.current?.getBoundingClientRect().width ?? 0);
   const fromPointer = (event: PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
     setWidth(box.width);
     const fraction = box.width > 0 ? (event.clientX - box.left) / box.width : 0;
-    setActive(Math.max(0, Math.min(n - 1, Math.round(fraction * (n - 1)))));
+    // The nearest day's point; before the first one, the first day.
+    setActive(Math.max(0, Math.min(n - 1, Math.round(fraction * n) - 1)));
   };
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const from = active ?? n - 1;
@@ -140,12 +169,18 @@ export function BalanceChart({
     value === null || value === undefined ? '—' : format(value);
   const point = active === null ? null : points[active];
   const savedNow = active === null ? null : (saved.values[active] ?? null);
+  const monthNow = active === null ? null : (month.values[active] ?? null);
+  const monthLabel = active === null ? '' : (month.labels[active] ?? month.label);
   const riskNow = active === null || !atRisk ? null : (atRisk.values[active] ?? null);
   const spoken = point
-    ? `${point.label}: ${[
-        `${saved.label} ${said(savedNow)}`,
-        ...(atRisk ? [`${atRisk.label} ${said(riskNow)}`] : []),
-      ].join(', ')}`
+    ? t('chart.reading', {
+        day: point.label,
+        figures: [
+          `${saved.label} ${said(savedNow)}`,
+          `${monthLabel} ${said(monthNow)}`,
+          ...(atRisk ? [`${atRisk.label} ${said(riskNow)}`] : []),
+        ].join(', '),
+      })
     : '';
   const x = active === null ? 0 : share(active) * width;
   const last = saved.values.at(-1) ?? 0;
@@ -248,6 +283,32 @@ export function BalanceChart({
           aria-hidden="true"
           className="baseline-dots pointer-events-none absolute inset-x-0 bottom-0 h-px"
         />
+        {/* Where the current month starts: a hairline, its date beside it (on its left near the
+            right edge), coming in once the curve has turned into the period's. While a day is
+            read, its date is under the line: the mark's own steps aside for the tooltip. */}
+        {marker ? (
+          <motion.div
+            key={`${period}:${marker.index}`}
+            aria-hidden="true"
+            data-chart="month-start"
+            className="pointer-events-none absolute inset-y-0 w-0"
+            style={{ left: `${along(marker.index) * 100}%` }}
+            initial={{ opacity: reduce ? 1 : 0 }}
+            animate={{ opacity: 1 }}
+            transition={reduce ? { duration: 0 } : ease('fill', DURATION.morph)}
+          >
+            <span className={`absolute inset-y-0 left-0 w-px ${CHART.reference}`} />
+            <span
+              className={`absolute top-0 transition-opacity duration-200 ease-brand ${
+                CHART.axisLabel
+              } ${along(marker.index) > 0.85 ? 'right-1.5' : 'left-1.5'} ${
+                active === null ? '' : 'opacity-0'
+              }`}
+            >
+              {marker.label}
+            </span>
+          </motion.div>
+        ) : null}
         {/* Today: a 6 px dot where the line arrives, pulsing every 2.4 s once it is drawn. */}
         <motion.span
           aria-hidden="true"
@@ -322,13 +383,34 @@ export function BalanceChart({
               }}
             >
               <p className="text-subtle">{point.label}</p>
+              {/* The value leads; a series drawn on the chart is keyed by a short stroke of it. */}
               <p className="mt-1 flex items-center justify-between gap-4">
-                <span>{saved.label}</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-0.5 w-2.5 shrink-0 rounded-full bg-turq-300" />
+                  {saved.label}
+                </span>
                 <span className="metric text-sm text-fg">{said(savedNow)}</span>
+              </p>
+              <p className="mt-0.5 flex items-center justify-between gap-4">
+                <span className="ps-4">{monthLabel}</span>
+                <span className="metric text-sm text-fg">{said(monthNow)}</span>
               </p>
               {riskShown && atRisk ? (
                 <p className="mt-0.5 flex items-center justify-between gap-4">
-                  <span>{atRisk.label}</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <svg width="10" height="2" viewBox="0 0 10 2" className="shrink-0">
+                      <line
+                        x1="0"
+                        x2="10"
+                        y1="1"
+                        y2="1"
+                        strokeWidth="1"
+                        strokeDasharray="2 2"
+                        className={CHART.comparison}
+                      />
+                    </svg>
+                    {atRisk.label}
+                  </span>
                   <span className="metric text-sm text-fg">{said(riskNow)}</span>
                 </p>
               ) : null}
@@ -390,6 +472,7 @@ export function BalanceChart({
           <tr>
             <th scope="col">{t('chart.day')}</th>
             <th scope="col">{saved.label}</th>
+            <th scope="col">{month.label}</th>
             {atRisk ? <th scope="col">{atRisk.label}</th> : null}
           </tr>
         </thead>
@@ -398,6 +481,7 @@ export function BalanceChart({
             <tr key={`${period}-${p.label}`}>
               <th scope="row">{p.label}</th>
               <td>{said(saved.values[index])}</td>
+              <td>{said(month.values[index])}</td>
               {atRisk ? <td>{said(atRisk.values[index])}</td> : null}
             </tr>
           ))}

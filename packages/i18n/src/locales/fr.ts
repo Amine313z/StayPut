@@ -1232,6 +1232,7 @@ export const fr: Messages = {
   'member.subscription.title': 'Votre abonnement',
   'member.subscription.welcome': 'Ce qui concerne votre abonnement, au même endroit.',
   'member.allSet': 'Votre abonnement est en ordre : rien ne vous attend ici.',
+  'chart.reading': '{day} : {figures}',
   'chart.day': 'Jour',
   'dash.saved.info':
     'Paiements récupérés, annulations retirées, pauses terminées ce mois-ci. Chacun compté une fois.',
@@ -1241,8 +1242,11 @@ export const fr: Messages = {
     '{departures} sur le départ, {high} à risque élevé. Notés chaque heure, de 0 à 100.',
   'dash.chart.title': 'Revenus sauvés et revenus à risque',
   'dash.chart.info':
-    'Sauvé : additionné depuis le 1er de chaque mois, aujourd’hui c’est le montant du mois. À risque : ce que payaient par mois les membres à risque.',
-  'dash.chart.saved': 'Sauvé',
+    'Sauvé sur la période : additionné depuis le premier jour affiché, la courbe ne fait que monter ; le trait vertical marque le début du mois. À risque : ce que payaient par mois les membres à risque.',
+  'dash.chart.saved': 'Sauvé sur la période',
+  'dash.chart.savedThisMonth': 'Sauvé ce mois-ci',
+  'dash.chart.savedIn': 'Sauvé en {month}',
+  'dash.chart.monthToDate': 'Sauvé dans le mois',
   'dash.chart.atRisk': 'À risque',
   'dash.chart.period': 'Période',
   'dash.chart.days.one': '{count} j',

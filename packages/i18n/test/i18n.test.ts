@@ -90,6 +90,19 @@ describe('createTranslator', () => {
     expect(createTranslator('fr').month(new Date('2026-09-01'))).toBe('septembre 2026');
   });
 
+  it('writes a community’s calendar day as it is, in English and in French', () => {
+    // Whatever the reader's time zone: never the day before, never the day after.
+    const en = createTranslator('en');
+    const fr = createTranslator('fr');
+    expect(en.calendarDate('2026-10-01')).toBe('Oct 1, 2026');
+    expect(fr.calendarDate('2026-10-01')).toBe('1 oct. 2026');
+    expect(en.calendarDay('2026-09-30')).toBe('Sep 30');
+    expect(fr.calendarDay('2026-09-30')).toBe('30 sept.');
+    expect(en.calendarMonth('2026-09-30')).toBe('September');
+    expect(fr.calendarMonth('2026-09-30')).toBe('septembre');
+    expect(en.calendarDate('2027-01-01')).toBe('Jan 1, 2027');
+  });
+
   it('says how long ago, in the largest unit that fits', () => {
     const now = new Date('2026-10-01T12:00:00Z');
     const ago = (ms: number) => new Date(now.getTime() - ms);
@@ -101,5 +114,20 @@ describe('createTranslator', () => {
     const fr = createTranslator('fr');
     expect(fr.relative(ago(2 * 3_600_000), now)).toBe('il y a 2 heures');
     expect(fr.relative(ago(3 * 86_400_000), now)).toBe('il y a 3 jours');
+  });
+
+  it('counts whole days on the calendar, as the dates the app shows', () => {
+    // In the reader's own calendar (local dates: the same in every time zone running the tests).
+    const evening = new Date(2026, 9, 3, 19, 8);
+    const en = createTranslator('en');
+    const fr = createTranslator('fr');
+    // 41 hours before this evening: 2 October at 02:08, yesterday.
+    expect(en.relative(new Date(2026, 9, 2, 2, 8), evening)).toBe('yesterday');
+    expect(fr.relative(new Date(2026, 9, 2, 2, 8), evening)).toBe('hier');
+    // 26 hours before 01:00: 1 October at 23:00, two days ago on the calendar.
+    expect(en.relative(new Date(2026, 9, 1, 23, 0), new Date(2026, 9, 3, 1, 0))).toBe('2 days ago');
+    // Under a day, hours; from a week, weeks.
+    expect(en.relative(new Date(2026, 9, 2, 20, 8), evening)).toBe('23 hours ago');
+    expect(en.relative(new Date(2026, 8, 25, 19, 8), evening)).toBe('last week');
   });
 });

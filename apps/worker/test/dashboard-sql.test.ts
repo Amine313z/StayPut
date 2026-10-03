@@ -388,3 +388,87 @@ describe('the home of the dashboard', () => {
     });
   });
 });
+
+describe('the chart’s days, in the community’s calendar (fix prompt v4.1, block 2)', () => {
+  // 3 October 2026, 16:00 in Paris, 10:00 in New York.
+  const AT = new Date('2026-10-03T14:00:00Z');
+
+  /** A community in `zone`, one member paying 49 a month, saves at the given UTC moments. */
+  async function community(id: string, zone: string, saves: Record<string, string>) {
+    await t.db.query(
+      `insert into stayput.companies (id, name, timezone, locale, mode)
+       values ($1, 'Le Club', $2, 'en', 'manual')`,
+      [id, zone],
+    );
+    await t.db.query(
+      `insert into stayput.company_admins (company_id, user_id, verified_at)
+       values ($1, 'user_Owner', now())`,
+      [id],
+    );
+    const ana = `mber_${id.slice(4)}`;
+    await t.db.query(
+      `insert into stayput.members (id, company_id, user_id, display_name, joined_at, status)
+       values ($2, $1, $3, 'Ana', '2026-06-01T00:00:00Z', 'joined')`,
+      [id, ana, `user_${id.slice(4)}`],
+    );
+    await t.db.query(
+      `insert into stayput.memberships (id, company_id, member_id, user_id, product_id, plan_id,
+                                        price, currency, billing_period_days, status,
+                                        current_period_end)
+       values ($2, $1, $3, $4, 'prod_Club', 'plan_Month', 49, 'usd', 30, 'active',
+               '2026-10-20T00:00:00Z')`,
+      [id, `mem_${id.slice(4)}`, ana, `user_${id.slice(4)}`],
+    );
+    for (const [payment, savedAt] of Object.entries(saves)) {
+      // As the attribution writes them: the payment's currency, in Whop's lowercase.
+      await t.db.query(
+        `insert into stayput.saves (company_id, member_id, save_type, category, amount, currency,
+                                    payment_id, saved_at)
+         values ($1, $2, 'payment_recovered', 'direct', 49, 'usd', $3, $4::timestamptz)`,
+        [id, ana, payment, savedAt],
+      );
+    }
+    const view = (await readDashboard(t.db, 'user_Owner', id, AT))!;
+    const on = (day: string) => view.revenueHistory.find((d) => d.day === day)?.saved;
+    return { view, on };
+  }
+
+  it('counts a save at 00:30 and one at 23:30 on their own day, east of UTC', async () => {
+    const { view, on } = await community('biz_Paris1', 'Europe/Paris', {
+      // 30 September, 23:30 in Paris (21:30 UTC): September's.
+      pay_Paris1: '2026-09-30T21:30:00Z',
+      // 1 October, 00:30 in Paris (still 30 September in UTC): October's.
+      pay_Paris2: '2026-09-30T22:30:00Z',
+      // 2 October, 23:30 in Paris (21:30 UTC).
+      pay_Paris3: '2026-10-02T21:30:00Z',
+    });
+    expect(on('2026-09-30')).toBe(49);
+    expect(on('2026-10-01')).toBe(49);
+    expect(on('2026-10-02')).toBe(49);
+    expect(on('2026-10-03')).toBe(0);
+    expect(view.revenueHistory.at(-1)?.day).toBe('2026-10-03');
+    // The hero's month and the chart's days are the same saves, whatever the currency's case.
+    expect(view.currency).toBe('USD');
+    expect(view.saved.thisMonth).toMatchObject({ direct: 98, saves: 2 });
+    expect(view.saved.lastMonth.direct).toBe(49);
+    const october = view.revenueHistory.filter((d) => d.day.startsWith('2026-10'));
+    expect(october.reduce((total, d) => total + d.saved, 0)).toBe(view.saved.thisMonth.direct);
+  });
+
+  it('counts a save at 00:30 and one at 23:30 on their own day, west of UTC', async () => {
+    const { view, on } = await community('biz_NewYork1', 'America/New_York', {
+      // 30 September, 23:30 in New York (already 1 October in UTC): September's.
+      pay_NewYork1: '2026-10-01T03:30:00Z',
+      // 1 October, 00:30 in New York (04:30 UTC): October's.
+      pay_NewYork2: '2026-10-01T04:30:00Z',
+      // 3 October, 00:30 in New York: today's.
+      pay_NewYork3: '2026-10-03T04:30:00Z',
+    });
+    expect(on('2026-09-30')).toBe(49);
+    expect(on('2026-10-01')).toBe(49);
+    expect(on('2026-10-02')).toBe(0);
+    expect(on('2026-10-03')).toBe(49);
+    expect(view.saved.thisMonth.direct).toBe(98);
+    expect(view.saved.lastMonth.direct).toBe(49);
+  });
+});

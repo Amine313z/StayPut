@@ -1,9 +1,9 @@
 import type { RevenueDay } from '@stayput/core';
 
 /**
- * The numbers of the Dashboard's balance (brief v4 §8, §13), one source for all of them: the
- * Worker's day-by-day history (`revenueHistory`, the community's calendar) and the month's figure
- * (`saved.thisMonth.direct`). Pure, so a test can hold them together.
+ * The numbers of the Dashboard's balance (brief v4 §8, §13, fix prompt v4.1 block 2), one source
+ * for all of them: the Worker's day-by-day history (`revenueHistory`, the community's calendar)
+ * and the month's figure (`saved.thisMonth.direct`). Pure, so a test can hold them together.
  */
 
 /** Amounts are added up in cents: never a $0.01 drift between two figures that must agree. */
@@ -12,22 +12,33 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
 export interface BalanceDay {
   /** YYYY-MM-DD, in the community's calendar. */
   day: string;
-  /** Saved from the first of that day's month up to that day: the month's balance then. */
-  saved: number;
+  /** Saved from the period's first day up to the end of this one: it only ever grows. */
+  inPeriod: number;
+  /** Saved from the 1st of this day's month up to the end of this one: that month's balance then. */
+  inMonth: number;
   /** What the members at risk paid a month that day; null: no score that day. */
   atRisk: number | null;
 }
 
+export interface BalanceWindow {
+  days: BalanceDay[];
+  /** What the members at risk paid the day before the period, where its line starts; null: unknown. */
+  atRiskBefore: number | null;
+  /** The current month's 1st among `days`, where the chart marks it; null: before the period. */
+  monthStart: number | null;
+}
+
 /**
- * The money saved as Whop shows a balance: added up from the first of each month, so the line
- * starts again on the 1st and ends today on the month's figure. `monthTotal` (the hero's figure)
- * is where today ends: the hero and the chart are one number, never two.
+ * The last `days` days of the history, as the chart draws them. The money saved adds up from the
+ * period's first day, so the line starts at $0.00 and never goes down, and ends today on what the
+ * period saved; each day also carries its month's balance, which `monthTotal` (the hero's figure)
+ * ends today: the hero and the chart are one number, never two.
  */
 export function balanceWindow(
   history: readonly RevenueDay[],
   days: number,
   monthTotal?: number,
-): BalanceDay[] {
+): BalanceWindow {
   let month = '';
   let total = 0;
   const all = history.map((entry) => {
@@ -37,15 +48,30 @@ export function balanceWindow(
       total = 0;
     }
     total += entry.saved;
-    return { day: entry.day, saved: round2(total), atRisk: entry.atRisk };
+    return { ...entry, inMonth: round2(total) };
   });
-  const window = all.slice(-days);
-  const today = window.at(-1);
-  if (today && monthTotal !== undefined) today.saved = round2(monthTotal);
-  return window;
+  const from = Math.max(0, all.length - days);
+  let period = 0;
+  const shown = all.slice(from).map((entry): BalanceDay => {
+    period += entry.saved;
+    return {
+      day: entry.day,
+      inPeriod: round2(period),
+      inMonth: entry.inMonth,
+      atRisk: entry.atRisk,
+    };
+  });
+  const today = shown.at(-1);
+  if (today && monthTotal !== undefined) today.inMonth = round2(monthTotal);
+  const first = today ? shown.findIndex((d) => d.day === `${today.day.slice(0, 7)}-01`) : -1;
+  return {
+    days: shown,
+    atRiskBefore: from > 0 ? all[from - 1]!.atRisk : null,
+    monthStart: first >= 0 ? first : null,
+  };
 }
 
-/** What was saved over the last `days` days (the 30-day total of « members saved »). */
+/** What was saved over the last `days` days: where the period's line ends today. */
 export function savedOver(history: readonly RevenueDay[], days: number): number {
   return round2(history.slice(-days).reduce((total, entry) => total + entry.saved, 0));
 }

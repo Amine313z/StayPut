@@ -13,6 +13,8 @@ export const CHART = {
   /** The comparison line's dashes, in px. */
   dash: '4 4',
   crosshair: 'bg-turq-300/40',
+  /** A reference on the plot (where the month starts): a solid hairline one step off the black. */
+  reference: 'bg-white-500/25',
   marker: 'bg-turq-300',
   comparisonMarker: 'bg-white-300',
   markerRing: 'ring-2 ring-bg',

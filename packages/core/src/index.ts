@@ -12,3 +12,4 @@ export * from './announcements';
 export * from './testimonials';
 export * from './attribution';
 export * from './dashboard';
+export * from './calendar';

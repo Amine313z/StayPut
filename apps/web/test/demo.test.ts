@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RISK_FACTORS } from '@stayput/core';
-import { localDay } from '../src/demo/pages';
+import { RISK_FACTORS, zonedDay, type RevenueDay } from '@stayput/core';
 import { createWorld } from '../src/demo/world';
 import { balanceWindow, savedOver } from '../src/views/creator/balance';
 
@@ -79,8 +78,8 @@ describe('the demo community', () => {
   it('has one number for the money saved: the hero, the chart, the members saved (§13)', () => {
     const home = world.dashboard();
     const history = home.revenueHistory;
-    // The hero is where the chart's line ends: the month's days added up, nothing forced.
-    expect(balanceWindow(history, 30).at(-1)!.saved).toBe(home.saved.thisMonth.direct);
+    // The hero is the month's days added up, nothing forced: the chart's today says it too.
+    expect(balanceWindow(history, 30).days.at(-1)!.inMonth).toBe(home.saved.thisMonth.direct);
     expect(home.saved.thisMonth.direct).toBeGreaterThan(0);
     // Each save is a member's plan, at its price.
     const member = (id: string) => world.members.members.find((m) => m.id === id)!;
@@ -89,7 +88,9 @@ describe('the demo community', () => {
     // « Members saved » are the chart's last 30 days, each member once: their plans add up to
     // what the chart saved in those days.
     const days = new Set(history.slice(-30).map((d) => d.day));
-    const saved = world.saves.filter((save) => days.has(localDay(new Date(save.at))));
+    const saved = world.saves.filter((save) =>
+      days.has(zonedDay(Date.parse(save.at), 'Europe/Paris')),
+    );
     const ids = saved.map((save) => save.memberId);
     expect(new Set(ids).size).toBe(ids.length);
     expect(home.stayputActions30d.saved).toBe(ids.length);
@@ -100,6 +101,56 @@ describe('the demo community', () => {
       expect(saved.find((save) => save.memberId === item.memberId)?.amount).toBe(item.amount);
     }
     for (const save of saved) expect(member(save.memberId).lastPayment!.at).toBe(save.at);
+  });
+
+  it('counts each save on its day in the community’s time zone, at 00:30 as at 23:30', () => {
+    const on = (history: readonly RevenueDay[], day: string) =>
+      history.find((entry) => entry.day === day)?.saved;
+    // 3 October, 01:11 in Paris: Clara Faure was saved at 00:30, still 2 October in UTC.
+    const paris = createWorld(Date.parse('2026-10-02T23:11:00Z'), 'Europe/Paris');
+    expect(paris.settings.timezone).toBe('Europe/Paris');
+    let home = paris.dashboard();
+    expect(home.revenueHistory.at(-1)!.day).toBe('2026-10-03');
+    expect(on(home.revenueHistory, '2026-10-03')).toBe(49);
+    // Anaïs Robin (149) at 23:11 and Arthur Lemoine (49) in the morning: 1 October.
+    expect(on(home.revenueHistory, '2026-10-01')).toBe(198);
+    expect(on(home.revenueHistory, '2026-10-02')).toBe(0);
+    expect(home.saved.thisMonth.direct).toBe(247);
+    // 3 October, 01:30 in New York: Anaïs Robin was saved at 23:30 on 1 October, already the
+    // 2nd in UTC.
+    const newYork = createWorld(Date.parse('2026-10-03T05:30:00Z'), 'America/New_York');
+    home = newYork.dashboard();
+    expect(home.revenueHistory.at(-1)!.day).toBe('2026-10-03');
+    expect(on(home.revenueHistory, '2026-10-01')).toBe(198);
+    expect(on(home.revenueHistory, '2026-10-02')).toBe(0);
+    expect(on(home.revenueHistory, '2026-10-03')).toBe(49);
+    expect(home.saved.thisMonth.direct).toBe(247);
+    // Another zone in Settings › Automations: the same saves on that zone's days, at once.
+    paris.saveSettings({ ...paris.settings, timezone: 'America/New_York' });
+    home = paris.dashboard();
+    expect(home.revenueHistory.at(-1)!.day).toBe('2026-10-02');
+    expect(on(home.revenueHistory, '2026-10-02')).toBe(49);
+    // Whatever the zone, the month's days add up to the hero, the history starts on a 1st.
+    for (const zone of ['Pacific/Honolulu', 'Asia/Tokyo', 'Australia/Sydney', 'UTC']) {
+      const world = createWorld(NOW, zone);
+      const view = world.dashboard();
+      const month = view.revenueHistory.at(-1)!.day.slice(0, 7);
+      expect(view.revenueHistory.at(-1)!.day, zone).toBe(zonedDay(NOW, zone));
+      expect(view.revenueHistory[0]!.day.endsWith('-01'), zone).toBe(true);
+      expect(
+        Math.round(
+          view.revenueHistory
+            .filter((entry) => entry.day.startsWith(month))
+            .reduce((total, entry) => total + entry.saved, 0) * 100,
+        ) / 100,
+        zone,
+      ).toBe(view.saved.thisMonth.direct);
+      const days = new Set(view.revenueHistory.map((entry) => entry.day));
+      for (const save of world.saves) {
+        const day = zonedDay(Date.parse(save.at), zone);
+        if (days.has(day)) expect(on(view.revenueHistory, day), zone).toBeGreaterThan(0);
+      }
+    }
   });
 
   it('shows « Getting started » half done, and ticks the steps the visitor takes', () => {

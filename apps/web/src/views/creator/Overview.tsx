@@ -381,7 +381,7 @@ function BalanceHero({ view }: { view: DashboardView | null }) {
  * when ahead, white-500 otherwise (never red). What is compared is its tooltip.
  */
 function Delta({ compare, money }: { compare: MonthCompare; money: (value: number) => string }) {
-  const { t, day } = useI18n();
+  const { t, calendarDay } = useI18n();
   // The sign is the amount's, in its font: « +$84.00 », « −$12.50 ».
   const amount = `${compare.delta < 0 ? '−' : '+'}${money(Math.abs(compare.delta))}`;
   const text = t('dash.delta', { amount });
@@ -392,10 +392,10 @@ function Delta({ compare, money }: { compare: MonthCompare; money: (value: numbe
         tip={
           // On the 1st, one day against one day.
           compare.from === compare.to
-            ? t('dash.delta.infoDay', { day: day(dayOf(compare.from)), amount: then })
+            ? t('dash.delta.infoDay', { day: calendarDay(compare.from), amount: then })
             : t('dash.delta.info', {
-                from: day(dayOf(compare.from)),
-                to: day(dayOf(compare.to)),
+                from: calendarDay(compare.from),
+                to: calendarDay(compare.to),
                 amount: then,
               })
         }
@@ -406,15 +406,12 @@ function Delta({ compare, money }: { compare: MonthCompare; money: (value: numbe
   );
 }
 
-/** A day of the history (`YYYY-MM-DD`, the community's calendar) at noon: never the day before. */
-function dayOf(day: string): Date {
-  return new Date(`${day}T12:00:00`);
-}
-
 /**
- * Under the balance, with no box: the month's balance day by day (added up from each 1st, so
- * today is the amount above) and, dashed, what the members at risk paid a month; over 7, 30 or
- * 90 days, the curve turning into the next period.
+ * Under the balance, with no box (fix prompt v4.1, block 2): what the period saved, added up day
+ * by day from $0.00 so it only climbs, a hairline where the current month starts (what the line
+ * climbs after it is the amount above) and, dashed, what the members at risk paid a month; over
+ * 7, 30 or 90 days, the curve turning into the next period. The days are the community's (its
+ * time zone's), written the same whatever the reader's time zone.
  */
 function SavedChart({
   view,
@@ -425,7 +422,7 @@ function SavedChart({
   period: Period;
   money: (value: number) => string;
 }) {
-  const { t, date, day } = useI18n();
+  const { t, calendarDate, calendarDay, calendarMonth } = useI18n();
   const days = Number(period);
   const data = useMemo(
     () =>
@@ -442,7 +439,8 @@ function SavedChart({
   if (view.revenueHistory.every((d) => d.atRisk === null && d.saved === 0)) {
     return <EmptyState inset body={t('dash.chart.empty')} />;
   }
-  const risks = data.map((d) => d.atRisk);
+  const shown = data.days;
+  const risks = shown.map((d) => d.atRisk);
   const first = risks.find((value) => value !== null) ?? null;
   const last = risks.at(-1) ?? null;
   const total = money(savedOver(view.revenueHistory, days));
@@ -450,18 +448,33 @@ function SavedChart({
     first !== null && last !== null
       ? t('dash.chart.summary', { days: period, saved: total, from: money(first), to: money(last) })
       : t('dash.chart.summaryNoRisk', { days: period, saved: total });
+  const thisMonth = shown.at(-1)?.day.slice(0, 7);
   return (
     <BalanceChart
       label={t('dash.chart.title')}
       summary={summary}
       period={period}
-      points={data.map((d) => ({ label: date(dayOf(d.day)), tick: day(dayOf(d.day)) }))}
+      points={shown.map((d) => ({ label: calendarDate(d.day), tick: calendarDay(d.day) }))}
       saved={{
         label: t('dash.chart.saved'),
-        values: data.map((d) => d.saved),
+        values: shown.map((d) => d.inPeriod),
         info: t('dash.chart.info'),
       }}
-      atRisk={{ label: t('dash.chart.atRisk'), values: risks }}
+      month={{
+        label: t('dash.chart.monthToDate'),
+        labels: shown.map((d) =>
+          d.day.startsWith(thisMonth ?? '-')
+            ? t('dash.chart.savedThisMonth')
+            : t('dash.chart.savedIn', { month: calendarMonth(d.day) }),
+        ),
+        values: shown.map((d) => d.inMonth),
+      }}
+      marker={
+        data.monthStart === null
+          ? null
+          : { index: data.monthStart, label: calendarDay(shown[data.monthStart]!.day) }
+      }
+      atRisk={{ label: t('dash.chart.atRisk'), values: risks, before: data.atRiskBefore }}
       format={money}
     />
   );

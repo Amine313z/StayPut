@@ -2285,3 +2285,95 @@ une capture. Le bloc 1 refait la lumière de la visite et de « Show me ».
 - Sur un téléphone (390 px), l'infobulle ne tient pas toujours à côté d'un grand endroit. Elle
   se met alors du côté qui a le plus de place, dans la fenêtre. Inspect y vérifie seulement que
   l'endroit est entier dans la découpe.
+
+## 2026-10-03 — Correctifs v4.1, bloc 2 : la courbe de l'argent sauvé
+
+### Ce que le fondateur a vu
+
+- La courbe « Saved » retombait à 0,00 $ le 1er de chaque mois : en 30 jours, de 445,00 $ (le
+  30 septembre) à 0,00 $ (le 1er octobre) ; en 90 jours, des dents de scie. On aurait dit une
+  perte.
+- La courbe lissée semblait passer sous la ligne de base avant de remonter.
+- Le 1er octobre affichait 0,00 $ alors qu'une sauvegarde de 49,00 $ avait eu lieu ce jour-là.
+
+### Ce qui change
+
+- **La courbe additionne la période affichée** (7, 30 ou 90 jours) :
+  - elle part de 0,00 $ au début du premier jour et ne descend jamais ;
+  - chaque point est la fin de son jour, donc une sauvegarde du jour J fait monter la courbe
+    pendant le jour J ;
+  - le dernier point est le total sauvé sur la période.
+- **Le montant du haut reste « Revenue saved · This month ».** Un trait vertical discret,
+  marqué « Oct 1 », montre où commence le mois : ce que la courbe gagne après lui, c'est ce
+  montant. Le trait n'apparaît que si le 1er du mois est dans la période (le 31, il est 30 jours
+  en arrière, donc pas en 30 jours).
+- **L'infobulle donne, pour le jour survolé :**
+  - « Saved in period » (le cumul depuis le début de la période) ;
+  - « Saved this month » (le cumul du mois jusqu'à ce jour) ; pour un jour d'un mois précédent,
+    « Saved in September » ;
+  - « At risk ».
+  - Chaque série tracée a sa petite marque, la valeur passe en premier. Pendant le survol,
+    l'étiquette du trait s'efface : la date est déjà sous la courbe.
+- **La courbe** : toujours la courbe monotone (Fritsch–Carlson), mais lue en 631 points et
+  tracée en segments droits. 630 est un multiple de 7, 30 et 90 : la fin de chaque jour tombe
+  sur un point. Avant, 90 points ne tombaient pas sur les jours, et un second lissage faisait
+  monter la courbe un peu avant le jour d'une sauvegarde. Elle reste plate entre deux jours
+  égaux et ne passe jamais sous la ligne de base. Le passage d'une période à l'autre reste
+  animé, chemin pour chemin.
+- La ligne pointillée « à risque » part de la veille de la période quand ce jour a un score.
+
+### Les jours sont ceux de la communauté
+
+- **Le Worker** comptait déjà chaque sauvegarde dans le jour de son fuseau
+  (`saved_at at time zone`).
+- **Bug trouvé par les nouveaux tests.** Le montant du mois comparait la devise des
+  sauvegardes telle quelle (`usd`, en minuscules comme Whop l'écrit) à celle des abonnements, mise
+  en capitales (`USD`). En production, « Revenue saved · This month » serait donc resté à 0,00 $
+  alors que la courbe montrait les sauvegardes.
+  - Corrigé : la devise est comparée en capitales.
+  - La borne « jusqu'à maintenant » est inclusive, comme sur la courbe.
+  - Pas de migration.
+- **La démo** comptait les jours avec le fuseau du navigateur, et sa communauté disait
+  « Europe/Paris ». Désormais :
+  - la communauté de la démo prend le fuseau du visiteur, comme une vraie communauté prend celui
+    du créateur à sa première ouverture ;
+  - le graphique, le mois du montant du haut et les membres sauvés sont calculés dans ce fuseau
+    à chaque lecture ;
+  - changer le fuseau dans Réglages › Automatisations les replace aussitôt.
+- **`@stayput/core` `calendar.ts`** : `zonedDay` (le jour d'un moment dans un fuseau, comme
+  Postgres), `addDays`, `monthStart`.
+- **Les dates de ces jours s'écrivent sans fuseau**, avec les nouvelles fonctions du traducteur
+  `calendarDate`, `calendarDay` et `calendarMonth` : un `2026-10-01` reste « Oct 1, 2026 » /
+  « 1 oct. 2026 » pour tout lecteur.
+- **Les durées relatives comptent les jours au calendrier** : 41 heures avant ce soir, c'est
+  « hier », plus « il y a 2 jours ». Un jour affiché « il y a 2 jours » ne doit pas tomber à la
+  date d'hier sur la courbe.
+
+### Tests
+
+- `core/test/calendar.test.ts` : 00:30 et 23:30 locales à Paris, New York, Tokyo et Calcutta,
+  les changements d'heure, un fuseau inconnu.
+- `worker/test/dashboard-sql.test.ts` : à Paris et à New York, des sauvegardes à 00:30 et à
+  23:30 locales tombent sur leur jour, et le mois du montant du haut vaut la somme de ses jours.
+  Ces tests échouent sans la correction de la devise.
+- `web/test/demo.test.ts` : la démo dans plusieurs fuseaux (00:30 à Paris, 23:30 à New York),
+  et le changement de fuseau dans les réglages.
+- `web/test/balance.test.ts` : pour 7, 30 et 90 jours, la courbe ne descend jamais et finit sur
+  la somme des sauvegardes de la période.
+- `web/test/charts.test.ts` : le tracé lui-même ne descend jamais, ne passe pas sous la ligne de
+  base et reste plat entre deux jours égaux.
+- `web/test/app.test.tsx` : le tableau, l'infobulle et le trait du mois, en anglais et en
+  français.
+- `i18n` : les dates de calendrier et les durées relatives.
+- Inspect (`look.mjs`) vérifie sur le site en ligne :
+  - que la courbe des 30 jours ne descend jamais ;
+  - que le trait porte la date du 1er du mois ;
+  - que le mois finit sur le montant du haut.
+  - Il garde aussi une capture du 1er du mois survolé, et des périodes 7 et 90 jours.
+
+### Incertain
+
+- Je n'ai pas retrouvé l'écran qui datait du 1er octobre la sauvegarde de 49,00 $. Dans la
+  démo, c'est celle d'Arthur Lemoine, 41 heures avant l'ouverture de la page : à partir de 17 h
+  environ, elle tombe le 2 octobre. Les jours viennent désormais d'un seul fuseau partout. Un
+  « il y a 2 jours » qui voulait dire « hier » ne peut plus faire croire à un décalage.

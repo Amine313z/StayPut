@@ -86,7 +86,12 @@ Guidance for Claude Code in this repository.
   `data-tour` on the exact element, a real cut-out, the tooltip on the side with room, steps 4–5
   on Automations › Rules (new first tab, the queue moved to `/actions/queue`) and Integrations ›
   Discord, the tour ending where it began; checked by `apps/web/e2e/spotlight.e2e.ts` (EN/FR,
-  1280×720 and 1024×768) in CI and on the live site (Inspect, job `spotlight`). Before
+  1280×720 and 1024×768) in CI and on the live site (Inspect, job `spotlight`). Block 2 (the
+  balance chart) done: « Saved » adds up the displayed period from $0.00 (never down), « Oct 1 »
+  marks the month's start, the tooltip gives the period's and the month's figures; days are the
+  community's time zone everywhere (`@stayput/core` `zonedDay`, the translator's
+  `calendarDate`/`calendarDay`), the demo takes the visitor's zone; the Worker's month figure
+  now compares save currencies in capitals (it read $0.00 with Whop's lowercase `usd`). Before
   it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard
