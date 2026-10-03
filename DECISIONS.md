@@ -1962,3 +1962,27 @@ Ordre du fondateur n° 2 (brief v4 §9.6 : chaque bloc de données se termine en
 - La fusion de l'onglet Activity dans chaque onglet de plateforme et la reconstruction des
   Intégrations en tableaux de bord (§9.6) : c'est l'étape « Intégrations » du brief, pas encore
   demandée.
+
+## 2026-10-03 — La démo : Discord et Telegram comptés à partir des membres
+
+Le fondateur, sur une capture d'Intégrations › Activity de la démo : « corrige et passe au 3 ».
+Trois chiffres ne tenaient pas : « Live » mais « Last message 1 hour ago » (l'heure était figée à
+l'ouverture de la démo), « 39 members » sur Discord pour une communauté de 36 membres dont 7
+n'ont rien écrit, 1 506 messages là où la page Membres en compte 511 sur les mêmes 30 jours. Ils
+étaient écrits à la main.
+
+- Un seul modèle : un compte par personne et par plateforme (`demo/pages.ts`). La plupart des
+  membres sont sur le serveur Discord, un tiers aussi dans le groupe Telegram ; leurs messages
+  y sont une part des leurs (le reste sur Whop) ; ceux qui n'ont rien écrit y sont, silencieux.
+  S'y ajoutent l'équipe (mise de côté), un invité, et les 4 comptes à relier dont les messages
+  attendent leur membre. Tuiles, jours, serveurs et groupes, membres les plus actifs, liste de
+  tout le monde, comptes à relier et compteurs des sources en sont tous tirés, comme le serveur
+  les compte. Relier un compte donne ses messages au membre (page Membres comprise).
+- En direct : ce que les membres font pendant que la démo est ouverte (une ligne toutes les 25 à
+  45 secondes) est compté là où ça s'est passé, avant chaque réponse de la démo : le fil, la
+  tuile et la barre du jour de la plateforme, le dernier message, les chiffres du membre.
+- La liste « Tied » se replie au-delà de 6 comptes, comme « Set aside » : les comptes à relier
+  restent en tête.
+- Des tests échouent si les tuiles ne sont plus la somme des comptes, si un membre a plus de
+  messages sur Discord et Telegram que dans ses propres chiffres, ou si le direct ne compte pas
+  un message partout.

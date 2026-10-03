@@ -25,6 +25,8 @@ let world: DemoWorld | null = null;
 
 function current(): DemoWorld {
   world ??= createWorld(Date.now());
+  // What members did since the last answer: every page tells the same community.
+  world.advance(Date.now());
   return world;
 }
 

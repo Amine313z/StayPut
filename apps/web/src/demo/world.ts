@@ -292,6 +292,11 @@ export interface DemoWorld {
   saves: readonly { memberId: string; at: string; amount: number }[];
   dashboard: () => DashboardView;
   feed: () => { items: FeedItem[] };
+  /**
+   * What members did while the demo is open, up to `current`: the feed's new lines, counted on
+   * Discord, Telegram and Members alike. Every answer of the demo runs it first.
+   */
+  advance: (current: number) => void;
   sync: SyncStatus;
   integrations: IntegrationsStatus;
   settings: ActionSettingsView;
@@ -584,18 +589,55 @@ export function createWorld(now: number): DemoWorld {
     item(41 * HOUR, 'stayput', 'saved', 'Arthur Lemoine', usd(49)),
     item(44 * HOUR, 'member', 'payment_succeeded', 'Léa Moreau', usd(49)),
   ];
+  // A message the feed tells is on the platform its author is on, and is their last one there.
+  for (const entry of feed) {
+    if (entry.activity !== 'message' || !entry.memberId) continue;
+    if (entry.source !== 'discord' && entry.source !== 'telegram') continue;
+    entry.source =
+      pages.noteMessage(entry.memberId, Date.parse(entry.at), entry.source) ?? entry.source;
+  }
 
-  // What members do while someone looks at the demo: one new line now and then.
-  const LIVE: readonly [string, Partial<FeedItem>][] = [
-    ['Emma Rousseau', { source: 'discord', activity: 'message' }],
-    ['Lucas Petit', { source: 'whop', activity: 'lesson' }],
-    ['Jade Mercier', { source: 'telegram', activity: 'message' }],
-    ['Gabriel Roux', { source: 'whop', activity: 'post' }],
-    ['Sofia Ricci', { source: 'discord', activity: 'message' }],
-    ['Karim Belkacem', { source: 'whop', activity: 'result' }],
+  // What members do while someone looks at the demo: one new line now and then, counted where it
+  // happened, so that the feed, Integrations and Members tell it alike: a message on Discord or
+  // Telegram (the one the member is on), a lesson, a post or a result on Whop.
+  const LIVE: readonly [
+    string,
+    NonNullable<FeedItem['activity']>,
+    'discord' | 'telegram' | 'whop',
+  ][] = [
+    ['Emma Rousseau', 'message', 'discord'],
+    ['Lucas Petit', 'lesson', 'whop'],
+    ['Arthur Lemoine', 'message', 'telegram'],
+    ['Gabriel Roux', 'post', 'whop'],
+    ['Sofia Ricci', 'message', 'discord'],
+    ['Karim Belkacem', 'result', 'whop'],
   ];
   let live = 0;
   let nextLive = now + 20_000;
+  /** Everything members did up to `current`, at the moment they did it. */
+  const advance = (current: number) => {
+    while (nextLive <= current) {
+      const moment = nextLive;
+      const [name, activity, place] = LIVE[live % LIVE.length]!;
+      live += 1;
+      const member = byName(name);
+      let source: NonNullable<FeedItem['source']> = place;
+      if (activity === 'message') {
+        source =
+          (place === 'whop' ? null : pages.recordMessage(member.id, moment, place)) ?? 'whop';
+        member.activity.messages += 1;
+      } else if (activity === 'lesson') member.activity.lessons += 1;
+      else if (activity === 'post') member.activity.posts += 1;
+      if (activity !== 'result') members.summary.activity30d += 1;
+      member.lastActivityAt = member.lastActionAt = new Date(moment).toISOString();
+      feed.unshift({
+        ...item(0, 'member', 'activity', name, { source, activity }),
+        at: new Date(moment).toISOString(),
+      });
+      feed.splice(24);
+      nextLive = moment + 25_000 + Math.floor(random() * 20_000);
+    }
+  };
 
   const reached = new Map<string, number>();
   const offers = new Map<string, CreatorOfferKind>();
@@ -738,7 +780,7 @@ export function createWorld(now: number): DemoWorld {
           total: joined.length,
           newLast7Days: PEOPLE.filter((p) => p.left === undefined && p.joined < 7).length,
         },
-        memberActivity30d: activity30d,
+        memberActivity30d: members.summary.activity30d,
         stayputActions30d: {
           total: 43,
           messages: 31,
@@ -780,18 +822,9 @@ export function createWorld(now: number): DemoWorld {
         }),
       };
     },
+    advance,
     feed: () => {
-      const current = Date.now();
-      if (current >= nextLive) {
-        const [name, extra] = LIVE[live % LIVE.length]!;
-        live += 1;
-        feed.unshift({
-          ...item(0, 'member', 'activity', name, extra),
-          at: new Date(current).toISOString(),
-        });
-        feed.splice(24);
-        nextLive = current + 25_000 + Math.floor(random() * 20_000);
-      }
+      advance(Date.now());
       return { items: feed };
     },
     message: (memberIds) => {

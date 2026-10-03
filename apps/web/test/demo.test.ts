@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RISK_FACTORS } from '@stayput/core';
 import { localDay } from '../src/demo/pages';
 import { createWorld } from '../src/demo/world';
@@ -234,14 +234,101 @@ describe('the demo community', () => {
     expect(RISK_FACTORS.reduce((total, f) => total + saved.weights[f], 0)).toBeCloseTo(1);
   });
 
+  it('counts Discord and Telegram from the members, as the server would', () => {
+    const world = createWorld(NOW);
+    const { pages } = world;
+    const joined = world.members.members.filter((m) => m.status === 'joined');
+    const activity = pages.platformActivity();
+    const people = pages.people().people;
+    for (const tile of activity.platforms) {
+      const accounts = people.filter((p) => p.platform === tile.platform && p.messages > 0);
+      const count = (status: string) => accounts.filter((a) => a.status === status).length;
+      // Who wrote there: each account once, each a member, the team, a guest or one to tie.
+      expect(tile.authors).toBe(accounts.length);
+      expect(tile.members).toBe(count('member'));
+      expect(tile.team + tile.guests + tile.unlinked).toBe(
+        count('team') + count('guest') + count('unlinked'),
+      );
+      // Never more members than the community has, never one who wrote nothing.
+      expect(tile.members).toBeLessThanOrEqual(joined.length);
+      // The messages are theirs, day by day, and the server's or group's.
+      expect(tile.messages).toBe(accounts.reduce((total, a) => total + a.messages, 0));
+      expect(tile.daily.reduce((total, n) => total + n, 0)).toBe(tile.messages);
+      expect(activity.places.find((p) => p.platform === tile.platform)?.messages).toBe(
+        tile.messages,
+      );
+      // The last message is the latest of them.
+      expect(tile.lastAt).toBe(
+        accounts
+          .map((a) => a.lastMessageAt!)
+          .sort()
+          .at(-1),
+      );
+    }
+    // A member's messages there are part of their own (Members, 30 days).
+    for (const member of joined) {
+      const there = people
+        .filter((p) => p.member?.id === member.id)
+        .reduce((total, p) => total + p.messages, 0);
+      expect(there).toBeLessThanOrEqual(member.activity.messages);
+    }
+    // Members who wrote nothing are there, silent; the most active add up from their accounts.
+    expect(people.some((p) => p.status === 'member' && p.messages === 0)).toBe(true);
+    for (const top of activity.topMembers) {
+      const theirs = people.filter((p) => p.member?.id === top.id);
+      expect(top.discord + top.telegram).toBe(theirs.reduce((t, p) => t + p.messages, 0));
+    }
+    // The accounts to tie are the tiles' ones; every member who wrote there is tied.
+    const accounts = pages.accounts();
+    expect(accounts.unlinked.filter((a) => a.messages > 0)).toHaveLength(
+      activity.platforms.reduce((total, p) => total + p.unlinked, 0),
+    );
+    expect(accounts.linked).toHaveLength(
+      activity.platforms.reduce((total, p) => total + p.members, 0),
+    );
+  });
+
+  it('keeps Discord and Telegram live while the demo is open', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const world = createWorld(NOW);
+    const before = world.pages.platformActivity();
+    const members = world.members.summary.activity30d;
+    // Ten minutes later: what members wrote meanwhile is counted, today, where they wrote it.
+    vi.setSystemTime(NOW + 10 * 60_000);
+    const lines = world
+      .feed()
+      .items.filter((i) => Date.parse(i.at) > NOW && i.activity === 'message');
+    const after = world.pages.platformActivity();
+    vi.useRealTimers();
+    expect(lines.length).toBeGreaterThan(0);
+    for (const tile of after.platforms) {
+      const written = lines.filter((i) => i.source === tile.platform).length;
+      const was = before.platforms.find((p) => p.platform === tile.platform)!;
+      expect(tile.messages).toBe(was.messages + written);
+      expect(tile.daily.at(-1)).toBe(was.daily.at(-1)! + written);
+      if (written > 0) expect(Date.parse(tile.lastAt!)).toBeGreaterThan(NOW);
+    }
+    // The same messages in the members' own counts.
+    expect(world.members.summary.activity30d).toBeGreaterThan(members);
+    const author = world.members.members.find((m) => m.id === lines[0]!.memberId)!;
+    expect(Date.parse(author.lastActivityAt!)).toBe(Date.parse(lines[0]!.at));
+  });
+
   it('ties a Discord or Telegram account to a member, and sets one aside', () => {
-    const { pages } = createWorld(NOW);
+    const world = createWorld(NOW);
+    const { pages } = world;
     const [first, second] = pages.accounts().unlinked;
     const memberId = first!.suggestions[0]!.memberId;
+    const member = world.members.members.find((m) => m.id === memberId)!;
+    const before = member.activity.messages;
     const linked = pages.changeAccount('link', { ...first!, memberId });
     expect(linked?.linked[0]).toMatchObject({ accountId: first!.accountId, via: 'creator' });
     expect(linked?.unlinked.some((a) => a.accountId === first!.accountId)).toBe(false);
+    // Its messages waiting are the member's now, and a member's on the platform's tile.
+    expect(member.activity.messages).toBe(before + first!.messages);
     pages.changeAccount('unlink', { platform: first!.platform, accountId: first!.accountId });
+    expect(member.activity.messages).toBe(before);
     expect(pages.accounts().unlinked[0]?.accountId).toBe(first!.accountId);
     pages.changeAccount('dismiss', { ...second!, as: 'guest' });
     expect(pages.accounts().dismissed[0]).toMatchObject({

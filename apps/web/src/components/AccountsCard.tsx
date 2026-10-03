@@ -156,20 +156,20 @@ function Accounts({
           </ul>
         )}
       </section>
-      {view.linked.length > 0 ? (
+      {view.linked.length > LINKED_SHOWN ? (
+        // Many accounts tied: folded, as the ones set aside (the accounts to tie come first).
+        <details className="group">
+          <summary className="cursor-pointer text-sm font-semibold">
+            {t('accounts.linked', { count: view.linked.length })}
+          </summary>
+          <LinkedList accounts={view.linked} change={change} />
+        </details>
+      ) : view.linked.length > 0 ? (
         <section aria-labelledby="accounts-linked">
           <h3 id="accounts-linked" className="text-sm font-semibold">
             {t('accounts.linked', { count: view.linked.length })}
           </h3>
-          <ul className="mt-3 divide-y divide-line">
-            {view.linked.map((account) => (
-              <Linked
-                key={`${account.platform}:${account.accountId}`}
-                account={account}
-                change={change}
-              />
-            ))}
-          </ul>
+          <LinkedList accounts={view.linked} change={change} />
         </section>
       ) : null}
       {view.dismissed.length > 0 ? (
@@ -189,6 +189,29 @@ function Accounts({
         </details>
       ) : null}
     </div>
+  );
+}
+
+/** Up to this many accounts tied show at once; more fold under « Tied (n) ». */
+const LINKED_SHOWN = 6;
+
+function LinkedList({
+  accounts,
+  change,
+}: {
+  accounts: readonly LinkedAccount[];
+  change: (what: Change, body: Record<string, string>) => Promise<void>;
+}) {
+  return (
+    <ul className="mt-3 divide-y divide-line">
+      {accounts.map((account) => (
+        <Linked
+          key={`${account.platform}:${account.accountId}`}
+          account={account}
+          change={change}
+        />
+      ))}
+    </ul>
   );
 }
 

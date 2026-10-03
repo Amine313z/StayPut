@@ -19,6 +19,7 @@ import {
   type DiscordChannelChoice,
   type InsightsReport,
   type IntegrationsStatus,
+  type LinkedAccount,
   type MemberRow,
   type MessageAction,
   type PeopleView,
@@ -26,6 +27,7 @@ import {
   type PlatformPerson,
   type RiskSettingsView,
   type TemplateValues,
+  type UnlinkedAccount,
 } from '@stayput/core';
 
 /**
@@ -67,10 +69,24 @@ export interface DemoPages {
   accounts: () => AccountsView;
   changeAccount: (what: string, body: Record<string, unknown>) => AccountsView | null;
   /**
-   * The sources' counts as the accounts stand: one tied or set aside leaves the « recent authors
-   * not linked », as on the server (stayput.unlinked_authors counts the messages waiting).
+   * The sources' counts as the accounts stand: the members tied there, and the accounts waiting
+   * with messages (stayput.unlinked_authors), as on the server.
    */
   integrations: (status: IntegrationsStatus) => IntegrationsStatus;
+  /**
+   * A member wrote on Discord or Telegram (`preferred`, or the platform they are on) while the
+   * demo is open: counted there, today. Which platform it was; null when they are on neither.
+   */
+  recordMessage: (
+    memberId: string,
+    at: number,
+    preferred: AccountPlatform,
+  ) => AccountPlatform | null;
+  /**
+   * A message the feed tells, already among the 30 days' counts: its account's last message.
+   * Which platform it was; null when they are on neither.
+   */
+  noteMessage: (memberId: string, at: number, preferred: AccountPlatform) => AccountPlatform | null;
   riskSettings: () => RiskSettingsView;
   saveRiskSettings: (next: RiskSettingsView) => RiskSettingsView;
   alumni: () => AlumniView;
@@ -391,188 +407,269 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     lessons,
   };
 
-  // ---- Integrations: Discord and Telegram over 30 days ----
+  // ---- Integrations: who is on Discord and Telegram, and what they wrote over 30 days ----
+  // One account per person and place, and every figure of Integrations (each platform's
+  // messages and days, the servers and groups, the most active members, everyone, the accounts
+  // to tie) counted from them as the server counts them: never a figure of its own. A member's
+  // messages there are part of their own (Members, 30 days); the rest they wrote on Whop.
   const joined = rows.filter((m) => m.status === 'joined');
-  const active = [...joined]
-    .filter((m) => m.activity.messages > 0)
-    .sort((a, b) => b.activity.messages - a.activity.messages);
-  const days = Array.from({ length: 30 }, (_, i) => new Date(now - (29 - i) * DAY));
-  // A trading community: busy on weekdays, quieter at the weekend.
-  const daily = (base: number, salt: number) =>
-    days.map((day, i) => {
-      const weekend = day.getDay() === 0 || day.getDay() === 6;
-      const wave = Math.round(Math.sin((i + salt) * 1.7) * base * 0.18);
-      return Math.max(0, Math.round(base * (weekend ? 0.45 : 1)) + wave);
-    });
-  const discordDaily = daily(46, 1);
-  const telegramDaily = daily(14, 4);
-  const sum = (values: readonly number[]) => values.reduce((total, v) => total + v, 0);
-  const topMembers = active.slice(0, 6).map((m, i) => ({
-    id: m.id,
-    name: m.name,
-    discord: Math.round(m.activity.messages * (i % 3 === 2 ? 0.55 : 0.8)),
-    telegram: Math.round(m.activity.messages * (i % 3 === 2 ? 0.45 : 0.2)),
-    lastAt: m.lastActivityAt ?? ago(DAY),
-  }));
-  const platformActivity: PlatformActivityView = {
-    from: localDay(days[0]!),
-    to: localDay(days[29]!),
-    platforms: [
-      {
-        platform: 'discord',
-        messages: sum(discordDaily),
-        authors: 44,
-        members: 39,
-        team: 2,
-        guests: 1,
-        unlinked: 2,
-        lastAt: ago(4 * MINUTE),
-        daily: discordDaily,
-      },
-      {
-        platform: 'telegram',
-        messages: sum(telegramDaily),
-        authors: 23,
-        members: 19,
-        team: 2,
-        guests: 0,
-        unlinked: 2,
-        lastAt: ago(6 * MINUTE),
-        daily: telegramDaily,
-      },
-    ],
-    places: [
-      {
-        platform: 'discord',
-        id: input.guildId,
-        name: community,
-        messages: sum(discordDaily),
-        lastAt: ago(4 * MINUTE),
-      },
-      {
-        platform: 'telegram',
-        id: input.chatId,
-        name: input.telegramTitle,
-        messages: sum(telegramDaily),
-        lastAt: ago(6 * MINUTE),
-      },
-    ],
-    topMembers,
-  };
-
-  // ---- The accounts on Discord and Telegram, and who they are ----
   const handle = (name: string) => name.toLowerCase().replace(/[^a-z]+/g, '.');
-  const accountsState: AccountsView = {
-    unlinked: [
-      {
-        platform: 'discord',
-        accountId: '1187420000000100001',
-        name: 'Margaux P.',
-        username: 'margauxp',
-        messages: 6,
-        lastAt: ago(13 * HOUR),
-        suggestions: [
-          { memberId: byName('Margaux Picard').id, name: 'Margaux Picard', strong: true },
-        ],
-      },
-      {
-        platform: 'discord',
-        accountId: '1187420000000100002',
-        name: 'Kev',
-        username: 'kev.trades',
-        messages: 14,
-        lastAt: ago(3 * HOUR),
-        suggestions: [{ memberId: byName('Kevin Nguyen').id, name: 'Kevin Nguyen', strong: false }],
-      },
-      {
-        platform: 'telegram',
-        accountId: '6120000001',
-        name: 'Yanis B',
-        username: 'yanisbenali',
-        messages: 9,
-        lastAt: ago(2 * DAY),
-        suggestions: [{ memberId: byName('Yanis Benali').id, name: 'Yanis Benali', strong: true }],
-      },
-      {
-        platform: 'telegram',
-        accountId: '6120000002',
-        name: 'Alex',
-        username: null,
-        messages: 3,
-        lastAt: ago(4 * DAY),
-        suggestions: [],
-      },
-    ],
-    linked: active.slice(0, 8).map((m, i) => ({
-      platform: i % 3 === 2 ? ('telegram' as const) : ('discord' as const),
-      accountId: `11874200000002${String(i).padStart(5, '0')}`,
-      name: m.name,
-      username: handle(m.name ?? 'member'),
-      member: { id: m.id, name: m.name },
-      via: i % 4 === 3 ? ('member' as const) : ('whop' as const),
-    })),
-    dismissed: [
-      {
-        platform: 'discord',
-        accountId: '1187420000000100009',
-        name: 'Atlas Team',
-        username: 'atlas.team',
-        as: 'team',
-        at: ago(40 * DAY),
-      },
-    ],
-  };
-  const sameAccount =
-    (body: Record<string, unknown>) => (account: { platform: string; accountId: string }) =>
-      account.platform === body.platform && account.accountId === body.accountId;
+  const days = Array.from({ length: 30 }, (_, i) => new Date(now - (29 - i) * DAY));
+  const sum = (values: readonly number[]) => values.reduce((total, v) => total + v, 0);
 
-  // ---- Everyone StayPut knows there, not only who writes ----
-  const people = (): PeopleView => {
-    const list: PlatformPerson[] = [];
-    joined.forEach((m, i) => {
-      const onTelegram = i % 3 === 2;
-      list.push({
-        platform: onTelegram ? 'telegram' : 'discord',
-        accountId: `${onTelegram ? '61200' : '11874200000003'}${String(i).padStart(5, '0')}`,
-        name: m.name,
-        username: handle(m.name ?? 'member'),
-        status: 'member',
-        member: { id: m.id, name: m.name },
-        here: true,
-        joinedAt: m.joinedAt,
-        leftAt: null,
-        messages: Math.round(m.activity.messages * (onTelegram ? 0.4 : 0.8)),
-        lastMessageAt: m.activity.messages > 0 ? m.lastActivityAt : null,
-      });
-    });
-    for (const account of accountsState.unlinked) {
-      list.push({
-        platform: account.platform,
-        accountId: account.accountId,
-        name: account.name,
-        username: account.username,
-        status: 'unlinked',
-        member: null,
-        here: true,
-        joinedAt: ago(20 * DAY),
-        leftAt: null,
-        messages: account.messages,
-        lastMessageAt: account.lastAt,
-      });
+  interface DemoAccount {
+    platform: AccountPlatform;
+    accountId: string;
+    name: string | null;
+    username: string | null;
+    status: 'member' | 'unlinked' | 'team' | 'guest';
+    member: MemberRow | null;
+    via: LinkedAccount['via'];
+    /** The members it may be, while it waits for one. */
+    suggestions: UnlinkedAccount['suggestions'];
+    /** Over the last 30 days. */
+    messages: number;
+    lastAt: number | null;
+    joinedAt: number;
+    /** When the creator set it aside. */
+    setAsideAt: number | null;
+    /** The creator's latest change comes first in its list. */
+    changed: number;
+  }
+  const account = (over: Partial<DemoAccount> & Pick<DemoAccount, 'platform' | 'accountId'>) =>
+    ({
+      name: null,
+      username: null,
+      status: 'member',
+      member: null,
+      via: null,
+      suggestions: [],
+      messages: 0,
+      lastAt: null,
+      joinedAt: now - 120 * DAY,
+      setAsideAt: null,
+      changed: 0,
+      ...over,
+    }) satisfies DemoAccount;
+
+  // Accounts waiting for a member, and whose they may be: their messages are no member's yet.
+  const suggestion = (name: string, strong: boolean) => {
+    const member = byName(name);
+    return [{ memberId: member.id, name: member.name, strong }];
+  };
+  const accounts: DemoAccount[] = [
+    account({
+      platform: 'discord',
+      accountId: '1187420000000100001',
+      name: 'Margaux P.',
+      username: 'margauxp',
+      status: 'unlinked',
+      suggestions: suggestion('Margaux Picard', true),
+      messages: 6,
+      lastAt: now - 13 * HOUR,
+    }),
+    account({
+      platform: 'discord',
+      accountId: '1187420000000100002',
+      name: 'Kev',
+      username: 'kev.trades',
+      status: 'unlinked',
+      suggestions: suggestion('Kevin Nguyen', false),
+      messages: 14,
+      lastAt: now - 3 * HOUR,
+    }),
+    account({
+      platform: 'telegram',
+      accountId: '6120000001',
+      name: 'Yanis B',
+      username: 'yanisbenali',
+      status: 'unlinked',
+      suggestions: suggestion('Yanis Benali', true),
+      messages: 9,
+      lastAt: now - 2 * DAY,
+    }),
+    account({
+      platform: 'telegram',
+      accountId: '6120000002',
+      name: 'Alex',
+      status: 'unlinked',
+      messages: 3,
+      lastAt: now - 4 * DAY,
+    }),
+  ];
+  // The members' own accounts: most of them on the Discord server, a third in the Telegram group
+  // too (one in six there only). A member whose account waits above has no other one there.
+  const waitingFor = (member: MemberRow, platform: AccountPlatform) =>
+    accounts.some(
+      (a) => a.platform === platform && a.suggestions.some((s) => s.memberId === member.id),
+    );
+  joined.forEach((m, i) => {
+    const onDiscord = i % 6 !== 5;
+    const onTelegram = i % 3 === 2;
+    const total = m.activity.messages;
+    const shares: [AccountPlatform, number][] = [
+      ['discord', onDiscord ? (onTelegram ? 0.55 : 0.75) : 0],
+      ['telegram', onTelegram ? (onDiscord ? 0.25 : 0.75) : 0],
+    ];
+    for (const [platform, share] of shares) {
+      if (share === 0 || waitingFor(m, platform)) continue;
+      const messages = Math.round(total * share);
+      accounts.push(
+        account({
+          platform,
+          accountId:
+            platform === 'discord'
+              ? `11874200000003${String(i).padStart(5, '0')}`
+              : `61200${String(i).padStart(5, '0')}`,
+          name: m.name,
+          username: handle(m.name ?? 'member'),
+          member: m,
+          // Discord: from the member's Whop profile; Telegram: the member linked it.
+          via: platform === 'discord' ? 'whop' : 'member',
+          messages,
+          lastAt: messages > 0 && m.lastActivityAt ? Date.parse(m.lastActivityAt) : null,
+          joinedAt: m.joinedAt ? Date.parse(m.joinedAt) : now - 120 * DAY,
+        }),
+      );
     }
-    list.push({
+  });
+  // The team, set aside as such (its messages never count in the scores), and a guest.
+  accounts.push(
+    account({
       platform: 'discord',
       accountId: '1187420000000100009',
       name: 'Atlas Team',
       username: 'atlas.team',
       status: 'team',
-      member: null,
-      here: true,
-      joinedAt: ago(300 * DAY),
-      leftAt: null,
       messages: 64,
-      lastMessageAt: ago(2 * HOUR),
+      lastAt: now - 2 * HOUR,
+      joinedAt: now - 300 * DAY,
+      setAsideAt: now - 40 * DAY,
+    }),
+    account({
+      platform: 'telegram',
+      accountId: '6120000009',
+      name: 'Atlas Team',
+      username: 'atlas_team',
+      status: 'team',
+      messages: 21,
+      lastAt: now - 5 * HOUR,
+      joinedAt: now - 280 * DAY,
+      setAsideAt: now - 38 * DAY,
+    }),
+    account({
+      platform: 'discord',
+      accountId: '1187420000000100010',
+      name: 'Marc Olivier',
+      username: 'marc.live',
+      status: 'guest',
+      messages: 5,
+      lastAt: now - 26 * HOUR,
+      joinedAt: now - 15 * DAY,
+      setAsideAt: now - 12 * DAY,
+    }),
+  );
+
+  const on = (platform: AccountPlatform) => accounts.filter((a) => a.platform === platform);
+  const wrote = (platform: AccountPlatform) => on(platform).filter((a) => a.messages > 0);
+  const latest = (list: readonly DemoAccount[]) =>
+    list.reduce<number | null>(
+      (last, a) => (a.lastAt !== null && a.lastAt > (last ?? 0) ? a.lastAt : last),
+      null,
+    );
+  // Each platform's days: the 30 days' messages spread as a trading community writes (busy on
+  // weekdays, quieter at the weekend), adding up to them; what is written while the demo is
+  // open goes to today.
+  const spread = (total: number, salt: number) => {
+    const weights = days.map((day, i) => {
+      const weekend = day.getDay() === 0 || day.getDay() === 6;
+      return (weekend ? 0.45 : 1) * (1 + Math.sin((i + salt) * 1.7) * 0.18);
     });
+    const scale = total / sum(weights);
+    const counts = weights.map((w) => Math.floor(w * scale));
+    const order = weights
+      .map((w, i) => ({ i, left: w * scale - Math.floor(w * scale) }))
+      .sort((a, b) => b.left - a.left);
+    const left = total - sum(counts);
+    for (let k = 0; k < left; k++) counts[order[k % order.length]!.i]! += 1;
+    return counts;
+  };
+  const daily: Record<AccountPlatform, number[]> = {
+    discord: spread(sum(wrote('discord').map((a) => a.messages)), 1),
+    telegram: spread(sum(wrote('telegram').map((a) => a.messages)), 4),
+  };
+
+  const platformActivity = (): PlatformActivityView => {
+    const tile = (platform: AccountPlatform) => {
+      const authors = wrote(platform);
+      const count = (status: DemoAccount['status']) =>
+        authors.filter((a) => a.status === status).length;
+      return {
+        platform,
+        messages: sum(authors.map((a) => a.messages)),
+        authors: authors.length,
+        members: count('member'),
+        team: count('team'),
+        guests: count('guest'),
+        unlinked: count('unlinked'),
+        lastAt: latest(authors) === null ? null : iso(latest(authors)!),
+        daily: [...daily[platform]],
+      };
+    };
+    const platforms = [tile('discord'), tile('telegram')];
+    // The members who wrote the most there, both platforms together.
+    const byMember = new Map<
+      string,
+      { id: string; name: string | null; discord: number; telegram: number; lastAt: number }
+    >();
+    for (const a of accounts) {
+      if (a.status !== 'member' || !a.member || a.messages === 0) continue;
+      const entry = byMember.get(a.member.id) ?? {
+        id: a.member.id,
+        name: a.member.name,
+        discord: 0,
+        telegram: 0,
+        lastAt: 0,
+      };
+      entry[a.platform] += a.messages;
+      entry.lastAt = Math.max(entry.lastAt, a.lastAt ?? 0);
+      byMember.set(a.member.id, entry);
+    }
+    return {
+      from: localDay(days[0]!),
+      to: localDay(days[29]!),
+      platforms,
+      places: platforms
+        .map((p) => ({
+          platform: p.platform,
+          id: p.platform === 'discord' ? input.guildId : input.chatId,
+          name: p.platform === 'discord' ? community : input.telegramTitle,
+          messages: p.messages,
+          lastAt: p.lastAt ?? ago(30 * DAY),
+        }))
+        .sort((a, b) => b.messages - a.messages),
+      topMembers: [...byMember.values()]
+        .sort((a, b) => b.discord + b.telegram - (a.discord + a.telegram))
+        .slice(0, 6)
+        .map((m) => ({ ...m, lastAt: iso(m.lastAt) })),
+    };
+  };
+
+  // ---- Everyone StayPut knows there, not only who writes ----
+  const people = (): PeopleView => {
+    const list: PlatformPerson[] = accounts.map((a) => ({
+      platform: a.platform,
+      accountId: a.accountId,
+      name: a.name,
+      username: a.username,
+      status: a.status,
+      member: a.status === 'member' && a.member ? { id: a.member.id, name: a.member.name } : null,
+      here: true,
+      joinedAt: iso(a.joinedAt),
+      leftAt: null,
+      messages: a.messages,
+      lastMessageAt: a.lastAt === null ? null : iso(a.lastAt),
+    }));
     list.sort(
       (a, b) =>
         Date.parse(b.lastMessageAt ?? '1970-01-01') - Date.parse(a.lastMessageAt ?? '1970-01-01'),
@@ -584,7 +681,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
           id: input.guildId,
           name: community,
           total: 44,
-          known: list.filter((p) => p.platform === 'discord').length,
+          known: on('discord').length,
           list: 'listed',
         },
         {
@@ -592,13 +689,60 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
           id: input.chatId,
           name: input.telegramTitle,
           total: 29,
-          known: list.filter((p) => p.platform === 'telegram').length,
+          known: on('telegram').length,
           list: 'joins',
         },
       ],
       total: list.length,
       people: list,
     };
+  };
+
+  // ---- The accounts seen writing, and the member each is ----
+  const latestFirst = (a: DemoAccount, b: DemoAccount) => b.changed - a.changed;
+  const accountsView = (): AccountsView => ({
+    unlinked: accounts
+      .filter((a) => a.status === 'unlinked')
+      .sort((a, b) => latestFirst(a, b) || (b.lastAt ?? 0) - (a.lastAt ?? 0))
+      .map((a) => ({
+        platform: a.platform,
+        accountId: a.accountId,
+        name: a.name,
+        username: a.username,
+        messages: a.messages,
+        lastAt: iso(a.lastAt ?? now - DAY),
+        suggestions: a.suggestions,
+      })),
+    linked: accounts
+      .filter((a) => a.status === 'member' && a.member && a.messages > 0)
+      .sort((a, b) => latestFirst(a, b) || b.messages - a.messages)
+      .map((a) => ({
+        platform: a.platform,
+        accountId: a.accountId,
+        name: a.name,
+        username: a.username,
+        member: { id: a.member!.id, name: a.member!.name },
+        via: a.via,
+      })),
+    dismissed: accounts
+      .filter((a) => a.status === 'team' || a.status === 'guest')
+      .sort((a, b) => latestFirst(a, b) || (b.setAsideAt ?? 0) - (a.setAsideAt ?? 0))
+      .map((a) => ({
+        platform: a.platform,
+        accountId: a.accountId,
+        name: a.name,
+        username: a.username,
+        as: a.status === 'guest' ? ('guest' as const) : ('team' as const),
+        at: iso(a.setAsideAt ?? now),
+      })),
+  });
+  let changes = 0;
+  const findAccount = (body: Record<string, unknown>) =>
+    accounts.find((a) => a.platform === body.platform && a.accountId === body.accountId);
+  /** The member's account there; the other platform when they are not on that one. */
+  const memberAccount = (memberId: string, preferred: AccountPlatform) => {
+    const theirs = accounts.filter((a) => a.status === 'member' && a.member?.id === memberId);
+    return theirs.find((a) => a.platform === preferred) ?? theirs[0] ?? null;
   };
 
   // ---- Settings › Risk score, the Alumni offer, the Discord channels ----
@@ -623,20 +767,6 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     readable: Boolean(readable),
     followed: Boolean(followed),
   }));
-
-  // The accounts tied when the demo opens: those tied since add to the sources' counts.
-  const tiedAtStart: Readonly<Record<AccountPlatform, number>> = {
-    discord: accountsState.linked.filter((a) => a.platform === 'discord').length,
-    telegram: accountsState.linked.filter((a) => a.platform === 'telegram').length,
-  };
-  const sourceCounts = (platform: AccountPlatform, linkedMembers: number) => ({
-    linkedMembers:
-      linkedMembers +
-      accountsState.linked.filter((a) => a.platform === platform).length -
-      tiedAtStart[platform],
-    unlinkedAuthors: accountsState.unlinked.filter((a) => a.platform === platform && a.messages > 0)
-      .length,
-  });
 
   return {
     actions: (view) => ({
@@ -698,69 +828,70 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
           .map((row) => row.member.id),
       ),
     insights,
-    platformActivity: () => platformActivity,
+    platformActivity,
     people,
-    accounts: () => accountsState,
-    integrations: (status) => ({
-      ...status,
-      discord: { ...status.discord, ...sourceCounts('discord', status.discord.linkedMembers) },
-      telegram: { ...status.telegram, ...sourceCounts('telegram', status.telegram.linkedMembers) },
-    }),
+    accounts: accountsView,
+    integrations: (status) => {
+      const counts = (platform: AccountPlatform) => ({
+        linkedMembers: new Set(
+          on(platform)
+            .filter((a) => a.status === 'member' && a.member)
+            .map((a) => a.member!.id),
+        ).size,
+        unlinkedAuthors: on(platform).filter((a) => a.status === 'unlinked' && a.messages > 0)
+          .length,
+      });
+      return {
+        ...status,
+        discord: { ...status.discord, ...counts('discord') },
+        telegram: { ...status.telegram, ...counts('telegram') },
+      };
+    },
+    recordMessage: (memberId, at, preferred) => {
+      const theirs = memberAccount(memberId, preferred);
+      if (!theirs) return null;
+      theirs.messages += 1;
+      theirs.lastAt = Math.max(theirs.lastAt ?? 0, at);
+      daily[theirs.platform][29]! += 1;
+      return theirs.platform;
+    },
+    noteMessage: (memberId, at, preferred) => {
+      const theirs = memberAccount(memberId, preferred);
+      if (!theirs) return null;
+      if (theirs.messages > 0) theirs.lastAt = Math.max(theirs.lastAt ?? 0, at);
+      return theirs.platform;
+    },
     changeAccount: (what, body) => {
-      const matches = sameAccount(body);
+      const found = findAccount(body);
+      if (!found) return null;
       if (what === 'link') {
-        const account = accountsState.unlinked.find(matches);
+        // Its messages waiting become the member's (Members counts them from now on).
         const member = rows.find((m) => m.id === body.memberId);
-        if (!account || !member) return null;
-        accountsState.unlinked = accountsState.unlinked.filter((a) => a !== account);
-        accountsState.linked.unshift({
-          platform: account.platform,
-          accountId: account.accountId,
-          name: account.name,
-          username: account.username,
-          member: { id: member.id, name: member.name },
-          via: 'creator',
-        });
+        if (found.status !== 'unlinked' || !member) return null;
+        found.status = 'member';
+        found.member = member;
+        found.via = 'creator';
+        member.activity.messages += found.messages;
       } else if (what === 'unlink') {
-        const account = accountsState.linked.find(matches);
-        if (!account) return null;
-        accountsState.linked = accountsState.linked.filter((a) => a !== account);
-        accountsState.unlinked.unshift({
-          platform: account.platform,
-          accountId: account.accountId,
-          name: account.name,
-          username: account.username,
-          messages: 0,
-          lastAt: ago(DAY),
-          suggestions: [],
-        });
+        if (found.status !== 'member' || !found.member) return null;
+        found.member.activity.messages = Math.max(
+          0,
+          found.member.activity.messages - found.messages,
+        );
+        found.status = 'unlinked';
+        found.member = null;
+        found.via = null;
       } else if (what === 'dismiss') {
-        const account = accountsState.unlinked.find(matches);
-        if (!account) return null;
-        accountsState.unlinked = accountsState.unlinked.filter((a) => a !== account);
-        accountsState.dismissed.unshift({
-          platform: account.platform,
-          accountId: account.accountId,
-          name: account.name,
-          username: account.username,
-          as: body.as === 'guest' ? 'guest' : 'team',
-          at: iso(Date.now()),
-        });
+        if (found.status !== 'unlinked') return null;
+        found.status = body.as === 'guest' ? 'guest' : 'team';
+        found.setAsideAt = Date.now();
       } else if (what === 'restore') {
-        const account = accountsState.dismissed.find(matches);
-        if (!account) return null;
-        accountsState.dismissed = accountsState.dismissed.filter((a) => a !== account);
-        accountsState.unlinked.unshift({
-          platform: account.platform,
-          accountId: account.accountId,
-          name: account.name,
-          username: account.username,
-          messages: 0,
-          lastAt: account.at,
-          suggestions: [],
-        });
+        if (found.status !== 'team' && found.status !== 'guest') return null;
+        found.status = 'unlinked';
+        found.setAsideAt = null;
       } else return null;
-      return accountsState;
+      found.changed = ++changes;
+      return accountsView();
     },
     riskSettings: () => riskSettings,
     saveRiskSettings: (next) => {
