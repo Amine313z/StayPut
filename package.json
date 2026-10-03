@@ -19,6 +19,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
+    "e2e": "playwright test -c apps/web/e2e/playwright.config.ts",
     "db:bundle": "tsx scripts/bundle-migrations.ts",
     "db:migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
     "deploy": "npm run build && npm run deploy -w @stayput/worker"
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
     "@types/node": "^22.19.0",
     "eslint": "10.11.0",
     "eslint-plugin-react-hooks": "7.1.1",

@@ -2155,3 +2155,133 @@ officiel, français dans la langue française).
 
 - Sur téléphone, la barre collante (puces + recherche) prend deux lignes, environ 130 px.
 - L'en-tête des colonnes n'est pas collant : seules les puces et la recherche le sont.
+
+## 2026-10-03 — Correctifs v4.1, bloc 1 : le projecteur de la visite et de « Show me »
+
+Le fondateur a envoyé sept blocs de correctifs, à faire un par un, chacun suivi d'un arrêt avec
+une capture. Le bloc 1 refait la lumière de la visite et de « Show me ».
+
+### Un seul composant, des cibles exactes
+
+- `Spotlight` (`components/guide/Spotlight.tsx`) sert à la visite et à « Show me ».
+- Chaque endroit porte `data-tour="…"` sur l'élément exact, jamais sur un conteneur plus large :
+  - `hero-amount` : le libellé, le montant et l'écart, pas la courbe ;
+  - `priority-action` ;
+  - `risk-ring` : l'anneau du premier membre de « Needs attention » ;
+  - `rule-payment-retry` ;
+  - `connect-discord`.
+- « Show me » utilise aussi `attention-row` (la première ligne) et `limits` (le groupe des
+  plafonds de Réglages › Automatisations, au lieu de toute la ligne, trop haute pour que
+  l'infobulle tienne à côté).
+- Tant qu'un endroit n'est pas là, la lumière attend 1,5 s avant de prendre sa solution de repli
+  (les onglets de la page, la liste). Une page qui lit ses données montre ses onglets avant son
+  contenu : sans ce délai, la lumière se posait sur les onglets de la page précédente.
+
+### Mesurer au bon moment
+
+- L'endroit est d'abord amené au milieu de la fenêtre, par un défilement doux.
+- On attend la fin du défilement : aucun événement pendant 120 ms, 1,5 s au plus.
+- On attend ensuite que sa boîte ne bouge plus pendant 150 ms : ses animations d'entrée, le
+  compteur.
+- Seulement alors, on mesure.
+- La lumière suit ensuite la page :
+  - le défilement et la taille de la fenêtre ;
+  - un `ResizeObserver` sur l'endroit et sur la page ;
+  - un relevé toutes les 300 ms pour ce qu'aucun événement ne signale.
+
+### La découpe et l'infobulle
+
+- La page est assombrie à 72 % (`#050607`). Un masque SVG y fait une vraie découpe : 8 px de
+  marge, coins de 12 px, un halo turquoise-300 de 2 px avec une lueur douce. L'endroit reste
+  entièrement visible.
+- L'infobulle :
+  - 320 px au plus ;
+  - posée sur le premier côté qui a la place, dans l'ordre droite > bas > gauche > haut ;
+  - sans toucher l'endroit, ni l'endroit suivant de la visite quand il est à l'écran ;
+  - une flèche de 12 px pointe vers l'endroit ;
+  - pour un endroit du menu latéral, toujours à droite du menu ;
+  - invisible tant qu'elle n'est pas placée, mais déjà lisible par un lecteur d'écran : elle
+    ne saute jamais d'une place à l'autre.
+- Son contenu :
+  - « x of 5 » (visite seulement), le titre, la phrase d'explication, les boutons ;
+  - « Show me » reprend la phrase de l'étape de la visite qui montre le même endroit, sinon la
+    légende de la carte du Guide, avec « Got it » : jamais un titre seul.
+- Entre deux étapes :
+  - la découpe et le halo glissent (position et taille, 400 ms,
+    `cubic-bezier(0.22,1,0.36,1)`) ;
+  - l'infobulle entre en fondu, avec un glissement de 6 px.
+- Clavier :
+  - Next / Back / Skip / Done, et les flèches ← → ;
+  - Échap ferme ;
+  - Tab reste dans l'infobulle.
+
+### La visite change de page, puis revient
+
+- Les étapes 4 et 5 ouvrent Automatisations, puis Intégrations › Discord.
+- Skip, Échap et Done ramènent la page et la position de défilement d'avant la visite. Commencée
+  sur le tableau de bord, Done y ramène.
+- La page peut encore lire ses données au retour : le défilement est donc réappliqué à chaque
+  image, pendant 1,5 s au plus.
+
+### Automatisations s'ouvre sur ses règles (décision)
+
+- L'étape 4 doit éclairer la règle de relance des paiements, sur la page Automatisations. Or
+  cette page n'avait pas de règles : sa première page était la file « À valider ».
+- J'ai donc avancé une première version de l'onglet **Règles**, prévu au bloc 7. Il montre cinq
+  cartes en lecture seule, telles que le moteur les applique (`prepare_actions`) :
+  - la relance des paiements, éteinte quand les limites ne permettent aucune relance ;
+  - la demande de mise à jour de la carte ;
+  - le questionnaire de départ ;
+  - le message de suivi ;
+  - le message de bienvenue.
+- Chaque carte dit : Quand / Si / Alors, et On / Off.
+- En tête : le mode (manuel ou automatique) et un lien « Mode et limites » vers les réglages.
+- Viendront avec le bloc 7 : allumer ou éteindre une règle, les aperçus de messages, le panneau
+  des limites.
+- La file passe à `/actions/queue`. Les anciens liens `?view=queue` (ou `?view=history`…)
+  ouvrent leur onglet. Le lien « Review » du tableau de bord y mène.
+- Les onglets : Règles · À valider · Programmées · Historique · Offre Alumni. Le bloc 7 fera
+  d'Historique et d'Alumni des filtres de la file.
+
+### Démo
+
+- Dans la démo, le bouton « Ajouter à Discord » est désactivé (« Désactivé dans la démo ») :
+  la visite l'éclaire sans rien ouvrir.
+- Les autres liens et envois de la démo relèvent du bloc 5.
+
+### Tests
+
+- `apps/web/e2e/spotlight.e2e.ts` (Playwright, Chrome) déroule la visite puis chaque
+  « Show me » :
+  - en anglais et en français, à 1280×720 et à 1024×768 ;
+  - pour chaque endroit, une fois la lumière posée : l'endroit est entièrement dans la
+    découpe et à l'écran, et l'infobulle est dans la fenêtre sans toucher ni l'endroit ni le
+    suivant ;
+  - la visite finit sur la page et au défilement de départ.
+- Où il tourne :
+  - en local : `npm run e2e`, après `npm run build` ;
+  - en CI, après le build ;
+  - dans Inspect, sur le site en ligne : job `spotlight`, avec les polices chargées comme chez
+    les créateurs.
+- `test/guide.test.ts` couvre le placement :
+  - l'ordre des côtés ;
+  - éviter l'endroit suivant ;
+  - le menu latéral ;
+  - rester dans la fenêtre ;
+  - la découpe.
+- `test/app.test.tsx` couvre :
+  - la visite sur ses pages et ses flèches ;
+  - le retour au point de départ ;
+  - « Show me » jamais réduit à un titre ;
+  - l'onglet Règles et l'ancien lien vers la file.
+- Inspect (`look.mjs`) vérifie la même géométrie sur le site en ligne, à 1440×900. Il garde une
+  capture par étape de la visite et par « Show me ».
+
+### Incertain
+
+- happy-dom ne donne aucune taille aux éléments. Dans les tests unitaires, la lumière ne trouve
+  donc jamais sa place et l'infobulle reste au milieu : seule la suite Playwright vérifie la
+  géométrie.
+- Sur un téléphone (390 px), l'infobulle ne tient pas toujours à côté d'un grand endroit. Elle
+  se met alors du côté qui a le plus de place, dans la fenêtre. Inspect y vérifie seulement que
+  l'endroit est entier dans la découpe.

@@ -52,6 +52,7 @@ import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
 import { EmptyState } from '../../ui/EmptyState';
 import { useCreatorData } from '../CreatorView';
+import { RulesTab } from './RulesTab';
 
 /** The Worker passes approved actions through the guardrails after answering: read again then. */
 const RELOAD_AFTER_MS = 3_000;
@@ -151,7 +152,7 @@ export function ActionsTab({ view }: { view: ActionView }) {
   const counts = state.status === 'ready' ? state.data.counts : null;
   useEffect(() => {
     if (counts) {
-      tabCounts?.({ '': counts.queue, scheduled: counts.scheduled, history: counts.history });
+      tabCounts?.({ queue: counts.queue, scheduled: counts.scheduled, history: counts.history });
     }
   }, [tabCounts, counts]);
   const later = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -241,14 +242,14 @@ export function ActionsTab({ view }: { view: ActionView }) {
 }
 
 /**
- * Automations › To approve, at its address; an older link that named a view (`?view=history`)
- * opens that view's tab.
+ * Automations' first page: its rules (brief v4 §9.4). An older link that named a view
+ * (`?view=history`, `?view=queue`) opens that view's tab.
  */
 export function ActionsHome() {
   const [params] = useSearchParams();
   const view = ACTION_VIEWS.find((v) => v === params.get('view'));
-  if (view && view !== 'queue') return <Navigate to={view} replace />;
-  return <ActionsTab view="queue" />;
+  if (view) return <Navigate to={view} replace />;
+  return <RulesTab />;
 }
 
 /** Automations › Alumni offer: former members keep in touch, and come back (SPEC 5.9). */

@@ -11,7 +11,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { pageHref, type GuideCard, type Targets } from '../guide';
+import { TOUR, pageHref, type GuideCard, type Targets } from '../guide';
 import { useI18n } from '../i18n';
 import { ease } from '../motion';
 import { readPreference, writePreference } from '../storage';
@@ -78,11 +78,26 @@ export function CreatorShell({
   };
   const { currency } = useI18n();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   // The guide (brief v4 §10): its panel, and what it lights up (the tour, a card's place, a
   // shortcut's control). Only one at a time: opening one closes the others.
   const [panel, setPanel] = useState(false);
   const [spot, setSpot] = useState<Spot | null>(null);
+  // Where the creator was when the tour began: its end (Skip, Escape, Done) brings them back.
+  const tourOrigin = useRef<{ path: string; scroll: number } | null>(null);
+  const tourTo = (index: number) => {
+    const page = pageHref(root, TOUR[index]?.page ?? '');
+    if (pathname !== page) void navigate(page);
+    setSpot({ kind: 'tour', index });
+  };
+  const endTour = () => {
+    setSpot(null);
+    const origin = tourOrigin.current;
+    tourOrigin.current = null;
+    if (!origin) return;
+    if (`${pathname}${search}` !== origin.path) void navigate(origin.path);
+    restoreScroll(origin.scroll);
+  };
   const guide: GuideControls = {
     openGuide: () => {
       setSpot(null);
@@ -90,8 +105,8 @@ export function CreatorShell({
     },
     startTour: () => {
       setPanel(false);
-      if (pathname !== root) void navigate(root);
-      setSpot({ kind: 'tour', index: 0 });
+      tourOrigin.current ??= { path: `${pathname}${search}`, scroll: window.scrollY };
+      tourTo(0);
     },
     showMe: (card) => {
       setPanel(false);
@@ -137,19 +152,30 @@ export function CreatorShell({
       </div>
       {panel ? <GuidePanel root={root} demo={demo} onClose={() => setPanel(false)} /> : null}
       {spot?.kind === 'tour' ? (
-        <Tour
-          index={spot.index}
-          zero={zero}
-          onIndex={(index) => setSpot({ kind: 'tour', index })}
-          onClose={() => setSpot(null)}
-        />
+        <Tour index={spot.index} zero={zero} onIndex={tourTo} onClose={endTour} />
       ) : null}
-      {spot?.kind === 'show' ? <ShowMe card={spot.card} onClose={() => setSpot(null)} /> : null}
+      {spot?.kind === 'show' ? (
+        <ShowMe card={spot.card} zero={zero} onClose={() => setSpot(null)} />
+      ) : null}
       {spot?.kind === 'flash' ? (
         <Flash key={spot.at} targets={spot.targets} onDone={() => setSpot(null)} />
       ) : null}
     </GuideContext.Provider>
   );
+}
+
+/**
+ * Back where the creator was: their page may still be reading its data, so the scroll is set
+ * again each frame until it holds (1.5 s at most).
+ */
+function restoreScroll(top: number) {
+  const started = performance.now();
+  const tick = () => {
+    window.scrollTo({ top, behavior: 'instant' });
+    if (Math.abs(window.scrollY - top) <= 1 || performance.now() - started > 1_500) return;
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 /** What the guide lights up: the tour at a step, a card's place, a shortcut's control. */

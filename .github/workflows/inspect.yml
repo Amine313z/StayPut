@@ -77,6 +77,24 @@ jobs:
           expect /api/creator/biz_2whAzkbCRpcGqQ/session 401 json
           exit $failed
 
+  # The browser tests (apps/web/e2e) on the deployed demo, its fonts loaded as creators get
+  # them: the tour and every « Show me » light their place wholly, the tooltip beside it, in
+  # English and French, at 1280×720 and 1024×768. No secret, no write.
+  spotlight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Run the spotlight tests on the deployed demo in Chrome
+        env:
+          STAYPUT_URL: ${{ vars.STAYPUT_URL || 'https://stayput.chezbenz18.workers.dev' }}
+        run: npm run e2e
+
   # The deployed demo in a real browser (scripts/ops/look.mjs): whether StayPut's fonts loaded
   # (Satoshi, Geist) and the chart drew its data, and screenshots of the Dashboard. No secret
   # here; its only write is the `screenshots` branch, replaced at each run, where the latest

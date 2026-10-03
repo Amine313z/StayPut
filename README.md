@@ -48,7 +48,9 @@ Satoshi, le reste en Geist. Un menu de rubriques sur le côté, qui se replie su
 haut, le logo de StayPut, la communauté (nom et logo lus chez Whop), la recherche d'un membre
 (⌘K ou Ctrl K) et le **Guide** : cinq cartes animées (qui va partir, les garder, l'argent gardé,
 le contrôle, Discord et Telegram), chacune avec « Montrez-moi » qui ouvre la page et en éclaire
-l'endroit, quatre raccourcis et une visite en cinq étapes. La première fois qu'une communauté
+l'endroit, quatre raccourcis et une visite en cinq étapes (le montant sauvé, l'action du jour,
+l'anneau de risque du premier membre, puis une règle d'Automatisations et la connexion de
+Discord, chacune sur sa page ; elle finit là où elle a commencé). La première fois qu'une communauté
 ouvre StayPut, un accueil en quatre étapes : bienvenue, Discord ou Telegram, automatique ou
 manuel, premier audit (puis la visite). Quand le mode test est actif, une fine barre le dit,
 avec « Désactiver ». La langue (English par défaut, Français) se change **uniquement** dans
@@ -59,14 +61,14 @@ Réglages › Général › « Développeur ». Sur un téléphone, les rubrique
 couleurs, polices et animations suivent [`docs/design-tokens.md`](./docs/design-tokens.md) et
 [`MOTION.md`](./MOTION.md).
 
-| Rubrique (EN · FR)            | Onglets                                             |
-| ----------------------------- | --------------------------------------------------- |
-| Dashboard · Tableau de bord   | une page                                            |
-| Members · Membres             | Tous les membres · Ne pas contacter                 |
-| Automations · Automatisations | À valider · Programmées · Historique · Offre Alumni |
-| Analytics · Analyses          | Cohortes · Leçons                                   |
-| Integrations · Intégrations   | Whop · Discord · Telegram · Activité                |
-| Settings · Réglages           | Général · Score de risque · Automatisations         |
+| Rubrique (EN · FR)            | Onglets                                                      |
+| ----------------------------- | ------------------------------------------------------------ |
+| Dashboard · Tableau de bord   | une page                                                     |
+| Members · Membres             | Tous les membres · Ne pas contacter                          |
+| Automations · Automatisations | Règles · À valider · Programmées · Historique · Offre Alumni |
+| Analytics · Analyses          | Cohortes · Leçons                                            |
+| Integrations · Intégrations   | Whop · Discord · Telegram · Activité                         |
+| Settings · Réglages           | Général · Score de risque · Automatisations                  |
 
 La page d'accueil répond à une seule question, « Est-ce que je perds de l'argent, et que faire
 aujourd'hui ? » : un bloc pour l'argent (sauvé ce mois-ci, à risque, membres à risque, et la

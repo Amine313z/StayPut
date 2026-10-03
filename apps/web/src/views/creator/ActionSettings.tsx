@@ -281,7 +281,7 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
       description={t('actionSettings.description')}
     >
       <form onSubmit={(event) => void submit(event)} className="divide-y divide-line" noValidate>
-        <Row label={t('actionSettings.mode')} labelId={`${ids}-mode`} tour="mode">
+        <Row label={t('actionSettings.mode')} labelId={`${ids}-mode`}>
           <div
             role="radiogroup"
             aria-labelledby={`${ids}-mode`}
@@ -435,8 +435,13 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
           </div>
         </Row>
 
-        <Row label={t('actionSettings.caps')} labelId={`${ids}-caps`} tour="limits">
-          <div role="group" aria-labelledby={`${ids}-caps`} className="space-y-3">
+        <Row label={t('actionSettings.caps')} labelId={`${ids}-caps`}>
+          <div
+            role="group"
+            aria-labelledby={`${ids}-caps`}
+            data-tour="limits"
+            className="space-y-3"
+          >
             <div className="grid gap-4 sm:grid-cols-2">
               {CAP_NAMES.map((cap) => (
                 <NumberField

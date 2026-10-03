@@ -14,6 +14,7 @@ export function ExternalButton({
   icon,
   variant = 'primary',
   size = 'md',
+  tour,
   children,
 }: {
   href: string;
@@ -21,6 +22,8 @@ export function ExternalButton({
   icon?: ReactNode;
   variant?: ButtonVariant;
   size?: ButtonSize;
+  /** Where the guide may light it up (`data-tour`, guide.ts). */
+  tour?: string;
   children: ReactNode;
 }) {
   const { t } = useI18n();
@@ -31,6 +34,7 @@ export function ExternalButton({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
+        data-tour={tour}
         className={buttonClass(variant, size)}
         onClick={(event) => {
           if (!whopAppId || !insideWhop()) return;

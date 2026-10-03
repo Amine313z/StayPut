@@ -4175,44 +4175,101 @@ describe('the guide (brief v4 §10)', () => {
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
-  it('runs the tour: five places, Next, Back and the arrows, Done at the end', async () => {
-    mockApi(dashboard());
+  it('runs the tour: five places, Next, Back and the arrows, its last two on their pages, Done back home', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/dashboard': [
+        { status: 200, body: HOME },
+        { status: 200, body: HOME },
+      ],
+      '/api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
+    });
     renderAt('/dashboard/biz_A1');
     fireEvent.click(await screen.findByRole('button', { name: 'Guide' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Replay the tour' }));
-    const tour = await screen.findByRole('dialog', { name: 'Tour of StayPut' });
-    expect(tour.textContent).toContain('1 of 5');
-    expect(within(tour).getByRole('heading').textContent).toBe('Revenue saved · This month');
-    expect(tour.textContent).toContain(
+    // Each place has its own tooltip: read the one on screen.
+    const tour = () => screen.getByRole('dialog', { name: 'Tour of StayPut' });
+    await screen.findByRole('dialog', { name: 'Tour of StayPut' });
+    expect(tour().textContent).toContain('1 of 5');
+    expect(within(tour()).getByRole('heading').textContent).toBe('Revenue saved · This month');
+    expect(tour().textContent).toContain(
       'This is what StayPut earned you this month. It starts at $0.00 and grows with every member saved.',
     );
-    // Its places are marked on the dashboard and in the menu.
-    for (const place of ['hero', 'priority', 'attention', 'nav-actions', 'nav-sources']) {
-      expect(document.querySelector(`[data-tour="${place}"]`), place).not.toBeNull();
+    // Its places on the dashboard: the exact elements, one each.
+    for (const place of ['hero-amount', 'priority-action', 'risk-ring']) {
+      await vi.waitFor(() =>
+        expect(document.querySelectorAll(`[data-tour="${place}"]`), place).toHaveLength(1),
+      );
     }
-    expect(within(tour).queryByRole('button', { name: 'Back' })).toBeNull();
-    fireEvent.click(within(tour).getByRole('button', { name: 'Next' }));
-    expect(tour.textContent).toContain('2 of 5');
-    expect(tour.textContent).toContain(
+    // The amount, its label and its change: not the chart below them.
+    expect(
+      document.querySelector('[data-tour="hero-amount"]')!.querySelector('svg, canvas'),
+    ).toBeNull();
+    expect(within(tour()).queryByRole('button', { name: 'Back' })).toBeNull();
+    fireEvent.click(within(tour()).getByRole('button', { name: 'Next' }));
+    expect(tour().textContent).toContain('2 of 5');
+    expect(tour().textContent).toContain(
       'One thing to do today. Click it, StayPut handles the rest.',
     );
     fireEvent.keyDown(window, { key: 'ArrowRight' });
-    expect(tour.textContent).toContain('0 means safe, 100 means leaving. Hover to see why.');
-    fireEvent.click(within(tour).getByRole('button', { name: 'Back' }));
-    expect(tour.textContent).toContain('2 of 5');
-    fireEvent.click(within(tour).getByRole('button', { name: 'Next' }));
-    fireEvent.click(within(tour).getByRole('button', { name: 'Next' }));
-    expect(within(tour).getByRole('heading').textContent).toBe('Automations');
-    expect(tour.textContent).toContain(
+    expect(tour().textContent).toContain('0 means safe, 100 means leaving. Hover to see why.');
+    fireEvent.click(within(tour()).getByRole('button', { name: 'Back' }));
+    expect(tour().textContent).toContain('2 of 5');
+    fireEvent.click(within(tour()).getByRole('button', { name: 'Next' }));
+    fireEvent.click(within(tour()).getByRole('button', { name: 'Next' }));
+    // Step 4 on Automations, at the payment retries' rule.
+    expect(await screen.findByRole('heading', { name: 'Automations', level: 1 })).toBeTruthy();
+    expect(within(tour()).getByRole('heading').textContent).toBe('Automations');
+    expect(tour().textContent).toContain('4 of 5');
+    expect(tour().textContent).toContain(
       'Decide what StayPut does on its own. Start with payment retries: zero risk, instant results.',
     );
-    fireEvent.click(within(tour).getByRole('button', { name: 'Next' }));
-    expect(tour.textContent).toContain('5 of 5');
-    expect(tour.textContent).toContain(
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-tour="rule-payment-retry"]')).not.toBeNull(),
+    );
+    // Step 5 on Integrations › Discord, at the button that connects it.
+    fireEvent.click(within(tour()).getByRole('button', { name: 'Next' }));
+    expect(await screen.findByRole('heading', { name: 'Integrations', level: 1 })).toBeTruthy();
+    expect(tour().textContent).toContain('5 of 5');
+    expect(tour().textContent).toContain(
       'Connect Discord or Telegram: that’s where your members talk. Without it, StayPut only sees half of what’s going on.',
     );
-    fireEvent.click(within(tour).getByRole('button', { name: 'Done' }));
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-tour="connect-discord"]')).not.toBeNull(),
+    );
+    // Back with ←: the rule again, on its page.
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    expect(await screen.findByRole('heading', { name: 'Automations', level: 1 })).toBeTruthy();
+    expect(tour().textContent).toContain('4 of 5');
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(await screen.findByRole('heading', { name: 'Integrations', level: 1 })).toBeTruthy();
+    fireEvent.click(within(tour()).getByRole('button', { name: 'Done' }));
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // Done: the dashboard again, where the tour began.
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
+  });
+
+  it('ends the tour on the page it began from, whichever way it ends', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/members': [
+        { status: 200, body: MEMBERS },
+        { status: 200, body: MEMBERS },
+        { status: 200, body: MEMBERS },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/members');
+    expect(await screen.findByRole('heading', { name: 'Members', level: 1 })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Replay the tour' }));
+    // The tour starts on the dashboard…
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
+    const tour = await screen.findByRole('dialog', { name: 'Tour of StayPut' });
+    expect(tour.textContent).toContain('1 of 5');
+    // …and Escape brings back Members.
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(await screen.findByRole('heading', { name: 'Members', level: 1 })).toBeTruthy();
   });
 
   it('stops the tour on Skip or Escape', async () => {
@@ -4241,13 +4298,36 @@ describe('the guide (brief v4 §10)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Guide' }));
     const guide = await screen.findByRole('dialog', { name: 'Guide' });
     fireEvent.click(within(guide).getAllByRole('button', { name: 'Show me' })[1]!);
-    // « Keep them, automatically »: Settings › Automations, where the mode is chosen.
+    // « Keep them, automatically »: Automations › Rules, at the payment retries, in the tour's
+    // words — never a title alone.
     const shown = await screen.findByRole('dialog', { name: 'Keep them, automatically' });
-    expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeTruthy();
-    await vi.waitFor(() => expect(document.querySelector('[data-tour="mode"]')).not.toBeNull());
-    expect(document.querySelector('[data-tour="limits"]')).not.toBeNull();
-    expect(document.querySelector('[data-tour="retries"] input')).not.toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Automations', level: 1 })).toBeTruthy();
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-tour="rule-payment-retry"]')).not.toBeNull(),
+    );
+    expect(within(shown).getByRole('heading').textContent).toBe('Keep them, automatically');
+    expect(shown.textContent).toContain(
+      'Decide what StayPut does on its own. Start with payment retries: zero risk, instant results.',
+    );
+    expect(shown.textContent).not.toMatch(/of 5/);
     fireEvent.click(within(shown).getByRole('button', { name: 'Got it' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    // « You stay in control »: no tour step shows its place, so its caption goes in the light.
+    fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Guide' })).getAllByRole('button', {
+        name: 'Show me',
+      })[3]!,
+    );
+    const control = await screen.findByRole('dialog', { name: 'You stay in control' });
+    expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeTruthy();
+    await vi.waitFor(() => expect(document.querySelector('[data-tour="limits"]')).not.toBeNull());
+    expect(document.querySelector('[data-tour="retries"] input')).not.toBeNull();
+    expect(control.textContent).toContain(
+      'StayPut never spams. One message per member every 5 days, no messages at night, a cap on discounts, and a list of members it must never contact. Change any of this in Settings.',
+    );
+    fireEvent.keyDown(window, { key: 'Escape' });
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
     fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
@@ -4432,6 +4512,7 @@ describe('the demo (/demo)', () => {
       'members',
       'members/never-contact',
       'actions',
+      'actions/queue',
       'actions/scheduled',
       'actions/history',
       'actions/alumni',
@@ -4458,7 +4539,21 @@ describe('the demo (/demo)', () => {
       expect(screen.queryByRole('alert'), page).toBeNull();
       cleanup();
     }
+    // Automations opens on its rules, the payment retries first; what waits is under To approve.
     renderAt('/demo/actions');
+    const rules = await screen.findAllByRole('article', undefined, { timeout: 3_000 });
+    expect(
+      rules.map((rule) => within(rule).getByRole('heading', { level: 3 }).textContent),
+    ).toEqual([
+      'Payment retries',
+      'Card update request',
+      'Departure survey',
+      'Check-in message',
+      'Welcome message',
+    ]);
+    expect(rules[0]!.getAttribute('data-tour')).toBe('rule-payment-retry');
+    cleanup();
+    renderAt('/demo/actions/queue');
     expect(await screen.findByText('Margaux Picard', undefined, { timeout: 3_000 })).toBeTruthy();
     expect(screen.getByText('Before you go')).toBeTruthy();
     cleanup();
@@ -4546,13 +4641,60 @@ describe('the actions (SPEC Phase 4)', () => {
     },
   });
 
+  it('opens on its rules: when, if, then, each on or off as the limits say', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/settings/actions': [
+        { status: 200, body: { ...ACTION_SETTINGS, maxPaymentRetries: 0 } },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions');
+    const rules = await screen.findAllByRole('article');
+    expect(rules).toHaveLength(5);
+    // The payment retries first, off while the limits allow no retry.
+    const retries = rules[0]!;
+    expect(within(retries).getByRole('heading').textContent).toBe('Payment retries');
+    expect(retries.textContent).toContain('Off');
+    expect(retries.textContent).toContain('A payment fails');
+    expect(retries.textContent).toContain('Off: retries are set to 0 in your limits');
+    expect(rules[1]!.textContent).toContain('On');
+    expect(screen.getByText('Manual')).toBeTruthy();
+    expect(screen.getByText(/StayPut asks you first: you approve each action\./)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Mode and limits' }).getAttribute('href')).toBe(
+      '/dashboard/biz_A1/settings/actions',
+    );
+    // Its tabs: the rules, then what waits for approval.
+    const tabs = screen.getByRole('navigation', { name: 'Automations tabs' });
+    expect(
+      within(tabs)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual([
+      '/dashboard/biz_A1/actions',
+      '/dashboard/biz_A1/actions/queue',
+      '/dashboard/biz_A1/actions/scheduled',
+      '/dashboard/biz_A1/actions/history',
+      '/dashboard/biz_A1/actions/alumni',
+    ]);
+  });
+
+  it('opens an older link to the queue on its tab', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/actions?view=queue': [page('queue', [row()])],
+    });
+    renderAt('/dashboard/biz_A1/actions?view=queue');
+    expect(await screen.findByText('Welcome, Ana')).toBeTruthy();
+    expect(screen.queryByRole('article')).toBeNull();
+  });
+
   it('shows each action to approve with its message as it will read, and approves it', async () => {
     const calls = mockApi({
       ...dashboard(),
       '/api/creator/biz_A1/actions?view=queue': [page('queue', [row()]), page('queue', [])],
       'POST /api/creator/biz_A1/actions/approve': [{ status: 200, body: { approved: 1 } }],
     });
-    renderAt('/dashboard/biz_A1/actions');
+    renderAt('/dashboard/biz_A1/actions/queue');
     expect(await screen.findByText('Welcome, Ana')).toBeTruthy();
     expect(screen.getByText('Glad to have you in Le Club.')).toBeTruthy();
     expect(screen.getByText('Leaves as soon as you approve it')).toBeTruthy();
@@ -4608,7 +4750,7 @@ describe('the actions (SPEC Phase 4)', () => {
         ),
       ],
     });
-    renderAt('/dashboard/biz_A1/actions');
+    renderAt('/dashboard/biz_A1/actions/queue');
     expect(
       await screen.findByText(
         'Test mode: every action is computed and kept, nothing is sent to your members.',

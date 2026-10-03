@@ -143,9 +143,7 @@ export function Overview() {
               <BalanceHero view={view} />
             </StaggerItem>
             <StaggerItem>
-              <div data-tour="priority">
-                <Priority view={view} api={api} root={root} testMode={testMode.on} onDone={acted} />
-              </div>
+              <Priority view={view} api={api} root={root} testMode={testMode.on} onDone={acted} />
             </StaggerItem>
           </>
         )}
@@ -308,24 +306,23 @@ function BalanceHero({ view }: { view: DashboardView | null }) {
         style={{ left: -260, top: -300 }}
       />
       <div className="min-w-0 [grid-area:balance]">
-        {/* The tour lights up the amount and its words, not the room left beside them. */}
-        <div data-tour="hero" className="w-fit max-w-full">
-          {view ? (
-            <>
-              <MetricHero
-                better="up"
-                label={t('dash.saved')}
-                tip={t('dash.saved.info')}
-                value={monthTotal}
-                format={money}
-                empty={t('dash.noRevenue')}
-              />
-              {compare ? <Delta compare={compare} money={money} /> : null}
-            </>
-          ) : (
-            <MetricSkeleton hero />
-          )}
-        </div>
+        {view ? (
+          // The guide lights up the label, the amount and its delta: never the room beside them,
+          // never the skeleton before them.
+          <div data-tour="hero-amount" className="w-fit max-w-full">
+            <MetricHero
+              better="up"
+              label={t('dash.saved')}
+              tip={t('dash.saved.info')}
+              value={monthTotal}
+              format={money}
+              empty={t('dash.noRevenue')}
+            />
+            {compare ? <Delta compare={compare} money={money} /> : null}
+          </div>
+        ) : (
+          <MetricSkeleton hero />
+        )}
       </div>
       <div className="justify-self-end [grid-area:period]">
         <Segmented
@@ -527,7 +524,7 @@ function Priority({
       case 'approve':
         sentence = plural('dash.priority.approve.sentence', priority.actions, { amount });
         aside = (
-          <Link to={`${root}/actions`} className={SECTION_LINK_CLASS}>
+          <Link to={`${root}/actions/queue`} className={SECTION_LINK_CLASS}>
             {t('dash.priority.reviewFirst')}
           </Link>
         );
@@ -637,6 +634,7 @@ function Priority({
       animate={{ opacity: 1 }}
       transition={ease('standard')}
       aria-labelledby={titleId}
+      data-tour="priority-action"
       className="flex flex-col gap-4 border-y border-line py-5 @3xl:flex-row @3xl:items-center @3xl:justify-between"
     >
       <div className="min-w-0">
@@ -813,6 +811,7 @@ function NeedsAttention({
                     testMode={testMode}
                     onDone={onDone}
                     delay={0.15 + index * STAGGER}
+                    first={index === 0}
                   />
                 </motion.li>
               ))}
@@ -831,12 +830,15 @@ function AttentionRow({
   testMode,
   onDone,
   delay,
+  first,
 }: {
   item: Urgency;
   api: string;
   testMode: boolean;
   onDone: () => void;
   delay: number;
+  /** The list's first row: the guide lights up it and its ring. */
+  first: boolean;
 }) {
   const i18n = useI18n();
   const { t, day, currency, number } = i18n;
@@ -885,6 +887,8 @@ function AttentionRow({
       }
       actions={<MemberActions member={member} api={api} testMode={testMode} onDone={onDone} />}
       delay={delay}
+      rowTour={first ? 'attention-row' : undefined}
+      ringTour={first ? 'risk-ring' : undefined}
     />
   );
 }

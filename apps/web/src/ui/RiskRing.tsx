@@ -11,12 +11,15 @@ export function RiskRing({
   label,
   size = 40,
   delay = 0,
+  tour,
 }: {
   score: number;
   label: string;
   size?: number;
   /** Seconds before it draws: the rows of a list one after the other. */
   delay?: number;
+  /** Where the guide may light it up (`data-tour`, guide.ts). */
+  tour?: string;
 }) {
   const stroke = size >= 40 ? 3 : 2.5;
   const radius = (size - stroke) / 2;
@@ -26,6 +29,7 @@ export function RiskRing({
       role="img"
       aria-label={label}
       data-risk-ring=""
+      data-tour={tour}
       className="relative inline-flex shrink-0 items-center justify-center"
       style={{ width: size, height: size }}
     >

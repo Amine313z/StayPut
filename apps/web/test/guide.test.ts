@@ -1,21 +1,37 @@
 import { MESSAGES } from '@stayput/i18n';
 import { describe, expect, it } from 'vitest';
-import { GUIDE_CARDS, SHORTCUTS, TOUR, haloBox, inView, pageHref, placeCard } from '../src/guide';
+import {
+  GUIDE_CARDS,
+  SHORTCUTS,
+  TOUR,
+  contains,
+  cutOut,
+  intersects,
+  pageHref,
+  placeTip,
+} from '../src/guide';
 
 const VIEW = { width: 1440, height: 900 };
-const CARD = { width: 320, height: 170 };
+const TIP = { width: 320, height: 170 };
+const boxOf = (place: { x: number; y: number }) => ({ ...place, ...TIP });
 
 describe('the guide', () => {
-  it('tours the five places of the brief, in its order (§10)', () => {
-    expect(TOUR.map((step) => step.id)).toEqual([
-      'hero',
-      'priority',
-      'risk',
-      'automations',
-      'integrations',
+  it('tours the five places of the brief, in its order, each on its page (§10, v4.1)', () => {
+    expect(TOUR.map((step) => [step.id, step.page, step.targets[0]])).toEqual([
+      ['hero', '', '[data-tour="hero-amount"]'],
+      ['priority', '', '[data-tour="priority-action"]'],
+      ['risk', '', '[data-tour="risk-ring"]'],
+      ['automations', 'actions', '[data-tour="rule-payment-retry"]'],
+      ['integrations', 'sources/discord', '[data-tour="connect-discord"]'],
     ]);
-    // A phone has no side menu: Integrations is found under « More ».
-    expect(TOUR.at(-1)?.targets).toEqual(['[data-tour="nav-sources"]', '[data-tour="nav-more"]']);
+    // « Show me » lights the same places as the tour, with its words, where the tour shows them.
+    expect(GUIDE_CARDS.map((card) => [card.id, card.page, card.targets[0], card.step])).toEqual([
+      ['who', '', '[data-tour="attention-row"]', undefined],
+      ['keep', 'actions', '[data-tour="rule-payment-retry"]', 'automations'],
+      ['money', '', '[data-tour="hero-amount"]', 'hero'],
+      ['control', 'settings/actions', '[data-tour="limits"]', undefined],
+      ['connect', 'sources/discord', '[data-tour="connect-discord"]', 'integrations'],
+    ]);
   });
 
   it('has five cards and four shortcuts, each said in both languages', () => {
@@ -51,44 +67,43 @@ describe('the guide', () => {
     }
   });
 
-  it('puts the card under the lit place, else above, else beside it, else in the middle', () => {
-    // Room below.
-    expect(placeCard({ x: 600, y: 100, width: 300, height: 80 }, CARD, VIEW)).toEqual({
-      x: 590,
-      y: 192,
-      side: 'below',
-    });
-    // At the bottom: above.
-    expect(placeCard({ x: 600, y: 700, width: 300, height: 120 }, CARD, VIEW).side).toBe('above');
-    // As tall as the window: beside it, on the right first.
-    expect(placeCard({ x: 0, y: 20, width: 220, height: 860 }, CARD, VIEW)).toEqual({
-      x: 232,
-      y: 20,
-      side: 'right',
-    });
-    expect(placeCard({ x: 1100, y: 20, width: 330, height: 860 }, CARD, VIEW).side).toBe('left');
-    // Nothing lit: in the middle.
-    expect(placeCard(null, CARD, VIEW)).toEqual({ x: 560, y: 365, side: 'center' });
-    // Never out of the window: a place at its left edge keeps the card 16 px in.
-    expect(placeCard({ x: 0, y: 100, width: 40, height: 40 }, CARD, VIEW).x).toBe(16);
+  it('cuts the page out around the place, 8 px of room, the place wholly inside', () => {
+    const place = { x: 100, y: 100, width: 200, height: 50 };
+    expect(cutOut(place)).toEqual({ x: 92, y: 92, width: 216, height: 66 });
+    expect(contains(cutOut(place), place)).toBe(true);
+    expect(contains(place, cutOut(place))).toBe(false);
+    // Side by side is not overlapping; one pixel over is.
+    expect(intersects(place, { x: 300, y: 100, width: 10, height: 10 })).toBe(false);
+    expect(intersects(place, { x: 299, y: 100, width: 10, height: 10 })).toBe(true);
   });
 
-  it('draws the halo around the place, inside the window', () => {
-    expect(haloBox({ x: 100, y: 100, width: 200, height: 50 }, VIEW)).toEqual({
-      x: 92,
-      y: 92,
-      width: 216,
-      height: 66,
-    });
-    expect(haloBox({ x: 0, y: 860, width: 1440, height: 60 }, VIEW)).toEqual({
-      x: 2,
-      y: 852,
-      width: 1436,
-      height: 46,
-    });
-    // Under the top bar (64 px) or behind a phone's bottom bar: not on screen.
-    expect(inView({ x: 0, y: 40, width: 10, height: 10 }, VIEW)).toBe(false);
-    expect(inView({ x: 0, y: 100, width: 10, height: 10 }, VIEW)).toBe(true);
-    expect(inView({ x: 0, y: 820, width: 10, height: 30 }, VIEW, 64, 72)).toBe(false);
+  it('puts the tooltip on the first side with room: right, bottom, left, top', () => {
+    // Room on the right: there, the arrow at the place's middle.
+    const left = { x: 200, y: 300, width: 200, height: 80 };
+    expect(placeTip(left, TIP, VIEW)).toEqual({ x: 414, y: 255, side: 'right', arrow: 85 });
+    // No room on the right: under it, kept 16 px inside the window.
+    const corner = { x: 1200, y: 300, width: 220, height: 60 };
+    expect(placeTip(corner, TIP, VIEW)).toEqual({ x: 1104, y: 374, side: 'bottom', arrow: 206 });
+    // As wide as the page, near its bottom: above it.
+    const wide = { x: 16, y: 700, width: 1408, height: 120 };
+    expect(placeTip(wide, TIP, VIEW)).toMatchObject({ y: 516, side: 'top' });
+    // Nothing lit: the middle of the window.
+    expect(placeTip(null, TIP, VIEW)).toEqual({ x: 560, y: 365, side: 'center', arrow: 0 });
+  });
+
+  it('never covers the place, what is lit next, nor leaves the window', () => {
+    const place = { x: 200, y: 100, width: 400, height: 60 };
+    const next = { x: 600, y: 0, width: 400, height: 400 };
+    const tip = placeTip(place, TIP, VIEW, { avoid: [next] });
+    expect(tip.side).toBe('bottom');
+    expect(intersects(boxOf(tip), next)).toBe(false);
+    expect(intersects(boxOf(tip), place)).toBe(false);
+    // In the side menu: always to the right of the menu.
+    expect(
+      placeTip({ x: 8, y: 200, width: 204, height: 40 }, TIP, VIEW, { menuEdge: 220 }),
+    ).toEqual({ x: 234, y: 135, side: 'right', arrow: 85 });
+    // Nowhere to go: still wholly in the window.
+    const all = placeTip({ x: 0, y: 0, width: 1440, height: 900 }, TIP, VIEW);
+    expect(contains({ x: 16, y: 16, width: 1408, height: 868 }, boxOf(all))).toBe(true);
   });
 });

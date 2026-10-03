@@ -6,13 +6,14 @@
  * their cents and the demo opened in English, whether the chart drew its data and ends on the
  * balance's amount (brief v4 §13), who comes first in « Needs attention », whether every block of
  * Integrations › Activity is past « Loading… » within 5 seconds (§9.6), whether the guide shows
- * its five cards and pictures, the tour lights up its five places and the welcome has its four
- * steps (§10), whether Members is a one-line-a-row table whose columns sort, whose chips stay on
- * top and whose rows open a 420 px drawer (§9.3), and what the browser complained about; keeps
- * screenshots of the Dashboard (desktop, the balance, phone, the chart's tooltip), of the
- * Activity tab, of the guide, of each step of the tour, of the welcome, and of Members and a
- * member's drawer (desktop and phone). Fails when any of these is wrong. Reads nothing private:
- * the demo is answered in the browser.
+ * its five cards and pictures, the tour and every « Show me » light their place wholly with the
+ * tooltip beside it, never over it, the tour ending where it began (fix prompt v4.1, block 1),
+ * and the welcome has its four steps (§10), whether Members is a one-line-a-row table whose
+ * columns sort, whose chips stay on top and whose rows open a 420 px drawer (§9.3), and what the
+ * browser complained about; keeps screenshots of the Dashboard (desktop, the balance, phone, the
+ * chart's tooltip), of the Activity tab, of the guide, of each step of the tour and each « Show
+ * me », of the welcome, and of Members and a member's drawer (desktop and phone). Fails when any
+ * of these is wrong. Reads nothing private: the demo is answered in the browser.
  *
  *   node look.mjs https://stayput.example.workers.dev <out dir>
  */
@@ -29,6 +30,82 @@ const browser = await chromium.launch(
 );
 const problems = [];
 const report = {};
+
+/** The tour's places, in its order, and each « Show me »'s, in the guide's (apps/web/src/guide.ts). */
+const TOUR_PLACES = [
+  'hero-amount',
+  'priority-action',
+  'risk-ring',
+  'rule-payment-retry',
+  'connect-discord',
+];
+const CARD_PLACES = [
+  'attention-row',
+  'rule-payment-retry',
+  'hero-amount',
+  'limits',
+  'connect-discord',
+];
+
+/**
+ * Once the light has landed on a place (its tooltip shown, the halo's glide over): whether the
+ * place is on the page, wholly inside the cut-out, and clear of the tooltip.
+ */
+async function lightOn(page, place, counter = null) {
+  await page.waitForFunction(
+    (counter) => {
+      const tip = document.querySelector('[data-spot="tip"][data-side]');
+      return (
+        tip !== null &&
+        getComputedStyle(tip).opacity === '1' &&
+        (counter === null || (tip.textContent ?? '').includes(counter))
+      );
+    },
+    counter,
+    { timeout: 15_000 },
+  );
+  await page.waitForTimeout(700);
+  return page.evaluate((name) => {
+    const boxOf = (element) => {
+      if (!element) return null;
+      const r = element.getBoundingClientRect();
+      return { x: r.left, y: r.top, width: r.width, height: r.height };
+    };
+    const target = boxOf(
+      [...document.querySelectorAll(`[data-tour="${name}"]`)].find((element) => {
+        const r = element.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      }),
+    );
+    const cut = boxOf(document.querySelector('[data-spot="cut"]'));
+    const tip = document.querySelector('[data-spot="tip"]');
+    const tipBox = boxOf(tip);
+    const inside =
+      target !== null &&
+      cut !== null &&
+      target.x >= cut.x - 0.5 &&
+      target.y >= cut.y - 0.5 &&
+      target.x + target.width <= cut.x + cut.width + 0.5 &&
+      target.y + target.height <= cut.y + cut.height + 0.5;
+    const covers =
+      target !== null &&
+      tipBox !== null &&
+      tipBox.x < target.x + target.width &&
+      target.x < tipBox.x + tipBox.width &&
+      tipBox.y < target.y + target.height &&
+      target.y < tipBox.y + tipBox.height;
+    return {
+      place: name,
+      found: target !== null,
+      inside,
+      clear: tipBox !== null && !covers,
+      side: tip?.getAttribute('data-side') ?? null,
+      title: tip?.querySelector('h2')?.textContent ?? null,
+    };
+  }, place);
+}
+
+const wellLit = (light) => light.found && light.inside && light.clear;
 
 async function open(viewport) {
   const context = await browser.newContext({ viewport, deviceScaleFactor: 2, locale: 'en-US' });
@@ -180,20 +257,37 @@ await guide.evaluate((panel) => panel.querySelector('.overflow-y-auto')?.scrollT
 await desktop.page.waitForTimeout(1_500);
 await desktop.page.screenshot({ path: `${out}/guide-1440-end.png` });
 
-// The tour: five places, each lit (the halo found its place) and said in the validated words.
+// The tour (fix prompt v4.1, block 1): five places, the last two on their own pages, each
+// wholly inside the cut-out with its tooltip beside it; Done brings back the dashboard.
 await guide.getByRole('button', { name: 'Replay the tour' }).click();
-const tour = desktop.page.getByRole('dialog', { name: 'Tour of StayPut' });
-await tour.waitFor();
 report.tour = [];
-for (let step = 1; step <= 5; step += 1) {
-  await desktop.page.waitForTimeout(1_000);
-  report.tour.push({
-    step,
-    title: await tour.getByRole('heading').textContent(),
-    lit: (await desktop.page.locator('[data-spot="halo"]').count()) === 1,
-  });
-  await desktop.page.screenshot({ path: `${out}/tour-${step}.png` });
-  await tour.getByRole('button', { name: step < 5 ? 'Next' : 'Done' }).click();
+for (const [index, place] of TOUR_PLACES.entries()) {
+  report.tour.push(await lightOn(desktop.page, place, `${index + 1} of 5`));
+  await desktop.page.screenshot({ path: `${out}/tour-${index + 1}.png` });
+  // Next, and Done on the last place.
+  await desktop.page.locator('[data-spot="tip"] [data-autofocus]').click();
+}
+await desktop.page.locator('[data-spot="tip"]').waitFor({ state: 'detached' });
+await desktop.page.waitForTimeout(800);
+report.tourEnd = await desktop.page.evaluate(() => ({
+  path: window.location.pathname,
+  scrollY: Math.round(window.scrollY),
+}));
+
+// Each « Show me »: its place on its page, in the same light, with what it is for.
+report.showMe = [];
+for (const [index, place] of CARD_PLACES.entries()) {
+  await desktop.page.getByRole('button', { name: 'Guide', exact: true }).click();
+  await desktop.page
+    .getByRole('dialog', { name: 'Guide' })
+    .getByRole('button', { name: 'Show me' })
+    .nth(index)
+    .click();
+  report.showMe.push(await lightOn(desktop.page, place));
+  await desktop.page.screenshot({ path: `${out}/showme-${index + 1}.png` });
+  // « Got it ».
+  await desktop.page.locator('[data-spot="tip"] [data-autofocus]').click();
+  await desktop.page.locator('[data-spot="tip"]').waitFor({ state: 'detached' });
 }
 
 // The welcome, four steps (`?welcome`: the demo never opens it by itself).
@@ -293,18 +387,18 @@ await desktop.context.close();
 
 const phone = await open({ width: 390, height: 844 });
 await phone.page.screenshot({ path: `${out}/dashboard-390-full.png`, fullPage: true });
-// On a phone, the tour's last place is « More » (Integrations is under it).
-await phone.page.getByRole('button', { name: 'Guide' }).click();
+// On a phone, the tour too: its first and last places.
+await phone.page.getByRole('button', { name: 'Guide', exact: true }).click();
 await phone.page.waitForTimeout(1_200);
 await phone.page.screenshot({ path: `${out}/guide-390.png` });
 await phone.page.getByRole('button', { name: 'Replay the tour' }).click();
-const phoneTour = phone.page.getByRole('dialog', { name: 'Tour of StayPut' });
-for (let step = 1; step <= 5; step += 1) {
-  await phone.page.waitForTimeout(900);
-  if (step === 1 || step === 5) {
-    await phone.page.screenshot({ path: `${out}/tour-390-${step}.png` });
+report.phoneTour = [];
+for (const [index, place] of TOUR_PLACES.entries()) {
+  report.phoneTour.push(await lightOn(phone.page, place, `${index + 1} of 5`));
+  if (index === 0 || index === TOUR_PLACES.length - 1) {
+    await phone.page.screenshot({ path: `${out}/tour-390-${index + 1}.png` });
   }
-  if (step < 5) await phoneTour.getByRole('button', { name: 'Next' }).click();
+  await phone.page.locator('[data-spot="tip"] [data-autofocus]').click();
 }
 await phone.page.goto(`${base}/demo/members`, { waitUntil: 'domcontentloaded' });
 const phoneMembers = phone.page.getByRole('table', { name: 'All members' });
@@ -341,7 +435,13 @@ const ok =
   report.guide.pictures === 5 &&
   report.guide.showMe === 5 &&
   report.tour.length === 5 &&
-  report.tour.every((step) => step.lit) &&
+  report.tour.every(wellLit) &&
+  report.tourEnd.path === '/demo' &&
+  report.tourEnd.scrollY === 0 &&
+  report.showMe.length === 5 &&
+  report.showMe.every(wellLit) &&
+  report.phoneTour.length === 5 &&
+  report.phoneTour.every((step) => step.found && step.inside) &&
   report.welcome.length === 4 &&
   report.members.columns.join(' | ') ===
     'Member | Risk | Status | MRR | Last activity | Next renewal | Do not contact' &&
@@ -365,7 +465,7 @@ writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing or does not end on the balance, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide, the tour or the welcome is not whole, or Members or its drawer is not as the brief says: see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing or does not end on the balance, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members or its drawer is not as the brief says: see the report above.',
   );
   process.exitCode = 1;
 }

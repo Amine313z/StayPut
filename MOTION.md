@@ -78,10 +78,14 @@ No bounce on data: a figure lands where it is, once.
   card's picture loops a few seconds (4 to 4.5 s), then pauses 1 s, transform and opacity only,
   and plays only while it is on screen: out of sight it waits on its first frame (it starts
   again without a jump), and with less motion asked it shows its telling frame, still.
-- **The tour and « Show me »**: the page dims to 70 % black around the lit place, which wears a
-  2 px turquoise halo; from one place to the next the halo and the card glide in 400 ms; the
-  first place fades in where it is. A scroll or a new window size moves them at once. A
-  shortcut's light (no dimming, nothing stopped) comes on, holds and fades in 2 s.
+- **The tour and « Show me »** (one `Spotlight`): the place is first brought to the middle of
+  the window (a smooth scroll) and allowed to land (its box still for 150 ms), then measured.
+  The page dims to 72 % black (`#050607`) around a real cut-out (8 px of room, 12 px corners)
+  wearing a 2 px turquoise-300 halo with a soft glow. From one place to the next the cut-out
+  and the halo glide (position and size, 400 ms, `cubic-bezier(0.22, 1, 0.36, 1)`); the
+  tooltip comes in with a fade and a 6 px slide toward its place, and shows only once placed
+  (never a jump). A scroll or a new window size moves them at once. A shortcut's light (no
+  dimming, nothing stopped) comes on, holds and fades in 2 s.
 - **The welcome**: the window springs in; its steps cross-fade with a 12 px slide; its four
   progress segments grow from the left (`scaleX`); the audit's figures count up from 0.
 - **Toasts**: slide in at the bottom right, stack, leave after 4 s.
@@ -103,7 +107,8 @@ are switched off with Tailwind's `motion-reduce:`.
 - Animate only `transform` and `opacity`. Never width, height, top or left on a list or a chart:
   use `scaleX`/`scaleY` from the baseline instead. Three exceptions, all outside any layout: the
   width of the single clip rectangle that draws a chart in (one SVG attribute), a ring's
-  `pathLength`, and the size of the tour's halo while it glides (one fixed element, 400 ms).
+  `pathLength`, and the size of the spotlight's cut-out and halo while they glide (one SVG
+  rectangle and one fixed element, 400 ms).
 - A figure's light is a blurred copy whose opacity moves, never an animated `filter` or
   `text-shadow`: the blur is drawn once.
 - Charts are drawn by StayPut itself in SVG (`ui/charts/`), a few kilobytes: no chart library
@@ -124,5 +129,9 @@ are switched off with Tailwind's `motion-reduce:`.
 The tests read what the screens say, not how they move: `apps/web/test/setup.ts` sets
 `MotionGlobalConfig.skipAnimations`, so every animation lands on its end at once. The live site
 is checked in a real browser by the « look » job of Inspect (`scripts/ops/look.mjs`): fonts
-loaded, chart drawn, the guide's pictures, the tour's five places lit, screenshots of the
-Dashboard, the guide, the tour and the welcome.
+loaded, chart drawn, the guide's pictures, the tour and each « Show me » lighting their place
+wholly with the tooltip beside it, screenshots of the Dashboard, the guide, each step of the
+tour, each « Show me » and the welcome. The spotlight's geometry has its own browser tests
+(`apps/web/e2e/spotlight.e2e.ts`, Playwright): the tour and every « Show me », in English and
+French, at 1280×720 and 1024×768, once the light has landed; in CI on the build, and on the live
+site in Inspect's `spotlight` job.

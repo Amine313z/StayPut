@@ -20,6 +20,8 @@ export function MemberListRow({
   paid,
   actions,
   delay = 0,
+  rowTour,
+  ringTour,
 }: {
   name: string;
   /** Why they need attention, in a few words. */
@@ -36,9 +38,15 @@ export function MemberListRow({
   actions: ReactNode;
   /** Seconds before the ring draws: the rows one after the other. */
   delay?: number;
+  /** Where the guide may light up the row, and its ring (`data-tour`, guide.ts). */
+  rowTour?: string;
+  ringTour?: string;
 }) {
   return (
-    <div className="group relative -mx-3 rounded-xl px-3 py-3 transition-transform duration-150 ease-brand hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0">
+    <div
+      data-tour={rowTour}
+      className="group relative -mx-3 rounded-xl px-3 py-3 transition-transform duration-150 ease-brand hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+    >
       <span
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 rounded-xl bg-surface-3/50 opacity-0 transition-opacity duration-150 group-hover:opacity-100"
@@ -55,7 +63,15 @@ export function MemberListRow({
               </p>
             ) : null}
           </div>
-          {risk ? <RiskRing score={risk.score} label={risk.label} size={36} delay={delay} /> : null}
+          {risk ? (
+            <RiskRing
+              score={risk.score}
+              label={risk.label}
+              size={36}
+              delay={delay}
+              tour={ringTour}
+            />
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 ps-12 @2xl/list:flex-nowrap @2xl/list:ps-0">
           <div className="text-[0.8125rem] @2xl/list:w-40">

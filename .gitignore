@@ -8,6 +8,9 @@ apps/web/public/fonts/
 .wrangler/
 coverage/
 *.tsbuildinfo
+# Playwright's reports (npm run e2e)
+test-results/
+playwright-report/
 
 # secrets: only the committed examples
 .env

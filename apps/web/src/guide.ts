@@ -1,10 +1,11 @@
 import type { MessageKey } from '@stayput/i18n';
 
 /**
- * The guide (brief v4 §10 and §11): what the tour, the guide's cards and its shortcuts point at.
- * Every place they light up marks itself with `data-tour="<name>"`; a spot lists the selectors
- * it may land on, the first one on screen wins (the menu's item on a computer, « More » on a
- * phone). Pure: the components (components/guide) draw it.
+ * The guide (brief v4 §10 and §11, fix prompt v4.1 block 1): what the tour, the guide's cards
+ * and its shortcuts light up, and where the light and its tooltip go. Every place marks the
+ * exact element with `data-tour="<name>"` (never a wrapper around more than it says); a spot
+ * lists the selectors it may land on, the first one on screen wins. Pure: the components
+ * (components/guide) draw it.
  */
 
 const at = (name: string) => `[data-tour="${name}"]`;
@@ -14,32 +15,47 @@ export type Targets = readonly string[];
 
 export interface TourStep {
   id: 'hero' | 'priority' | 'risk' | 'automations' | 'integrations';
+  /** The page it shows, after the dashboard's root (`''`: the dashboard). */
+  page: string;
   targets: Targets;
   /** What the place is called: the words the page itself uses for it. */
   title: MessageKey;
   body: MessageKey;
 }
 
-/** The tour, on the dashboard: hero amount → priority action → risk ring → Automations → Integrations. */
+/**
+ * The tour: the amount saved → the action of the day → the first member's risk ring, on the
+ * dashboard; then a rule of Automations and connecting Discord, on their own pages.
+ */
 export const TOUR: readonly TourStep[] = [
-  { id: 'hero', targets: [at('hero')], title: 'dash.saved', body: 'tour.hero' },
-  { id: 'priority', targets: [at('priority')], title: 'dash.priority', body: 'tour.priority' },
+  { id: 'hero', page: '', targets: [at('hero-amount')], title: 'dash.saved', body: 'tour.hero' },
+  {
+    id: 'priority',
+    page: '',
+    targets: [at('priority-action')],
+    title: 'dash.priority',
+    body: 'tour.priority',
+  },
   {
     id: 'risk',
+    page: '',
     // The first member's ring; while « Needs attention » has nobody, the list itself.
-    targets: [`${at('attention')} [data-risk-ring]`, at('attention')],
+    targets: [at('risk-ring'), at('attention')],
     title: 'tab.riskScore',
     body: 'tour.risk',
   },
   {
     id: 'automations',
-    targets: [at('nav-actions')],
+    page: 'actions',
+    targets: [at('rule-payment-retry')],
     title: 'nav.actions',
     body: 'tour.automations',
   },
   {
     id: 'integrations',
-    targets: [at('nav-sources'), at('nav-more')],
+    page: 'sources/discord',
+    // The button that connects Discord; without the bot configured, the platforms' tabs.
+    targets: [at('connect-discord'), at('tabs')],
     title: 'nav.sources',
     body: 'tour.integrations',
   },
@@ -52,6 +68,8 @@ export interface GuideCard {
   /** « Show me »: the page, after the dashboard's root (`''`: the dashboard), and its place. */
   page: string;
   targets: Targets;
+  /** The tour step that shows the same place: its words go in the light, else the caption. */
+  step?: TourStep['id'];
 }
 
 /** The guide's five cards, in the validated words (§11). */
@@ -61,21 +79,23 @@ export const GUIDE_CARDS: readonly GuideCard[] = [
     title: 'guide.who.title',
     body: 'guide.who.body',
     page: '',
-    targets: [at('attention')],
+    targets: [at('attention-row'), at('attention')],
   },
   {
     id: 'keep',
     title: 'guide.keep.title',
     body: 'guide.keep.body',
-    page: 'settings/actions',
-    targets: [at('mode')],
+    page: 'actions',
+    targets: [at('rule-payment-retry')],
+    step: 'automations',
   },
   {
     id: 'money',
     title: 'guide.money.title',
     body: 'guide.money.body',
     page: '',
-    targets: [at('hero')],
+    targets: [at('hero-amount')],
+    step: 'hero',
   },
   {
     id: 'control',
@@ -88,9 +108,9 @@ export const GUIDE_CARDS: readonly GuideCard[] = [
     id: 'connect',
     title: 'guide.connect.title',
     body: 'guide.connect.body',
-    page: 'sources',
-    // The invitation to connect while nothing is; once something is, the platforms' tabs.
-    targets: [at('connect'), at('tabs')],
+    page: 'sources/discord',
+    targets: [at('connect-discord'), at('tabs')],
+    step: 'integrations',
   },
 ];
 
@@ -132,62 +152,131 @@ export interface Size {
   height: number;
 }
 
-/** Around the lit place: room for the 2 px halo without touching what it frames. */
-export const HALO_PAD = 8;
+/** Around the lit element: the cut-out's room (8 px), its corners rounded 12 px. */
+export const CUT_PAD = 8;
+export const CUT_RADIUS = 12;
+/** From the cut-out to the tooltip: the arrow (6 px tall) and a little air. */
+export const TIP_GAP = 14;
+/** The tooltip keeps this far from the window's edges. */
+export const TIP_MARGIN = 16;
+/** The arrow never sits in the tooltip's rounded corners. */
+const ARROW_INSET = 18;
 
-/** The halo around an element's box, kept inside the window. */
-export function haloBox(element: Box, view: Size, pad = HALO_PAD): Box {
-  const x = Math.max(2, element.x - pad);
-  const y = Math.max(2, element.y - pad);
-  const right = Math.min(view.width - 2, element.x + element.width + pad);
-  const bottom = Math.min(view.height - 2, element.y + element.height + pad);
-  return { x, y, width: Math.max(0, right - x), height: Math.max(0, bottom - y) };
-}
-
-/** Whether an element is wholly on screen, under the top bar and above a phone's bottom bar. */
-export function inView(element: Box, view: Size, top = 64, bottom = 0): boolean {
-  return element.y >= top && element.y + element.height <= view.height - bottom;
-}
-
-export type Side = 'below' | 'above' | 'right' | 'left' | 'center';
-
-/**
- * Where the tour's card goes beside the lit place: under it when it fits, else above, else to
- * its right (a menu item), else to its left; centred when nothing fits (or nothing is lit). Kept
- * `margin` inside the window, `gap` from the halo.
- */
-export function placeCard(
-  halo: Box | null,
-  card: Size,
-  view: Size,
-  gap = 12,
-  margin = 16,
-): { x: number; y: number; side: Side } {
-  const clampX = (x: number) => Math.max(margin, Math.min(x, view.width - margin - card.width));
-  const clampY = (y: number) => Math.max(margin, Math.min(y, view.height - margin - card.height));
-  if (halo) {
-    const centredX = clampX(halo.x + halo.width / 2 - card.width / 2);
-    if (halo.y + halo.height + gap + card.height <= view.height - margin) {
-      return { x: centredX, y: halo.y + halo.height + gap, side: 'below' };
-    }
-    if (halo.y - gap - card.height >= margin) {
-      return { x: centredX, y: halo.y - gap - card.height, side: 'above' };
-    }
-    if (halo.x + halo.width + gap + card.width <= view.width - margin) {
-      return { x: halo.x + halo.width + gap, y: clampY(halo.y), side: 'right' };
-    }
-    if (halo.x - gap - card.width >= margin) {
-      return { x: halo.x - gap - card.width, y: clampY(halo.y), side: 'left' };
-    }
-  }
+/** The cut-out around an element's box: the element whole, with room around it. */
+export function cutOut(element: Box, pad = CUT_PAD): Box {
   return {
-    x: clampX((view.width - card.width) / 2),
-    y: clampY((view.height - card.height) / 2),
-    side: 'center',
+    x: element.x - pad,
+    y: element.y - pad,
+    width: element.width + pad * 2,
+    height: element.height + pad * 2,
   };
 }
 
-/** The first of the selectors that names something on screen (a hidden menu has no size). */
+/** Whether `inner` lies wholly within `outer` (half a pixel of rounding allowed). */
+export function contains(outer: Box, inner: Box): boolean {
+  return (
+    inner.x >= outer.x - 0.5 &&
+    inner.y >= outer.y - 0.5 &&
+    inner.x + inner.width <= outer.x + outer.width + 0.5 &&
+    inner.y + inner.height <= outer.y + outer.height + 0.5
+  );
+}
+
+/** Whether two boxes share any area. */
+export function intersects(a: Box, b: Box): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+export type Side = 'right' | 'bottom' | 'left' | 'top';
+
+/** The order the tooltip's side is chosen in (right > bottom > left > top). */
+export const SIDES: readonly Side[] = ['right', 'bottom', 'left', 'top'];
+
+export interface TipPlace {
+  x: number;
+  y: number;
+  /** The side of the cut-out it stands on; `center` when nothing is lit. */
+  side: Side | 'center';
+  /** Where the arrow meets the tooltip's edge: from its top (left, right) or left (top, bottom). */
+  arrow: number;
+}
+
+/** Where the tooltip would stand on one side of the cut-out, kept inside the window. */
+function onSide(side: Side, cut: Box, tip: Size, view: Size): TipPlace {
+  const clampX = (x: number) =>
+    Math.max(TIP_MARGIN, Math.min(x, view.width - TIP_MARGIN - tip.width));
+  const clampY = (y: number) =>
+    Math.max(TIP_MARGIN, Math.min(y, view.height - TIP_MARGIN - tip.height));
+  const arrowAlong = (centre: number, start: number, length: number) =>
+    Math.max(ARROW_INSET, Math.min(centre - start, length - ARROW_INSET));
+  if (side === 'right' || side === 'left') {
+    const x = side === 'right' ? cut.x + cut.width + TIP_GAP : cut.x - TIP_GAP - tip.width;
+    const y = clampY(cut.y + cut.height / 2 - tip.height / 2);
+    return { x, y, side, arrow: arrowAlong(cut.y + cut.height / 2, y, tip.height) };
+  }
+  const y = side === 'bottom' ? cut.y + cut.height + TIP_GAP : cut.y - TIP_GAP - tip.height;
+  const x = clampX(cut.x + cut.width / 2 - tip.width / 2);
+  return { x, y, side, arrow: arrowAlong(cut.x + cut.width / 2, x, tip.width) };
+}
+
+/**
+ * Where the tooltip goes (fix prompt v4.1, block 1): on the first side, in the order right,
+ * bottom, left, top, where it stands wholly in the window without touching the cut-out or what
+ * is lit next (`avoid`). A place in the side menu (`menuEdge`: the menu's right edge) always has
+ * it to the right of the menu. When no side fits, the side with the most room, kept in the
+ * window; with nothing lit, the middle of the window.
+ */
+export function placeTip(
+  cut: Box | null,
+  tip: Size,
+  view: Size,
+  { avoid = [], menuEdge = null }: { avoid?: readonly Box[]; menuEdge?: number | null } = {},
+): TipPlace {
+  if (!cut) {
+    return {
+      x: Math.max(TIP_MARGIN, (view.width - tip.width) / 2),
+      y: Math.max(TIP_MARGIN, (view.height - tip.height) / 2),
+      side: 'center',
+      arrow: 0,
+    };
+  }
+  if (menuEdge !== null) {
+    // Its arrow still points at the item; the tooltip clears the whole menu.
+    const beside = onSide('right', cut, tip, view);
+    return { ...beside, x: Math.max(beside.x, menuEdge + TIP_GAP) };
+  }
+  const fits = (place: TipPlace) => {
+    const box = { x: place.x, y: place.y, width: tip.width, height: tip.height };
+    return (
+      box.x >= TIP_MARGIN - 0.5 &&
+      box.y >= TIP_MARGIN - 0.5 &&
+      box.x + box.width <= view.width - TIP_MARGIN + 0.5 &&
+      box.y + box.height <= view.height - TIP_MARGIN + 0.5 &&
+      !intersects(box, cut) &&
+      avoid.every((other) => !intersects(box, other))
+    );
+  };
+  for (const side of SIDES) {
+    const place = onSide(side, cut, tip, view);
+    if (fits(place)) return place;
+  }
+  // Nothing fits: the side with the most room, the tooltip kept in the window.
+  const room: Record<Side, number> = {
+    right: view.width - (cut.x + cut.width),
+    bottom: view.height - (cut.y + cut.height),
+    left: cut.x,
+    top: cut.y,
+  };
+  const side = [...SIDES].sort((a, b) => room[b] - room[a])[0]!;
+  const place = onSide(side, cut, tip, view);
+  return {
+    ...place,
+    x: Math.max(TIP_MARGIN, Math.min(place.x, view.width - TIP_MARGIN - tip.width)),
+    y: Math.max(TIP_MARGIN, Math.min(place.y, view.height - TIP_MARGIN - tip.height)),
+  };
+}
+
+/** The first of the selectors that names something on screen (a hidden element has no size). */
 export function findTarget(targets: Targets, root: ParentNode = document): HTMLElement | null {
   for (const selector of targets) {
     for (const element of root.querySelectorAll<HTMLElement>(selector)) {

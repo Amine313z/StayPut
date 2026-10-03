@@ -80,7 +80,13 @@ Guidance for Claude Code in this repository.
   `/getting-started/welcomed`; `/demo?welcome` shows the welcome), then Members (§9.3, done: a
   compact sortable table and a drawer per member, `src/members.ts` for the states and orders,
   `components/MemberTable.tsx` / `MemberDrawer.tsx`, read-only route `GET /members/:memberId`,
-  no migration; the address keeps `filter`, `q`, `sort`, `dir` and the open `member`). Before
+  no migration; the address keeps `filter`, `q`, `sort`, `dir` and the open `member`). Then the
+  **fix prompt v4.1** (2026-10-03): seven blocks, one stop with a screenshot after each. Block 1
+  (the spotlight) done: one `Spotlight` for the tour and « Show me », places marked
+  `data-tour` on the exact element, a real cut-out, the tooltip on the side with room, steps 4–5
+  on Automations › Rules (new first tab, the queue moved to `/actions/queue`) and Integrations ›
+  Discord, the tour ending where it began; checked by `apps/web/e2e/spotlight.e2e.ts` (EN/FR,
+  1280×720 and 1024×768) in CI and on the live site (Inspect, job `spotlight`). Before
   it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard
@@ -107,6 +113,9 @@ npm test             # Vitest (packages/*, apps/worker, apps/web); the database 
 npm run build        # apps/web/dist, the static files the Worker serves
 npm run bundle -w @stayput/worker   # the Worker exactly as `wrangler deploy` uploads it
 npm run db:bundle    # after adding a migration: supabase/install.sql + schema-version.ts
+npm run e2e          # after `npm run build`: Playwright on the build (vite preview), demo mode;
+                     # STAYPUT_URL=<site> runs it on a deployed StayPut; CHROME_PATH names the browser
+                     # (in a cloud session: CHROME_PATH=/opt/pw-browsers/chromium)
 ```
 
 ## Architecture and rules

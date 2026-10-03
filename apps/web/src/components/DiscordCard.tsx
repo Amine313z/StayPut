@@ -13,7 +13,7 @@ import { deleteJson, putJson, useApi } from '../api';
 import { useI18n } from '../i18n';
 import { Badge, Notice } from '../ui/Badge';
 import { DiscordIcon } from '../ui/BrandIcons';
-import { Button } from '../ui/Button';
+import { Button, buttonClass } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ExternalButton } from '../ui/ExternalLink';
 import { ConfirmButton } from './ConfirmButton';
@@ -28,23 +28,40 @@ export function DiscordCard({
   status,
   whopAppId,
   api,
+  demo = false,
   onChange,
 }: {
   status: DiscordStatus;
   whopAppId: string | null;
   api: string;
+  /** The demo connects nothing: the button shows, said disabled, and opens no page. */
+  demo?: boolean;
   onChange: () => void;
 }) {
   const { t } = useI18n();
-  const install = status.install ? (
+  const variant = status.servers.length > 0 ? 'secondary' : 'primary';
+  const label = t(status.servers.length > 0 ? 'discord.addAnother' : 'discord.add');
+  const install = demo ? (
+    <button
+      type="button"
+      aria-disabled="true"
+      title={t('demo.disabled')}
+      data-tour="connect-discord"
+      className={buttonClass(variant, 'sm', 'cursor-not-allowed opacity-60')}
+    >
+      <DiscordIcon className="size-4" />
+      {label}
+    </button>
+  ) : status.install ? (
     <ExternalButton
       href={status.install.url}
       whopAppId={whopAppId}
-      variant={status.servers.length > 0 ? 'secondary' : 'primary'}
+      variant={variant}
       size="sm"
       icon={<DiscordIcon className="size-4" />}
+      tour="connect-discord"
     >
-      {t(status.servers.length > 0 ? 'discord.addAnother' : 'discord.add')}
+      {label}
     </ExternalButton>
   ) : null;
   return (

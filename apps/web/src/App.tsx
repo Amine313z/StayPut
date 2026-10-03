@@ -35,6 +35,7 @@ function creatorSections(): RouteObject[] {
     ]),
     section('actions', 'actions', [
       { index: true, element: <ActionsHome /> },
+      { path: 'queue', element: <ActionsTab view="queue" /> },
       { path: 'scheduled', element: <ActionsTab view="scheduled" /> },
       { path: 'history', element: <ActionsTab view="history" /> },
       { path: 'alumni', element: <AlumniTab /> },

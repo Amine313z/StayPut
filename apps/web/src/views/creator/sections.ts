@@ -66,7 +66,8 @@ export const SECTIONS: readonly Section[] = [
     description: 'nav.actions.description',
     Icon: Zap,
     tabs: [
-      { path: '', label: 'actions.view.queue' },
+      { path: '', label: 'rules.tab' },
+      { path: 'queue', label: 'actions.view.queue' },
       { path: 'scheduled', label: 'actions.view.scheduled' },
       { path: 'history', label: 'actions.view.history' },
       { path: 'alumni', label: 'alumni.title' },
