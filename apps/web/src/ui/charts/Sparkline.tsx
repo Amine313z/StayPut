@@ -120,7 +120,7 @@ export function Sparkline({
             }}
           >
             <span className="text-muted">{point.label}</span>{' '}
-            <span className="tabular font-semibold">{format(point.value)}</span>
+            <span className="num font-semibold">{format(point.value)}</span>
           </motion.figcaption>
         ) : null}
       </AnimatePresence>

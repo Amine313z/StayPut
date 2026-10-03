@@ -38,7 +38,7 @@ import { routes } from '../src/App';
 import { resetDemo } from '../src/demo/api';
 import { readScreenshot } from '../src/ocr';
 import { LIVE_REFRESH_MS } from '../src/components/PlatformActivityCard';
-import { I18nProvider } from '../src/i18n';
+import { I18nProvider, detectLocale } from '../src/i18n';
 import { ErrorPanel } from '../src/components/Status';
 import { ToastProvider } from '../src/ui/Toast';
 
@@ -446,7 +446,7 @@ describe('creator view', () => {
         within(hero)
           .getAllByRole('definition')
           .map((dd) => dd.textContent),
-      ).toEqual(['$98', '$98', '2']),
+      ).toEqual(['$98.00', '$98.00', '2']),
     );
     // What each counts is the label's tooltip, on the label's own words: never an « i ».
     expect(
@@ -455,7 +455,7 @@ describe('creator view', () => {
         .map((tip) => tip.textContent),
     ).toEqual([
       'Payments recovered, cancellations withdrawn and pauses ended this month. Each counts once.',
-      'What the members leaving or at high risk pay each month, out of $245.',
+      'What the members leaving or at high risk pay each month, out of $245.00.',
       '1 leaving, 1 at high risk. Scored every hour, from 0 to 100.',
       'Saved: added up over the period. At risk: what members at risk paid a month, day by day.',
     ]);
@@ -464,15 +464,15 @@ describe('creator view', () => {
       /^Payments recovered/,
     );
     expect(within(hero).queryByRole('button', { name: 'More information' })).toBeNull();
-    // The money saved: the screen's one giant number, in the signature gradient, on its light;
-    // the money at risk in white, never red.
+    // The money saved: the screen's one large amount, solid white as Whop writes a balance (the
+    // signature gradient is the primary button's, never an amount's), on its light; the money at
+    // risk in white too, never red.
     const [saved, atRisk] = within(hero).getAllByRole('definition');
-    expect(saved!.querySelector('.metric-lead.text-hero')).toBeTruthy();
+    expect(saved!.querySelector('.metric-lead.text-fg')).toBeTruthy();
     expect(hero.querySelector('.hero-glow')).toBeTruthy();
     expect(atRisk!.querySelector('.metric-hero.text-fg')).toBeTruthy();
-    expect(atRisk!.querySelector('.text-hero')).toBeNull();
     expect(atRisk!.innerHTML).not.toMatch(/danger|urgent/);
-    expect(document.querySelectorAll('.text-hero')).toHaveLength(1);
+    expect(hero.innerHTML).not.toMatch(/text-hero|gradient/);
     // The chart is inside the same block.
     expect(within(hero).getByRole('table', { name: 'Revenue saved vs at risk' })).toBeTruthy();
     // In Analytics: the retention, what the members themselves did.
@@ -504,7 +504,7 @@ describe('creator view', () => {
     renderAt('/dashboard/biz_A1');
     const card = (
       await screen.findByRole('heading', {
-        name: 'Message 1 high-risk member nobody reached: $49 at risk',
+        name: 'Message 1 high-risk member nobody reached: $49.00 at risk',
       })
     ).closest('section')!;
     // How it is chosen is the label's tooltip: what those members pay, never a promise.
@@ -541,7 +541,7 @@ describe('creator view', () => {
     expect(rows[1]!.textContent).toContain('Bruno Petit');
     expect(rows[1]!.textContent).toContain('No activity for 21 days');
     expect(rows[1]!.textContent).toContain('Renews on Oct 15');
-    expect(rows[1]!.textContent).toContain('$49/mo');
+    expect(rows[1]!.textContent).toContain('$49.00/mo');
     expect(rows[1]!.textContent).not.toContain('Urgent');
     expect(within(rows[1]!).getByRole('img', { name: 'High risk · 78' })).toBeTruthy();
     expect(attention.textContent).not.toContain('Denis Moreau');
@@ -729,28 +729,28 @@ describe('creator view', () => {
     // Said in a sentence, and as a table, for screen readers; the saved money added up.
     const summary = () => chart.querySelector('figcaption')?.textContent;
     expect(summary()).toBe(
-      'Over the last 30 days, StayPut saved $98; the revenue at risk went from $147 to $98 a month.',
+      'Over the last 30 days, StayPut saved $98.00; the revenue at risk went from $147.00 to $98.00 a month.',
     );
     const rows = () => within(chart).getAllByRole('row');
     expect(rows()).toHaveLength(31);
-    expect(rows()[30]!.textContent).toBe('Oct 1, 2026$98$98');
+    expect(rows()[30]!.textContent).toBe('Oct 1, 2026$98.00$98.00');
     // Before the first scores, no risk figure rather than a zero.
     fireEvent.click(within(periods).getByRole('radio', { name: '90d' }));
     expect(rows()).toHaveLength(91);
-    expect(rows()[1]!.textContent).toBe('Jul 4, 2026$0—');
+    expect(rows()[1]!.textContent).toBe('Jul 4, 2026$0.00—');
     fireEvent.click(within(periods).getByRole('radio', { name: '7d' }));
     expect(summary()).toBe(
-      'Over the last 7 days, StayPut saved $98; the revenue at risk went from $147 to $98 a month.',
+      'Over the last 7 days, StayPut saved $98.00; the revenue at risk went from $147.00 to $98.00 a month.',
     );
     // The keyboard walks the days, and each day's figures are said.
     const plot = within(chart).getByRole('group', { name: 'Revenue saved vs at risk' });
     const said = () => chart.querySelector('[aria-live]')?.textContent;
     fireEvent.focus(plot);
-    expect(said()).toBe('Oct 1, 2026: Revenue saved $98, Revenue at risk $98');
+    expect(said()).toBe('Oct 1, 2026: Revenue saved $98.00, Revenue at risk $98.00');
     fireEvent.keyDown(plot, { key: 'ArrowLeft' });
-    expect(said()).toBe('Sep 30, 2026: Revenue saved $49, Revenue at risk $147');
+    expect(said()).toBe('Sep 30, 2026: Revenue saved $49.00, Revenue at risk $147.00');
     fireEvent.keyDown(plot, { key: 'Home' });
-    expect(said()).toBe('Sep 25, 2026: Revenue saved $0, Revenue at risk $147');
+    expect(said()).toBe('Sep 25, 2026: Revenue saved $0.00, Revenue at risk $147.00');
     fireEvent.keyDown(plot, { key: 'Escape' });
     expect(said()).toBe('');
   });
@@ -1082,7 +1082,7 @@ describe('creator view', () => {
       ).toEqual(['Tous les membres5', 'Ne jamais contacter0']),
     );
     const alice = (await screen.findByText('Alice Martin')).closest('li')!;
-    expect(alice.textContent).toContain('Active · 49,00 $US par mois');
+    expect(alice.textContent).toContain('Active · 49,00 $ par mois');
     expect(alice.textContent).toContain(
       '30 derniers jours : 6 messages, 1 réaction, 0 post, 0 leçon',
     );
@@ -3653,7 +3653,8 @@ describe('the creator’s frame', () => {
     fireEvent.click(within(languages).getByRole('radio', { name: 'Français' }));
     // At once, without reloading: the words, and the menu around them.
     expect(await screen.findByRole('heading', { name: 'Réglages', level: 1 })).toBeTruthy();
-    expect(window.localStorage.getItem('stayput.locale')).toBe('fr');
+    // Kept for this community's app alone (brief v4 §3), never for the demo.
+    expect(window.localStorage.getItem('stayput.locale.biz_A1')).toBe('fr');
     expect(
       within(screen.getByRole('radiogroup', { name: 'Langue' }))
         .getByRole('radio', { name: 'Français' })
@@ -3662,6 +3663,35 @@ describe('the creator’s frame', () => {
     // The arrows move the choice too, as in any radio group.
     fireEvent.keyDown(screen.getByRole('radio', { name: 'Français' }), { key: 'ArrowLeft' });
     expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeTruthy();
+  });
+
+  it('opens the demo in English whatever was chosen elsewhere, and keeps no choice made there', async () => {
+    // A creator chose French in their own app (brief v4 §3): that choice is theirs alone.
+    window.localStorage.setItem('stayput.locale.biz_A1', 'fr');
+    expect(detectLocale('/dashboard/biz_A1/settings')).toBe('fr');
+    expect(detectLocale('/demo')).toBe('en');
+    expect(detectLocale('/')).toBe('en');
+    vi.stubGlobal('fetch', vi.fn());
+    // Even a page still in French turns English on entering the demo.
+    renderAt('/demo/settings', 'fr');
+    expect(
+      await screen.findByRole('heading', { name: 'Settings', level: 1 }, { timeout: 3_000 }),
+    ).toBeTruthy();
+    // French is there, second, and works for the visit…
+    const languages = await screen.findByRole('radiogroup', { name: 'Language' });
+    expect(
+      within(languages)
+        .getAllByRole('radio')
+        .map((radio) => radio.textContent),
+    ).toEqual(['English', 'Français']);
+    fireEvent.click(within(languages).getByRole('radio', { name: 'Français' }));
+    expect(await screen.findByRole('heading', { name: 'Réglages', level: 1 })).toBeTruthy();
+    // …but is not kept: the demo opens in English again.
+    const kept = Array.from({ length: window.localStorage.length }, (_, i) =>
+      window.localStorage.key(i),
+    ).filter((key) => key?.startsWith('stayput.locale'));
+    expect(kept).toEqual(['stayput.locale.biz_A1']);
+    expect(detectLocale('/demo')).toBe('en');
   });
 
   it('has no theme to choose in Settings › General, and gives the company ID to copy', async () => {
@@ -3722,7 +3752,7 @@ describe('the demo (/demo)', () => {
       'section',
     )!;
     await vi.waitFor(() =>
-      expect(within(hero).getAllByRole('definition')[1]!.textContent).toBe('$731'),
+      expect(within(hero).getAllByRole('definition')[1]!.textContent).toBe('$731.17'),
     );
     expect(within(hero).getAllByRole('definition')[2]!.textContent).toBe('9');
     expect(await screen.findByText('Hugo Bernard')).toBeTruthy();
@@ -3740,26 +3770,26 @@ describe('the demo (/demo)', () => {
     };
     // Manual mode: what waits for approval first, as on Automations.
     await next(
-      'Approve the 6 actions StayPut prepared: $384 at risk',
+      'Approve the 6 actions StayPut prepared: $384.17 at risk',
       'Approve all',
       '6 actions approved',
     );
     // Then the failed payments, the members leaving, the member nobody reached.
-    await next('Retry 3 failed payments: $347 at risk', 'Retry now', '3 payments retried now');
+    await next('Retry 3 failed payments: $347.00 at risk', 'Retry now', '3 payments retried now');
     await next(
-      'Offer a pause to 3 members leaving: $237 at risk',
+      'Offer a pause to 3 members leaving: $237.17 at risk',
       'Offer a pause',
       'A pause offered to 3 members',
     );
     await next(
-      'Message 1 high-risk member nobody reached: $49 at risk',
+      'Message 1 high-risk member nobody reached: $49.00 at risk',
       'Send the message',
       '1 message queued',
     );
     // Three payments still unpaid: never « nothing urgent ».
     await screen.findByRole(
       'heading',
-      { name: '3 members still have a failed payment: $347 at risk' },
+      { name: '3 members still have a failed payment: $347.00 at risk' },
       { timeout: 3_000 },
     );
     expect(screen.getByRole('link', { name: 'See who' }).getAttribute('href')).toBe(

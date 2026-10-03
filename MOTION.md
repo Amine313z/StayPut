@@ -4,37 +4,42 @@ Motion in StayPut explains what changed: a number that moved, a member who needs
 page that opened. It never decorates for its own sake and never slows anyone down. Every screen
 uses the same few gestures, from `apps/web/src/motion.ts` (Motion, `motion/react`) and the
 `--ease-brand` / `--dur-*` tokens of `apps/web/src/styles.css`. The rules are the brief's
-(v3, §8).
+(v4, §14).
 
 ## Tokens
 
 | Token      | Value                            | Used for                                           |
 | ---------- | -------------------------------- | -------------------------------------------------- |
 | Easing     | `cubic-bezier(0.22, 1, 0.36, 1)` | everything (`EASE`, `--ease-brand`)                |
-| `micro`    | 150 ms                           | press, hover, focus, an item leaving a list        |
-| `standard` | 250 ms                           | a section, a row, a value, a toggle                |
-| `page`     | 400 ms                           | a page coming in                                   |
-| `count`    | 800 ms                           | a number counting to its value, a ring filling     |
+| `micro`    | 120 ms                           | press, focus, an item leaving a list               |
+| `hover`    | 200 ms                           | a hover                                            |
+| `standard` | 300 ms                           | a section, a row, a toggle                         |
+| `page`     | 450 ms                           | a page coming in                                   |
+| `count`    | 900 ms                           | a number counting up from 0 the first time         |
+| `change`   | 600 ms                           | a number moving from its old value to a new one    |
+| `ring`     | 700 ms                           | a risk ring filling to its score                   |
 | `draw`     | 1.2 s                            | a chart drawing its lines, a new row's pulse       |
 | `tooltip`  | 120 ms                           | a tooltip fading in                                |
+| `SPRING`   | stiffness 380, damping 32        | drawers and toggles only                           |
 | Stagger    | 60 ms                            | sections (and rows) of a page coming in one by one |
 | Success    | 1.2 s                            | a button's check mark after it succeeded           |
 | Toast      | 4 s                              | a toast before it leaves                           |
 
-No springs with overshoot, no bounce on data: a figure lands where it is, once.
+No bounce on data: a figure lands where it is, once.
 
 ## Gestures
 
 - **Page**: fades in while rising 8 px (`pageVariants`). The side menu and the top bar never
   move.
 - **Sections**: come in one after the other, 60 ms apart (`<Stagger>` + `<StaggerItem>`).
-- **Numbers**: count up from the previous value in 800 ms (`useCountUp`). Then a soft turquoise
-  light pulses behind the figure, on load and each time it gets better: the figure again, light
-  turquoise and blurred (`.number-glow`, drawn by CSS from `data-glow`, so the page's text holds
-  the figure once), whose opacity alone moves. When it gets worse the figure dims a moment
-  instead, never red. Which way is better belongs to the figure (revenue at risk going down is
-  good).
-- **Risk rings**: the turquoise stroke draws from 0 to the score in 800 ms, each row's ring a
+- **Numbers**: count up from 0 the first time in 900 ms, then move from the old value to each
+  new one in 600 ms (`useCountUp`), cents included, tabular so the width never jumps. Then a
+  soft turquoise light pulses behind the figure, on load and each time it gets better: the
+  figure again, light turquoise and blurred (`.number-glow`, drawn by CSS from `data-glow`, so
+  the page's text holds the figure once), whose opacity alone moves. When it gets worse the
+  figure dims a moment instead, never red. Which way is better belongs to the figure (revenue at
+  risk going down is good).
+- **Risk rings**: the turquoise stroke draws from 0 to the score in 700 ms, each row's ring a
   little after the one above it.
 - **Charts**: the lines draw in from the left in 1.2 s (one clip reveals the lines and their
   area together) while the gradient area fades in. A new period (7, 30, 90 days) draws in again

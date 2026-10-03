@@ -68,8 +68,10 @@ describe('createTranslator', () => {
     const fr = createTranslator('fr');
     expect(fr.currency(1234.5, 'EUR')).toMatch(/^1\s234,50\s€$/);
     expect(createTranslator('en').currency(1234.5, 'USD')).toBe('$1,234.50');
-    expect(createTranslator('en').currency(1225, 'USD', { whole: true })).toBe('$1,225');
-    expect(fr.currency(1225.4, 'EUR', { whole: true })).toMatch(/^1\s225\s€$/);
+    // Whop's way (brief v4 §7): the symbol and the cents, always; never « $US », never « $247 ».
+    expect(createTranslator('en').currency(247, 'USD')).toBe('$247.00');
+    expect(fr.currency(247, 'USD')).toMatch(/^247,00\s\$$/);
+    expect(fr.currency(1284.5, 'USD')).toMatch(/^1\s284,50\s\$$/);
     expect(fr.number(0.5)).toBe('0,5');
     expect(createTranslator('en').date(new Date('2026-09-30T12:00:00Z'))).toBe('Sep 30, 2026');
     // A chart's axis: short.

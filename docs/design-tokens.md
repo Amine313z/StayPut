@@ -3,7 +3,7 @@
 The tokens live in one place, `apps/web/src/styles.css` (`:root`, mapped to Tailwind by
 `@theme inline`). Components never write a color, a font or a duration by hand: they use the
 Tailwind names below (`bg-surface`, `text-muted`, `ease-brand`…). Motion has its own page:
-[`MOTION.md`](../MOTION.md). The values are the brief's (v3: black · turquoise · white).
+[`MOTION.md`](../MOTION.md). The values are the brief's (v4: black · turquoise · white).
 
 **Dark is the brand and the only theme.** There is no light theme and no theme setting.
 
@@ -21,15 +21,15 @@ color that is not here does not exist. Anything else is one of them, at most wit
 | `turq-100`                | `#9FF5EA`               | highlights, the end of the signature gradient     |
 | `turq-300` (`accent`)     | `#5EEAD4`               | active states, the chart line, rings, focus rings |
 | `turq-500` (`accent-2`)   | `#2BC4B4`               | pressed states, the chart gradient's base         |
-| `turq-glow` (`glow`)      | `rgba(94,234,212,0.18)` | the radial light behind the hero number           |
-| `white-100` (`fg`)        | `#FFFFFF`               | hero numbers, names, amounts, titles              |
+| `turq-glow` (`glow`)      | `rgba(94,234,212,0.18)` | the radial light behind the hero block            |
+| `white-100` (`fg`)        | `#FFFFFF`               | amounts, names, titles                            |
 | `white-300` (`muted`)     | `#D9DEE3`               | UI text, the body's default                       |
 | `white-500` (`subtle`)    | `#8A94A0`               | muted text, labels, placeholders                  |
 | `urgent` (`danger`)       | `#FF5C5C`               | urgent only, as a small dot or badge at 70 %      |
 
-- **The signature gradient**, white → light turquoise (`#FFFFFF → #9FF5EA`, `.text-hero`,
-  `.button-primary`), is the single accent: the hero number, the primary button (black text) and
-  the logo's ribbon. Nowhere else.
+- **The signature gradient**, white → light turquoise (`#FFFFFF → #9FF5EA`, `.button-primary`),
+  is the single accent: the primary button (black text) and the logo's ribbon. Never on an
+  amount (brief v4 §5): the amounts are solid white, as Whop writes a balance.
 - **Turquoise is light and airy**: at full strength only on thin things (lines, rings, 1 px
   borders, text). Never a large turquoise fill: a tile behind an icon is `surface-2`.
 - **The ghost outline** (`line-strong`) is turquoise at 25 %.
@@ -58,30 +58,37 @@ Nothing else decorates the page:
 
 The « S » ribbon, white → light turquoise, on a pure black (`black-900`) rounded square:
 `docs/brand-logo-1024.png`, exported to `apps/web/public/logo-64|128|256.png`, `favicon-32.png`
-and `apple-touch-icon.png`. At 40 px in the top bar, as the favicon, in loading and empty states,
+and `apple-touch-icon.png`. At 32 px in the top bar, as the favicon, in loading and empty states,
 and as the Dashboard's watermark.
 
 ## Type
 
 Two families, both served by StayPut itself (the CSP allows no other origin):
 
-- **Satoshi** (Indian Type Foundry, Fontshare, ITF Free Font License) for figures and titles.
+- **Satoshi** (Indian Type Foundry, Fontshare, ITF Free Font License) for every number of the
+  app (amounts, counts, scores, the charts' axes: one font, `.num` or a `.metric*` class) and
+  for the titles.
   Its license allows using it in our own app but forbids passing the files on, and the repository
   is public: the file is downloaded from Fontshare at each deployment and never committed
   (`scripts/deploy/satoshi.ts`, its fingerprint pinned). Without it (locally), Geist takes its
   place.
 - **Geist** (Vercel, SIL OFL) for the UI, from `@fontsource-variable/geist`.
 
-| Role           | Face          | Size / weight                                                     |
-| -------------- | ------------- | ----------------------------------------------------------------- |
-| Hero number    | Satoshi 500   | 56 px (`.metric-lead`), −0.03 em, tabular, the signature gradient |
-| Secondary hero | Satoshi 500   | 32 px (`.metric-hero`), −0.02 em, tabular, white                  |
-| Other figures  | Satoshi 500   | the size of their line (`.metric`), tabular                       |
-| Page title     | Satoshi 700   | 22 px (`.title-page`), white                                      |
-| Section title  | Satoshi 600   | 15 px (`.title-section`), white                                   |
-| UI text        | Geist 400/500 | 14 px (13 px in rows), `muted` (white-300), line height 1.5       |
-| Label          | Geist 500     | 11 px uppercase, +0.12 em, `subtle` (white-500) (`.label-caps`)   |
+| Role             | Face          | Size / weight                                                     |
+| ---------------- | ------------- | ----------------------------------------------------------------- |
+| Hero amount      | Satoshi 700   | 48 px (`.metric-lead`), −0.04 em, tabular, solid white            |
+| Secondary amount | Satoshi 600   | 28 px (`.metric-hero`), −0.02 em, tabular, white                  |
+| A list's amount  | Satoshi 500   | 14 px (`.metric`), tabular, white                                 |
+| Any other number | Satoshi       | the size of its line (`.num`: Satoshi and tabular numerals)       |
+| Page title       | Satoshi 700   | 22 px (`.title-page`), white                                      |
+| Section title    | Satoshi 700   | 15 px (`.title-section`), white                                   |
+| UI text          | Geist 400/500 | 13–14 px, `muted` (white-300), line height 1.5                    |
+| Label            | Geist 500     | 12 px, sentence case, no letter-spacing, `subtle` (`.label-text`) |
 
+- **Amounts as Whop writes them** (brief v4 §7): the symbol and the cents, always: « $247.00 »,
+  « $1,284.50 »; in French « 247,00 $ » (the symbol alone, never « $US »). Counts (members,
+  messages) without decimals. A chart's axis alone may shorten an amount (« $1.2K »). The
+  translator's `currency` does it (`packages/i18n`).
 - Figures always use tabular numerals: they line up and do not jump while they count. Never a
   monospace.
 - Two text sizes per element at most. No sentence under a figure and no « i » icon: what a

@@ -52,6 +52,9 @@ export function CreatorView({ demo = false }: { demo?: boolean }) {
   useEffect(() => {
     if (from) rememberDemoExit(from);
   }, [from]);
+  // The language of this app: the community's own choice, the demo always in English.
+  const { enterCommunity } = useI18n();
+  useEffect(() => enterCommunity(demo ? null : companyId), [enterCommunity, demo, companyId]);
 
   if (state.status === 'loading') return <ShellSkeleton />;
   if (state.status === 'error') {

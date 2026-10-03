@@ -186,11 +186,13 @@ function Setup({ steps, root }: { steps: GettingStarted; root: string }) {
   );
 }
 
-/** An amount of the dashboard, whole, in the community's currency (a count without one). */
+/**
+ * An amount of the dashboard in the community's currency, with its symbol and its cents
+ * (brief v4 §7: « $247.00 »); a count without one.
+ */
 function useMoney(currency: string | null): (value: number) => string {
   const i18n = useI18n();
-  return (value) =>
-    currency ? i18n.currency(value, currency, { whole: true }) : i18n.number(Math.round(value));
+  return (value) => (currency ? i18n.currency(value, currency) : i18n.number(Math.round(value)));
 }
 
 /**
@@ -534,7 +536,7 @@ function Priority({
     >
       <div className="min-w-0">
         <p>
-          <LabelTip tip={t('dash.priority.info')} className="label-caps">
+          <LabelTip tip={t('dash.priority.info')} className="label-text">
             {t('dash.priority')}
           </LabelTip>
         </p>
@@ -775,7 +777,7 @@ function AttentionRow({
       paid={
         monthly !== null && membership?.currency
           ? t('dash.row.perMonth', {
-              amount: currency(monthly, membership.currency.toUpperCase(), { whole: true }),
+              amount: currency(monthly, membership.currency.toUpperCase()),
             })
           : null
       }
@@ -814,7 +816,7 @@ function ActionsStrip({ view }: { view: DashboardView | null }) {
   ];
   return (
     <section aria-labelledby={titleId} className="border-t border-line pt-6">
-      <h2 id={titleId} className="label-caps">
+      <h2 id={titleId} className="label-text">
         {t('dash.stayputActions')}
       </h2>
       <dl className="mt-4 grid grid-cols-2 gap-y-6 @3xl:grid-cols-4">

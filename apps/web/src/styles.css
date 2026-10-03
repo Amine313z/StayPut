@@ -92,11 +92,12 @@
   --space-inner: 1.25rem;
   --radius: 0.75rem;
 
-  /* Motion (MOTION.md): one easing, three durations. */
+  /* Motion (MOTION.md, brief v4 §14): one easing, four durations. */
   --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-micro: 150ms;
-  --dur-standard: 250ms;
-  --dur-page: 400ms;
+  --dur-micro: 120ms;
+  --dur-hover: 200ms;
+  --dur-standard: 300ms;
+  --dur-page: 450ms;
 }
 
 @theme inline {
@@ -187,27 +188,36 @@ body::before {
   font-variant-numeric: tabular-nums;
 }
 
-/* The hero number, one per screen: Satoshi 500, 56 px, -0.03em. */
-.metric-lead {
+/*
+ * Every number of the app is Satoshi, one font (brief v4 §7): amounts, counts, scores, the axes
+ * of the charts. Tabular, so a figure never changes width while it counts. Never a monospace.
+ */
+.num {
   font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 3.5rem;
-  line-height: 1;
-  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 
-/* A secondary hero number: Satoshi 500, 32 px. */
+/* The hero amount, one per screen, as Whop writes a balance: Satoshi 700, 48 px, -0.04em. */
+.metric-lead {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 3rem;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A secondary amount beside the hero: Satoshi 600, 28 px. */
 .metric-hero {
   font-family: var(--font-display);
-  font-weight: 500;
-  font-size: 2rem;
+  font-weight: 600;
+  font-size: 1.75rem;
   line-height: 1.1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
-/* Any other figure: Satoshi 500, the size of its line. Never a monospace. */
+/* Any other figure (a list's amount, a count): Satoshi 500, the size of its line. */
 .metric {
   font-family: var(--font-display);
   font-weight: 500;
@@ -225,31 +235,24 @@ body::before {
   color: var(--text);
 }
 
-/* A section's title: Satoshi 600, 15 px. */
+/* A section's title: Satoshi 700, 15 px. */
 .title-section {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.9375rem;
   line-height: 1.35;
   color: var(--text);
 }
 
-/* The small label above a figure or a block: 11 px, uppercase, white-500, 0.12em. */
-.label-caps {
-  font-size: 0.6875rem;
+/*
+ * The small label above a figure or a block: Geist 500, 12 px, white-500, in sentence case (no
+ * capitals, no letter-spacing, brief v4 §7). What it means is a tooltip on its own words.
+ */
+.label-text {
+  font-size: 0.75rem;
   line-height: 1rem;
   font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--subtle);
-}
-
-/* The signature: white to light turquoise, on the hero number. */
-.text-hero {
-  background-image: linear-gradient(135deg, var(--hero-from) 25%, var(--hero-to) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 
 /*

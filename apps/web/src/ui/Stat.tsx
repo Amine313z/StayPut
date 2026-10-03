@@ -37,7 +37,7 @@ export function Stat({
           </span>
         ) : null}
       </dt>
-      <dd className="tabular mt-2 text-2xl font-semibold tracking-tight">{value}</dd>
+      <dd className="num mt-2 text-2xl font-semibold tracking-tight">{value}</dd>
       {hint ? <dd className="mt-1 text-xs text-muted">{hint}</dd> : null}
     </div>
   );

@@ -21,7 +21,7 @@ il a sauvé.
 | 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les droits |
 | 5. Espace membre               | Faite, mise de côté pour la V1 (`MEMBER_SPACE_ENABLED`)   |
 | 6. Preuve de valeur            | En cours : l'argent sauvé (6.4) et l'accueil (6.2) faits  |
-| Refonte du design (v3)         | Jetons, logo, cadre et Tableau de bord faits, à valider   |
+| Refonte du design (v4)         | Étape 1 sur 10 faite (jetons, montants, langue)           |
 
 ## Architecture
 
@@ -48,8 +48,10 @@ Satoshi, le reste en Geist. Un menu de rubriques sur le côté, qui se replie su
 haut, le logo de StayPut, la communauté (nom et logo lus chez Whop), la recherche d'un membre
 (⌘K ou Ctrl K) et le **Guide**. Quand le mode test est actif, une fine barre le dit, avec
 « Désactiver ». La langue (English par défaut, Français) se change **uniquement** dans
-Réglages › Général ; l'identifiant brut de la communauté (`biz_…`) n'apparaît que là, dans
-« Développeur ». Sur un téléphone, les rubriques passent dans une barre en bas de l'écran. Les
+Réglages › Général, et n'est retenue que pour l'app de cette communauté : la démo s'ouvre
+toujours en anglais. Les montants s'écrivent comme sur Whop, symbole et centimes compris
+(« $247.00 », « 247,00 $ »). L'identifiant brut de la communauté (`biz_…`) n'apparaît que dans
+Réglages › Général › « Développeur ». Sur un téléphone, les rubriques passent dans une barre en bas de l'écran. Les
 couleurs, polices et animations suivent [`docs/design-tokens.md`](./docs/design-tokens.md) et
 [`MOTION.md`](./MOTION.md).
 

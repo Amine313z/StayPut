@@ -39,14 +39,11 @@ export interface Translator {
   plural: (key: PluralKey, count: number, params?: Params) => string;
   number: (value: number) => string;
   /**
-   * An amount in its currency; `whole` drops the cents (a figure of the dashboard); `compact`
-   * shortens it for a chart's axis (« $1.2K », « 1,2 k€ »).
+   * An amount in its currency, always with its symbol and its cents, as Whop writes a balance
+   * (brief v4 §7): « $247.00 », « 247,00 $ », the symbol alone (never « $US »). `compact`
+   * shortens it for a chart's axis only (« $1.2K », « 1,2 k€ »).
    */
-  currency: (
-    amount: number,
-    currency: string,
-    options?: { whole?: boolean; compact?: boolean },
-  ) => string;
+  currency: (amount: number, currency: string, options?: { compact?: boolean }) => string;
   /** A share from 0 to 1, as a whole percentage: « 42% », « 42 % ». */
   percent: (ratio: number) => string;
   date: (value: Date) => string;
@@ -106,11 +103,10 @@ export function createTranslator(locale: Locale): Translator {
       new Intl.NumberFormat(locale, {
         style: 'currency',
         currency,
+        currencyDisplay: 'narrowSymbol',
         ...(options?.compact
           ? { notation: 'compact', minimumFractionDigits: 0, maximumFractionDigits: 1 }
-          : options?.whole
-            ? { minimumFractionDigits: 0, maximumFractionDigits: 0 }
-            : {}),
+          : { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       }).format(amount),
     percent: (ratio) => percents.format(ratio),
     date: (value) => dates.format(value),

@@ -53,20 +53,24 @@ export function StaggerItem({
 }
 
 /**
- * A number on its way to `value`: counts from where it was (0 the first time) in 800 ms. When
- * the device asks for less motion, the value shows at once.
+ * A number on its way to `value`: counts up from 0 the first time (900 ms), then moves from its
+ * old value to each new one (600 ms). When the device asks for less motion, the value shows at
+ * once.
  */
 export function useCountUp(value: number): number {
   const reduce = useReducedMotion();
   const [shown, setShown] = useState(reduce ? value : 0);
   const from = useRef(reduce ? value : 0);
+  const counted = useRef(false);
   useEffect(() => {
     if (reduce) {
       from.current = value;
       return;
     }
+    const duration = counted.current ? DURATION.change : DURATION.count;
+    counted.current = true;
     const controls = animate(from.current, value, {
-      duration: DURATION.count,
+      duration,
       ease: EASE,
       onUpdate: (latest) => {
         from.current = latest;
@@ -101,7 +105,7 @@ export function AnimatedNumber({
   better?: 'up' | 'down' | null;
   /** The figure's type (size, weight): its light wears it too. */
   className?: string;
-  /** The figure's colour (`text-hero`, `text-fg`): the figure alone, never its light. */
+  /** The figure's colour (`text-fg`): the figure alone, never its light. */
   tone?: string;
 }) {
   const reduce = useReducedMotion();

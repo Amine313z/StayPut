@@ -58,14 +58,15 @@ export function MemberListRow({
           {risk ? <RiskRing score={risk.score} label={risk.label} size={36} delay={delay} /> : null}
         </div>
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 ps-12 @2xl/list:flex-nowrap @2xl/list:ps-0">
-          <div className="tabular text-[0.8125rem] @2xl/list:w-40">
+          <div className="text-[0.8125rem] @2xl/list:w-40">
             {when ? (
-              <p className="flex items-center gap-1.5 text-muted">
+              <p className="tabular flex items-center gap-1.5 text-muted">
                 {whenUrgent ? <Urgent /> : null}
                 {when}
               </p>
             ) : null}
-            {paid ? <p className="text-subtle">{paid}</p> : null}
+            {/* A list's amount: Satoshi 500, 14 px, white (brief v4 §7). */}
+            {paid ? <p className="metric text-sm text-fg">{paid}</p> : null}
           </div>
           {actions}
         </div>

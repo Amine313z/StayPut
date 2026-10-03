@@ -70,8 +70,11 @@ Guidance for Claude Code in this repository.
   Deployed on 2026-10-01 (0008 applied, `/health` ok); the sandbox's fake members were removed
   and seeded again (titled lessons, one inactive newcomer), and the « Seed sandbox » workflow's
   `report` action prints them by score with their reasons (the Phase 3 stop list).
-- **Design v3** (brief « black · turquoise · white », 2026-10-02, DECISIONS.md « Refonte du
-  design, v3 »): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
+- **Design v4** (brief « Complete redesign prompt (v4) », 2026-10-03, DECISIONS.md « Refonte du
+  design, v4 »): ten steps, one stop with a screenshot after each; step 1 done (amounts always
+  with symbol and cents, `$247.00` / `247,00 $`; every number in Satoshi via `.num` / `.metric*`;
+  labels in sentence case; the UI language kept per community, `/demo` always English). Before
+  it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard
   before Members → Integrations → Automations → Analytics → Settings → Onboarding and Guide, one

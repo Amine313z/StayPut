@@ -1772,3 +1772,64 @@ et Guide. Cette étape livre les jetons, le logo, les composants, le cadre et le
 - Dans la démo, « auteurs récents non reliés » suit la liste, comme sur le serveur
   (`stayput.unlinked_authors` compte les comptes dont des messages attendent) : il baisse quand
   on relie ou qu'on écarte quelqu'un. Il disait 3 quand la liste en montrait 2.
+
+## 2026-10-03 — Refonte du design, v4 : étape 1 (jetons, polices, montants, langue)
+
+Le fondateur a envoyé une quatrième version du brief (« Complete redesign prompt (v4) ») avec la
+consigne « exécute étape par étape ». Dix étapes, un arrêt et une capture après chacune : 1.
+jetons, polices, format des montants, langue ; 2. cohérence des données de la démo ; 3. tableau
+de bord façon « solde Whop » et animations ; 4. Intégrations ; 5. Membres ; 6. Guide, visite et
+prise en main ; 7. Automatisations ; 8. Analyses ; 9. Réglages ; 10. MOTION.md et liste finale.
+
+### Ce qui ne change pas
+
+- La pile réelle reste celle du SPEC (React + Vite, Worker Cloudflare, graphiques SVG de
+  StayPut) : le brief cite à nouveau Next.js, Frosted UI et Recharts comme pile « existante »,
+  les raisons des versions précédentes tiennent. « Framer Motion » est la bibliothèque déjà
+  utilisée, sous son nouveau nom `motion`.
+
+### Les montants comme Whop les écrit
+
+- Toujours le symbole et les centimes : « $247.00 », « $1,284.50 » ; en français « 247,00 $ »
+  (le symbole seul, jamais « $US »). Les nombres de membres et de messages restent sans
+  décimales. Seul l'axe d'un graphique raccourcit un montant (« $1.2K »). C'est la fonction
+  `currency` du traducteur (`packages/i18n`), qui perd son option « sans centimes ».
+- Le montant héros n'est plus dans le dégradé : Satoshi 700, 48 px, blanc plein. Le dégradé
+  signature ne reste que sur le bouton principal et le ruban du logo. Montants secondaires en
+  Satoshi 600, 28 px ; montants des listes en Satoshi 500, 14 px.
+- Les étiquettes passent en minuscules, Geist 500, 12 px, blanc-500 (`.label-text`, plus de
+  capitales ni d'espacement des lettres).
+
+### Une seule police pour tous les chiffres
+
+- Satoshi pour chaque nombre de l'app : la classe `.num` (Satoshi et chiffres tabulaires) pour
+  tout nombre isolé, les classes `.metric*` pour les montants ; les axes et infobulles des
+  graphiques, l'anneau de risque, les montants des listes et le compteur « 2/4 » y passent dès
+  cette étape. Les dates dans une phrase (« Renouvelle le 25 oct. ») restent du texte, en Geist.
+- La preuve se fait dans un vrai navigateur sur le site en ligne : le job « look » d'Inspect lit
+  la police réellement utilisée par chaque montant, chiffre, axe, étiquette et lien du menu,
+  vérifie que Satoshi (500, 600, 700) et Geist (400, 500) sont chargées, que les montants ont
+  leurs centimes et que la démo s'ouvre en anglais, et échoue sinon.
+
+### La langue
+
+- L'anglais partout par défaut ; le français seulement dans Réglages › Général, listé en second.
+- Le choix est retenu **pour l'app de cette communauté seulement** (`stayput.locale.<biz_…>` dans
+  le navigateur) : `/demo` s'ouvre toujours en anglais, même après un choix du français ailleurs,
+  et un choix fait dans la démo n'est pas gardé. Conséquence : un choix fait avant cette version
+  (une clé commune à tout le navigateur) est oublié une fois ; il suffit de rechoisir dans
+  Réglages.
+- La langue des messages aux membres est déjà l'anglais par défaut côté base
+  (`companies.locale`). L'étiquette « EN / FR » sur l'aperçu des modèles viendra avec la page
+  Automatisations (étape 7).
+- Le mot « thème » disparaît des Réglages (« Votre langue, comment StayPut note vos membres et
+  agit »).
+
+### Autres jetons
+
+- Logo de l'en-tête en 32 px.
+- Animations : 120 ms (micro), 200 ms (survol), 300 ms (standard), 450 ms (page), un ressort
+  (raideur 380, amortissement 32) pour les tiroirs et les interrupteurs seulement ; un chiffre
+  compte depuis 0 en 900 ms la première fois puis va d'une valeur à l'autre en 600 ms ; l'anneau
+  de risque se remplit en 700 ms. Le reste du système d'animation (§14) vient avec le tableau de
+  bord, à l'étape 3.

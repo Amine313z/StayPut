@@ -3,9 +3,9 @@ import { LabelTip } from './LabelTip';
 import { AnimatedNumber } from './Motion';
 
 /**
- * The numbers of a hero block (brief v3 §5, §6.2): a label in capitals that explains itself on
- * hover, and the number, nothing under it. Each counts to its value and pulses a soft turquoise
- * light at the end (MOTION.md); one that worsens dims a moment, never red.
+ * The numbers of a hero block (brief v4 §7): a label in sentence case that explains itself on
+ * hover, and the number in Satoshi, solid white, nothing under it. Each counts to its value
+ * (MOTION.md); one that worsens dims a moment, never red.
  */
 
 interface MetricProps {
@@ -22,8 +22,9 @@ interface MetricProps {
 }
 
 /**
- * The one giant number of the screen: 56 px, the signature gradient, on the light that sits
- * behind the hero block (the page draws it: `.hero-glow`).
+ * The one large amount of the screen, as Whop writes a balance: Satoshi 700, 48 px, solid white
+ * (the signature gradient is the primary button's and the logo's, never an amount's), on the
+ * light that sits behind the hero block (the page draws it: `.hero-glow`).
  */
 export function MetricHero({
   label,
@@ -37,7 +38,7 @@ export function MetricHero({
   return (
     <dl className={`flex min-w-0 flex-col ${className}`}>
       <dt>
-        <LabelTip tip={tip} className="label-caps">
+        <LabelTip tip={tip} className="label-text">
           {label}
         </LabelTip>
       </dt>
@@ -50,7 +51,7 @@ export function MetricHero({
             format={format}
             better={better}
             className="metric-lead"
-            tone="text-hero"
+            tone="text-fg"
           />
         )}
       </dd>
@@ -58,7 +59,7 @@ export function MetricHero({
   );
 }
 
-/** A number of second rank beside the hero: 32 px, white. */
+/** A number of second rank beside the hero: Satoshi 600, 28 px, white. */
 export function SecondaryMetric({
   label,
   tip,
@@ -71,7 +72,7 @@ export function SecondaryMetric({
   return (
     <dl className={`flex min-w-0 flex-col ${className}`}>
       <dt>
-        <LabelTip tip={tip} className="label-caps">
+        <LabelTip tip={tip} className="label-text">
           {label}
         </LabelTip>
       </dt>

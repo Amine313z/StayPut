@@ -32,7 +32,7 @@ export function NavTabs({ items, label }: { items: readonly TabItem[]; label: st
               {item.icon}
               {item.label}
               {item.count === undefined ? null : (
-                <span className="tabular rounded-full bg-surface-2 px-1.5 text-xs text-muted">
+                <span className="num rounded-full bg-surface-2 px-1.5 text-xs text-muted">
                   {item.count}
                 </span>
               )}

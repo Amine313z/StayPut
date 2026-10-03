@@ -56,7 +56,7 @@ export function GettingStartedPill({
             transition={ease('count')}
           />
         </span>
-        <span className="tabular text-subtle">{progress(done, steps.length)}</span>
+        <span className="num text-subtle">{progress(done, steps.length)}</span>
         <ChevronDown
           aria-hidden="true"
           className={`size-4 text-subtle transition-transform duration-250 ease-brand ${

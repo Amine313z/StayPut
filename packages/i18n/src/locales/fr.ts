@@ -807,8 +807,7 @@ export const fr: Messages = {
   'nav.sources.description':
     'Où StayPut lit l’activité de vos membres : Whop, Discord et Telegram.',
   'nav.settings': 'Réglages',
-  'nav.settings.description':
-    'Votre langue et votre thème, comment StayPut note vos membres et agit.',
+  'nav.settings.description': 'Votre langue, comment StayPut note vos membres et agit.',
   'tab.overview': 'Vue d’ensemble',
   'tab.testimonials': 'Témoignages',
   'tab.memberView': 'Vue membre',

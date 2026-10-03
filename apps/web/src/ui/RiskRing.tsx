@@ -47,7 +47,7 @@ export function RiskRing({
           className="stroke-turq-300"
           initial={{ pathLength: 0 }}
           animate={{ pathLength: share }}
-          transition={ease('count', delay)}
+          transition={ease('ring', delay)}
         />
       </svg>
       <span

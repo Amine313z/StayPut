@@ -1,11 +1,11 @@
 /**
- * One chart style for every chart of StayPut (brief v3 §6.6, the ChartTheme): axis labels
- * white-500 at 11 px, grid lines black-600 at 60 %, no border around a chart, no library color.
+ * One chart style for every chart of StayPut (brief v3 §6.6, the ChartTheme): axis labels in
+ * Satoshi like every number (brief v4 §7), white-500 at 11 px, grid lines black-600 at 60 %, no border around a chart, no library color.
  * The main series is a turquoise line over its turquoise area fading to nothing; a comparison is
  * a dashed white line. Tailwind classes, so every value is one of the palette's tokens.
  */
 export const CHART = {
-  axisLabel: 'tabular text-[11px] leading-none whitespace-nowrap text-subtle',
+  axisLabel: 'num text-[11px] leading-none whitespace-nowrap text-subtle',
   legend: 'text-xs text-muted',
   grid: 'stroke-black-600/60',
   line: 'stroke-turq-300',

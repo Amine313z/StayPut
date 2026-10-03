@@ -787,7 +787,7 @@ export const en = {
   'nav.sources.description':
     'Where StayPut reads your members’ activity: Whop, Discord and Telegram.',
   'nav.settings': 'Settings',
-  'nav.settings.description': 'Your language and theme, how StayPut scores your members and acts.',
+  'nav.settings.description': 'Your language, how StayPut scores your members and acts.',
   'tab.overview': 'Overview',
   'tab.testimonials': 'Testimonials',
   'tab.memberView': 'Member view',

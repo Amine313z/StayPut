@@ -1,9 +1,10 @@
 import type { Transition, Variants } from 'motion/react';
 
 /**
- * StayPut's motion system (MOTION.md): one easing, three durations, the same few gestures on
- * every screen. Only transform and opacity move (60 fps); no bounce on data. When the device
- * asks for less motion, MotionConfig (App) keeps the fades and drops the movement.
+ * StayPut's motion system (MOTION.md, brief v4 §14): one easing, four durations, one spring for
+ * drawers and toggles, the same few gestures on every screen. Only transform and opacity move
+ * (60 fps); no bounce on data. When the device asks for less motion, MotionConfig (App) keeps the
+ * fades and drops the movement.
  */
 
 /** The only easing: quick out of the gate, a soft landing. Same as `--ease-brand` (styles.css). */
@@ -11,19 +12,28 @@ export const EASE = [0.22, 1, 0.36, 1] as const;
 
 /** Seconds, as Motion counts them; the CSS twins are `--dur-*` in styles.css. */
 export const DURATION = {
-  /** A press, a hover, a tooltip. */
-  micro: 0.15,
-  /** A card, a list item, a value. */
-  standard: 0.25,
+  /** A press, an item leaving. */
+  micro: 0.12,
+  /** A hover. */
+  hover: 0.2,
+  /** A section, a list item, a toggle. */
+  standard: 0.3,
   /** A page coming in. */
-  page: 0.4,
-  /** A number counting to its value, a ring filling to it. */
-  count: 0.8,
+  page: 0.45,
+  /** A number counting up from 0 the first time it shows. */
+  count: 0.9,
+  /** A number moving from its old value to a new one. */
+  change: 0.6,
+  /** A risk ring filling to its score. */
+  ring: 0.7,
   /** A chart drawing its line. */
   draw: 1.2,
-  /** A chart's tooltip. */
+  /** A tooltip. */
   tooltip: 0.12,
 } as const;
+
+/** Drawers and toggles only: a spring that lands without bouncing. */
+export const SPRING: Transition = { type: 'spring', stiffness: 380, damping: 32 };
 
 /** Between two sections (or rows) of a group coming in. */
 export const STAGGER = 0.06;
