@@ -82,15 +82,20 @@ export function useCountUp(value: number): number {
   return reduce ? value : shown;
 }
 
-/** How long the turquoise light stays after a count, in ms. */
+/** How long the turquoise light stays once a better figure has landed, in ms. */
 const PULSE_MS = 700;
 
+/** How long a worse figure dims (brief v4 §14), in ms. */
+const DIP_MS = 200;
+
 /**
- * A figure that counts to its value (MOTION.md: 800 ms), then pulses a soft turquoise light: on
- * load, and each time it gets better; when it gets worse it dims a moment instead (never red).
- * Which way is better belongs to the figure (`better`; none: every change pulses). The light is a
- * blurred turquoise copy behind the figure whose opacity alone moves (60 fps), so a figure in
- * the signature gradient keeps its gradient. Less motion asked for: the value at once, no light.
+ * A figure that counts up from 0 the first time it shows (900 ms) and moves from its old value to
+ * each new one (600 ms), cents included (MOTION.md). When it gets better, a soft turquoise light
+ * pulses behind it once it has landed; when it gets worse it dims for 200 ms instead (never red).
+ * At rest, no light at all: a hero amount stays solid white (brief v4 §8). Which way is better
+ * belongs to the figure (`better`; none: every change pulses). The light is a blurred turquoise
+ * copy behind the figure whose opacity alone moves (60 fps). Less motion asked for: the value at
+ * once, no light, no dip.
  */
 export function AnimatedNumber({
   value,
@@ -112,33 +117,25 @@ export function AnimatedNumber({
   const shown = useCountUp(value);
   const previous = useRef(value);
   const [flash, setFlash] = useState<'good' | 'bad' | null>(null);
-  const count = DURATION.count * 1000;
-  // Loaded: the light once the count is done.
-  useEffect(() => {
-    if (reduce || previous.current === 0) return;
-    const on = window.setTimeout(() => setFlash('good'), count);
-    const off = window.setTimeout(() => setFlash(null), count + PULSE_MS);
-    return () => {
-      window.clearTimeout(on);
-      window.clearTimeout(off);
-    };
-  }, [reduce, count]);
   useEffect(() => {
     const before = previous.current;
     previous.current = value;
     if (reduce || before === value) return;
     const improved = better === null || (better === 'up' ? value > before : value < before);
-    if (!improved) setFlash('bad');
+    const change = DURATION.change * 1000;
     const timers = improved
       ? [
-          window.setTimeout(() => setFlash('good'), count),
-          window.setTimeout(() => setFlash(null), count + PULSE_MS),
+          window.setTimeout(() => setFlash('good'), change),
+          window.setTimeout(() => setFlash(null), change + PULSE_MS),
         ]
-      : [window.setTimeout(() => setFlash(null), count + 200)];
+      : [
+          window.setTimeout(() => setFlash('bad'), 0),
+          window.setTimeout(() => setFlash(null), DIP_MS),
+        ];
     return () => {
       for (const timer of timers) window.clearTimeout(timer);
     };
-  }, [value, better, reduce, count]);
+  }, [value, better, reduce]);
   // The light is the number again, turquoise and blurred, behind it (`.number-glow`, drawn by
   // CSS so the page's text holds the number once): only its opacity moves.
   const text = format(shown);
@@ -150,7 +147,7 @@ export function AnimatedNumber({
         className={`tabular ${className} number-glow ${flash === 'good' ? 'opacity-60' : 'opacity-0'}`}
       />
       <span
-        className={`tabular relative inline-block transition-opacity duration-500 ease-brand ${
+        className={`tabular relative inline-block transition-opacity duration-200 ease-brand ${
           flash === 'bad' ? 'opacity-55' : ''
         } ${className} ${tone}`}
       >

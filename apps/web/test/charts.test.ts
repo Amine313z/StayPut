@@ -1,16 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { niceTicks, smoothPath } from '../src/ui/charts/AreaChart';
-import { chartWindow } from '../src/views/creator/Overview';
+import { monotoneSample, smoothPath } from '../src/ui/charts/curve';
 
-describe('the area chart', () => {
-  it('steps its value axis in round amounts, from 0 to above the largest', () => {
-    expect(niceTicks(1_000)).toEqual([0, 250, 500, 750, 1_000]);
-    expect(niceTicks(1_240)).toEqual([0, 500, 1_000, 1_500]);
-    expect(niceTicks(163)).toEqual([0, 50, 100, 150, 200]);
-    // Nothing to show yet: still an axis.
-    expect(niceTicks(0)).toEqual([0, 2.5, 5, 7.5, 10]);
-  });
-
+describe('the chart’s curve', () => {
   it('draws a line that never overshoots its points (a total that grows never dips)', () => {
     const d = smoothPath([
       { x: 0, y: 100 },
@@ -28,19 +19,29 @@ describe('the area chart', () => {
     expect(smoothPath([{ x: 5, y: 5 }])).toBe('M5 5');
   });
 
-  it('adds up the money saved over the period shown, and keeps the days without a score', () => {
-    const history = [
-      { day: '2026-09-28', saved: 10, atRisk: null },
-      { day: '2026-09-29', saved: 0, atRisk: 300 },
-      { day: '2026-09-30', saved: 49, atRisk: 250 },
-      { day: '2026-10-01', saved: 20, atRisk: 200 },
-    ];
-    expect(chartWindow(history, 3)).toEqual({
-      window: history.slice(1),
-      saved: [0, 49, 69],
-      atRisk: [300, 250, 200],
-    });
-    expect(chartWindow(history, 90).saved).toEqual([10, 10, 59, 79]);
-    expect(chartWindow(history, 90).atRisk[0]).toBeNull();
+  it('reads every period at the same number of places, through each day, never beyond it', () => {
+    // A month's balance: it grows, starts again on the 1st, grows again.
+    const days = [149, 445, 445, 49, 247];
+    const samples = monotoneSample(days, 9);
+    expect(samples).toHaveLength(9);
+    // Every other place is a day: the curve goes through each one.
+    expect(samples.filter((_, k) => k % 2 === 0)).toEqual(days);
+    // Between two days it stays between them: no bump above $445, no dip under $49.
+    for (let k = 1; k < 8; k += 2) {
+      const a = days[(k - 1) / 2]!;
+      const b = days[(k + 1) / 2]!;
+      expect(samples[k]).toBeGreaterThanOrEqual(Math.min(a, b));
+      expect(samples[k]).toBeLessThanOrEqual(Math.max(a, b));
+    }
+    // 7 days or 90: the same count of places, so one line can turn into the other.
+    expect(
+      monotoneSample(
+        Array.from({ length: 90 }, (_, i) => i),
+        90,
+      ),
+    ).toHaveLength(90);
+    expect(monotoneSample([49, 49, 49], 5)).toEqual([49, 49, 49, 49, 49]);
+    expect(monotoneSample([7], 3)).toEqual([7, 7, 7]);
+    expect(monotoneSample([], 3)).toEqual([0, 0, 0]);
   });
 });

@@ -7,7 +7,6 @@ import type {
   MemberRow,
   MembersPage,
   PriorityAction,
-  RevenueDay,
 } from '@stayput/core';
 import {
   ArrowRight,
@@ -18,8 +17,15 @@ import {
   RotateCw,
   Send,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { useId, useMemo, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import {
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import { Link } from 'react-router';
 import { postJson, useApi, useReloadOnChange, type Loadable } from '../../api';
 import { MemberActions, failureText } from '../../components/MemberActions';
@@ -33,6 +39,7 @@ import { reasonText } from '../../risk-text';
 import { ActionButton } from '../../ui/ActionButton';
 import { SECTION_LINK_CLASS, buttonClass } from '../../ui/Button';
 import { EmptyState } from '../../ui/EmptyState';
+import { Figures } from '../../ui/Figures';
 import { GettingStartedPill } from '../../ui/GettingStartedPill';
 import { LabelTip } from '../../ui/LabelTip';
 import { MetricHero, SecondaryMetric } from '../../ui/Metric';
@@ -40,14 +47,18 @@ import { AnimatedNumber, Stagger, StaggerItem } from '../../ui/Motion';
 import { Segmented } from '../../ui/Segmented';
 import { MetricSkeleton, RowsSkeleton, Skeleton } from '../../ui/Skeleton';
 import { useToast } from '../../ui/Toast';
-import { AreaChart } from '../../ui/charts/AreaChart';
+import { BalanceChart } from '../../ui/charts/BalanceChart';
 import { useCreatorData } from '../CreatorView';
+import { balanceWindow, monthOverMonth, savedOver, type MonthCompare } from './balance';
 
 /** Members in « Needs attention »: the most urgent only, the others in Members. */
 export const ATTENTION_LIMIT = 5;
 
 /** A departure this close is urgent: the red dot (the brief: within 48 hours). */
 const URGENT_MS = 48 * 3_600_000;
+
+/** A departure this close comes first in « Needs attention » (brief v4 §13: within 7 days). */
+const FIRST_MS = 7 * 86_400_000;
 
 /** The chart's periods, in days. */
 const PERIODS = ['7', '30', '90'] as const;
@@ -97,7 +108,7 @@ export function Overview() {
         ) : (
           <>
             <StaggerItem>
-              <HeroBlock view={view} />
+              <BalanceHero view={view} />
             </StaggerItem>
             <StaggerItem>
               <Priority view={view} api={api} root={root} testMode={testMode.on} onDone={acted} />
@@ -195,84 +206,169 @@ function useMoney(currency: string | null): (value: number) => string {
   return (value) => (currency ? i18n.currency(value, currency) : i18n.number(Math.round(value)));
 }
 
+/** How far the hero's light moves with the cursor, at most, in px (desktop only). */
+const GLOW_REACH = 20;
+
 /**
- * The one hero block (brief v3 §6.2): no box inside it, thin dividers only. On the left the
- * revenue saved this month, the screen's one giant number, in the signature gradient on the
- * turquoise light; on the right, in white, the revenue at risk (never red) and the members at
- * risk; beneath, in the same block, saved against at risk over time. What each counts is in its
- * label's tooltip, never under the number.
+ * The hero's light follows the cursor a little (brief v4 §14), on a computer only and never when
+ * the device asks for less motion. Moved by style, never by React: the chart does not redraw.
  */
-function HeroBlock({ view }: { view: DashboardView | null }) {
-  const { t, number } = useI18n();
+function useFollowingGlow() {
+  const reduce = useReducedMotion();
+  const glow = useRef<HTMLSpanElement>(null);
+  const fine =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(pointer: fine)').matches;
+  const on = fine && !reduce;
+  const place = (x: number, y: number) => {
+    if (glow.current) glow.current.style.transform = `translate(${x}px, ${y}px)`;
+  };
+  return {
+    glow,
+    onPointerMove: on
+      ? (event: ReactPointerEvent<HTMLElement>) => {
+          const box = event.currentTarget.getBoundingClientRect();
+          const x = box.width ? (event.clientX - box.left) / box.width - 0.5 : 0;
+          const y = box.height ? (event.clientY - box.top) / box.height - 0.5 : 0;
+          place(Math.round(x * 2 * GLOW_REACH), Math.round(y * 2 * GLOW_REACH));
+        }
+      : undefined,
+    onPointerLeave: on ? () => place(0, 0) : undefined,
+  };
+}
+
+/**
+ * The balance (brief v4 §8), as Whop shows « Total balance »: what StayPut saved this month, one
+ * large amount, how it compares with the same days last month, and beneath it, with no box, the
+ * month's balance day by day against what the members at risk pay. The revenue and the members
+ * at risk sit to its right (under the chart on a narrow screen); 7D, 30D, 90D at the top right.
+ * The amount, the end of the line and the tooltip on today are one number.
+ */
+function BalanceHero({ view }: { view: DashboardView | null }) {
+  const { t, plural, number } = useI18n();
   const titleId = useId();
+  const [period, setPeriod] = useState<Period>('30');
   const money = useMoney(view?.currency ?? null);
+  const { glow, onPointerMove, onPointerLeave } = useFollowingGlow();
+  const monthTotal = view?.currency ? view.saved.thisMonth.direct : null;
+  const compare = useMemo(
+    () => (view && monthTotal !== null ? monthOverMonth(view.revenueHistory, monthTotal) : null),
+    [view, monthTotal],
+  );
   const atRisk = view?.atRisk;
   return (
-    <section aria-labelledby={titleId} className="relative isolate rounded-xl border border-line">
+    <section
+      aria-labelledby={titleId}
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
+      className="relative isolate grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-6 [grid-template-areas:'balance_period'_'chart_chart'_'stats_stats'] @3xl:[grid-template-areas:'balance_period'_'balance_stats'_'chart_chart']"
+    >
       <h2 id={titleId} className="sr-only">
         {t('dash.money')}
       </h2>
-      <div className="grid grid-cols-1 @3xl:grid-cols-[minmax(0,5fr)_minmax(0,4fr)]">
-        <div className="relative flex flex-col justify-center p-5 @3xl:py-8">
-          <span
-            aria-hidden="true"
-            className="hero-glow -z-10"
-            style={{ left: -210, top: 'calc(50% - 350px)' }}
-          />
-          {view ? (
+      <span
+        ref={glow}
+        aria-hidden="true"
+        className="hero-glow -z-10 transition-transform duration-700 ease-brand"
+        style={{ left: -260, top: -300 }}
+      />
+      <div className="min-w-0 [grid-area:balance]">
+        {view ? (
+          <>
             <MetricHero
               better="up"
               label={t('dash.saved')}
               tip={t('dash.saved.info')}
-              value={view.currency ? view.saved.thisMonth.direct : null}
+              value={monthTotal}
               format={money}
               empty={t('dash.noRevenue')}
             />
-          ) : (
-            <MetricSkeleton hero />
-          )}
-        </div>
-        <div className="grid grid-cols-2 border-t border-line @3xl:grid-cols-1 @3xl:border-s @3xl:border-t-0">
-          <div className="p-5">
-            {view && atRisk ? (
-              <SecondaryMetric
-                better="down"
-                label={t('dash.atRisk')}
-                tip={
-                  view.monthlyRevenue === null
-                    ? undefined
-                    : t('dash.atRisk.info', { total: money(view.monthlyRevenue) })
-                }
-                value={view.currency ? atRisk.revenue : null}
-                format={money}
-                empty={t('dash.noRevenue')}
-              />
-            ) : (
-              <MetricSkeleton />
-            )}
-          </div>
-          <div className="border-s border-line p-5 @3xl:border-s-0 @3xl:border-t">
-            {view && atRisk ? (
-              <SecondaryMetric
-                better="down"
-                label={t('dash.membersAtRisk')}
-                tip={t('dash.membersAtRisk.info', {
-                  departures: number(atRisk.departures),
-                  high: number(atRisk.high),
-                })}
-                value={atRisk.members}
-                format={(value) => number(Math.round(value))}
-              />
-            ) : (
-              <MetricSkeleton />
-            )}
-          </div>
-        </div>
+            {compare ? <Delta compare={compare} money={money} /> : null}
+          </>
+        ) : (
+          <MetricSkeleton hero />
+        )}
       </div>
-      <div className="border-t border-line p-5">
-        <RevenueChart view={view} />
+      <div className="justify-self-end [grid-area:period]">
+        <Segmented
+          look="pills"
+          label={t('dash.chart.period')}
+          value={period}
+          onChange={setPeriod}
+          options={PERIODS.map((value) => ({
+            value,
+            label: plural('dash.chart.days', Number(value)),
+          }))}
+        />
+      </div>
+      <div className="flex gap-10 [grid-area:stats] @3xl:self-end @3xl:justify-self-end">
+        {view && atRisk ? (
+          <>
+            <SecondaryMetric
+              better="down"
+              label={t('dash.atRisk')}
+              tip={
+                view.monthlyRevenue === null
+                  ? undefined
+                  : t('dash.atRisk.info', { total: money(view.monthlyRevenue) })
+              }
+              value={view.currency ? atRisk.revenue : null}
+              format={money}
+              empty={t('dash.noRevenue')}
+            />
+            <SecondaryMetric
+              better="down"
+              label={t('dash.membersAtRisk')}
+              tip={t('dash.membersAtRisk.info', {
+                departures: number(atRisk.departures),
+                high: number(atRisk.high),
+              })}
+              value={atRisk.members}
+              format={(value) => number(Math.round(value))}
+            />
+          </>
+        ) : (
+          <>
+            <MetricSkeleton />
+            <MetricSkeleton />
+          </>
+        )}
+      </div>
+      <div className="min-w-0 [grid-area:chart]">
+        <SavedChart view={view} period={period} money={money} />
       </div>
     </section>
+  );
+}
+
+/**
+ * « +$84.00 vs last month »: the month so far against the same days of last month, turquoise
+ * when ahead, white-500 otherwise (never red). What is compared is its tooltip.
+ */
+function Delta({ compare, money }: { compare: MonthCompare; money: (value: number) => string }) {
+  const { t, day } = useI18n();
+  // The sign is the amount's, in its font: « +$84.00 », « −$12.50 ».
+  const amount = `${compare.delta < 0 ? '−' : '+'}${money(Math.abs(compare.delta))}`;
+  const text = t('dash.delta', { amount });
+  const then = money(compare.lastMonth);
+  return (
+    <p className={`mt-2 text-[0.8125rem] ${compare.delta > 0 ? 'text-accent' : 'text-subtle'}`}>
+      <LabelTip
+        tip={
+          // On the 1st, one day against one day.
+          compare.from === compare.to
+            ? t('dash.delta.infoDay', { day: day(dayOf(compare.from)), amount: then })
+            : t('dash.delta.info', {
+                from: day(dayOf(compare.from)),
+                to: day(dayOf(compare.to)),
+                amount: then,
+              })
+        }
+      >
+        <Figures text={text} figures={[amount]} />
+      </LabelTip>
+    </p>
   );
 }
 
@@ -281,89 +377,59 @@ function dayOf(day: string): Date {
   return new Date(`${day}T12:00:00`);
 }
 
-/** The last `days` days: the money saved added up from the first one, and the money at risk. */
-export function chartWindow(history: readonly RevenueDay[], days: number) {
-  const window = history.slice(-days);
-  let total = 0;
-  const saved = window.map((day) => (total += day.saved));
-  return { window, saved, atRisk: window.map((day) => day.atRisk) };
-}
-
 /**
- * Saved against at risk, inside the hero block: what StayPut saved, added up over the period
- * (the turquoise line over its area), and what the members at risk paid each month, day by day
- * (the dashed white line); over 7, 30 or 90 days, each period drawing in.
+ * Under the balance, with no box: the month's balance day by day (added up from each 1st, so
+ * today is the amount above) and, dashed, what the members at risk paid a month; over 7, 30 or
+ * 90 days, the curve turning into the next period.
  */
-function RevenueChart({ view }: { view: DashboardView | null }) {
-  const i18n = useI18n();
-  const { t, plural, date, day } = i18n;
-  const [period, setPeriod] = useState<Period>('30');
-  const money = useMoney(view?.currency ?? null);
-  const currency = view?.currency ?? null;
+function SavedChart({
+  view,
+  period,
+  money,
+}: {
+  view: DashboardView | null;
+  period: Period;
+  money: (value: number) => string;
+}) {
+  const { t, date, day } = useI18n();
+  const days = Number(period);
   const data = useMemo(
-    () => (view ? chartWindow(view.revenueHistory, Number(period)) : null),
-    [view, period],
+    () =>
+      view
+        ? balanceWindow(
+            view.revenueHistory,
+            days,
+            view.currency ? view.saved.thisMonth.direct : undefined,
+          )
+        : null,
+    [view, days],
   );
-  const title = t('dash.chart.title');
-  const header = (
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <h3 className="title-section">
-        <LabelTip tip={t('dash.chart.info')}>{title}</LabelTip>
-      </h3>
-      <Segmented
-        label={t('dash.chart.period')}
-        value={period}
-        onChange={setPeriod}
-        options={PERIODS.map((value) => ({
-          value,
-          label: plural('dash.chart.days', Number(value)),
-        }))}
-      />
-    </div>
-  );
-  if (!view || !data) {
-    return (
-      <>
-        {header}
-        <Skeleton className="h-64 w-full" />
-      </>
-    );
+  if (!view || !data) return <Skeleton className="h-[220px] w-full" />;
+  if (view.revenueHistory.every((d) => d.atRisk === null && d.saved === 0)) {
+    return <EmptyState inset body={t('dash.chart.empty')} />;
   }
-  const empty = view.revenueHistory.every((d) => d.atRisk === null && d.saved === 0);
-  const first = data.atRisk.find((value) => value !== null) ?? null;
-  const last = data.atRisk.at(-1) ?? null;
-  const savedTotal = data.saved.at(-1) ?? 0;
+  const risks = data.map((d) => d.atRisk);
+  const first = risks.find((value) => value !== null) ?? null;
+  const last = risks.at(-1) ?? null;
+  const total = money(savedOver(view.revenueHistory, days));
   const summary =
     first !== null && last !== null
-      ? t('dash.chart.summary', {
-          days: period,
-          saved: money(savedTotal),
-          from: money(first),
-          to: money(last),
-        })
-      : t('dash.chart.summaryNoRisk', { days: period, saved: money(savedTotal) });
+      ? t('dash.chart.summary', { days: period, saved: total, from: money(first), to: money(last) })
+      : t('dash.chart.summaryNoRisk', { days: period, saved: total });
   return (
-    <>
-      {header}
-      {empty ? (
-        <EmptyState inset body={t('dash.chart.empty')} />
-      ) : (
-        <AreaChart
-          label={title}
-          summary={summary}
-          period={period}
-          points={data.window.map((d) => ({ label: date(dayOf(d.day)), tick: day(dayOf(d.day)) }))}
-          series={[
-            { key: 'saved', label: t('dash.chart.saved'), values: data.saved, look: 'area' },
-            { key: 'atRisk', label: t('dash.chart.atRisk'), values: data.atRisk, look: 'line' },
-          ]}
-          format={money}
-          formatTick={(value) =>
-            currency ? i18n.currency(value, currency, { compact: true }) : i18n.number(value)
-          }
-        />
-      )}
-    </>
+    <BalanceChart
+      label={t('dash.chart.title')}
+      summary={summary}
+      period={period}
+      points={data.map((d) => ({ label: date(dayOf(d.day)), tick: day(dayOf(d.day)) }))}
+      saved={{
+        label: t('dash.chart.saved'),
+        values: data.map((d) => d.saved),
+        info: t('dash.chart.info'),
+      }}
+      atRisk={{ label: t('dash.chart.atRisk'), values: risks }}
+      format={money}
+    />
   );
 }
 
@@ -412,12 +478,14 @@ function Priority({
   const fail = (error: unknown) => toast({ tone: 'error', title: failureText(error, t) });
 
   let sentence: string;
+  let figure = '';
   let button: ReactNode = null;
   let aside: ReactNode = null;
   if (priority === null) {
     sentence = t('dash.priority.none.title');
   } else {
     const amount = money(priority.revenue);
+    figure = amount;
     switch (priority.kind) {
       case 'approve':
         sentence = plural('dash.priority.approve.sentence', priority.actions, { amount });
@@ -544,7 +612,9 @@ function Priority({
           {priority === null ? (
             <CircleCheck aria-hidden="true" className="mt-1 size-4 shrink-0 text-accent" />
           ) : null}
-          {sentence}
+          <span>
+            <Figures text={sentence} figures={[figure]} />
+          </span>
         </h2>
       </div>
       {button ? (
@@ -579,12 +649,12 @@ export interface Urgency {
   end: number | null;
 }
 
-const LEVEL_RANK = { scheduled_departure: 0, high: 1, medium: 2, low: 3 } as const;
-
 /**
- * The members who need attention, the most urgent first: leaving within 48 hours or a payment
- * failed, then the departures, then the highest scores, the soonest end first. Before the first
- * scores, Whop's facts (a cancellation scheduled, a payment failed).
+ * The members who need attention, the most urgent first (brief v4 §13), in this order: leaving
+ * within 7 days, then a payment failed and not recovered, then the highest risk score, then what
+ * they pay a month, the soonest end last. A member at 100 leaving in six days always comes
+ * before a failed payment at 79. Before the first scores, Whop's facts (a cancellation
+ * scheduled, a payment failed).
  */
 export function mostUrgent(members: readonly MemberRow[], now: number): Urgency[] {
   const scored = members.some((m) => m.risk !== null);
@@ -603,8 +673,10 @@ export function mostUrgent(members: readonly MemberRow[], now: number): Urgency[
         urgent: leavingSoon || paymentFailed,
         leavingSoon,
         leaving,
+        leavingThisWeek: leaving && end !== null && end - now <= FIRST_MS,
         paymentFailed,
         end,
+        monthly: monthlyOf(member.membership) ?? 0,
       };
     })
     .filter(({ member, leaving, paymentFailed }) =>
@@ -616,12 +688,13 @@ export function mostUrgent(members: readonly MemberRow[], now: number): Urgency[
     )
     .sort(
       (a, b) =>
-        Number(b.urgent) - Number(a.urgent) ||
-        (a.member.risk ? LEVEL_RANK[a.member.risk.level] : 4) -
-          (b.member.risk ? LEVEL_RANK[b.member.risk.level] : 4) ||
+        Number(b.leavingThisWeek) - Number(a.leavingThisWeek) ||
+        Number(b.paymentFailed) - Number(a.paymentFailed) ||
         (b.member.risk?.score ?? 0) - (a.member.risk?.score ?? 0) ||
+        b.monthly - a.monthly ||
         (a.end ?? Infinity) - (b.end ?? Infinity),
-    );
+    )
+    .map(({ leavingThisWeek: _week, monthly: _monthly, ...urgency }) => urgency);
 }
 
 /**
@@ -802,6 +875,7 @@ const STRIP_CELLS = [
 function ActionsStrip({ view }: { view: DashboardView | null }) {
   const { t, plural, number } = useI18n();
   const titleId = useId();
+  const money = useMoney(view?.currency ?? null);
   if (!view) return <Skeleton className="h-20 w-full rounded-xl" />;
   const done = view.stayputActions30d;
   const stats = [
@@ -822,7 +896,20 @@ function ActionsStrip({ view }: { view: DashboardView | null }) {
       <dl className="mt-4 grid grid-cols-2 gap-y-6 @3xl:grid-cols-4">
         {stats.map((stat, index) => (
           <div key={stat.key} className={`flex flex-col-reverse gap-1 ${STRIP_CELLS[index]}`}>
-            <dt className="text-[0.8125rem] text-subtle">{stat.label}</dt>
+            <dt className="text-[0.8125rem] text-subtle">
+              {stat.key === 'saved' && view.currency ? (
+                // What those members' plans paid in 30 days: the chart's 30-day total (§13).
+                <LabelTip
+                  tip={t('dash.strip.savedInfo', {
+                    amount: money(savedOver(view.revenueHistory, 30)),
+                  })}
+                >
+                  {stat.label}
+                </LabelTip>
+              ) : (
+                stat.label
+              )}
+            </dt>
             <dd className="metric text-2xl text-fg">
               <AnimatedNumber
                 value={stat.value}

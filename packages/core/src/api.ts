@@ -138,6 +138,10 @@ export interface DashboardView {
     paymentRetries: number;
     offers: number;
     pauses: number;
+    /**
+     * Members saved (direct saves in `currency`) over the chart's last 30 days, each once: their
+     * plans are the chart's 30-day total (brief v4 §13).
+     */
     saved: number;
   };
   mode: 'auto' | 'manual';
@@ -145,7 +149,11 @@ export interface DashboardView {
   testMode: boolean;
   /** Members at each level, day by day over the last 30 days (the daily score history). */
   riskHistory: RiskDay[];
-  /** The money saved and the money at risk, day by day over the last 90 days (the chart). */
+  /**
+   * The money saved and the money at risk, day by day (the chart): from the 1st of the month 89
+   * days ago to today, so 90 days at least and each month whole, its balance adding up from its
+   * 1st (brief v4 §8).
+   */
   revenueHistory: RevenueDay[];
   /** The « Getting started » steps; the card is gone once all four are done. */
   gettingStarted: GettingStarted;

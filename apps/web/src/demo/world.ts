@@ -185,6 +185,51 @@ const PEOPLE: readonly Person[] = [
   person('Lucie Moulin', 'monthly', null, 0, 120, 52, undefined, { left: 40 }),
 ];
 
+/**
+ * What StayPut saved, member by member (the Worker's `stayput.saves`): a payment recovered after
+ * a retry, a member back from a pause, a cancellation taken back, each at the price of the
+ * member's plan. The three most recent are the feed's. Within 30 days never the same member
+ * twice (« 7 members saved » are seven plans paid), and none between 29 and 30 days ago, so that
+ * count does not change with the hour the demo opens. Far enough back to fill the chart's first
+ * month whatever the date.
+ */
+const SAVES: readonly { name: string; ago: number }[] = [
+  { name: 'Clara Faure', ago: 41 * MINUTE },
+  { name: 'Anaïs Robin', ago: 26 * HOUR },
+  { name: 'Arthur Lemoine', ago: 41 * HOUR },
+  { name: 'Sofia Ricci', ago: 6 * DAY + 7 * HOUR },
+  { name: 'Camille Laurent', ago: 11 * DAY + 3 * HOUR },
+  { name: 'Jade Mercier', ago: 18 * DAY + 9 * HOUR },
+  { name: 'Inès Haddad', ago: 23 * DAY + 5 * HOUR },
+  { name: 'Juliette Caron', ago: 31 * DAY + 4 * HOUR },
+  { name: 'Karim Belkacem', ago: 34 * DAY + 6 * HOUR },
+  { name: 'Mehdi Amrani', ago: 45 * DAY + 3 * HOUR },
+  // The year's plan, once.
+  { name: 'Lucas Petit', ago: 52 * DAY + 5 * HOUR },
+  { name: 'Rose Gauthier', ago: 58 * DAY + 9 * HOUR },
+  { name: 'Emma Rousseau', ago: 64 * DAY + 2 * HOUR },
+  { name: 'Gabriel Roux', ago: 70 * DAY + 6 * HOUR },
+  { name: 'Léa Moreau', ago: 77 * DAY + 4 * HOUR },
+  { name: 'Nathan Girard', ago: 85 * DAY + 7 * HOUR },
+  { name: 'Tom Barbier', ago: 93 * DAY + 3 * HOUR },
+  { name: 'Inès Haddad', ago: 101 * DAY + 5 * HOUR },
+  { name: 'Camille Laurent', ago: 108 * DAY + 2 * HOUR },
+  { name: 'Jade Mercier', ago: 116 * DAY + 8 * HOUR },
+];
+
+/** How long ago StayPut last saved that member, when it was less than `within` ago. */
+function savedWithin(name: string, within: number): number | undefined {
+  const agos = SAVES.filter((save) => save.name === name && save.ago < within).map((s) => s.ago);
+  return agos.length > 0 ? Math.min(...agos) : undefined;
+}
+
+/** The price of a member's plan: what StayPut saved when it saved them. */
+function planPrice(name: string): number {
+  const plan = PEOPLE.find((p) => p.name === name)?.plan;
+  if (!plan) throw new Error(`${name}: no plan to save`);
+  return PLANS[plan].price;
+}
+
 /** Seeded random numbers (mulberry32): the same community at every visit. */
 function seeded(seed: number): () => number {
   let state = seed >>> 0;
@@ -243,6 +288,8 @@ export interface DemoWorld {
   /** Automations, Analytics, Integrations › Activity, Settings › Risk score (pages.ts). */
   pages: DemoPages;
   members: MembersPage;
+  /** What StayPut saved, payment by payment (the Worker's `stayput.saves`), the latest first. */
+  saves: readonly { memberId: string; at: string; amount: number }[];
   dashboard: () => DashboardView;
   feed: () => { items: FeedItem[] };
   sync: SyncStatus;
@@ -284,8 +331,10 @@ export function createWorld(now: number): DemoWorld {
       posts: count(2),
       lessons: count(3),
     };
-    // Renews on the day of the month (or of the year) they joined.
-    const sinceRenewal = plan ? p.joined % plan.days : 0;
+    // Renews on the day of the month (or of the year) they joined, unless StayPut saved a
+    // payment of theirs within the period: that payment started it, and is their last one.
+    const saved = plan ? savedWithin(p.name, plan.days * DAY) : undefined;
+    const sinceRenewal = plan ? (saved === undefined ? p.joined % plan.days : saved / DAY) : 0;
     const renewal = plan ? now + (plan.days - sinceRenewal) * DAY : null;
     const leftAt = p.left === undefined ? null : now - p.left * DAY;
     const lastActive = p.active === null ? null : at(p.active * DAY + between([1, 600]) * MINUTE);
@@ -328,7 +377,9 @@ export function createWorld(now: number): DemoWorld {
             currency: 'usd',
             at: p.failed
               ? at(between([2, 30]) * HOUR)
-              : new Date((leftAt ?? now) - Math.max(sinceRenewal, 0.5) * DAY).toISOString(),
+              : new Date(
+                  (leftAt ?? now) - (saved ?? Math.max(sinceRenewal, 0.5) * DAY),
+                ).toISOString(),
             failureReason: p.failed ?? null,
           }
         : null,
@@ -404,21 +455,8 @@ export function createWorld(now: number): DemoWorld {
     };
   });
 
-  // The money StayPut saved, payment by payment, over 90 days: the three of the feed first (a
-  // payment recovered after a retry, a member back from a pause), then one every few days, most
-  // of them a monthly plan, now and then a VIP, once a year's plan.
-  const savesMade: { ago: number; amount: number }[] = [
-    { ago: 41 * MINUTE, amount: 49 },
-    { ago: 26 * HOUR, amount: 149 },
-    { ago: 41 * HOUR, amount: 49 },
-  ];
-  // Every five to nine days, as payments fall due.
-  for (let day = 5; day < 90; day += 5 + Math.floor(random() * 5)) {
-    savesMade.push({
-      ago: day * DAY + between([1, 20]) * HOUR,
-      amount: day >= 50 && day <= 56 ? 470 : random() < 0.15 ? 149 : 49,
-    });
-  }
+  // The money StayPut saved, payment by payment: each member's plan, once.
+  const savesMade = SAVES.map((save) => ({ ...save, amount: planPrice(save.name) }));
   const monthOf = (moment: Date) => moment.getFullYear() * 12 + moment.getMonth();
   const thisMonth = monthOf(new Date(now));
   const savedIn = (month: number) =>
@@ -433,18 +471,48 @@ export function createWorld(now: number): DemoWorld {
     const day = localDay(new Date(now - save.ago));
     savedByDay.set(day, (savedByDay.get(day) ?? 0) + save.amount);
   }
-  // What the members at risk paid each month: higher three months ago, coming down as StayPut
-  // acts, with the day-to-day noise of a real community; today, the figure of the hero row.
-  const revenueHistory: RevenueDay[] = Array.from({ length: 90 }, (_, i) => {
-    const day = localDay(new Date(now - (89 - i) * DAY));
-    const trend = 1_180 - ((1_180 - atRiskRevenue) * i) / 89;
-    const noise = (random() - 0.5) * 160 + Math.sin(i / 6) * 45;
-    return {
-      day,
-      saved: savedByDay.get(day) ?? 0,
-      atRisk: i === 89 ? atRiskRevenue : Math.round(Math.max(atRiskRevenue * 0.8, trend + noise)),
-    };
-  });
+  // The chart's days, as the Worker sends them: from the 1st of the month 89 days ago up to
+  // today, so that each month's balance adds up from its 1st.
+  const today = localDay(new Date(now));
+  const historyDays: string[] = [];
+  const start = new Date(now - 89 * DAY);
+  for (
+    const cursor = new Date(start.getFullYear(), start.getMonth(), 1, 12);
+    localDay(cursor) <= today;
+    cursor.setDate(cursor.getDate() + 1)
+  ) {
+    historyDays.push(localDay(cursor));
+  }
+  // What the members at risk paid each month: today, the figure of the hero row; before, a member
+  // crossing into high risk or out of it a few times a week, at their plan's price, so the total
+  // moves by steps; higher three months ago, before StayPut was at work. Counted back from today,
+  // each step toward that slope when the total has drifted from it.
+  const lastDay = historyDays.length - 1;
+  const atRiskByDay: number[] = [];
+  atRiskByDay[lastDay] = atRiskRevenue;
+  for (let i = lastDay - 1; i >= 0; i--) {
+    const trend = 1_180 - ((1_180 - atRiskRevenue) * i) / lastDay;
+    let value = atRiskByDay[i + 1]!;
+    if (random() < 0.3) {
+      const gap = trend - value;
+      const price = Math.abs(gap) > 100 && random() < 0.4 ? monthly('vip') : monthly('monthly');
+      const up = Math.abs(gap) > price / 2 ? gap > 0 : random() < 0.5;
+      value += up ? price : -price;
+    }
+    atRiskByDay[i] = round(Math.max(atRiskRevenue * 0.8, value));
+  }
+  const revenueHistory: RevenueDay[] = historyDays.map((day, i) => ({
+    day,
+    saved: savedByDay.get(day) ?? 0,
+    atRisk: atRiskByDay[i]!,
+  }));
+  // The members saved in the chart's last 30 days, each once: their plans are its 30-day total.
+  const last30 = new Set(revenueHistory.slice(-30).map((entry) => entry.day));
+  const savedMembers30d = new Set(
+    savesMade
+      .filter((save) => last30.has(localDay(new Date(now - save.ago))))
+      .map((save) => save.name),
+  ).size;
   const gettingStarted: GettingStarted = {
     discord: true,
     automation: true,
@@ -627,6 +695,11 @@ export function createWorld(now: number): DemoWorld {
       testMode: false,
     },
     members,
+    saves: savesMade.map((save) => ({
+      memberId: byName(save.name).id,
+      at: at(save.ago),
+      amount: save.amount,
+    })),
     sync,
     integrations,
     settings,
@@ -672,7 +745,7 @@ export function createWorld(now: number): DemoWorld {
           paymentRetries: 7,
           offers: 5,
           pauses: 6,
-          saved: savesMade.filter((save) => save.ago < 30 * DAY).length,
+          saved: savedMembers30d,
         },
         mode: settings.mode,
         testMode: settings.dryRun,

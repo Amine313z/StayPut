@@ -3,8 +3,9 @@
  * Inspect (.github/workflows/inspect.yml): the deployed demo in a real browser, as a creator sees
  * it. Says whether StayPut's fonts loaded (Satoshi for the numbers and titles, Geist for the UI:
  * no fallback rendering), which font every figure and text is drawn in, whether the amounts carry
- * their cents and the demo opened in English, whether the chart drew its data, and what the
- * browser complained about; keeps screenshots of the Dashboard (desktop, phone, the chart's
+ * their cents and the demo opened in English, whether the chart drew its data and ends on the
+ * balance's amount (brief v4 §13), who comes first in « Needs attention », and what the browser
+ * complained about; keeps screenshots of the Dashboard (desktop, the balance, phone, the chart's
  * tooltip). Fails when any of these is wrong. Reads nothing private: the demo is answered in the
  * browser.
  *
@@ -36,7 +37,7 @@ async function open(viewport) {
     if (response.status() >= 400) problems.push(`HTTP ${response.status()}: ${response.url()}`);
   });
   await page.goto(`${base}/demo`, { waitUntil: 'networkidle' });
-  await page.getByText('Revenue saved this month').first().waitFor({ timeout: 30_000 });
+  await page.getByText('Revenue saved · This month').first().waitFor({ timeout: 30_000 });
   await page.waitForFunction(() => !document.querySelector('.skeleton'), null, {
     timeout: 30_000,
   });
@@ -111,8 +112,30 @@ report.hero = await desktop.page.evaluate(() =>
 );
 // Amounts as Whop writes them (brief v4 §7): the symbol and the cents, « $247.00 ».
 report.amountsWithCents = report.hero.slice(0, 2).every((text) => /^\$[\d,]+\.\d{2}$/.test(text));
+// The balance (brief v4 §8, §13): one number for the amount and the end of its line, the
+// difference with last month under it, 7D / 30D / 90D; the most urgent member first.
+const balance = desktop.page.getByRole('region', { name: 'Your money this month' });
+report.balance = await balance.evaluate((section) => {
+  const rows = [...section.querySelectorAll('table tbody tr')];
+  return {
+    amount: section.querySelector('dd')?.textContent ?? null,
+    chartEnds: rows.at(-1)?.querySelector('td')?.textContent ?? null,
+    delta:
+      [...section.querySelectorAll('p')]
+        .find((p) => / vs last month/.test(p.textContent ?? ''))
+        ?.querySelector('button')?.textContent ?? null,
+    periods: [...section.querySelectorAll('[role="radio"]')].map((radio) => radio.textContent),
+  };
+});
+report.firstNeedingAttention = await desktop.page.evaluate(() => {
+  const title = [...document.querySelectorAll('h2')].find(
+    (h) => h.textContent === 'Needs attention',
+  );
+  return title?.closest('section')?.querySelector('li p')?.textContent ?? null;
+});
 await desktop.page.screenshot({ path: `${out}/dashboard-1440.png` });
 await desktop.page.screenshot({ path: `${out}/dashboard-1440-full.png`, fullPage: true });
+await balance.screenshot({ path: `${out}/dashboard-balance.png` });
 const chart = desktop.page.getByRole('group', { name: 'Revenue saved vs at risk' });
 const box = await chart.boundingBox();
 if (box) {
@@ -138,12 +161,17 @@ const ok =
   report.fonts.textInGeist &&
   report.fonts.language === 'en' &&
   report.amountsWithCents &&
-  report.chart.linesDrawn >= 2;
+  report.chart.linesDrawn >= 2 &&
+  report.balance.amount !== null &&
+  report.balance.amount === report.balance.chartEnds &&
+  /^[+−]\$[\d,]+\.\d{2} vs last month$/.test(report.balance.delta ?? '') &&
+  report.balance.periods.join(' ') === '7D 30D 90D' &&
+  report.firstNeedingAttention === 'Hugo Bernard';
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, or the chart drew nothing: see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing or does not end on the balance, or « Needs attention » is out of order: see the report above.',
   );
   process.exitCode = 1;
 }

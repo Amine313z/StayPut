@@ -22,9 +22,9 @@ interface MetricProps {
 }
 
 /**
- * The one large amount of the screen, as Whop writes a balance: Satoshi 700, 48 px, solid white
- * (the signature gradient is the primary button's and the logo's, never an amount's), on the
- * light that sits behind the hero block (the page draws it: `.hero-glow`).
+ * The one large amount of the screen, as Whop writes a balance (brief v4 §8): its label in Geist
+ * 500, 13 px, white; the amount in Satoshi 700, 48 px, solid white (the signature gradient is the
+ * primary button's and the logo's, never an amount's), on the light behind it (`.hero-glow`).
  */
 export function MetricHero({
   label,
@@ -38,11 +38,11 @@ export function MetricHero({
   return (
     <dl className={`flex min-w-0 flex-col ${className}`}>
       <dt>
-        <LabelTip tip={tip} className="label-text">
+        <LabelTip tip={tip} className="text-[0.8125rem] font-medium text-fg">
           {label}
         </LabelTip>
       </dt>
-      <dd className="mt-4">
+      <dd className="mt-2">
         {value === null ? (
           <span className="metric-hero text-subtle">{empty}</span>
         ) : (
@@ -59,7 +59,7 @@ export function MetricHero({
   );
 }
 
-/** A number of second rank beside the hero: Satoshi 600, 28 px, white. */
+/** A compact figure beside the balance: its label Geist 13 px white-500, Satoshi 600 28 px. */
 export function SecondaryMetric({
   label,
   tip,
@@ -72,11 +72,11 @@ export function SecondaryMetric({
   return (
     <dl className={`flex min-w-0 flex-col ${className}`}>
       <dt>
-        <LabelTip tip={tip} className="label-text">
+        <LabelTip tip={tip} className="text-[0.8125rem] font-medium text-subtle">
           {label}
         </LabelTip>
       </dt>
-      <dd className="mt-3">
+      <dd className="mt-1">
         {value === null ? (
           <span className="metric-hero text-subtle">{empty}</span>
         ) : (

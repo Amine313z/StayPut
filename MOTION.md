@@ -19,6 +19,9 @@ uses the same few gestures, from `apps/web/src/motion.ts` (Motion, `motion/react
 | `change`   | 600 ms                           | a number moving from its old value to a new one    |
 | `ring`     | 700 ms                           | a risk ring filling to its score                   |
 | `draw`     | 1.2 s                            | a chart drawing its lines, a new row's pulse       |
+| `fill`     | 400 ms                           | a chart's area fading in once its line is drawn    |
+| `morph`    | 500 ms                           | a chart's curve turning into another period's      |
+| `pulse`    | 1.2 s                            | today's dot on a chart: a pulse, then a pause      |
 | `tooltip`  | 120 ms                           | a tooltip fading in                                |
 | `SPRING`   | stiffness 380, damping 32        | drawers and toggles only                           |
 | Stagger    | 60 ms                            | sections (and rows) of a page coming in one by one |
@@ -33,24 +36,28 @@ No bounce on data: a figure lands where it is, once.
   move.
 - **Sections**: come in one after the other, 60 ms apart (`<Stagger>` + `<StaggerItem>`).
 - **Numbers**: count up from 0 the first time in 900 ms, then move from the old value to each
-  new one in 600 ms (`useCountUp`), cents included, tabular so the width never jumps. Then a
-  soft turquoise light pulses behind the figure, on load and each time it gets better: the
-  figure again, light turquoise and blurred (`.number-glow`, drawn by CSS from `data-glow`, so
-  the page's text holds the figure once), whose opacity alone moves. When it gets worse the
-  figure dims a moment instead, never red. Which way is better belongs to the figure (revenue at
-  risk going down is good).
+  new one in 600 ms (`useCountUp`), cents included, tabular so the width never jumps. Each time
+  a figure gets better, once it has landed, a soft turquoise light pulses behind it: the figure
+  again, light turquoise and blurred (`.number-glow`, drawn by CSS from `data-glow`, so the
+  page's text holds the figure once), whose opacity alone moves. When it gets worse the figure
+  dims for 200 ms instead, never red. Which way is better belongs to the figure (revenue at risk
+  going down is good). Nothing pulses on load: the count is the arrival.
+- **The balance** (the Dashboard's hero, brief v4 §8): its light follows the cursor by at most
+  20 px (a computer only, never with less motion asked), moved by style so nothing redraws.
 - **Risk rings**: the turquoise stroke draws from 0 to the score in 700 ms, each row's ring a
   little after the one above it.
-- **Charts**: the lines draw in from the left in 1.2 s (one clip reveals the lines and their
-  area together) while the gradient area fades in. A new period (7, 30, 90 days) draws in again
-  while the old one fades out in 150 ms. The crosshair and the markers follow the pointer (or
-  the arrow keys) at once.
+- **Charts**: the lines draw in from the left in 1.2 s (one clip reveals them), then the area
+  fades in (400 ms) and today's dot appears, pulsing every 2.4 s (scale 1 → 1.8, opacity 0.6 →
+  0). A new period (7, 30, 90 days) is not drawn again: the curve turns into the new one in
+  500 ms (every period is read at the same 90 places of a monotone curve, so the paths match
+  point for point), today's dot gliding with it. The hairline, the dots on the lines, the
+  tooltip and the day under the pointer follow it (or the arrow keys) with 80 ms of smoothing.
 - **Tooltips** (a label's, a chart's): fade in in 120 ms, two lines at most.
-- **Choices side by side** (a period): the chosen one's pill slides to it (250 ms). The side
-  menu's 2 px turquoise bar slides to the open section the same way.
+- **Choices side by side** (a period, as small pills): the chosen one's pill slides to it
+  (300 ms). The side menu's 2 px turquoise bar slides to the open section the same way.
 - **Progress** (« Getting started »): the bar grows from the left (`scaleX`).
 - **Lists** (« Needs attention »): a member who joins the list slides in with a short turquoise
-  pulse (1.2 s, opacity only); one who leaves it folds away (opacity, scale 0.98, 150 ms) and the
+  pulse (1.2 s, opacity only); one who leaves it folds away (opacity, scale 0.98, 120 ms) and the
   rows below close up. On hover a row lifts 2 px while a surface fades in behind it.
 - **Buttons**: press scales to 0.98; while working, a spinner takes the label's place without
   changing the button's size (the label stays for screen readers); on success a check mark
@@ -78,14 +85,15 @@ are switched off with Tailwind's `motion-reduce:`.
   `text-shadow`: the blur is drawn once.
 - Charts are drawn by StayPut itself in SVG (`ui/charts/`), a few kilobytes: no chart library
   (Recharts weighed 109 KB compressed for one area chart, and animates every point in
-  JavaScript with its own easing).
+  JavaScript with its own easing). A period change animates one attribute per line (its path),
+  never a point at a time.
 - 60 fps on a mid-range laptop inside Whop's frame is the bar.
 
 ## Adding a screen
 
 1. Wrap the page in `<Page>` (it applies `pageVariants`).
 2. Put its sections in a `<Stagger>` group; use `<MetricHero>` / `<SecondaryMetric>`,
-   `<AreaChart>`, `<MemberListRow>`, `<Skeleton>`.
+   `<BalanceChart>`, `<MemberListRow>`, `<Skeleton>`.
 3. Never write a duration or an easing by hand: take them from `motion.ts`.
 
 ## Tests

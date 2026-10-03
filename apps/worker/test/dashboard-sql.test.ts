@@ -140,7 +140,7 @@ describe('the home of the dashboard', () => {
     });
     const ines = await member('Ines', -40, { price: 29, level: 'low' });
     await member('Max', -45, { price: 19, status: 'left', endedAt: -10 });
-    await member('Old', -90, { price: 19, status: 'left', endedAt: -60 });
+    const old = await member('Old', -120, { price: 19, status: 'left', endedAt: -60 });
     await member('Zoe', -3, { price: 29, level: 'low' });
     await member('Calm', -70, { price: 15, level: 'high', dnc: true });
 
@@ -160,6 +160,12 @@ describe('the home of the dashboard', () => {
     await save(ines, 'influenced', 29, -2, 'pay_B');
     await save(ines, 'direct', 20, -20, 'pay_C');
     await save(ines, 'direct', 999, -60, 'pay_D');
+    // Lea: a renewal after a message (not money StayPut saved itself), and a payment saved on
+    // 15 September at 19:36 in Paris, 30 calendar days ago: neither is in « members saved ».
+    await save(lea, 'influenced', 49, -5, 'pay_E');
+    await save(lea, 'direct', 49, -29.6, 'pay_F');
+    // 7 July: before the 90 days, in the first month of the chart.
+    await save(old, 'direct', 19, -100, 'pay_G');
 
     for (const [day, levels] of [
       [-1, ['high', 'high', 'scheduled_departure', 'low']],
@@ -183,8 +189,8 @@ describe('the home of the dashboard', () => {
     expect(rest).toEqual({
       currency: 'EUR',
       saved: {
-        thisMonth: { direct: 49, influenced: 29, saves: 2 },
-        lastMonth: { direct: 20 },
+        thisMonth: { direct: 49, influenced: 78, saves: 3 },
+        lastMonth: { direct: 69 },
         otherCurrencies: false,
       },
       // Lea 49, Paul 99, Ines 29, Zoe 29, Calm 15: never the team's own membership.
@@ -195,6 +201,7 @@ describe('the home of the dashboard', () => {
       members: { total: 5, newLast7Days: 1 },
       memberActivity30d: 5,
       // The pause action applies an accepted offer: no survey or creator offer made one here.
+      // Saved: Ines alone, twice (the chart's last 30 days, 16 September to today).
       stayputActions30d: {
         total: 3,
         messages: 1,
@@ -214,10 +221,17 @@ describe('the home of the dashboard', () => {
       priority: { kind: 'approve', actions: 1, members: 1, revenue: 99 },
     });
 
-    // 90 days in the community's calendar, the last one today.
-    expect(revenueHistory).toHaveLength(90);
-    expect(revenueHistory[0]?.day).toBe('2026-07-18');
+    // In the community's calendar, from the 1st of the month 89 days ago (18 July) to today:
+    // each month whole, so that its balance adds up from its 1st.
+    expect(revenueHistory).toHaveLength(107);
+    expect(revenueHistory[0]?.day).toBe('2026-07-01');
+    expect(revenueHistory.at(-1)?.day).toBe('2026-10-15');
     const on = (day: string) => revenueHistory.find((d) => d.day === day);
+    expect(on('2026-07-07')).toEqual({ day: '2026-07-07', saved: 19, atRisk: null });
+    expect(on('2026-09-15')).toEqual({ day: '2026-09-15', saved: 49, atRisk: null });
+    // The month's days add up to the hero's figure.
+    const october = revenueHistory.filter((d) => d.day.startsWith('2026-10'));
+    expect(october.reduce((total, d) => total + d.saved, 0)).toBe(rest.saved.thisMonth.direct);
     // Today: the live figure of the hero row (Lea 49, Paul 99, Calm 15).
     expect(on('2026-10-15')).toEqual({ day: '2026-10-15', saved: 0, atRisk: 163 });
     // Yesterday: 49 saved; Lea and Calm high, Paul leaving.

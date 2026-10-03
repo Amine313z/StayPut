@@ -153,8 +153,8 @@ npm run db:bundle    # after adding a migration: supabase/install.sql + schema-v
   `contrast.test.ts` checks the exact values, that every color written in `apps/web/src` is one
   of them, and WCAG AA; a new text / background pair goes into its `PAIRS`). Building blocks in
   `apps/web/src/ui/` (Button / ActionButton, MetricHero / SecondaryMetric, LabelTip, RiskRing,
-  AreaChart, GettingStartedPill, Card, Badge / Notice, EmptyState, Avatar, brand marks,
-  ExternalButton); icons from `lucide-react`. Fonts served by StayPut: Geist (npm) and Satoshi,
+  BalanceChart, GettingStartedPill, Card, Badge / Notice, EmptyState, Avatar, brand marks,
+  ExternalButton, Figures for the amounts inside a sentence); icons from `lucide-react`. Fonts served by StayPut: Geist (npm) and Satoshi,
   downloaded from Fontshare at each deployment (`scripts/deploy/satoshi.ts`) and **never
   committed** (its license forbids redistribution and the repository is public). Motion rules:
   `MOTION.md`. The creator view loads its data once (`CreatorView`, read by

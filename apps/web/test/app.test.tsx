@@ -301,12 +301,14 @@ const ACTION_SETTINGS: ActionSettingsView = {
 const NO_ALUMNI: AlumniView = { offer: null, entered: 0, left: 0, returned: 0 };
 
 /**
- * 90 days of the home's chart, the last one Oct 1: $49 saved on Sep 30 and on Oct 1; the members
- * at risk paid $147 a month from Sep 2 (the first scores), $98 today.
+ * The home's chart as the Worker sends it on Oct 1: from Jul 1 (the 1st of the month 89 days
+ * earlier). Saved: $49 on Sep 1, a $149 VIP on Sep 30, two $49 members today ($98, the hero's).
+ * The members at risk paid $147 a month from Sep 2 (the first scores), $98 today.
  */
-const REVENUE_HISTORY: RevenueDay[] = Array.from({ length: 90 }, (_, i) => {
-  const day = new Date(Date.UTC(2026, 9, 1) - (89 - i) * 86_400_000).toISOString().slice(0, 10);
-  return { day, saved: day >= '2026-09-30' ? 49 : 0, atRisk: i < 60 ? null : i === 89 ? 98 : 147 };
+const REVENUE_HISTORY: RevenueDay[] = Array.from({ length: 93 }, (_, i) => {
+  const day = new Date(Date.UTC(2026, 6, 1) + i * 86_400_000).toISOString().slice(0, 10);
+  const saved = { '2026-09-01': 49, '2026-09-30': 149, '2026-10-01': 98 }[day] ?? 0;
+  return { day, saved, atRisk: day < '2026-09-02' ? null : day === '2026-10-01' ? 98 : 147 };
 });
 
 /** The home's figures for MEMBERS: $245 a month, $98 of it at risk, Bruno to message. */
@@ -314,7 +316,7 @@ const HOME: DashboardView = {
   currency: 'USD',
   saved: {
     thisMonth: { direct: 98, influenced: 49, saves: 3 },
-    lastMonth: { direct: 49 },
+    lastMonth: { direct: 198 },
     otherCurrencies: false,
   },
   monthlyRevenue: 245,
@@ -455,11 +457,17 @@ describe('creator view', () => {
         .map((tip) => tip.textContent),
     ).toEqual([
       'Payments recovered, cancellations withdrawn and pauses ended this month. Each counts once.',
+      'Against the same day last month, Sep 1: $49.00 saved then.',
       'What the members leaving or at high risk pay each month, out of $245.00.',
       '1 leaving, 1 at high risk. Scored every hour, from 0 to 100.',
-      'Saved: added up over the period. At risk: what members at risk paid a month, day by day.',
+      'Saved: added up from the 1st of each month, so today is this month’s amount. At risk: what members at risk paid a month.',
     ]);
-    const label = within(hero).getByRole('button', { name: 'Revenue saved this month' });
+    // As Whop writes a balance: the month so far, then against the same days last month,
+    // turquoise when ahead.
+    const delta = within(hero).getByRole('button', { name: '+$49.00 vs last month' });
+    expect(delta.closest('p')!.className).toContain('text-accent');
+    expect(delta.querySelector('.num')?.textContent).toBe('+$49.00');
+    const label = within(hero).getByRole('button', { name: 'Revenue saved · This month' });
     expect(document.getElementById(label.getAttribute('aria-describedby')!)?.textContent).toMatch(
       /^Payments recovered/,
     );
@@ -482,13 +490,24 @@ describe('creator view', () => {
     const strip = screen
       .getByRole('heading', { name: 'StayPut actions (30d)' })
       .closest('section')!;
+    // Each number under its words (the label's own, its tooltip aside).
+    const cells = () =>
+      Array.from(strip.querySelectorAll('dl > div')).map((cell) => [
+        (within(cell as HTMLElement).queryByRole('button') ?? cell.querySelector('dt'))!
+          .textContent,
+        cell.querySelector('dd')!.textContent,
+      ]);
     await vi.waitFor(() =>
-      expect(Array.from(strip.querySelectorAll('dl > div')).map((d) => d.textContent)).toEqual([
-        'messages sent4',
-        'payment retried1',
-        'pauses offered2',
-        'members saved3',
+      expect(cells()).toEqual([
+        ['messages sent', '4'],
+        ['payment retried', '1'],
+        ['pauses offered', '2'],
+        ['members saved', '3'],
       ]),
+    );
+    // Those three members' plans are what the chart saved in 30 days (brief v4 §13).
+    expect(within(strip).getByRole('tooltip').textContent).toBe(
+      'What their plans paid: $247.00 in 30 days.',
     );
   });
 
@@ -725,34 +744,43 @@ describe('creator view', () => {
       within(periods)
         .getAllByRole('radio')
         .map((radio) => `${radio.textContent} ${radio.getAttribute('aria-checked')}`),
-    ).toEqual(['7d false', '30d true', '90d false']);
+    ).toEqual(['7D false', '30D true', '90D false']);
     // Said in a sentence, and as a table, for screen readers; the saved money added up.
     const summary = () => chart.querySelector('figcaption')?.textContent;
     expect(summary()).toBe(
-      'Over the last 30 days, StayPut saved $98.00; the revenue at risk went from $147.00 to $98.00 a month.',
+      'Over the last 30 days, StayPut saved $247.00; the revenue at risk went from $147.00 to $98.00 a month.',
     );
+    // Today the line ends on the hero's figure: the month's balance, from its 1st.
     const rows = () => within(chart).getAllByRole('row');
     expect(rows()).toHaveLength(31);
     expect(rows()[30]!.textContent).toBe('Oct 1, 2026$98.00$98.00');
+    expect(rows()[29]!.textContent).toBe('Sep 30, 2026$198.00$147.00');
     // Before the first scores, no risk figure rather than a zero.
-    fireEvent.click(within(periods).getByRole('radio', { name: '90d' }));
+    fireEvent.click(within(periods).getByRole('radio', { name: '90D' }));
     expect(rows()).toHaveLength(91);
     expect(rows()[1]!.textContent).toBe('Jul 4, 2026$0.00—');
-    fireEvent.click(within(periods).getByRole('radio', { name: '7d' }));
+    fireEvent.click(within(periods).getByRole('radio', { name: '7D' }));
     expect(summary()).toBe(
-      'Over the last 7 days, StayPut saved $98.00; the revenue at risk went from $147.00 to $98.00 a month.',
+      'Over the last 7 days, StayPut saved $247.00; the revenue at risk went from $147.00 to $98.00 a month.',
     );
     // The keyboard walks the days, and each day's figures are said.
     const plot = within(chart).getByRole('group', { name: 'Revenue saved vs at risk' });
     const said = () => chart.querySelector('[aria-live]')?.textContent;
     fireEvent.focus(plot);
-    expect(said()).toBe('Oct 1, 2026: Revenue saved $98.00, Revenue at risk $98.00');
+    expect(said()).toBe('Oct 1, 2026: Saved $98.00, At risk $98.00');
     fireEvent.keyDown(plot, { key: 'ArrowLeft' });
-    expect(said()).toBe('Sep 30, 2026: Revenue saved $49.00, Revenue at risk $147.00');
+    expect(said()).toBe('Sep 30, 2026: Saved $198.00, At risk $147.00');
     fireEvent.keyDown(plot, { key: 'Home' });
-    expect(said()).toBe('Sep 25, 2026: Revenue saved $0.00, Revenue at risk $147.00');
+    expect(said()).toBe('Sep 25, 2026: Saved $49.00, At risk $147.00');
     fireEvent.keyDown(plot, { key: 'Escape' });
     expect(said()).toBe('');
+    // The members at risk, hidden and shown again from the legend.
+    const legend = within(chart).getByRole('button', { name: 'At risk' });
+    expect(legend.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(legend);
+    expect(legend.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(legend);
+    expect(legend.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('puts « Getting started » under the title, folded from two steps done, gone when done', async () => {
@@ -802,7 +830,7 @@ describe('creator view', () => {
     // Everything done: gone.
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
-    await screen.findByText('Revenue saved this month');
+    await screen.findByText('Revenue saved · This month');
     expect(screen.queryByRole('button', { name: /^Getting started/ })).toBeNull();
   });
 
@@ -4229,7 +4257,7 @@ describe('the actions (SPEC Phase 4)', () => {
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
     expect(headersOf.get('POST /api/creator/biz_A1/timezone')?.get('x-stayput-csrf')).toBe('1');
-    expect(await screen.findByText('Revenue saved this month')).toBeTruthy();
+    expect(await screen.findByText('Revenue saved · This month')).toBeTruthy();
     expect(calls.filter((call) => call.endsWith('/timezone'))).toHaveLength(1);
   });
 

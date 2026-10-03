@@ -100,7 +100,6 @@ export async function readDashboard(
       retries: number;
       offers: number;
       pauses: number;
-      saved_members: number;
       pending_actions: number;
       pending_members: string[];
     }>(
@@ -151,9 +150,6 @@ export async function readDashboard(
           + (select count(*) from stayput.creator_offers o
               where o.company_id = $1 and o.kind = 'pause_offer'
                 and o.created_at > $2::timestamptz - interval '30 days'))::int as pauses,
-         (select count(distinct v.member_id) from stayput.saves v
-           where v.company_id = $1 and v.saved_at > $2::timestamptz - interval '30 days'
-             and v.saved_at <= $2::timestamptz)::int as saved_members,
          (select count(*) from stayput.actions
            where company_id = $1 and status = 'proposed')::int as pending_actions,
          (select coalesce(jsonb_agg(distinct member_id), '[]'::jsonb) from stayput.actions
@@ -213,8 +209,9 @@ export async function readDashboard(
     );
 
     // The chart: what was saved each day (direct saves) and what the members at risk that day
-    // pay a month, over 90 days, in the community's main currency. A day without scores has no
-    // risk figure (null), not a zero.
+    // pay a month, in the community's main currency, from the 1st of the month 89 days ago to
+    // today: 90 days at least, each month whole so that its balance adds up from its 1st (brief
+    // v4 §8). A day without scores has no risk figure (null), not a zero.
     const chartCurrency = currency ?? savedCurrency ?? '';
     const revenue = await tx.query<RevenueDay>(
       `with paying as (
@@ -227,20 +224,24 @@ export async function readDashboard(
           group by ms.member_id
        ), today as (
          select ($2::timestamptz at time zone $3)::date as day
+       ), since as (
+         select date_trunc('month', (day - 89)::timestamp)::date as day from today
        ), days as (
-         select (t.day - n)::date as day from today t, generate_series(0, 89) as n
+         select (t.day - n)::date as day
+           from today t, since f, generate_series(0, t.day - f.day) as n
        ), scored as (
          select r.day, sum(case when r.level in ('high', 'scheduled_departure')
                                 then coalesce(p.monthly, 0) else 0 end) as at_risk
            from stayput.risk_scores r
            left join paying p on p.member_id = r.member_id
-          where r.company_id = $1 and r.day > (select day from today) - 90
+          where r.company_id = $1 and r.day >= (select day from since)
           group by r.day
        ), saved as (
          select (v.saved_at at time zone $3)::date as day, sum(v.amount) as amount
            from stayput.saves v
           where v.company_id = $1 and v.category = 'direct' and upper(v.currency) = $4
-            and v.saved_at > $2::timestamptz - interval '91 days' and v.saved_at <= $2::timestamptz
+            and v.saved_at >= ((select day from since)::timestamp at time zone $3)
+            and v.saved_at <= $2::timestamptz
           group by 1
        )
        select to_char(d.day, 'YYYY-MM-DD') as day,
@@ -250,6 +251,18 @@ export async function readDashboard(
          left join saved s on s.day = d.day
          left join scored k on k.day = d.day
         order by d.day`,
+      [companyId, at, company.zone, chartCurrency],
+    );
+
+    // The members StayPut saved in the chart's last 30 days, each once: the plans behind its
+    // 30-day total (brief v4 §13), so its direct saves, in its currency, on its days.
+    const [savedMembers] = await tx.query<{ members: number }>(
+      `select count(distinct v.member_id)::int as members
+         from stayput.saves v
+        where v.company_id = $1 and v.category = 'direct' and upper(v.currency) = $4
+          and v.saved_at >= ((($2::timestamptz at time zone $3)::date - 29)::timestamp
+                             at time zone $3)
+          and v.saved_at <= $2::timestamptz`,
       [companyId, at, company.zone, chartCurrency],
     );
 
@@ -351,7 +364,7 @@ export async function readDashboard(
         paymentRetries: f.retries,
         offers: f.offers,
         pauses: f.pauses,
-        saved: f.saved_members,
+        saved: savedMembers?.members ?? 0,
       },
       mode: company.mode,
       testMode: company.dry_run,

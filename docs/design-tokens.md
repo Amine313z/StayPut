@@ -119,8 +119,12 @@ Two families, both served by StayPut itself (the CSP allows no other origin):
 
 ## Charts
 
-- One value axis, round steps from 0. The main series is a 2 px turquoise line over a turquoise
-  gradient fading to transparent (`turq-300` 28 % → `turq-500` 10 % → 0); a second series is a
-  dashed white-300 line. A legend names them (never a color alone), a crosshair and a tooltip
-  with both values follow the pointer or the arrow keys, and screen readers get a sentence and
-  the table of the figures. Grid lines `black-600` at 60 %, axis labels 11 px white-500.
+- Drawn as Whop draws a balance (brief v4 §8, `ui/charts/BalanceChart.tsx`, its classes in
+  `ui/charts/theme.ts`): no box, no grid, no value axis, 220 px tall. The main series is a
+  smooth monotone 2 px `turq-300` line over its area, `turq-300` at 22 % fading to transparent;
+  a second series is a 1 px dashed white-500 line, shown or hidden from the legend. A dotted
+  baseline (1 px, white-500 at 30 %, 2 px dashes 4 apart, `.baseline-dots`); a 6 px turquoise
+  dot on today's point. The days stay out of the way: only the one under the pointer shows, in
+  11 px white-500. A hairline, a dot on each line and a compact tooltip (the date, then each
+  series' value) follow the pointer or the arrow keys; a legend names the series (never a color
+  alone), and screen readers get a sentence and the table of the figures.

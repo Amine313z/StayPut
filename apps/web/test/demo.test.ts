@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { RISK_FACTORS } from '@stayput/core';
+import { localDay } from '../src/demo/pages';
 import { createWorld } from '../src/demo/world';
+import { balanceWindow, savedOver } from '../src/views/creator/balance';
 
 const NOW = Date.parse('2026-10-02T10:00:00.000Z');
 
@@ -58,19 +60,45 @@ describe('the demo community', () => {
 
   it('tells one story, from the hero row to the chart', () => {
     const home = world.dashboard();
-    expect(home.revenueHistory).toHaveLength(90);
+    const history = home.revenueHistory;
+    // As the Worker sends it: from the 1st of the month 89 days ago (4 July) to today.
+    expect(history[0]!.day).toBe('2026-07-01');
+    expect(history.at(-1)!.day).toBe('2026-10-02');
+    expect(history).toHaveLength(94);
     // Today's risk is the hero row's; three months ago it was higher (StayPut at work).
-    expect(home.revenueHistory.at(-1)!.atRisk).toBe(home.atRisk.revenue);
-    expect(home.revenueHistory[0]!.atRisk).toBeGreaterThan(home.atRisk.revenue);
-    expect(home.revenueHistory.every((d) => d.atRisk !== null && d.atRisk > 0)).toBe(true);
-    // The month's money saved is its days' in the chart.
-    const month = home.revenueHistory.filter((d) => d.day.startsWith('2026-10'));
-    expect(home.saved.thisMonth.direct).toBe(month.reduce((total, d) => total + d.saved, 0));
+    expect(history.at(-1)!.atRisk).toBe(home.atRisk.revenue);
+    expect(history[0]!.atRisk).toBeGreaterThan(home.atRisk.revenue);
+    expect(history.every((d) => d.atRisk !== null && d.atRisk > 0)).toBe(true);
     // Credible: a payment saved every few days, a fraction of what the community earns.
-    const last30 = home.revenueHistory.slice(-30).reduce((total, d) => total + d.saved, 0);
+    const last30 = savedOver(history, 30);
     expect(last30).toBeGreaterThan(0);
     expect(last30 / home.monthlyRevenue!).toBeLessThan(0.25);
-    expect(home.stayputActions30d.saved).toBeGreaterThan(0);
+  });
+
+  it('has one number for the money saved: the hero, the chart, the members saved (§13)', () => {
+    const home = world.dashboard();
+    const history = home.revenueHistory;
+    // The hero is where the chart's line ends: the month's days added up, nothing forced.
+    expect(balanceWindow(history, 30).at(-1)!.saved).toBe(home.saved.thisMonth.direct);
+    expect(home.saved.thisMonth.direct).toBeGreaterThan(0);
+    // Each save is a member's plan, at its price.
+    const member = (id: string) => world.members.members.find((m) => m.id === id)!;
+    for (const save of world.saves)
+      expect(save.amount).toBe(member(save.memberId).membership!.price);
+    // « Members saved » are the chart's last 30 days, each member once: their plans add up to
+    // what the chart saved in those days.
+    const days = new Set(history.slice(-30).map((d) => d.day));
+    const saved = world.saves.filter((save) => days.has(localDay(new Date(save.at))));
+    const ids = saved.map((save) => save.memberId);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(home.stayputActions30d.saved).toBe(ids.length);
+    const plans = ids.reduce((total, id) => total + member(id).membership!.price!, 0);
+    expect(Math.round(plans * 100) / 100).toBe(savedOver(history, 30));
+    // The feed's saves are among them, and a member saved this period paid last that day.
+    for (const item of world.feed().items.filter((i) => i.event === 'saved')) {
+      expect(saved.find((save) => save.memberId === item.memberId)?.amount).toBe(item.amount);
+    }
+    for (const save of saved) expect(member(save.memberId).lastPayment!.at).toBe(save.at);
   });
 
   it('shows « Getting started » half done, and ticks the steps the visitor takes', () => {

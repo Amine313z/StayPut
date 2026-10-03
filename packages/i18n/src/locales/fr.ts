@@ -1084,7 +1084,11 @@ export const fr: Messages = {
   'error.demo': 'Cet écran se remplit avec les données de votre propre communauté.',
 
   'dash.money': 'Votre argent ce mois-ci',
-  'dash.saved': 'Revenus sauvés ce mois-ci',
+  'dash.saved': 'Revenus sauvés · Ce mois-ci',
+  'dash.delta': '{amount} par rapport au mois dernier',
+  'dash.delta.info':
+    'Comparé aux mêmes jours le mois dernier, du {from} au {to} : {amount} sauvés.',
+  'dash.delta.infoDay': 'Comparé au même jour le mois dernier, le {day} : {amount} sauvés.',
   'dash.atRisk': 'Revenus à risque',
   'dash.membersAtRisk': 'Membres à risque',
   'dash.noRevenue': 'Aucun abonnement payant pour l’instant.',
@@ -1196,9 +1200,9 @@ export const fr: Messages = {
     '{departures} sur le départ, {high} à risque élevé. Notés chaque heure, de 0 à 100.',
   'dash.chart.title': 'Revenus sauvés et revenus à risque',
   'dash.chart.info':
-    'Sauvés : cumulés sur la période. À risque : ce que payaient les membres à risque, jour après jour.',
-  'dash.chart.saved': 'Revenus sauvés',
-  'dash.chart.atRisk': 'Revenus à risque',
+    'Sauvé : additionné depuis le 1er de chaque mois, aujourd’hui c’est le montant du mois. À risque : ce que payaient par mois les membres à risque.',
+  'dash.chart.saved': 'Sauvé',
+  'dash.chart.atRisk': 'À risque',
   'dash.chart.period': 'Période',
   'dash.chart.days.one': '{count} j',
   'dash.chart.days.other': '{count} j',
@@ -1216,6 +1220,7 @@ export const fr: Messages = {
   'dash.strip.pauses.other': 'pauses proposées',
   'dash.strip.saved.one': 'membre sauvé',
   'dash.strip.saved.other': 'membres sauvés',
+  'dash.strip.savedInfo': 'Ce que leurs abonnements ont payé : {amount} en 30 jours.',
   'start.title': 'Pour bien démarrer',
   'start.progress': '{done}/{total}',
   'start.done': 'fait',

@@ -28,6 +28,12 @@ export const DURATION = {
   ring: 0.7,
   /** A chart drawing its line. */
   draw: 1.2,
+  /** A chart's area fading in once its line is drawn. */
+  fill: 0.4,
+  /** A chart's curve turning into another period's. */
+  morph: 0.5,
+  /** The light of a chart's last point: one pulse, then as long a pause (every 2.4 s). */
+  pulse: 1.2,
   /** A tooltip. */
   tooltip: 0.12,
 } as const;

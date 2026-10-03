@@ -1833,3 +1833,88 @@ prise en main ; 7. Automatisations ; 8. Analyses ; 9. Réglages ; 10. MOTION.md 
   compte depuis 0 en 900 ms la première fois puis va d'une valeur à l'autre en 600 ms ; l'anneau
   de risque se remplit en 700 ms. Le reste du système d'animation (§14) vient avec le tableau de
   bord, à l'étape 3.
+
+## 2026-10-03 — v4 : le solde façon Whop et le tri « Needs attention »
+
+Ordre du fondateur, dans cet ordre et un arrêt après chacun : 1. le solde au style Whop (§8) et
+le tri « Needs attention » ; 2. le bug Activity ; 3. le Guide (§10, §11) ; 4. la page Membres
+(§9.3). Ceci est le 1.
+
+### Le solde
+
+- En haut du tableau de bord, comme le « Total balance » de Whop : l'étiquette « Revenue saved ·
+  This month » (Geist 500, 13 px), le montant (Satoshi 700, 48 px, blanc), dessous l'écart
+  « +$98.00 vs last month », turquoise en avance, blanc-500 sinon (jamais rouge). Les revenus et
+  les membres à risque à sa droite sur un écran large, sous la courbe sur un écran étroit. 7D,
+  30D, 90D en petites pilules en haut à droite.
+- La courbe sous le solde, sans boîte : 220 px, une ligne turquoise lisse de 2 px, un fond
+  turquoise de 22 % à rien, une ligne de base pointillée, ni grille ni axe, la date seulement au
+  survol, un point de 6 px qui pulse sur aujourd'hui. Les membres à risque en tirets fins
+  blanc-500, à masquer depuis la légende. Au survol : un trait, un point sur chaque ligne et une
+  infobulle courte (la date, « Saved », « At risk »).
+
+### Un seul chiffre (§13)
+
+- La courbe montre **le solde du mois** : les montants sauvés additionnés depuis le 1er de
+  chaque mois. Elle finit donc aujourd'hui exactement sur le grand chiffre, et repart de zéro le
+  1er, comme un solde Whop après un versement. Le total de la période choisie est dans la phrase
+  lue aux lecteurs d'écran.
+- L'écart compare le mois en cours aux **mêmes jours** du mois dernier (du 1er à la date du
+  jour) : jamais un début de mois contre un mois entier. Le 1er, un jour contre un jour ; un mois
+  plus court s'arrête à son dernier jour (31 mars contre 28 février).
+- « Membres sauvés » (le bandeau des 30 jours) : les membres derrière les sauvetages
+  **directs**, dans la devise de la courbe, sur **les mêmes 30 jours calendaires** qu'elle,
+  chacun une fois. Leurs abonnements font le total des 30 derniers jours de la courbe, dit dans
+  l'infobulle (« What their plans paid: $543.00 in 30 days. »). Avant, le Worker comptait aussi
+  les renouvellements « influencés » et 30 × 24 h glissantes : deux chiffres qui pouvaient
+  diverger.
+- Le Worker envoie l'historique **depuis le 1er du mois d'il y a 89 jours** (90 à 120 jours) :
+  sans cela, le premier mois de la vue 90 jours commençait en son milieu et son solde était faux.
+- Des tests échouent si ces chiffres divergent : la démo (grand chiffre = fin de la courbe,
+  membres sauvés × prix de leur abonnement = total des 30 jours, un sauvetage = l'abonnement d'un
+  membre) et le Worker (un renouvellement influencé et un sauvetage d'il y a 30 jours calendaires
+  ne comptent pas ; les jours du mois de la courbe font le grand chiffre).
+
+### La démo
+
+- Chaque sauvetage est celui d'un vrai membre de la démo, au prix de son abonnement (49 $, 149 $
+  pour un VIP, 470 $ l'an une fois), jamais deux fois le même membre en 30 jours. Les trois du fil
+  d'activité (Clara Faure, Anaïs Robin, Arthur Lemoine) en font partie, et le dernier paiement
+  d'un membre sauvé est celui du sauvetage. Le 3 octobre : $247.00 ce mois-ci, +$98.00 face aux
+  mêmes jours de septembre, 7 membres sauvés pour $543.00 en 30 jours.
+- Le total à risque de la démo bouge par paliers, comme dans une vraie communauté : un membre
+  entre dans le risque ou en sort quelques fois par semaine, au prix de son abonnement (de
+  1 225,17 $ il y a trois mois à 731,17 $ aujourd'hui), au lieu d'un bruit jour par jour qui
+  faisait zigzaguer la ligne.
+
+### Le tri « Needs attention »
+
+- Dans cet ordre : 1. départ dans les 7 jours ; 2. paiement échoué non récupéré ; 3. score de
+  risque décroissant ; 4. revenu mensuel décroissant (un abonnement annuel compte pour un
+  douzième). Un membre à 100 qui part dans 6 jours passe toujours avant un paiement échoué à 79.
+  Le point rouge reste réservé au départ dans les 48 heures et au paiement échoué.
+
+### Animations (§14)
+
+- Trois jetons de plus : `fill` 400 ms (le fond, une fois la ligne tracée), `morph` 500 ms (une
+  autre période : la courbe se transforme au lieu d'être redessinée ; chaque période est lue aux
+  mêmes 90 points d'une courbe monotone, donc les tracés se correspondent point à point), `pulse`
+  1,2 s (le point d'aujourd'hui, toutes les 2,4 s). Le trait et l'infobulle suivent le pointeur
+  avec 80 ms de lissage ; la lueur du solde suit la souris de 20 px au plus (ordinateur
+  seulement, jamais si l'appareil demande moins d'animations).
+- Un chiffre ne pulse plus au chargement (le comptage est son arrivée) : la lumière turquoise
+  quand il s'améliore, une baisse de 200 ms quand il se dégrade.
+
+### Ménage
+
+- L'ancien graphique (`AreaChart`, avec axe et grille) n'est plus utilisé : retiré. Le style
+  commun des graphiques (`ui/charts/theme.ts`) passe aux valeurs v4 et `BalanceChart` le lit.
+- Le signe fait partie du montant (« +$98.00 », en Satoshi) : un lecteur d'écran le lisait à
+  part.
+
+### Incertain
+
+- La chute de la courbe le 1er du mois (le solde repart de zéro) : c'est ainsi que Whop dessine
+  un solde après un versement, et c'est ce qui fait finir la courbe sur le grand chiffre. Si le
+  fondateur préfère une courbe qui ne fait que monter sur la période choisie, le grand chiffre
+  devra alors suivre la période (« sur 30 jours ») plutôt que « ce mois-ci ».
