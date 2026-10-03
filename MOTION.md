@@ -60,8 +60,10 @@ No bounce on data: a figure lands where it is, once.
 - **Progress** (« Getting started »): the bar grows from the left (`scaleX`).
 - **Lists** (« Needs attention », the Members table): a member who joins the list comes in with
   a turquoise edge on its left that lights and fades (600 ms, opacity only); one who leaves it
-  folds away in 250 ms and the rows below close up. On hover a row lifts 2 px while black-700
-  fades in behind it (200 ms).
+  goes in 250 ms and the rows below close up (the table's row folds its height away; in « Needs
+  attention » it fades out, then the rows below slide up, 250 ms). On hover a row lifts 2 px
+  while black-700 fades in behind it (200 ms). Never `AnimatePresence mode="popLayout"`: it
+  injects a style block that the Content Security Policy refuses (`test/csp.test.ts`).
 - **The Members table** (brief v4 §9.3): its first ten rows fade in 30 ms apart (the others are
   there at once), their rings drawing 40 ms apart; the filter chips' pill slides to the chosen
   one (300 ms) and the list cross-fades (200 ms); a new order moves the rows at once.

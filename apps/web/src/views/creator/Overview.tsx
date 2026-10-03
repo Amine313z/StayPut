@@ -786,9 +786,9 @@ function NeedsAttention({
         ) : (
           <Stagger as="ul" className="@container/list divide-y divide-line">
             {/* The first rows come in with the page; one that shows up later comes in with a
-                turquoise edge (600 ms), one that goes folds away while the others close up
-                (250 ms, MOTION.md). */}
-            <AnimatePresence initial={false} mode="popLayout">
+                turquoise edge (600 ms); one that goes fades out, then the others close up (250 ms
+                each, MOTION.md). Never « popLayout »: it injects a style the CSP refuses. */}
+            <AnimatePresence initial={false}>
               {shown.map((item, index) => (
                 <motion.li
                   key={item.member.id}

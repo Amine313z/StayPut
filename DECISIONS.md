@@ -2128,7 +2128,14 @@ officiel, français dans la langue française).
   black-700 (200 ms) ; une ligne arrivée après coup a un liseré turquoise à gauche (600 ms) ; une
   ligne qui part se replie (250 ms). Les anneaux se dessinent en 700 ms, à 40 ms d'écart.
 - « Needs attention » suit désormais les mêmes règles de liste : liseré turquoise de 600 ms (au
-  lieu d'une lueur de 1,2 s) et repli en 250 ms (au lieu de 120 ms).
+  lieu d'une lueur de 1,2 s) ; une ligne qui part s'efface en 250 ms, puis les suivantes
+  remontent en 250 ms.
+- Jamais `AnimatePresence mode="popLayout"` : pour épingler l'élément qui sort, Motion injecte
+  une balise `<style>`, que la politique de sécurité de la page (`style-src 'self'`) refuse
+  (erreur dans la console, élément non épinglé). Le premier Inspect l'a relevé sur le fondu des
+  filtres ; le fondu superpose désormais l'ancienne et la nouvelle liste dans la même case d'une
+  grille. Seul un vrai navigateur le montre (happy-dom ne donne aucune taille aux éléments) :
+  `test/csp.test.ts` interdit ce mode dans les sources.
 
 ### Une seule formulation (§12)
 

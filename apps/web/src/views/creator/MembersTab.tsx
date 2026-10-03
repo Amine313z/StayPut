@@ -1,8 +1,8 @@
 import type { MemberRow, MembersPage } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
 import { BellOff, Search, Users } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { AnimatePresence, motion, useIsPresent } from 'motion/react';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { postJson, type Loadable } from '../../api';
 import { MemberDrawer } from '../../components/MemberDrawer';
@@ -116,21 +116,14 @@ export function MembersTab() {
           </label>
         </div>
       </div>
-      <div className="relative mt-3">
+      <div className="mt-3 grid grid-cols-1">
         {page === null ? (
           <div className="px-3 py-4" role="status" aria-label={t('common.loading')}>
             <RowsSkeleton rows={8} />
           </div>
         ) : (
-          // A new filter cross-fades the list (200 ms).
-          <AnimatePresence initial={false} mode="popLayout">
-            <motion.div
-              key={filter}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={ease('hover')}
-            >
+          <AnimatePresence initial={false}>
+            <FilterView key={filter}>
               {page.members.length === 0 ? (
                 <EmptyState
                   icon={<Users aria-hidden="true" className="size-5" />}
@@ -150,7 +143,7 @@ export function MembersTab() {
                   isNew={isNew}
                 />
               )}
-            </motion.div>
+            </FilterView>
           </AnimatePresence>
         )}
       </div>
@@ -247,6 +240,27 @@ export function NeverContactTab() {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * What one filter shows, cross-fading with the next (200 ms): both share the grid's one cell
+ * while they fade, so nothing has to be pinned by an injected style (the CSP allows none). The
+ * one leaving is out of reach meanwhile.
+ */
+function FilterView({ children }: { children: ReactNode }) {
+  const present = useIsPresent();
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={ease('hover')}
+      inert={!present}
+      className="col-start-1 row-start-1 min-w-0"
+    >
+      {children}
+    </motion.div>
   );
 }
 
