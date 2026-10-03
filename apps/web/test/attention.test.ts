@@ -118,12 +118,14 @@ describe('« Needs attention », the most urgent first (brief v4 §13)', () => {
 
   it('shows the demo’s five in that order', () => {
     const world = createWorld(NOW);
+    // Margaux's month ends this week; then the three failed payments; then Hugo, leaving at the
+    // end of the month he paid on the 29th (fix prompt v4.1, block 4).
     expect(order(world.members.members).slice(0, 5)).toEqual([
-      'Hugo Bernard',
+      'Margaux Picard',
       'Sarah Cohen',
       'Maxime Vidal',
       'Elena Novak',
-      'Margaux Picard',
+      'Hugo Bernard',
     ]);
   });
 });

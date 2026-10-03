@@ -278,6 +278,10 @@ await desktop.page.waitForTimeout(5_000);
 report.activity = {
   loadingAfter5s: await desktop.page.getByText('Loading…').count(),
   slow: await desktop.page.getByText('This is taking longer than usual.').count(),
+  // Each platform's members' part (fix prompt v4.1, block 4): what their 30 days add up to.
+  byMembers: await desktop.page.evaluate(() =>
+    [...document.querySelectorAll('[data-by-members]')].map((line) => line.textContent),
+  ),
 };
 await desktop.page.screenshot({ path: `${out}/integrations-activity.png`, fullPage: true });
 
@@ -382,6 +386,22 @@ report.members = await desktop.page.evaluate(() => {
     urgentDots: document.querySelectorAll('[role=table] [class*="bg-urgent"]').length,
   };
 });
+// One story (fix prompt v4.1, block 4): a pause, a year's end, a member gone, each on its row.
+report.story = await desktop.page.evaluate(() => {
+  const cells = (name) =>
+    [
+      ...([...document.querySelectorAll('[role=table] [role=rowgroup]:last-child > [role=row]')]
+        .find((row) => row.textContent.includes(name))
+        ?.querySelectorAll('[role=cell]') ?? []),
+    ].map((cell) => cell.textContent.trim());
+  return {
+    juliette: cells('Juliette Caron'),
+    hugo: cells('Hugo Bernard'),
+    kevin: cells('Kevin Nguyen'),
+    sarah: cells('Sarah Cohen'),
+    paul: cells('Paul Henry'),
+  };
+});
 await desktop.page.screenshot({ path: `${out}/members-1440.png` });
 await desktop.page.mouse.wheel(0, 900);
 await desktop.page.waitForTimeout(700);
@@ -443,6 +463,45 @@ await desktop.page.evaluate(() =>
 await desktop.page.waitForTimeout(800);
 await desktop.page.screenshot({ path: `${out}/members-drawer-1440-end.png` });
 await drawer.getByRole('button', { name: 'Close' }).click();
+// Juliette's drawer: paused, and until when (fix prompt v4.1, block 4).
+await desktop.page.waitForTimeout(600);
+await members.getByRole('row').filter({ hasText: 'Juliette Caron' }).click();
+const paused = desktop.page.getByRole('dialog', { name: 'Juliette Caron' });
+await paused.waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(1_800);
+report.story.julietteDrawer = await paused.evaluate((dialog) =>
+  [...dialog.querySelectorAll('p')]
+    .map((line) => line.textContent)
+    .filter((text) => /paused|resumes/i.test(text)),
+);
+await desktop.page.screenshot({ path: `${out}/members-drawer-paused-1440.png` });
+await paused.getByRole('button', { name: 'Close' }).click();
+
+// Automations › History: what came of each action, the proof of value (block 4).
+await desktop.page.goto(`${base}/demo/actions/history`, { waitUntil: 'domcontentloaded' });
+await desktop.page.waitForSelector('[data-outcome]', { timeout: 30_000 });
+await desktop.page.waitForTimeout(800);
+report.history = await desktop.page.evaluate(() =>
+  [...document.querySelectorAll('li')]
+    .filter((item) => item.querySelector('[data-outcome]'))
+    .slice(0, 12)
+    .map((item) => ({
+      member: item.querySelector('p')?.textContent ?? null,
+      outcome: item.querySelector('[data-outcome]').textContent,
+    })),
+);
+await desktop.page.screenshot({ path: `${out}/actions-history-1440.png` });
+// And the queue: approving one moves the tab and « Approve all » together.
+await desktop.page.goto(`${base}/demo/actions/queue`, { waitUntil: 'domcontentloaded' });
+const approveAll = desktop.page.getByRole('button', { name: /^Approve all/ });
+await approveAll.waitFor({ timeout: 30_000 });
+const queueTab = desktop.page.getByRole('link', { name: /^To approve/ });
+const countIn = async (locator) => /(\d+)\)?\s*$/.exec((await locator.textContent()) ?? '')?.[1];
+report.queue = { before: [await countIn(queueTab), await countIn(approveAll)] };
+await desktop.page.getByRole('button', { name: 'Approve', exact: true }).first().click();
+await desktop.page.getByRole('button', { name: 'Approve all (5)' }).waitFor({ timeout: 10_000 });
+report.queue.after = [await countIn(queueTab), await countIn(approveAll)];
+await desktop.page.screenshot({ path: `${out}/actions-queue-approved.png` });
 await desktop.context.close();
 
 const phone = await open({ width: 390, height: 844 });
@@ -490,7 +549,7 @@ const ok =
   report.balance.monthMark === report.balance.monthStart &&
   /^[+−]\$[\d,]+\.\d{2} vs last month$/.test(report.balance.delta ?? '') &&
   report.balance.periods.join(' ') === '7D 30D 90D' &&
-  report.firstNeedingAttention === 'Hugo Bernard' &&
+  report.firstNeedingAttention === 'Margaux Picard' &&
   report.attentionRow.atRest === '0' &&
   report.attentionRow.hovered === '1' &&
   report.activity.loadingAfter5s === 0 &&
@@ -531,12 +590,27 @@ const ok =
   ) &&
   report.members.drawer.scoreDrawn &&
   report.members.drawer.doNotContact === 'false' &&
-  report.members.phoneOverflow <= 0;
+  report.members.phoneOverflow <= 0 &&
+  // One story (fix prompt v4.1, block 4).
+  report.story.juliette.some((cell) => /^Paused · resumes \w{3} \d{1,2}$/.test(cell)) &&
+  report.story.julietteDrawer.some((line) => /· resumes on /.test(line)) &&
+  report.story.hugo.some((cell) => /^Ends \w{3} \d{1,2}/.test(cell)) &&
+  report.story.kevin.some((cell) => /^Ends \w{3} \d{1,2}/.test(cell)) &&
+  report.story.sarah.some((cell) => /^Unpaid since \w{3} \d{1,2}/.test(cell)) &&
+  report.story.paul.some((cell) => cell === 'Gone') &&
+  ['Recovered $49.00', 'Still failing', 'Came back', 'No reply yet'].every((outcome) =>
+    report.history.some((item) => item.outcome === outcome),
+  ) &&
+  report.history.some((item) => /^Paused until /.test(item.outcome)) &&
+  report.queue.before.join() === '6,6' &&
+  report.queue.after.join() === '5,5' &&
+  report.activity.byMembers.length === 2 &&
+  report.activity.byMembers.every((line) => /^[\d,]+ by members$/.test(line));
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest: see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest, or the demo does not tell one story (a pause, an end, an unpaid date, a member gone, an outcome, a count): see the report above.',
   );
   process.exitCode = 1;
 }

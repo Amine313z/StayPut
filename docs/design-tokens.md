@@ -51,7 +51,6 @@ Nothing else decorates the page:
 
 - one radial light, `turq-glow` fading over 700 px, behind the hero block (`.hero-glow`, a
   gradient rather than a blur filter);
-- one very light diagonal streak, turquoise at 6 %, the logo's (`body::before`, fixed);
 - StayPut's logo at 3 % in the bottom right corner of the Dashboard, after its last block.
 
 ## The logo

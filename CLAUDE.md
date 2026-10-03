@@ -99,7 +99,18 @@ Guidance for Claude Code in this repository.
   (`matchesSearch`; `MemberRow.username`, no migration: StayPut stores no member e-mails); an
   empty search says « No member matches “zzz”. » with « Clear search and filters »; a « Needs
   attention » row opens the member and shows its icon actions only when hovered or focused
-  (`IconTip`). Checked by `apps/web/e2e/members.e2e.ts` and `look.mjs`. Before
+  (`IconTip`). Checked by `apps/web/e2e/members.e2e.ts` and `look.mjs`. Block 4 (demo data,
+  one story) done: every demo date follows from the day a member joined and their plan
+  (`billingOf` in `demo/world.ts`: a departure at the end of the period paid, a failed renewal
+  on its day, « Unpaid since », a pause until it ends); a new member state « Paused · resumes
+  Nov 2 » (`MemberRow.membership.pausedUntil`: Whop's `paused`, or StayPut's applied pause); a
+  member gone says « ended on », never « renews »; « Score turned high » only for a member high
+  that day; each History item says what came of it (`actionOutcome` in `@stayput/core`, used by
+  the Worker's SQL and the demo: Recovered $X, Still failing, Paused until, Came back, No reply
+  yet, Left), every demo save being a History action; approving moves the tab and « Approve
+  all » together (`withMoves`, `useLayoutEffect`); Integrations › Activity says each
+  platform's members' part (migration **0031** `platform_activity.messagesBy`). The page's
+  diagonal streak was removed at the founder's request. Before
   it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard

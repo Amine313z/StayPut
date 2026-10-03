@@ -443,6 +443,8 @@ describe('the activity the creator sees', () => {
       team: 1,
       guests: 0,
       unlinked: 1,
+      // The messages by who wrote them (0031): the members' part is Alice's two, her own.
+      messagesBy: { members: 2, team: 1, guests: 0, unlinked: 1 },
     });
     // 30 days, the messages on 30 September (the 29th of them).
     expect(telegram.daily).toHaveLength(30);

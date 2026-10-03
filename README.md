@@ -83,12 +83,18 @@ route n'est pas finie, la pastille « Getting started » (Discord, première aut
 membres à risque passés en revue, limites) s'affiche sous le titre.
 
 La page Membres est un tableau compact, une ligne par membre : son anneau de risque, son état en
-un mot (Leaving · Payment failed · Inactive · Active), ce qu'il paie par mois, sa dernière
-activité et son prochain renouvellement. Chaque colonne se trie ; les puces de filtre et la
+un mot (Leaving · Payment failed · Inactive · Paused · Active ; « Paused · resumes Nov 2 » dit
+quand la pause finit), ce qu'il paie par mois, sa dernière activité et son prochain
+renouvellement (« Ends Oct 29 » pour un départ, « Unpaid since Oct 3 » pour un paiement échoué,
+jamais un renouvellement à venir). Chaque colonne se trie ; les puces de filtre et la
 recherche (par nom ou nom d'utilisateur Whop, sans tenir compte des majuscules ni des accents)
 restent en haut pendant le défilement. Une ligne ouvre le tiroir du membre : pourquoi
 il est à risque, les actions rapides, son score sur 30 jours, son abonnement et ses paiements,
 son activité par plateforme, et l'interrupteur « Ne pas contacter ».
+
+Dans Automatisations › Historique, chaque action qui a atteint un membre dit ce qu'il en est sorti
+: « Recovered $49.00 » (l'argent sauvé grâce à elle), « Still failing », « Paused until Nov 2 »,
+« Came back », « No reply yet » ou « Left ». C'est la preuve de ce que StayPut rapporte.
 
 Chaque onglet a son adresse (`/dashboard/<communauté>/<rubrique>/<onglet>`) ; une adresse
 inconnue ouvre le premier onglet de sa rubrique, et les anciennes (`/actions?view=history`)
@@ -209,11 +215,13 @@ Whop du sandbox ».
 
 `https://stayput.chezbenz18.workers.dev/demo` montre le tableau de bord sur une communauté
 imaginaire (« Atlas Trading Club ») : rien n'y est réel, rien n'est envoyé, aucun compte n'est
-nécessaire. 36 membres (39 avec ceux qui sont partis), 90 jours d'historique, des annulations,
-des paiements échoués et la pastille « Getting started » à 2 étapes sur 4 (elle se coche quand
+nécessaire. 35 membres (39 avec ceux qui sont partis), 90 jours d'historique, des annulations,
+des paiements échoués, une pause et la pastille « Getting started » à 2 étapes sur 4 (elle se coche quand
 on visite Membres et qu'on enregistre les limites). Pour les captures de l'App Store et pour montrer StayPut ; dans l'app, le Guide
 y mène par « Explorer avec des données de démo ». La démo ne montre pas l'accueil d'elle-même :
-`/demo?welcome` l'ouvre.
+`/demo?welcome` l'ouvre. Chaque page raconte la même histoire : chaque date vient du jour où le
+membre a rejoint et de son offre, chaque argent sauvé est une action de l'historique, et des tests
+le vérifient règle par règle (`apps/web/test/demo.test.ts`).
 
 ### Discord et Telegram (optionnels, gratuits)
 

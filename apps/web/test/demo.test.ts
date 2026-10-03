@@ -1,6 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RISK_FACTORS, zonedDay, type RevenueDay } from '@stayput/core';
+import {
+  DEFAULT_HIGH_FROM,
+  RISK_FACTORS,
+  zonedDay,
+  type MemberRow,
+  type RevenueDay,
+} from '@stayput/core';
+import { createTranslator } from '@stayput/i18n';
+import { membershipLine } from '../src/components/MemberRows';
+import { renewalText, stateText } from '../src/components/MemberTable';
 import { createWorld } from '../src/demo/world';
+import { keepMember, memberState, pausedUntil, unpaidSince } from '../src/members';
 import { balanceWindow, savedOver } from '../src/views/creator/balance';
 
 const NOW = Date.parse('2026-10-02T10:00:00.000Z');
@@ -23,8 +33,8 @@ describe('the demo community', () => {
       expect(name.toLowerCase()).not.toMatch(/test|demo|lorem|foo|user/);
     }
     expect(world.session.companyName).not.toMatch(/test|demo/i);
-    // 25 to 40 members (brief v3 §11): 36 here, and three who left.
-    expect(joined.length).toBe(36);
+    // 25 to 40 members (brief v3 §11): 35 here, and four who left.
+    expect(joined.length).toBe(35);
     expect(world.members.members.length).toBeLessThanOrEqual(40);
   });
 
@@ -176,7 +186,7 @@ describe('the demo community', () => {
   it('goes through the actions of the day the way the Worker chooses them, never calm', () => {
     const demo = createWorld(NOW);
     const queue = demo.pages.actions('queue');
-    expect(queue.counts).toEqual({ queue: 6, scheduled: 3, history: 11 });
+    expect(queue.counts).toEqual({ queue: 6, scheduled: 3, history: 31 });
     // What StayPut prepared first (Kevin's annual plan counts a twelfth a month).
     expect(demo.dashboard().priority).toEqual({
       kind: 'approve',
@@ -186,7 +196,7 @@ describe('the demo community', () => {
     });
     // Approved, they leave at their hour; the three failed payments come next (brief v3 §6.2).
     expect(demo.pages.approve()).toBe(6);
-    expect(demo.pages.actions('scheduled').counts).toEqual({ queue: 0, scheduled: 9, history: 11 });
+    expect(demo.pages.actions('scheduled').counts).toEqual({ queue: 0, scheduled: 9, history: 31 });
     expect(demo.dashboard().priority).toEqual({ kind: 'retry', payments: 3, revenue: 347 });
     expect(demo.retry()).toBe(3);
     expect(demo.retry()).toBe(0);
@@ -288,8 +298,9 @@ describe('the demo community', () => {
     expect(demo.offer(target, 'promo_offer')).toEqual({ error: 'offer_open' });
     expect(demo.setContact(target, true)).toBe(true);
     expect(demo.message([target])).toBe(0);
-    const free = demo.members.members.find((m) => m.membership === null && m.status === 'joined')!;
-    expect(demo.offer(free.id, 'promo_offer')).toEqual({ error: 'no_membership' });
+    // A member who left is no one's to make an offer to.
+    const gone = demo.members.members.find((m) => m.status === 'left')!;
+    expect(demo.offer(gone.id, 'promo_offer')).toEqual({ error: 'not_a_member' });
     // Cancelled before it left: in the history.
     const scheduled = demo.pages.actions('scheduled').actions[0]!;
     expect(demo.pages.cancel(scheduled.id)).toBe(true);
@@ -461,5 +472,213 @@ describe('the demo community', () => {
     const times = items.map((i) => Date.parse(i.at));
     expect([...times].sort((a, b) => b - a)).toEqual(times);
     expect(items.every((i) => i.memberName !== null)).toBe(true);
+  });
+});
+
+/**
+ * Fix prompt v4.1, block 4: one source of truth. Every page tells the same story, rule by rule,
+ * on the founder's day (3 October, 16:00 in Paris).
+ */
+describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
+  const AT = Date.parse('2026-10-03T14:00:00Z');
+  const world = createWorld(AT, 'Europe/Paris');
+  const members = world.members.members;
+  const joined = members.filter((m) => m.status === 'joined');
+  const named = (name: string) => members.find((m) => m.name === name)!;
+  const en = createTranslator('en');
+  const DAY = 86_400_000;
+  const periodOf = (m: MemberRow) => m.membership!.billingPeriodDays! * DAY;
+  const lastPaid = (m: MemberRow) =>
+    Date.parse(world.memberDetail(m.id)!.payments.find((p) => p.status === 'succeeded')!.at);
+  const history = world.pages.actions('history').actions;
+
+  it('1. ends or renews each membership one period after the payment that paid it', () => {
+    for (const m of members.filter((m) => m.membership)) {
+      const end = Date.parse(m.membership!.currentPeriodEnd!);
+      const until = pausedUntil(m);
+      // A pause defers the renewal to the day it ends; otherwise one period after the last
+      // payment that came in: a renewal that failed was due on that day, and is still unpaid.
+      expect(end).toBe(until ?? lastPaid(m) + periodOf(m));
+      if (m.lastPayment?.status === 'failed') expect(unpaidSince(m)).toBe(end);
+    }
+    // Hugo paid on 29 September for a month: he leaves on 29 October, as his reason says.
+    const hugo = named('Hugo Bernard');
+    expect(hugo.lastPayment!.at.slice(0, 10)).toBe('2026-09-29');
+    expect(hugo.membership!.currentPeriodEnd!.slice(0, 10)).toBe('2026-10-29');
+    expect(renewalText(hugo, AT, en)).toBe('Ends Oct 29');
+    // Kevin's year, paid on 13 May, runs to 13 May 2027, its year said.
+    const kevin = named('Kevin Nguyen');
+    expect(kevin.lastPayment!.at.slice(0, 10)).toBe('2026-05-13');
+    expect(kevin.membership!.currentPeriodEnd!.slice(0, 10)).toBe('2027-05-13');
+    expect(renewalText(kevin, AT, en)).toBe('Ends May 13, 2027');
+    // A departure's reason is its end.
+    for (const m of joined.filter((m) => m.membership?.cancelAtPeriodEnd)) {
+      expect(m.risk?.reasons.find((r) => r.code === 'cancel_scheduled')).toEqual({
+        code: 'cancel_scheduled',
+        date: m.membership!.currentPeriodEnd,
+      });
+    }
+  });
+
+  it('2. says « ended on » for every member gone, never « renews »', () => {
+    const gone = members.filter((m) => m.status === 'left');
+    expect(gone.map((m) => m.name)).toEqual([
+      'Benoît Lacroix',
+      'Sabrina Aït',
+      'Lucie Moulin',
+      'Paul Henry',
+    ]);
+    for (const m of gone) {
+      const line = membershipLine(m.membership!, en, { now: AT, gone: true });
+      expect(line).toMatch(/· ended on \w{3} \d{1,2}, 2026$/);
+      expect(line).not.toMatch(/renews/);
+      expect(renewalText(m, AT, en)).toBe('–');
+      // Their drawer says the same membership.
+      expect(world.memberDetail(m.id)!.memberships[0]?.status).toBe('canceled');
+    }
+  });
+
+  it('3. shows a pause StayPut applied: « Paused · resumes Nov 2 » on Members and in the drawer', () => {
+    const juliette = named('Juliette Caron');
+    expect(memberState(juliette, AT)).toBe('paused');
+    expect(stateText(juliette, 'paused', AT, en)).toBe('Paused · resumes Nov 2');
+    expect(
+      membershipLine(juliette.membership!, en, { now: AT, pausedUntil: pausedUntil(juliette) }),
+    ).toBe('Paused · $149.00 per month · resumes on Nov 2, 2026');
+    // The pause of the History is hers, and ends the same day.
+    const pause = history.find((a) => a.member.id === juliette.id && a.type === 'pause_offer');
+    expect(pause?.offer?.resumesAt).toBe(juliette.membership!.pausedUntil);
+    expect(pause?.outcome).toEqual({ kind: 'paused', until: juliette.membership!.pausedUntil });
+  });
+
+  it('4. sends « Score turned high » only to a member whose score was high that day', () => {
+    const all = (['queue', 'scheduled', 'history'] as const).flatMap(
+      (view) => world.pages.actions(view).actions,
+    );
+    const turnedHigh = all.filter((a) => a.trigger === 'score_high');
+    expect(turnedHigh.length).toBeGreaterThan(0);
+    for (const action of turnedHigh) {
+      const day = zonedDay(Date.parse(action.createdAt), 'Europe/Paris');
+      const score = world.memberDetail(action.member.id)!.scores.find((s) => s.day === day);
+      expect(score?.score, action.member.name ?? '').toBeGreaterThanOrEqual(DEFAULT_HIGH_FROM);
+    }
+    // Lou, at medium risk (62), got the creator's own message, not StayPut's.
+    const lou = all.find((a) => a.member.name === 'Lou Marchand');
+    expect(lou).toMatchObject({ type: 'creator_message', trigger: 'creator' });
+  });
+
+  it('5. follows each payment retry on its member: recovered and counted, or still failing', () => {
+    const retries = history.filter((a) => a.type === 'payment_retry' && a.status === 'sent');
+    expect(retries.map((a) => a.outcome?.kind)).toContain('recovered');
+    expect(retries.map((a) => a.outcome?.kind)).toContain('still_failing');
+    const chart = world.dashboard().revenueHistory;
+    for (const retry of retries) {
+      const member = members.find((m) => m.id === retry.member.id)!;
+      const sent = Date.parse(retry.sentAt!);
+      if (retry.outcome?.kind === 'recovered') {
+        // The payment came in after it; the save is in the money saved, on its day.
+        const save = world.saves.find(
+          (s) =>
+            s.memberId === member.id && Date.parse(s.at) >= sent && Date.parse(s.at) - sent < DAY,
+        )!;
+        expect(save.amount).toBe(retry.outcome.amount);
+        const day = zonedDay(Date.parse(save.at), 'Europe/Paris');
+        const onChart = chart.find((d) => d.day === day);
+        if (onChart) expect(onChart.saved).toBeGreaterThanOrEqual(save.amount);
+        if (sent > AT - periodOf(member)) {
+          expect(member.lastPayment).toMatchObject({ status: 'succeeded', at: save.at });
+        }
+      } else {
+        expect(retry.outcome?.kind).toBe('still_failing');
+        expect(member.lastPayment?.status).toBe('failed');
+      }
+    }
+    // Clara: retried 47 minutes ago, recovered; Elena: retried 2 hours ago, still failing.
+    expect(history.find((a) => a.member.name === 'Clara Faure')?.outcome).toEqual({
+      kind: 'recovered',
+      amount: 49,
+      currency: 'usd',
+    });
+    expect(
+      history.find((a) => a.member.name === 'Elena Novak' && a.type === 'payment_retry')?.outcome,
+    ).toEqual({ kind: 'still_failing' });
+  });
+
+  it('6. says what came of every action that reached a member: the proof of value', () => {
+    for (const action of history.filter((a) => a.status === 'sent')) {
+      expect(action.outcome, `${action.type} ${action.member.name}`).not.toBeNull();
+    }
+    const kinds = new Set(history.map((a) => a.outcome?.kind));
+    for (const kind of ['recovered', 'came_back', 'paused', 'no_reply', 'still_failing', 'left']) {
+      expect(kinds.has(kind as never), kind).toBe(true);
+    }
+    // Every save of the money saved is an action of the History that says it, at its amount.
+    for (const save of world.saves) {
+      const action = history.find(
+        (a) =>
+          a.member.id === save.memberId &&
+          a.outcome?.kind === 'recovered' &&
+          Date.parse(a.sentAt!) <= Date.parse(save.at) &&
+          Date.parse(save.at) - Date.parse(a.sentAt!) <= 31 * DAY,
+      );
+      expect(action?.outcome).toMatchObject({ kind: 'recovered', amount: save.amount });
+    }
+    // The home's « StayPut's actions » are the History's last 30 days.
+    const done = history.filter(
+      (a) => a.status === 'sent' && AT - Date.parse(a.sentAt!) < 30 * DAY,
+    );
+    expect(world.dashboard().stayputActions30d).toMatchObject({
+      total: done.length,
+      paymentRetries: done.filter((a) => a.type === 'payment_retry').length,
+      pauses: done.filter((a) => a.type === 'pause_offer').length,
+    });
+  });
+
+  it('7. moves the counts of every list together when an action is approved', () => {
+    const demo = createWorld(AT, 'Europe/Paris');
+    const before = demo.pages.actions('queue');
+    const [first] = before.actions;
+    expect(demo.pages.approve([first!.id])).toBe(1);
+    const after = demo.pages.actions('queue');
+    expect(after.counts).toEqual({
+      queue: before.counts.queue - 1,
+      scheduled: before.counts.scheduled + 1,
+      history: before.counts.history,
+    });
+    // « Approve all (5) » counts the same list as the tab.
+    expect(after.actions.filter((a) => a.status === 'proposed')).toHaveLength(after.counts.queue);
+  });
+
+  it('8. never lists a member without a membership with a risk score: Paul Henry is gone', () => {
+    for (const m of joined) expect(m.membership, m.name ?? '').not.toBeNull();
+    for (const m of members.filter((m) => m.risk)) expect(m.membership).not.toBeNull();
+    const paul = named('Paul Henry');
+    expect(paul).toMatchObject({ status: 'left', risk: null });
+    expect(keepMember('left', paul)).toBe(true);
+    for (const filter of ['all', 'leaving', 'high', 'medium', 'low', 'newcomers'] as const) {
+      if (filter !== 'all') expect(keepMember(filter, paul)).toBe(false);
+    }
+  });
+
+  it('9. counts on Integrations › Activity the messages each member’s 30 days add up to', () => {
+    const activity = world.pages.platformActivity();
+    const drawers = joined.map((m) => world.memberDetail(m.id)!);
+    for (const tile of activity.platforms) {
+      const by = tile.messagesBy!;
+      // The members' part is theirs, member by member; the rest the team's, guests', to tie.
+      const theirs = drawers
+        .flatMap((d) => d.platforms)
+        .filter((p) => p.platform === tile.platform)
+        .reduce((total, p) => total + p.events, 0);
+      expect(by.members).toBe(theirs);
+      expect(by.members + by.team + by.guests + by.unlinked).toBe(tile.messages);
+    }
+    // Each member's places add up to their 30 days, and all of them to the home's figure.
+    for (const [i, m] of joined.entries()) {
+      const places = drawers[i]!.platforms.reduce((total, p) => total + p.events, 0);
+      const { messages, reactions, posts, lessons } = m.activity;
+      expect(places, m.name ?? '').toBe(messages + reactions + posts + lessons);
+    }
+    expect(world.dashboard().memberActivity30d).toBe(world.members.summary.activity30d);
   });
 });

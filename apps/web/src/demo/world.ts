@@ -1,4 +1,5 @@
 import {
+  DEFAULT_HIGH_FROM,
   DEFAULT_OFFERS,
   MEMBER_PAYMENTS_LIMIT,
   addDays,
@@ -62,24 +63,37 @@ interface Person {
   plan: Plan | null;
   level: RiskLevel | null;
   score: number;
-  /** Days since they joined (a fraction for today's newcomers). */
+  /**
+   * Days since they joined (a fraction for today's newcomers). Their plan renews on that day of
+   * each period: a payment then, the next renewal one period later (fix prompt v4.1, block 4).
+   */
   joined: number;
   /** Days since their last activity; null: never active. */
   active: number | null;
-  reasons: (now: number) => RiskReason[];
-  /** Leaves in that many days (a cancellation scheduled). */
-  leaves?: number;
-  /** Their last payment failed, and why. */
+  reasons: (dates: ReasonDates) => RiskReason[];
+  /** A cancellation scheduled: they leave at the end of the period they paid. */
+  cancels?: boolean;
+  /** Their latest renewal failed, and why (nothing came in since). */
   failed?: string;
-  /** Left the community that many days ago. */
+  /** Left the community that many days ago, at the end of the last period they paid. */
   left?: number;
+  /** StayPut paused them that many hours ago, at their renewal, for that many days. */
+  paused?: { hoursAgo: number; days: number };
+  /** Last active exactly that many hours ago: a message brought them back. */
+  seenHoursAgo?: number;
+}
+
+/** What a member's reasons are dated from: now, and the end of the period they paid. */
+interface ReasonDates {
+  now: number;
+  end: number | null;
 }
 
 const cancel =
-  (inDays: number) =>
-  (now: number): RiskReason => ({
+  () =>
+  (dates: ReasonDates): RiskReason => ({
     code: 'cancel_scheduled',
-    date: new Date(now + inDays * DAY).toISOString(),
+    date: new Date(dates.end ?? dates.now).toISOString(),
   });
 const inactive = (days: number) => (): RiskReason => ({ code: 'inactive', days });
 const never = (days: number) => (): RiskReason => ({ code: 'never_active', days });
@@ -92,9 +106,9 @@ const ticket = (days: number) => (): RiskReason => ({ code: 'ticket_open', days 
 const paymentFailed = () => (): RiskReason => ({ code: 'payment_failed' });
 
 const reasons =
-  (...parts: ((now: number) => RiskReason)[]) =>
-  (now: number) =>
-    parts.map((part) => part(now));
+  (...parts: ((dates: ReasonDates) => RiskReason)[]) =>
+  (dates: ReasonDates) =>
+    parts.map((part) => part(dates));
 
 const person = (
   name: string,
@@ -103,26 +117,31 @@ const person = (
   score: number,
   joined: number,
   active: number | null,
-  why: (now: number) => RiskReason[] = () => [],
+  why: (dates: ReasonDates) => RiskReason[] = () => [],
   extra: Partial<Person> = {},
 ): Person => ({ name, plan, level, score, joined, active, reasons: why, ...extra });
 
-/** The most at risk first, as the Worker sends them. */
+const H = 1 / 24;
+
+/**
+ * The most at risk first, as the Worker sends them. Each date follows from the day they joined
+ * and their plan (fix prompt v4.1, block 4): Hugo paid on the 29th, so he leaves a month later;
+ * Kevin's year runs to the day he paid it; a renewal that failed failed on its day.
+ */
 const PEOPLE: readonly Person[] = [
-  person('Hugo Bernard', 'vip', 'scheduled_departure', 100, 214, 9, reasons(cancel(6), drop(100)), {
-    leaves: 6,
+  person('Hugo Bernard', 'vip', 'scheduled_departure', 100, 214, 9, reasons(cancel(), drop(100)), {
+    cancels: true,
   }),
+  // Her month ends this week: the most urgent departure.
   person(
     'Margaux Picard',
     'monthly',
     'scheduled_departure',
     100,
-    98,
+    115,
     12,
-    reasons(cancel(11), inactive(12)),
-    {
-      leaves: 11,
-    },
+    reasons(cancel(), inactive(12)),
+    { cancels: true },
   ),
   person(
     'Kevin Nguyen',
@@ -131,12 +150,22 @@ const PEOPLE: readonly Person[] = [
     100,
     143,
     6,
-    reasons(cancel(17), stalled(20, 'Module 5 · Backtesting')),
-    { leaves: 17 },
+    reasons(cancel(), stalled(20, 'Module 5 · Backtesting')),
+    { cancels: true },
   ),
-  person('Sarah Cohen', 'vip', 'high', 88, 187, 8, reasons(paymentFailed(), drop(64)), {
-    failed: 'Card declined',
-  }),
+  // Her renewal failed 95 minutes ago.
+  person(
+    'Sarah Cohen',
+    'vip',
+    'high',
+    88,
+    180 + 95 / 1_440,
+    8,
+    reasons(paymentFailed(), drop(64)),
+    {
+      failed: 'Card declined',
+    },
+  ),
   person(
     'Yanis Benali',
     'monthly',
@@ -146,10 +175,11 @@ const PEOPLE: readonly Person[] = [
     19,
     reasons(inactive(19), stalled(23, 'Module 3 · Risk management')),
   ),
-  person('Maxime Vidal', 'vip', 'high', 81, 166, 24, reasons(paymentFailed(), inactive(24)), {
+  person('Maxime Vidal', 'vip', 'high', 81, 152.1, 24, reasons(paymentFailed(), inactive(24)), {
     failed: 'Card expired',
   }),
-  person('Elena Novak', 'monthly', 'high', 79, 76, 15, reasons(paymentFailed(), inactive(15)), {
+  // Three days ago; StayPut's retry failed again two hours ago.
+  person('Elena Novak', 'monthly', 'high', 79, 63, 15, reasons(paymentFailed(), inactive(15)), {
     failed: 'Insufficient funds',
   }),
   person('Théo Fontaine', 'monthly', 'high', 74, 59, 4, reasons(drop(82), quiet(100))),
@@ -164,67 +194,83 @@ const PEOPLE: readonly Person[] = [
   ),
   person('Lou Marchand', 'monthly', 'medium', 62, 88, 6, reasons(drop(55), quiet(60))),
   person('Rose Gauthier', 'monthly', 'medium', 58, 205, 5, reasons(ticket(4), drop(41))),
-  person('Victor Leclerc', 'annual', 'medium', 55, 251, 7, reasons(stalled(14), drop(38))),
+  // High two days ago; StayPut's message brought him back.
+  person('Victor Leclerc', 'annual', 'medium', 55, 251, 1, reasons(stalled(14), drop(38)), {
+    seenHoursAgo: 20,
+  }),
   person('Nora Chabane', 'monthly', 'medium', 53, 47, 5, reasons(drop(47), quiet(50))),
-  person('Juliette Caron', 'vip', 'medium', 49, 178, 6, reasons(quiet(75), drop(35))),
+  // Paused at her renewal, five hours ago, for 30 days.
+  person('Juliette Caron', 'vip', 'medium', 49, 150 + 5 * H, 6, reasons(quiet(75), drop(35)), {
+    paused: { hoursAgo: 5, days: 30 },
+  }),
   person('Tom Barbier', 'monthly', 'medium', 45, 154, 9, reasons(inactive(9), quiet(58))),
   person('Laura Weber', 'monthly', 'medium', 43, 71, 4, reasons(drop(39), quiet(52))),
   person('Ethan Brooks', 'monthly', 'medium', 41, 5, null, reasons(never(5), stalled(5))),
   person('Maya Fernandes', 'monthly', 'low', 28, 4, null, reasons(never(4), stalled(4))),
-  person('Paul Henry', null, 'low', 16, 29, 2),
   person('Emma Rousseau', 'monthly', 'low', 14, 175, 1, reasons(quiet(25))),
-  person('Clara Faure', 'monthly', 'low', 12, 91, 0),
-  person('Sofia Ricci', 'monthly', 'low', 12, 36, 1),
+  // Her renewal failed two days ago; StayPut's retry got it paid.
+  person('Clara Faure', 'monthly', 'low', 12, 92, 0),
+  person('Sofia Ricci', 'monthly', 'low', 12, 36.5, 1),
   person('Nathan Girard', 'monthly', 'low', 11, 160, 2),
-  person('Arthur Lemoine', 'monthly', 'low', 11, 48, 1),
+  person('Arthur Lemoine', 'monthly', 'low', 11, 62, 1),
   person('Anaïs Robin', 'vip', 'low', 10, 56, 1),
-  person('Pauline Giraud', 'monthly', 'low', 10, 0.4, 0),
+  // Joined this morning; StayPut's welcome brought her in two hours ago.
+  person('Pauline Giraud', 'monthly', 'low', 10, 0.4, 0, undefined, { seenHoursAgo: 2 }),
   person('Lucas Petit', 'annual', 'low', 9, 290, 1),
   person('Inès Haddad', 'monthly', 'low', 7, 233, 0),
-  person('Gabriel Roux', 'vip', 'low', 7, 101, 1),
-  person('Léa Moreau', 'monthly', 'low', 6, 267, 0),
-  person('Jade Mercier', 'monthly', 'low', 6, 138, 0),
+  // Renewed 18 hours ago.
+  person('Gabriel Roux', 'vip', 'low', 7, 90.75, 1),
+  // Renewed 44 hours ago.
+  person('Léa Moreau', 'monthly', 'low', 6, 241 + 20 * H, 0),
+  person('Jade Mercier', 'monthly', 'low', 6, 138.5, 0),
   person('Karim Belkacem', 'monthly', 'low', 6, 52, 0),
   person('Mehdi Amrani', 'monthly', 'low', 5, 198, 0),
   person('Zoé Lambert', 'monthly', 'low', 5, 109, 0),
   person('Camille Laurent', 'vip', 'low', 4, 302, 0),
   // Joined 26 minutes ago: not scored yet (the scores run every hour).
   person('Jonas Keller', 'monthly', null, 0, 0.018, null),
-  person('Benoît Lacroix', 'monthly', null, 0, 160, 31, undefined, { left: 12 }),
-  person('Sabrina Aït', 'monthly', null, 0, 77, 40, undefined, { left: 21 }),
-  person('Lucie Moulin', 'monthly', null, 0, 120, 52, undefined, { left: 40 }),
+  // Those who left, at the end of the last month they paid.
+  person('Benoît Lacroix', 'monthly', null, 0, 162, 31, undefined, { left: 12 }),
+  person('Sabrina Aït', 'monthly', null, 0, 81, 40, undefined, { left: 21 }),
+  person('Lucie Moulin', 'monthly', null, 0, 130, 52, undefined, { left: 40 }),
+  // Never a member without a membership scored among the others: he left (block 4, rule 8).
+  person('Paul Henry', 'monthly', null, 0, 69, 10, undefined, { left: 9 }),
 ];
 
+/** How StayPut saved a member: what it did, before the money came in. */
+type SaveVia = 'retry' | 'notice' | 'pause' | 'extend';
+
 /**
- * What StayPut saved, member by member (the Worker's `stayput.saves`): a payment recovered after
- * a retry, a member back from a pause, a cancellation taken back, each at the price of the
- * member's plan. The three most recent are the feed's. Within 30 days never the same member
- * twice (« 7 members saved » are seven plans paid), and none between 29 and 30 days ago, so that
- * count does not change with the hour the demo opens. Far enough back to fill the chart's first
- * month whatever the date.
+ * What StayPut saved, member by member (the Worker's `stayput.saves`), and how: a failed payment
+ * retried or a member who updated their card after the notice, a member back from a 30-day pause,
+ * a cancellation taken back after free days, each at the price of the member's plan. Each one is
+ * an action of the History that says « Recovered » (fix prompt v4.1, block 4). The three most
+ * recent are the feed's. Within 30 days never the same member twice (« 7 members saved » are
+ * seven plans paid), and none between 29 and 30 days ago, so that count does not change with the
+ * hour the demo opens. Far enough back to fill the chart's first month whatever the date.
  */
-const SAVES: readonly { name: string; ago: number }[] = [
-  { name: 'Clara Faure', ago: 41 * MINUTE },
-  { name: 'Anaïs Robin', ago: 26 * HOUR },
-  { name: 'Arthur Lemoine', ago: 41 * HOUR },
-  { name: 'Sofia Ricci', ago: 6 * DAY + 7 * HOUR },
-  { name: 'Camille Laurent', ago: 11 * DAY + 3 * HOUR },
-  { name: 'Jade Mercier', ago: 18 * DAY + 9 * HOUR },
-  { name: 'Inès Haddad', ago: 23 * DAY + 5 * HOUR },
-  { name: 'Juliette Caron', ago: 31 * DAY + 4 * HOUR },
-  { name: 'Karim Belkacem', ago: 34 * DAY + 6 * HOUR },
-  { name: 'Mehdi Amrani', ago: 45 * DAY + 3 * HOUR },
+const SAVES: readonly { name: string; ago: number; via: SaveVia }[] = [
+  { name: 'Clara Faure', ago: 43 * MINUTE, via: 'retry' },
+  { name: 'Anaïs Robin', ago: 26 * HOUR, via: 'extend' },
+  { name: 'Arthur Lemoine', ago: 41 * HOUR, via: 'retry' },
+  { name: 'Sofia Ricci', ago: 6 * DAY + 7 * HOUR, via: 'notice' },
+  { name: 'Camille Laurent', ago: 11 * DAY + 3 * HOUR, via: 'pause' },
+  { name: 'Jade Mercier', ago: 18 * DAY + 9 * HOUR, via: 'retry' },
+  { name: 'Inès Haddad', ago: 23 * DAY + 5 * HOUR, via: 'pause' },
+  { name: 'Gabriel Roux', ago: 31 * DAY + 4 * HOUR, via: 'notice' },
+  { name: 'Karim Belkacem', ago: 34 * DAY + 6 * HOUR, via: 'retry' },
+  { name: 'Mehdi Amrani', ago: 45 * DAY + 3 * HOUR, via: 'retry' },
   // The year's plan, once.
-  { name: 'Lucas Petit', ago: 52 * DAY + 5 * HOUR },
-  { name: 'Rose Gauthier', ago: 58 * DAY + 9 * HOUR },
-  { name: 'Emma Rousseau', ago: 64 * DAY + 2 * HOUR },
-  { name: 'Gabriel Roux', ago: 70 * DAY + 6 * HOUR },
-  { name: 'Léa Moreau', ago: 77 * DAY + 4 * HOUR },
-  { name: 'Nathan Girard', ago: 85 * DAY + 7 * HOUR },
-  { name: 'Tom Barbier', ago: 93 * DAY + 3 * HOUR },
-  { name: 'Inès Haddad', ago: 101 * DAY + 5 * HOUR },
-  { name: 'Camille Laurent', ago: 108 * DAY + 2 * HOUR },
-  { name: 'Jade Mercier', ago: 116 * DAY + 8 * HOUR },
+  { name: 'Lucas Petit', ago: 52 * DAY + 5 * HOUR, via: 'notice' },
+  { name: 'Rose Gauthier', ago: 58 * DAY + 9 * HOUR, via: 'retry' },
+  { name: 'Emma Rousseau', ago: 64 * DAY + 2 * HOUR, via: 'pause' },
+  { name: 'Gabriel Roux', ago: 70 * DAY + 6 * HOUR, via: 'retry' },
+  { name: 'Léa Moreau', ago: 77 * DAY + 4 * HOUR, via: 'notice' },
+  { name: 'Nathan Girard', ago: 85 * DAY + 7 * HOUR, via: 'retry' },
+  { name: 'Tom Barbier', ago: 93 * DAY + 3 * HOUR, via: 'pause' },
+  { name: 'Inès Haddad', ago: 101 * DAY + 5 * HOUR, via: 'retry' },
+  { name: 'Camille Laurent', ago: 108 * DAY + 2 * HOUR, via: 'notice' },
+  { name: 'Jade Mercier', ago: 116 * DAY + 8 * HOUR, via: 'retry' },
 ];
 
 /** How long ago StayPut last saved that member, when it was less than `within` ago. */
@@ -302,6 +348,38 @@ function memberId(index: number): string {
   return `mber_demo${String(index + 1).padStart(2, '0')}`;
 }
 
+/**
+ * A member's plan in dates (fix prompt v4.1, block 4), all from the day they joined: their plan
+ * renews on that day of each period. `paidAt`: the latest payment that came in; `end`: when the
+ * membership renews, or ends for a member leaving, one period after it; for a renewal that
+ * failed, the day it was due (`failedAt`, unpaid since); after StayPut's pause, the day it ends;
+ * for a member gone, the end of the last period they paid. A payment StayPut saved within the
+ * period is the latest one, and starts it.
+ */
+function billingOf(
+  p: Person,
+  period: number,
+  now: number,
+): { paidAt: number; failedAt: number | null; end: number; pausedUntil: number | null } {
+  if (p.left !== undefined) {
+    const leftAt = now - p.left * DAY;
+    return { paidAt: leftAt - period, failedAt: null, end: leftAt, pausedUntil: null };
+  }
+  // Their latest renewal day: now, or before.
+  const renewal = now - ((p.joined * DAY) % period);
+  const saved = savedWithin(p.name, period);
+  if (saved !== undefined) {
+    return { paidAt: now - saved, failedAt: null, end: now - saved + period, pausedUntil: null };
+  }
+  if (p.failed)
+    return { paidAt: renewal - period, failedAt: renewal, end: renewal, pausedUntil: null };
+  if (p.paused) {
+    const until = now - p.paused.hoursAgo * HOUR + p.paused.days * DAY;
+    return { paidAt: renewal - period, failedAt: null, end: until, pausedUntil: until };
+  }
+  return { paidAt: renewal, failedAt: null, end: renewal + period, pausedUntil: null };
+}
+
 export interface DemoWorld {
   session: CreatorSession;
   /** Automations, Analytics, Integrations › Activity, Settings › Risk score (pages.ts). */
@@ -363,13 +441,17 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
       posts: count(2),
       lessons: count(3),
     };
-    // Renews on the day of the month (or of the year) they joined, unless StayPut saved a
-    // payment of theirs within the period: that payment started it, and is their last one.
-    const saved = plan ? savedWithin(p.name, plan.days * DAY) : undefined;
-    const sinceRenewal = plan ? (saved === undefined ? p.joined % plan.days : saved / DAY) : 0;
-    const renewal = plan ? now + (plan.days - sinceRenewal) * DAY : null;
+    const billing = plan ? billingOf(p, plan.days * DAY, now) : null;
     const leftAt = p.left === undefined ? null : now - p.left * DAY;
-    const lastActive = p.active === null ? null : at(p.active * DAY + between([1, 600]) * MINUTE);
+    const minutes = p.active === null ? 0 : between([1, 600]);
+    const lastActive =
+      p.active === null
+        ? null
+        : at(
+            p.seenHoursAgo !== undefined
+              ? p.seenHoursAgo * HOUR
+              : p.active * DAY + minutes * MINUTE,
+          );
     return {
       id: memberId(index),
       name: p.name,
@@ -386,36 +468,41 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
           ? {
               score: p.score,
               level: p.level,
-              reasons: p.reasons(now),
+              reasons: p.reasons({ now, end: billing?.end ?? null }),
               inactiveNewcomer: p.active === null && p.joined >= 3 && p.joined <= 7,
               computedAt: scoredAt,
             }
           : null,
-      membership: plan
-        ? {
-            status: leftAt !== null ? 'canceled' : p.failed ? 'past_due' : 'active',
-            price: plan.price,
-            currency: 'usd',
-            billingPeriodDays: plan.days,
-            cancelAtPeriodEnd: p.leaves !== undefined,
-            currentPeriodEnd: new Date(
-              leftAt ?? (p.leaves === undefined ? renewal! : now + p.leaves * DAY),
-            ).toISOString(),
-          }
-        : null,
-      lastPayment: plan
-        ? {
-            status: p.failed ? 'failed' : 'succeeded',
-            amount: plan.price,
-            currency: 'usd',
-            at: p.failed
-              ? at(between([2, 30]) * HOUR)
-              : new Date(
-                  (leftAt ?? now) - (saved ?? Math.max(sinceRenewal, 0.5) * DAY),
-                ).toISOString(),
-            failureReason: p.failed ?? null,
-          }
-        : null,
+      membership:
+        plan && billing
+          ? {
+              status:
+                leftAt !== null
+                  ? 'canceled'
+                  : p.failed
+                    ? 'past_due'
+                    : p.paused
+                      ? 'paused'
+                      : 'active',
+              price: plan.price,
+              currency: 'usd',
+              billingPeriodDays: plan.days,
+              cancelAtPeriodEnd: p.cancels === true,
+              currentPeriodEnd: new Date(billing.end).toISOString(),
+              pausedUntil:
+                billing.pausedUntil === null ? null : new Date(billing.pausedUntil).toISOString(),
+            }
+          : null,
+      lastPayment:
+        plan && billing
+          ? {
+              status: p.failed ? 'failed' : 'succeeded',
+              amount: plan.price,
+              currency: 'usd',
+              at: new Date(billing.failedAt ?? billing.paidAt).toISOString(),
+              failureReason: p.failed ?? null,
+            }
+          : null,
     };
   });
 
@@ -563,6 +650,12 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
     community: COMMUNITY,
     rows,
     monthly: price,
+    saves: SAVES.map((save) => ({
+      memberId: rows[PEOPLE.findIndex((p) => p.name === save.name)]!.id,
+      at: now - save.ago,
+      amount: planPrice(save.name),
+      via: save.via,
+    })),
     guildId: DISCORD_GUILD,
     chatId: TELEGRAM_CHAT,
     telegramTitle: TELEGRAM_TITLE,
@@ -596,6 +689,8 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
     item(41 * MINUTE, 'stayput', 'saved', 'Clara Faure', usd(49)),
     item(43 * MINUTE, 'member', 'payment_succeeded', 'Clara Faure', usd(49)),
     item(95 * MINUTE, 'member', 'payment_failed', 'Sarah Cohen', usd(149)),
+    // StayPut's retry failed again: Elena's payment is still unpaid (History: « Still failing »).
+    item(2 * HOUR - MINUTE, 'member', 'payment_failed', 'Elena Novak', usd(49)),
     item(2 * HOUR, 'stayput', 'payment_retry', 'Elena Novak'),
     item(3 * HOUR, 'member', 'activity', 'Léa Moreau', { source: 'whop', activity: 'lesson' }),
     item(4 * HOUR, 'member', 'cancellation_scheduled', 'Margaux Picard'),
@@ -778,20 +873,42 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
           : risk.level === 'medium'
             ? risk.score - 14
             : risk.score + 4;
+    // A « Score turned high » action came on a day the score was high (fix prompt v4.1, block
+    // 4): high from that day on; for a member it brought back, high that day, then lower.
+    const turnedHigh = pages.scoreTurnedHigh(memberId);
+    const highDay = turnedHigh === null ? null : zonedDay(turnedHigh, zone);
+    const days = Array.from({ length: 30 }, (_, i) => zonedDay(now - (29 - i) * DAY, zone));
+    const peakAt = highDay === null ? -1 : days.indexOf(highDay);
+    const PEAK = DEFAULT_HIGH_FROM + 4;
     const scores = risk
-      ? Array.from({ length: 30 }, (_, i) => i)
-          .filter((i) => 29 - i < p.joined)
-          .map((i) => {
+      ? days
+          .map((day, i) => ({ day, i }))
+          .filter(({ i }) => 29 - i < p.joined)
+          .map(({ day, i }) => {
             const t = i / 29;
             const noise = (own() - 0.5) * 6;
-            const score =
-              i === 29
-                ? risk.score
-                : Math.max(
-                    0,
-                    Math.min(100, Math.round(start + (risk.score - start) * t * t + noise)),
-                  );
-            return { day: zonedDay(now - (29 - i) * DAY, zone), score };
+            const curve = Math.max(
+              0,
+              Math.min(100, Math.round(start + (risk.score - start) * t * t + noise)),
+            );
+            let score = i === 29 ? risk.score : curve;
+            if (peakAt >= 0 && i >= peakAt) {
+              score =
+                risk.score >= DEFAULT_HIGH_FROM
+                  ? Math.max(score, DEFAULT_HIGH_FROM)
+                  : // Brought back: from the peak down to today's, day by day.
+                    Math.round(
+                      PEAK + ((risk.score - PEAK) * (i - peakAt)) / Math.max(29 - peakAt, 1),
+                    );
+            } else if (peakAt >= 0 && risk.score < DEFAULT_HIGH_FROM) {
+              // Rising to it.
+              const u = i / Math.max(peakAt, 1);
+              score = Math.max(
+                0,
+                Math.min(100, Math.round(start + (PEAK - start) * u * u + noise)),
+              );
+            }
+            return { day, score };
           })
       : [];
     const plan = p.plan ? PLANS[p.plan] : null;
@@ -807,17 +924,32 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
         at: row.lastPayment.at,
         failureReason: row.lastPayment.failureReason,
       });
+      // Paid each period before it; a payment StayPut saved is the one of its period.
+      const saves = SAVES.filter((save) => save.name === p.name).map((save) => now - save.ago);
+      const period = plan.days * DAY;
+      const paidBefore = row.lastPayment.status === 'failed' ? last - period : last;
+      if (paidBefore !== last) {
+        payments.push({
+          id: `pay_demo${tag}p1`,
+          status: 'succeeded',
+          amount: plan.price,
+          currency: 'usd',
+          at: new Date(paidBefore).toISOString(),
+          failureReason: null,
+        });
+      }
       for (
-        let moment = last - plan.days * DAY;
+        let moment = paidBefore - period;
         moment >= first - DAY && payments.length < MEMBER_PAYMENTS_LIMIT;
-        moment -= plan.days * DAY
+        moment -= period
       ) {
+        const saved = saves.find((at) => Math.abs(at - moment) < period / 2);
         payments.push({
           id: `pay_demo${tag}p${payments.length}`,
           status: 'succeeded',
           amount: plan.price,
           currency: 'usd',
-          at: new Date(moment).toISOString(),
+          at: new Date(saved ?? moment).toISOString(),
           failureReason: null,
         });
       }
@@ -932,14 +1064,8 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
           newLast7Days: PEOPLE.filter((p) => p.left === undefined && p.joined < 7).length,
         },
         memberActivity30d: members.summary.activity30d,
-        stayputActions30d: {
-          total: 43,
-          messages: 31,
-          paymentRetries: 7,
-          offers: 5,
-          pauses: 6,
-          saved: days.savedMembers30d,
-        },
+        // What StayPut did over 30 days: the History's own actions, as the Worker counts them.
+        stayputActions30d: { ...pages.done30d(), saved: days.savedMembers30d },
         mode: settings.mode,
         testMode: settings.dryRun,
         riskHistory,

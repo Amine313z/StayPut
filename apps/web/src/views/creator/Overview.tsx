@@ -36,7 +36,7 @@ import { attentionReasons } from '../../components/MemberRows';
 import { LEVELS } from '../../components/Risk';
 import { ErrorPanel } from '../../components/Status';
 import { useI18n } from '../../i18n';
-import { URGENT_MS, monthlyOf } from '../../members';
+import { URGENT_MS, monthlyOf, unpaidSince } from '../../members';
 import { STAGGER, ease, itemVariants } from '../../motion';
 import { reasonText } from '../../risk-text';
 import { ActionButton } from '../../ui/ActionButton';
@@ -685,6 +685,8 @@ export interface Urgency {
   paymentFailed: boolean;
   /** When they leave, or renew (ms). */
   end: number | null;
+  /** Since when their payment is unpaid (ms): the renewal that failed. */
+  unpaid: number | null;
 }
 
 /**
@@ -714,6 +716,7 @@ export function mostUrgent(members: readonly MemberRow[], now: number): Urgency[
         leavingThisWeek: leaving && end !== null && end - now <= FIRST_MS,
         paymentFailed,
         end,
+        unpaid: unpaidSince(member),
         monthly: monthlyOf(member.membership) ?? 0,
       };
     })
@@ -859,7 +862,9 @@ function AttentionRow({
 }) {
   const i18n = useI18n();
   const { t, day, currency, number } = i18n;
-  const { member, leavingSoon, leaving, paymentFailed, end } = item;
+  const { member, leavingSoon, leaving, paymentFailed, end, unpaid } = item;
+  // A date of another year keeps its year (an annual plan's end).
+  const today = new Date();
   const main = (member.risk?.reasons ?? []).find((reason) => reason.code !== 'cancel_scheduled');
   // A payment that failed is said first: it is what is urgent.
   const reason = paymentFailed
@@ -889,11 +894,15 @@ function AttentionRow({
           : null
       }
       when={
-        end === null
-          ? null
-          : t(leaving ? 'risk.reason.cancel_scheduled' : 'dash.row.renews', {
-              date: day(new Date(end)),
-            })
+        // When they leave; else, for a payment that failed, since when it is unpaid, never a
+        // renewal still to come; else the next renewal.
+        leaving && end !== null
+          ? t('risk.reason.cancel_scheduled', { date: day(new Date(end), today) })
+          : unpaid !== null
+            ? t('members.unpaidSince', { date: day(new Date(unpaid), today) })
+            : end === null
+              ? null
+              : t('dash.row.renews', { date: day(new Date(end), today) })
       }
       whenUrgent={leavingSoon}
       paid={

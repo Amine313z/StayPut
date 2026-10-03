@@ -165,24 +165,6 @@ body {
   color: var(--white-100);
 }
 
-/*
- * The page's one decoration: a very light diagonal streak, turquoise at 6 %, the logo's. A fixed
- * layer behind everything: it never moves with the content and cannot change any contrast.
- */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: linear-gradient(
-    118deg,
-    transparent 0 71.4%,
-    rgb(94 234 212 / 0.06) 71.8%,
-    transparent 72.2%
-  );
-}
-
 /* Figures line up in columns and do not jump when they change. */
 .tabular {
   font-variant-numeric: tabular-nums;

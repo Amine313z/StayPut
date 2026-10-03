@@ -47,8 +47,11 @@ export interface Translator {
   /** A share from 0 to 1, as a whole percentage: « 42% », « 42 % ». */
   percent: (ratio: number) => string;
   date: (value: Date) => string;
-  /** A day without its year, for a chart's axis: « Oct 12 », « 12 oct. ». */
-  day: (value: Date) => string;
+  /**
+   * A day without its year, for a chart's axis: « Oct 12 », « 12 oct. ». Given `now`, a day of
+   * another year keeps it: « May 13, 2027 », « 13 mai 2027 ».
+   */
+  day: (value: Date, now?: Date) => string;
   /** A calendar month, « September 2026 » (read in UTC: `2026-09-01` is September anywhere). */
   month: (value: Date) => string;
   /**
@@ -130,7 +133,8 @@ export function createTranslator(locale: Locale): Translator {
       }).format(amount),
     percent: (ratio) => percents.format(ratio),
     date: (value) => dates.format(value),
-    day: (value) => days.format(value),
+    day: (value, now) =>
+      now && value.getFullYear() !== now.getFullYear() ? dates.format(value) : days.format(value),
     month: (value) => months.format(value),
     calendarDate: (day) => keyDates.format(noonOf(day)),
     calendarDay: (day) => keyDays.format(noonOf(day)),

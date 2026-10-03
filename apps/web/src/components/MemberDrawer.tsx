@@ -12,7 +12,15 @@ import { motion } from 'motion/react';
 import { useId, useState, type ReactNode } from 'react';
 import { putJson, useApi, type ApiError } from '../api';
 import { useI18n } from '../i18n';
-import { URGENT_MS, isLeaving, memberState, monthlyOf, periodEnd } from '../members';
+import {
+  URGENT_MS,
+  isLeaving,
+  memberState,
+  monthlyOf,
+  pausedUntil,
+  periodEnd,
+  unpaidSince,
+} from '../members';
 import { ease } from '../motion';
 import { reasonText } from '../risk-text';
 import { Avatar } from '../ui/Avatar';
@@ -27,7 +35,7 @@ import { UrgentDot } from '../ui/UrgentDot';
 import { Sparkline } from '../ui/charts/Sparkline';
 import { MemberActions } from './MemberActions';
 import { membershipLine } from './MemberRows';
-import { STATE_LABELS } from './MemberTable';
+import { stateText } from './MemberTable';
 import { LEVELS, RiskReasons } from './Risk';
 
 /** A payment's outcome in a word; Whop's own word when StayPut has none for it. */
@@ -117,7 +125,7 @@ export function MemberDrawer({
         </StaggerItem>
         <StaggerItem>
           <Section title={t('member.subscription')}>
-            <Subscription member={member} memberships={data?.memberships ?? null} />
+            <Subscription member={member} memberships={data?.memberships ?? null} now={now} />
           </Section>
         </StaggerItem>
         {failed ? null : (
@@ -181,7 +189,8 @@ function Urgent() {
  * leave. A red dot for a payment not recovered, and for a departure within 48 hours.
  */
 function Summary({ member, now }: { member: MemberRow; now: number }) {
-  const { t, number, currency, day } = useI18n();
+  const i18n = useI18n();
+  const { t, number, currency, day } = i18n;
   const risk = member.risk;
   const state = memberState(member, now);
   const end = member.status === 'left' ? null : periodEnd(member);
@@ -197,7 +206,7 @@ function Summary({ member, now }: { member: MemberRow; now: number }) {
       node: (
         <span className="inline-flex items-center gap-1.5 text-fg">
           {failedNow ? <Urgent /> : null}
-          {t(STATE_LABELS[state])}
+          {stateText(member, state, now, i18n)}
         </span>
       ),
     });
@@ -220,7 +229,7 @@ function Summary({ member, now }: { member: MemberRow; now: number }) {
       node: (
         <span className="inline-flex items-center gap-1.5">
           {end - now <= URGENT_MS ? <Urgent /> : null}
-          {t('members.endsOn', { date: day(new Date(end)) })}
+          {t('members.endsOn', { date: day(new Date(end), new Date(now)) })}
         </span>
       ),
     });
@@ -244,7 +253,7 @@ function Summary({ member, now }: { member: MemberRow; now: number }) {
       <div className="min-w-0">
         <p className="flex items-center gap-1.5 text-base font-medium text-fg">
           {!risk && failedNow ? <Urgent /> : null}
-          {risk ? t(LEVELS[risk.level].label) : t(STATE_LABELS[state])}
+          {risk ? t(LEVELS[risk.level].label) : stateText(member, state, now, i18n)}
         </p>
         {details.length > 0 ? (
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem] text-subtle">
@@ -337,10 +346,12 @@ function calendarDay(day: string): Date {
 function Subscription({
   member,
   memberships,
+  now,
 }: {
   member: MemberRow;
   /** Null while loading: the row's membership meanwhile. */
   memberships: MemberDetailMembership[] | null;
+  now: number;
 }) {
   const i18n = useI18n();
   const { t, date } = i18n;
@@ -348,10 +359,17 @@ function Subscription({
   if (current === null) return <p className="text-sm text-muted">{t('members.noMembership')}</p>;
   const startedAt = memberships?.[0]?.startedAt ?? null;
   const before = memberships?.slice(1) ?? [];
+  // The member's row knows what the one that counts is going through: unpaid, paused, over.
+  const facts = {
+    now,
+    gone: member.status === 'left',
+    unpaidSince: unpaidSince(member),
+    pausedUntil: pausedUntil(member),
+  };
   return (
     <div className="space-y-2 text-sm">
       <div>
-        <p className="text-fg">{membershipLine(current, i18n)}</p>
+        <p className="text-fg">{membershipLine(current, i18n, facts)}</p>
         {startedAt ? (
           <p className="mt-0.5 text-[0.8125rem] text-subtle">
             {t('member.since', { date: date(new Date(startedAt)) })}
@@ -363,7 +381,7 @@ function Subscription({
       {before.length > 0 ? (
         <ul className="space-y-1 border-t border-line pt-2 text-[0.8125rem] text-subtle">
           {before.map((membership) => (
-            <li key={membership.id}>{membershipLine(membership, i18n)}</li>
+            <li key={membership.id}>{membershipLine(membership, i18n, { now })}</li>
           ))}
         </ul>
       ) : null}

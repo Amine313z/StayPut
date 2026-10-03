@@ -3,7 +3,9 @@ import {
   DEFAULT_HIGH_FROM,
   DEFAULT_MEDIUM_FROM,
   DEFAULT_TEMPLATES,
+  MESSAGE_KINDS,
   NICHE_PRESETS,
+  actionOutcome,
   analyzeCohorts,
   findBlockingLessons,
   normalizeWeights,
@@ -11,6 +13,7 @@ import {
   type AccountPlatform,
   type AccountsView,
   type ActionRow,
+  type ActionType,
   type ActionView,
   type ActionsPage,
   type AlumniView,
@@ -42,12 +45,31 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+/** An offer applied to a membership, as the home counts them (the Worker's list). */
+const OFFER_TYPES: readonly ActionType[] = [
+  'pause_offer',
+  'promo_offer',
+  'extend_offer',
+  'coaching_offer',
+  'affiliate_invite',
+];
+
 export interface DemoPagesInput {
   now: number;
   community: string;
   rows: readonly MemberRow[];
   /** What a member pays a month. */
   monthly: (member: MemberRow) => number;
+  /**
+   * What StayPut saved (world.ts), and how: each one is an action of the History, sent before the
+   * money came in, that says « Recovered ».
+   */
+  saves: readonly {
+    memberId: string;
+    at: number;
+    amount: number;
+    via: 'retry' | 'notice' | 'pause' | 'extend';
+  }[];
   /** The Discord server and the Telegram group of the community. */
   guildId: string;
   chatId: string;
@@ -63,6 +85,16 @@ export interface DemoPages {
   pending: () => { actions: number; members: number; revenue: number };
   /** Members a message reached (or will) within 5 days: not « unreached » on the home. */
   reached: () => ReadonlySet<string>;
+  /** When a « Score turned high » action first came for a member; null when none did. */
+  scoreTurnedHigh: (memberId: string) => number | null;
+  /** What StayPut did over the last 30 days (the History's), as the home counts it. */
+  done30d: () => {
+    total: number;
+    messages: number;
+    paymentRetries: number;
+    offers: number;
+    pauses: number;
+  };
   insights: InsightsReport;
   platformActivity: () => PlatformActivityView;
   people: () => PeopleView;
@@ -155,6 +187,47 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     };
   };
   const evening = nextHour(now, 19);
+  // Every action that saved money, and the money: the History says « Recovered » for them.
+  const savedBy = new Map<string, { amount: number; currency: string }>();
+  const savedActions = input.saves.map((save) => {
+    const member = rows.find((m) => m.id === save.memberId)!;
+    const name = member.name ?? '';
+    // Retried a few minutes before the money came in, its renewal having failed two days
+    // before; the notice two hours before the member paid; the pause 30 days before they came
+    // back and paid; the free days a week before their renewal, paid.
+    const sent =
+      save.via === 'retry'
+        ? save.at - 4 * MINUTE
+        : save.via === 'notice'
+          ? save.at - 2 * HOUR
+          : save.via === 'pause'
+            ? save.at - 30 * DAY
+            : save.at - 7 * DAY;
+    const row = action(name, {
+      type:
+        save.via === 'retry'
+          ? 'payment_retry'
+          : save.via === 'notice'
+            ? 'payment_failed_notice'
+            : save.via === 'pause'
+              ? 'pause_offer'
+              : 'extend_offer',
+      status: 'sent',
+      trigger: save.via === 'retry' || save.via === 'notice' ? 'payment_failed' : 'exit_survey',
+      createdAt: iso(save.via === 'retry' ? save.at - 2 * DAY : sent - 10 * MINUTE),
+      sendAt: iso(sent),
+      sentAt: iso(sent),
+      message: save.via === 'notice' ? message('payment_failed_notice', name) : null,
+      offer:
+        save.via === 'pause'
+          ? { reason: 'no_time', days: 30, keep: true, resumesAt: iso(sent + 30 * DAY) }
+          : save.via === 'extend'
+            ? { reason: 'other', days: 7, keep: true }
+            : null,
+    });
+    savedBy.set(row.id, { amount: save.amount, currency: 'usd' });
+    return row;
+  });
   let actions: ActionRow[] = [
     // Waiting for the creator (manual mode).
     action('Margaux Picard', {
@@ -164,6 +237,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       createdAt: ago(4 * HOUR),
       message: message('exit_survey', 'Margaux Picard'),
     }),
+    // « Score turned high »: only ever for a member whose score is high then (block 4, rule 4).
     action('Yanis Benali', {
       type: 'high_risk_message',
       status: 'proposed',
@@ -183,6 +257,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       sendAt: iso(evening + 30 * MINUTE),
       message: message('high_risk_message', 'Maxime Vidal', { days_inactive: 24 }),
     }),
+    // After StayPut's retry failed again.
     action('Elena Novak', {
       type: 'payment_failed_notice',
       status: 'proposed',
@@ -232,23 +307,15 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       sendAt: iso(nextHour(now, 18, 30) + 15 * MINUTE),
       message: message('welcome_message', 'Maya Fernandes'),
     }),
-    // Done, the newest first.
+    // Done. Lou is at medium risk: the creator wrote to her from the dashboard.
     action('Lou Marchand', {
-      type: 'high_risk_message',
+      type: 'creator_message',
       status: 'sent',
-      trigger: 'score_high',
+      trigger: 'creator',
       createdAt: ago(26 * HOUR),
       sendAt: ago(12 * MINUTE),
       sentAt: ago(12 * MINUTE),
-      message: message('high_risk_message', 'Lou Marchand', { days_inactive: 9 }),
-    }),
-    action('Clara Faure', {
-      type: 'payment_retry',
-      status: 'sent',
-      trigger: 'payment_failed',
-      createdAt: ago(2 * DAY),
-      sendAt: ago(47 * MINUTE),
-      sentAt: ago(47 * MINUTE),
+      message: message('creator_message', 'Lou Marchand'),
     }),
     action('Sarah Cohen', {
       type: 'payment_failed_notice',
@@ -259,6 +326,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       sentAt: ago(90 * MINUTE),
       message: message('payment_failed_notice', 'Sarah Cohen'),
     }),
+    // Retried two hours ago: failed again (« Still failing »), her payment still unpaid.
     action('Elena Novak', {
       type: 'payment_retry',
       status: 'sent',
@@ -274,7 +342,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       createdAt: ago(5 * HOUR + 10 * MINUTE),
       sendAt: ago(5 * HOUR),
       sentAt: ago(5 * HOUR),
-      offer: { reason: 'no_time', days: 30, keep: true, resumesAt: iso(now + 30 * DAY) },
+      offer: { reason: 'no_time', days: 30, keep: true, resumesAt: iso(now - 5 * HOUR + 30 * DAY) },
     }),
     action('Pauline Giraud', {
       type: 'welcome_message',
@@ -294,22 +362,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       sentAt: ago(11 * HOUR),
       message: message('creator_message', 'Rose Gauthier'),
     }),
-    action('Anaïs Robin', {
-      type: 'promo_offer',
-      status: 'sent',
-      trigger: 'exit_survey',
-      createdAt: ago(31 * HOUR),
-      sendAt: ago(30 * HOUR),
-      sentAt: ago(30 * HOUR),
-      offer: {
-        reason: 'too_expensive',
-        percentOff: 20,
-        months: 3,
-        keep: false,
-        promoCode: 'STAY-7QK2MX4P',
-        expiresAt: iso(now + 6 * DAY),
-      },
-    }),
+    // His score turned high two days ago; the message brought him back (« Came back »).
     action('Victor Leclerc', {
       type: 'high_risk_message',
       status: 'sent',
@@ -319,13 +372,23 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       sentAt: ago(31 * HOUR),
       message: message('high_risk_message', 'Victor Leclerc', { days_inactive: 7 }),
     }),
+    // The creator wrote to Tom twice in two days: the second one waits for the spacing.
     action('Tom Barbier', {
-      type: 'high_risk_message',
+      type: 'creator_message',
       status: 'blocked_by_guardrail',
-      trigger: 'score_high',
+      trigger: 'creator',
       createdAt: ago(2 * DAY + 3 * HOUR),
       blockedReason: 'message_spacing',
-      message: message('high_risk_message', 'Tom Barbier', { days_inactive: 9 }),
+      message: message('creator_message', 'Tom Barbier'),
+    }),
+    action('Tom Barbier', {
+      type: 'creator_message',
+      status: 'sent',
+      trigger: 'creator',
+      createdAt: ago(4 * DAY + 3 * HOUR),
+      sendAt: ago(4 * DAY + 3 * HOUR),
+      sentAt: ago(4 * DAY + 3 * HOUR),
+      message: message('creator_message', 'Tom Barbier'),
     }),
     action('Benoît Lacroix', {
       type: 'alumni_followup',
@@ -339,7 +402,47 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
         offer: '20% off for 3 months with the code STAY-K7QM2XPA',
       }),
     }),
+    // Too expensive, a discount offered; she left all the same (« Left »).
+    action('Sabrina Aït', {
+      type: 'promo_offer',
+      status: 'sent',
+      trigger: 'exit_survey',
+      createdAt: ago(24 * DAY + 20 * MINUTE),
+      sendAt: ago(24 * DAY),
+      sentAt: ago(24 * DAY),
+      offer: {
+        reason: 'too_expensive',
+        percentOff: 20,
+        months: 3,
+        keep: false,
+        promoCode: 'STAY-7QK2MX4P',
+        expiresAt: iso(now - 24 * DAY + 7 * DAY),
+      },
+    }),
+    ...savedActions,
   ];
+  /**
+   * What came of an action that reached its member, from the members as every page shows them
+   * (core `actionOutcome`, the Worker's rule): the money saved through it, their payment, a pause,
+   * whether they came back after it or left since.
+   */
+  const outcomeOf = (row: ActionRow) => {
+    const member = rows.find((m) => m.id === row.member.id);
+    const sent = Date.parse(row.sentAt ?? row.createdAt);
+    const leftAt =
+      member?.status === 'left' && member.membership?.currentPeriodEnd
+        ? Date.parse(member.membership.currentPeriodEnd)
+        : null;
+    return actionOutcome({
+      type: row.type,
+      status: row.status,
+      saved: savedBy.get(row.id) ?? null,
+      paymentFailing: member?.lastPayment?.status === 'failed',
+      activeAfter: !!member?.lastActivityAt && Date.parse(member.lastActivityAt) > sent,
+      leftAfter: leftAt !== null && leftAt > sent,
+      resumesAt: row.offer?.resumesAt ?? null,
+    });
+  };
   const IN_VIEW: Record<ActionView, (row: ActionRow) => boolean> = {
     queue: (row) => row.status === 'proposed',
     scheduled: (row) => row.status === 'approved' || row.status === 'scheduled',
@@ -355,7 +458,8 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
           : view === 'scheduled'
             ? moment(a) - moment(b)
             : 0,
-      );
+      )
+      .map((row) => (view === 'history' ? { ...row, outcome: outcomeOf(row) } : row));
 
   // ---- Analytics: the months of arrival, and the lessons members stall after ----
   // Members arrive through each month; a month counts at a horizon once its members are old
@@ -612,9 +716,18 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       const authors = wrote(platform);
       const count = (status: DemoAccount['status']) =>
         authors.filter((a) => a.status === status).length;
+      const written = (status: DemoAccount['status']) =>
+        sum(authors.filter((a) => a.status === status).map((a) => a.messages));
       return {
         platform,
         messages: sum(authors.map((a) => a.messages)),
+        // The members' part is what their own 30 days add up to there (their drawers).
+        messagesBy: {
+          members: written('member'),
+          team: written('team'),
+          guests: written('guest'),
+          unlinked: written('unlinked'),
+        },
         authors: authors.length,
         members: count('member'),
         team: count('team'),
@@ -835,6 +948,27 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
               return total + (member ? monthly(member) : 0);
             }, 0) * 100,
           ) / 100,
+      };
+    },
+    scoreTurnedHigh: (memberId) => {
+      const times = actions
+        .filter((row) => row.trigger === 'score_high' && row.member.id === memberId)
+        .map((row) => Date.parse(row.createdAt));
+      return times.length > 0 ? Math.min(...times) : null;
+    },
+    done30d: () => {
+      const done = actions.filter(
+        (row) =>
+          (row.status === 'sent' || row.status === 'simulated') && now - moment(row) < 30 * DAY,
+      );
+      const count = (keep: (type: ActionType) => boolean) =>
+        done.filter((row) => keep(row.type)).length;
+      return {
+        total: done.length,
+        messages: count((type) => MESSAGE_KINDS[type] !== 'none'),
+        paymentRetries: count((type) => type === 'payment_retry'),
+        offers: count((type) => OFFER_TYPES.includes(type)),
+        pauses: count((type) => type === 'pause_offer'),
       };
     },
     reached: () =>

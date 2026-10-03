@@ -209,9 +209,9 @@ function PlatformIcon({ platform }: { platform: AccountPlatform }) {
   );
 }
 
-/** One platform: its messages, who wrote them, and a bar per day. */
+/** One platform: its messages and the members' part of them, who wrote them, a bar per day. */
 function PlatformTile({ activity, from }: { activity: PlatformActivity; from: string }) {
-  const { t, plural, relative } = useI18n();
+  const { t, plural, relative, number } = useI18n();
   const name = t(
     activity.platform === 'discord' ? 'sources.discord.name' : 'sources.telegram.name',
   );
@@ -232,6 +232,13 @@ function PlatformTile({ activity, from }: { activity: PlatformActivity; from: st
           <p className="tabular mt-2 text-2xl font-semibold tracking-tight">
             {plural('activity.messages', activity.messages)}
           </p>
+          {/* The members' part: what their own 30 days add up to there (fix prompt v4.1,
+              block 4); the rest is the team's, guests' and accounts' not tied yet. */}
+          {activity.messagesBy ? (
+            <p data-by-members="" className="tabular text-sm text-muted">
+              {t('activity.byMembers', { count: number(activity.messagesBy.members) })}
+            </p>
+          ) : null}
           <p className="mt-0.5 text-xs text-muted">
             {activity.lastAt
               ? t('activity.lastMessage', { when: relative(new Date(activity.lastAt)) })

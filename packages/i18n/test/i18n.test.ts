@@ -77,6 +77,13 @@ describe('createTranslator', () => {
     // A chart's axis: short.
     expect(createTranslator('en').day(new Date('2026-09-30T12:00:00Z'))).toBe('Sep 30');
     expect(fr.day(new Date('2026-09-30T12:00:00Z'))).toBe('30 sept.');
+    // Next year's day keeps its year beside today: an annual plan's end is not last May.
+    const today = new Date('2026-10-03T12:00:00Z');
+    expect(createTranslator('en').day(new Date('2027-05-13T12:00:00Z'), today)).toBe(
+      'May 13, 2027',
+    );
+    expect(fr.day(new Date('2027-05-13T12:00:00Z'), today)).toBe('13 mai 2027');
+    expect(createTranslator('en').day(new Date('2026-10-29T12:00:00Z'), today)).toBe('Oct 29');
     expect(createTranslator('en').currency(1240, 'USD', { compact: true })).toBe('$1.2K');
     expect(fr.currency(1240, 'EUR', { compact: true })).toMatch(/^1,2\sk\s?€$/);
     expect(createTranslator('en').currency(500, 'USD', { compact: true })).toBe('$500');

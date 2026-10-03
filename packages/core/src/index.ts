@@ -13,3 +13,4 @@ export * from './testimonials';
 export * from './attribution';
 export * from './dashboard';
 export * from './calendar';
+export * from './outcomes';

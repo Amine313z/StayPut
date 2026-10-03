@@ -199,6 +199,11 @@ export async function readMembers(
               coalesce(r.posts, 0) as posts, coalesce(r.lessons, 0) as lessons,
               ms.status as membership_status, ms.price::float8 as price, ms.currency,
               ms.billing_period_days, ms.cancel_at_period_end, ms.current_period_end,
+              -- Paused: Whop says so (its end, or StayPut's pause's), or StayPut's pause runs.
+              case when ms.paused or ms.status = 'paused'
+                     then coalesce(ms.pause_resumes_at, pz.resumes_at)
+                   when pz.resumes_at > $5::timestamptz then pz.resumes_at
+              end as paused_until,
               p.status as payment_status, p.amount::float8 as payment_amount,
               p.currency as payment_currency, p.whop_created_at as payment_at,
               p.failure_reason, k.score as risk_score, k.level as risk_level,
@@ -211,7 +216,7 @@ export async function readMembers(
             where e.company_id = m.company_id and e.member_id = m.id) a on true
          left join lateral (
            select x.status, x.price, x.currency, x.billing_period_days, x.cancel_at_period_end,
-                  x.current_period_end
+                  x.current_period_end, x.paused, x.pause_resumes_at
              from stayput.memberships x
             where x.company_id = m.company_id and x.member_id = m.id
             order by x.status = any(string_to_array($4, ',')) desc,
@@ -223,12 +228,21 @@ export async function readMembers(
             where y.company_id = m.company_id and y.member_id = m.id
             order by y.whop_created_at desc
             limit 1) p on true
+         -- The latest pause StayPut applied to the member, and when it ends.
+         left join lateral (
+           select (z.result ->> 'resumes_at')::timestamptz as resumes_at
+             from stayput.actions z
+            where z.company_id = m.company_id and z.member_id = m.id
+              and z.type = 'pause_offer' and z.status = 'sent'
+              and z.result ->> 'resumes_at' is not null
+            order by z.sent_at desc nulls last
+            limit 1) pz on true
         where m.company_id = $1
         order by m.status = 'joined' desc, k.score desc nulls last,
                  greatest(m.last_action_at, a.last_activity_at) desc nulls last,
                  m.joined_at desc nulls last, m.id
         limit $3`,
-      [companyId, since, MEMBERS_PAGE_LIMIT + 1, live],
+      [companyId, since, MEMBERS_PAGE_LIMIT + 1, live, now.toISOString()],
     );
     return {
       summary: {
@@ -266,6 +280,7 @@ interface MemberSqlRow {
   billing_period_days: number | null;
   cancel_at_period_end: boolean | null;
   current_period_end: Date | string | null;
+  paused_until: Date | string | null;
   payment_status: string | null;
   payment_amount: number | null;
   payment_currency: string | null;
@@ -348,6 +363,7 @@ function toMemberRow(r: MemberSqlRow): MemberRow {
           billingPeriodDays: r.billing_period_days,
           cancelAtPeriodEnd: r.cancel_at_period_end ?? false,
           currentPeriodEnd: iso(r.current_period_end),
+          pausedUntil: iso(r.paused_until),
         }
       : null,
     lastPayment:

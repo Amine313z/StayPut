@@ -1,6 +1,7 @@
 import {
   ACTION_VIEWS,
   type ActionOffer,
+  type ActionOutcome,
   type ActionRow,
   type ActionStatus,
   type ActionType,
@@ -38,7 +39,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
 import { postJson, useApi } from '../../api';
 import { AlumniCard } from '../../components/AlumniCard';
@@ -139,18 +140,56 @@ const NOTES: Readonly<Record<string, MessageKey>> = {
   left_alumni: 'actions.note.left_alumni',
 };
 
+/** What the creator just did to an action, shown before the list is read again. */
+type Move = 'approved' | 'cancelled';
+
+/**
+ * A list with the creator's latest moves applied (fix prompt v4.1, block 4): an action approved
+ * or cancelled leaves its list at once, and every count moves with it. Once the Worker's answer
+ * has it (the action is no longer where it was), the move has nothing left to change.
+ */
+export function withMoves(page: ActionsPage, moves: ReadonlyMap<string, Move>): ActionsPage {
+  if (moves.size === 0) return page;
+  const counts = { ...page.counts };
+  const actions = page.actions.filter((action) => {
+    const move = moves.get(action.id);
+    if (!move) return true;
+    const from: ActionView | null =
+      action.status === 'proposed' || action.status === 'approved'
+        ? 'queue'
+        : action.status === 'scheduled'
+          ? 'scheduled'
+          : null;
+    // Approving moves an action from the queue to the scheduled ones; cancelling, to the history.
+    if (from === null || (move === 'approved' && from !== 'queue')) return true;
+    counts[from] -= 1;
+    counts[move === 'approved' ? 'scheduled' : 'history'] += 1;
+    return false;
+  });
+  return { ...page, counts, actions };
+}
+
 /**
  * What StayPut does for the members (SPEC Phase 4): the actions to approve in manual mode, each
  * with the message exactly as the member will read it; the scheduled ones; and what happened,
- * sent, simulated in test mode, blocked by a guardrail with the reason, cancelled or failed.
+ * sent, simulated in test mode, blocked by a guardrail with the reason, cancelled or failed, each
+ * with what came of it.
  */
 export function ActionsTab({ view }: { view: ActionView }) {
   const { t } = useI18n();
   const { api, root, tabCounts } = useCreatorData();
-  const { state, retry, reload } = useApi<ActionsPage>(`${api}/actions?view=${view}`);
-  // The section's tabs say how many actions each view holds.
-  const counts = state.status === 'ready' ? state.data.counts : null;
-  useEffect(() => {
+  const { state: read, retry, reload } = useApi<ActionsPage>(`${api}/actions?view=${view}`);
+  // An approval or a cancellation shows at once: the list, its button and the tabs together.
+  const [moves, setMoves] = useState<ReadonlyMap<string, Move>>(new Map());
+  const page = read.status === 'ready' ? read.data : null;
+  const shown = useMemo(() => (page ? withMoves(page, moves) : null), [page, moves]);
+  const state = shown && read.status === 'ready' ? { ...read, data: shown } : read;
+  const moved = (ids: readonly string[], move: Move) =>
+    setMoves((current) => new Map([...current, ...ids.map((id) => [id, move] as const)]));
+  // The section's tabs say how many actions each view holds: set before the screen is painted,
+  // so a tab never shows another count than the list's button.
+  const counts = shown?.counts ?? null;
+  useLayoutEffect(() => {
     if (counts) {
       tabCounts?.({ queue: counts.queue, scheduled: counts.scheduled, history: counts.history });
     }
@@ -215,7 +254,13 @@ export function ActionsTab({ view }: { view: ActionView }) {
                 <ApproveAll
                   api={api}
                   count={state.data.actions.filter((a) => a.status === 'proposed').length}
-                  onDone={changed}
+                  onDone={() => {
+                    moved(
+                      state.data.actions.filter((a) => a.status === 'proposed').map((a) => a.id),
+                      'approved',
+                    );
+                    changed();
+                  }}
                 />
               ) : null}
             </div>
@@ -230,7 +275,15 @@ export function ActionsTab({ view }: { view: ActionView }) {
             ) : (
               <ul className="divide-y divide-line">
                 {state.data.actions.map((action) => (
-                  <ActionItem key={action.id} action={action} api={api} onChange={changed} />
+                  <ActionItem
+                    key={action.id}
+                    action={action}
+                    api={api}
+                    onChange={(move) => {
+                      moved([action.id], move);
+                      changed();
+                    }}
+                  />
                 ))}
               </ul>
             )}
@@ -298,7 +351,8 @@ function ActionItem({
 }: {
   action: ActionRow;
   api: string;
-  onChange: () => void;
+  /** It was approved or cancelled. */
+  onChange: (move: Move) => void;
 }) {
   const { t, relative, dateTime, percent } = useI18n();
   const [step, setStep] = useState<'idle' | 'running' | 'failed'>('idle');
@@ -357,7 +411,9 @@ function ActionItem({
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <p className="truncate font-medium">{action.member.name ?? t('members.unnamed')}</p>
-              {action.status !== 'proposed' ? (
+              {action.outcome ? (
+                <OutcomeBadge outcome={action.outcome} />
+              ) : action.status !== 'proposed' ? (
                 <Badge tone={status.tone}>{t(status.label)}</Badge>
               ) : null}
             </div>
@@ -403,7 +459,7 @@ function ActionItem({
                   postJson(`${api}/actions/approve`, { ids: [action.id] }).then(
                     () => {
                       setStep('idle');
-                      onChange();
+                      onChange('approved');
                     },
                     () => setStep('failed'),
                   );
@@ -417,7 +473,9 @@ function ActionItem({
               confirmLabel={t('actions.cancelConfirm')}
               icon={<X aria-hidden="true" className="size-4" />}
               run={() =>
-                postJson(`${api}/actions/${encodeURIComponent(action.id)}/cancel`).then(onChange)
+                postJson(`${api}/actions/${encodeURIComponent(action.id)}/cancel`).then(() =>
+                  onChange('cancelled'),
+                )
               }
             />
             {step === 'failed' ? (
@@ -429,6 +487,37 @@ function ActionItem({
         ) : null}
       </div>
     </li>
+  );
+}
+
+const OUTCOME_TONES: Readonly<Record<ActionOutcome['kind'], Tone>> = {
+  recovered: 'accent',
+  still_failing: 'danger',
+  paused: 'info',
+  came_back: 'accent',
+  no_reply: 'neutral',
+  left: 'neutral',
+};
+
+/**
+ * What came of an action that reached the member, in its History item (fix prompt v4.1, block 4):
+ * « Recovered $49.00 », « Still failing », « Paused until Nov 2 », « Came back », « No reply yet »,
+ * « Left ». The proof of value, in place of « Sent ».
+ */
+function OutcomeBadge({ outcome }: { outcome: ActionOutcome }) {
+  const { t, currency, day } = useI18n();
+  const text =
+    outcome.kind === 'recovered'
+      ? t('actions.outcome.recovered', {
+          amount: currency(outcome.amount, outcome.currency.toUpperCase()),
+        })
+      : outcome.kind === 'paused' && outcome.until
+        ? t('actions.outcome.pausedUntil', { date: day(new Date(outcome.until), new Date()) })
+        : t(`actions.outcome.${outcome.kind}`);
+  return (
+    <span data-outcome={outcome.kind} title={t('actions.outcome.label')}>
+      <Badge tone={OUTCOME_TONES[outcome.kind]}>{text}</Badge>
+    </span>
   );
 }
 

@@ -1,5 +1,5 @@
 import type { MemberRow } from '@stayput/core';
-import type { MessageKey } from '@stayput/i18n';
+import type { MessageKey, Translator } from '@stayput/i18n';
 import { ArrowDown, ArrowUp, BellOff, ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useI18n } from '../i18n';
@@ -9,7 +9,9 @@ import {
   lastActive,
   memberState,
   monthlyOf,
+  pausedUntil,
   periodEnd,
+  unpaidSince,
   type MemberSort,
   type MemberState,
   type SortDirection,
@@ -24,10 +26,40 @@ export const STATE_LABELS: Readonly<Record<MemberState, MessageKey>> = {
   leaving: 'members.state.leaving',
   paymentFailed: 'members.state.paymentFailed',
   inactive: 'members.state.inactive',
+  paused: 'members.state.paused',
   active: 'members.state.active',
   team: 'members.team',
   gone: 'members.state.gone',
 };
+
+/** A member's state in words: a pause says when it ends (« Paused · resumes Nov 2 »). */
+export function stateText(
+  member: MemberRow,
+  state: MemberState,
+  now: number,
+  { t, day }: Translator,
+): string {
+  const until = state === 'paused' ? pausedUntil(member) : null;
+  return until !== null && until > now
+    ? t('members.pausedUntil', { date: day(new Date(until), new Date(now)) })
+    : t(STATE_LABELS[state]);
+}
+
+/**
+ * When their membership next changes, as the renewal column says it: the end of a membership
+ * they leave (« Ends Oct 29 »), since when a payment that failed is unpaid, or the next renewal;
+ * a date of another year keeps its year (an annual plan). Nothing for a member gone.
+ */
+export function renewalText(member: MemberRow, now: number, { t, day }: Translator): string {
+  const today = new Date(now);
+  const end = member.status === 'left' ? null : periodEnd(member);
+  if (end !== null && isLeaving(member)) {
+    return t('members.endsOn', { date: day(new Date(end), today) });
+  }
+  const unpaid = member.status === 'left' ? null : unpaidSince(member);
+  if (unpaid !== null) return t('members.unpaidSince', { date: day(new Date(unpaid), today) });
+  return end === null ? '–' : day(new Date(end), today);
+}
 
 /**
  * The sortable columns. `whole`: a name that may spill into the gaps beside its narrow column
@@ -156,7 +188,8 @@ function Row({
   fresh: boolean;
   onOpen: (member: MemberRow) => void;
 }) {
-  const { t, number, currency, relative, day } = useI18n();
+  const i18n = useI18n();
+  const { t, number, currency, relative } = i18n;
   const name = member.name ?? t('members.unnamed');
   const state = memberState(member, now);
   const urgent = isUrgent(member, now);
@@ -168,7 +201,6 @@ function Row({
         })
       : null;
   const last = lastActive(member);
-  const end = member.status === 'left' ? null : periodEnd(member);
   const risk = member.risk;
   const animated = index < ANIMATED_ROWS;
   const status = (
@@ -179,7 +211,7 @@ function Row({
           <span className="sr-only">{t('dash.row.urgent')}</span>
         </>
       ) : null}
-      <span className="truncate">{t(STATE_LABELS[state])}</span>
+      <span className="truncate">{stateText(member, state, now, i18n)}</span>
     </span>
   );
   return (
@@ -260,11 +292,7 @@ function Row({
           {last === null ? t('members.never') : relative(new Date(last), new Date(now))}
         </div>
         <div role="cell" className="hidden truncate text-subtle @3xl/table:block">
-          {end === null
-            ? '–'
-            : isLeaving(member)
-              ? t('members.endsOn', { date: day(new Date(end)) })
-              : day(new Date(end))}
+          {renewalText(member, now, i18n)}
         </div>
         <div role="cell">
           {member.doNotContact ? (

@@ -329,6 +329,11 @@ export interface MemberRow {
     billingPeriodDays: number | null;
     cancelAtPeriodEnd: boolean;
     currentPeriodEnd: string | null;
+    /**
+     * Paused until then: a pause StayPut applied (its action's `resumes_at`), or Whop's own. Null
+     * or absent when not paused; a membership Whop says is `paused` without a date is paused too.
+     */
+    pausedUntil?: string | null;
   } | null;
   lastPayment: {
     status: string;
@@ -567,7 +572,24 @@ export interface ActionRow {
   alumniStep?: number;
   /** Earned days: the milestone reached, in percent. */
   milestone?: number;
+  /** What came of it, once it reached the member (History only; core `actionOutcome`). */
+  outcome?: ActionOutcome | null;
 }
+
+/**
+ * What came of an action that reached a member (fix prompt v4.1, block 4): the proof of value,
+ * as a badge in the History. `recovered`: money StayPut saved through it (stayput.saves);
+ * `still_failing`: the payment it was about still fails; `paused`: the pause it applied, until
+ * then; `came_back`: the member did something in the community after it; `no_reply`: nothing
+ * yet; `left`: the member left after it.
+ */
+export type ActionOutcome =
+  | { kind: 'recovered'; amount: number; currency: string }
+  | { kind: 'still_failing' }
+  | { kind: 'paused'; until: string | null }
+  | { kind: 'came_back' }
+  | { kind: 'no_reply' }
+  | { kind: 'left' };
 
 /** An accepted offer, as the creator reviews it. */
 export interface ActionOffer {
@@ -1088,6 +1110,11 @@ export interface PlatformActivityView {
 export interface PlatformActivity {
   platform: AccountPlatform;
   messages: number;
+  /**
+   * The messages by who wrote them: the members' part is what their own 30 days add up to (each
+   * member's drawer), the rest the team's, guests' and accounts' not tied yet.
+   */
+  messagesBy?: { members: number; team: number; guests: number; unlinked: number };
   /** Who wrote, counted once each: members, the team, guests, accounts not tied yet. */
   authors: number;
   members: number;

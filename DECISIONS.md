@@ -2490,3 +2490,144 @@ une capture. Le bloc 1 refait la lumière de la visite et de « Show me ».
 - Le décalage du tiroir n'a pas été reproduit ici (voir « Le tiroir ») : à vérifier sur l'écran
   du fondateur.
 - La recherche ne trouve pas par e-mail (voir « La recherche »).
+
+## 2026-10-03 — Correctifs v4.1, bloc 4 : une seule histoire dans la démo
+
+### La traînée diagonale retirée
+
+- Le fondateur a demandé de retirer la fine ligne turquoise en diagonale du fond de page. Les
+  briefs v3 et v4 la demandaient (« one very subtle diagonal light streak »).
+- Elle est retirée de `styles.css` (`body::before`) et de `docs/design-tokens.md`. Restent la
+  lumière derrière le montant du haut et le logo à 3 % en bas du Tableau de bord.
+
+### Chaque date vient du paiement (règle 1)
+
+- **Toutes les dates d'un membre viennent du jour où il a rejoint** : son offre se renouvelle
+  ce jour-là de chaque période. Le générateur n'a plus de date de départ libre (`leaves`).
+  - Un départ programmé tombe à la fin de la période payée.
+  - Hugo Bernard a payé le 29 septembre (au mois) : il part le 29 octobre.
+  - Kevin Nguyen a payé son année le 13 mai : il part le 13 mai 2027.
+  - Margaux Picard (payé le 8 septembre) part le 8 octobre : il reste un départ dans la
+    semaine, en tête de « Needs attention ».
+- **Un renouvellement échoué a échoué le jour où il était dû** :
+  - Sarah Cohen il y a 95 minutes, comme le dit le fil d'activité ;
+  - Elena Novak le 30 septembre.
+  - Leur ligne ne dit plus « Renews on Oct 26 » mais « Unpaid since Oct 3 ». La règle vaut
+    aussi pour les vraies données : un paiement échoué n'affiche jamais un renouvellement à
+    venir.
+- **Une date d'une autre année garde son année** (`day(date, now)` du traducteur) : « Ends May
+  13, 2027 ».
+- Les paiements du tiroir suivent la même période. Un paiement sauvé par StayPut prend la place
+  du paiement de sa période.
+
+### Les membres partis (règles 2 et 8)
+
+- Un membre parti dit « ended on » (ou « ends on » si la date est à venir), jamais « renews ».
+  `membershipLine` le garantit aussi pour les vraies données, même si l'abonnement n'est pas
+  encore marqué terminé.
+- **Paul Henry** était listé sans abonnement mais avec un score. Il est désormais parti : un
+  mois payé, terminé le 24 septembre. Il n'apparaît que dans « Gone » (qui compte 4 membres).
+  Aucun membre n'a plus de score sans abonnement.
+- Dans la démo, je n'ai trouvé aucun membre parti qui affichait « Renews on ». La règle est
+  maintenant écrite et testée.
+
+### La pause (règle 3)
+
+- **Nouvel état « Paused »** (« En pause »), entre « Inactive » et « Active » :
+  - sur Membres : « Paused · resumes Nov 2 » ;
+  - dans le tiroir : « Paused · $149.00 per month · resumes on Nov 2, 2026 ».
+- Juliette Caron a été mise en pause à son renouvellement, il y a 5 heures, pour 30 jours. Sa
+  facturation reprend le 2 novembre.
+- **Vraies données** : `MemberRow.membership.pausedUntil` vient de deux sources.
+  - Le statut `paused` de Whop (colonnes `paused` / `pause_resumes_at` de 0001, que la
+    synchronisation ne remplit pas encore).
+  - Ou la dernière pause appliquée par StayPut (`resumes_at` du résultat de l'action) tant
+    qu'elle court.
+  - Pas de migration.
+
+### « Score turned high » (règle 4)
+
+- Une action déclenchée par « Score turned high » ne vise qu'un membre dont le score était
+  élevé (≥ 70) le jour où elle a été créée.
+- Lou Marchand (moyen, 62) reçoit maintenant un message du créateur (« You, from the
+  dashboard »). Tom Barbier aussi : deux messages du créateur à deux jours d'écart, le second
+  bloqué par l'espacement des messages.
+- Victor Leclerc est passé en élevé il y a deux jours. Le message de StayPut l'a fait revenir :
+  sa courbe monte à 74 ce jour-là, puis redescend à 55.
+
+### Ce qu'il en est sorti : la preuve de valeur (règles 5 et 6)
+
+- **Chaque action de l'historique qui a atteint le membre dit ce qu'il en est sorti**, à la
+  place de « Sent » :
+  - « Recovered $49.00 » : l'argent sauvé grâce à elle (`stayput.saves.action_id`) ;
+  - « Still failing » : le paiement échoue toujours ;
+  - « Paused until Nov 2 » ;
+  - « Came back » : le membre a fait quelque chose après ;
+  - « No reply yet » ;
+  - « Left » : le membre est parti depuis. C'est un ajout du bloc, car « No reply yet » serait
+    faux pour un membre parti.
+  - Ce qui a été bloqué, annulé ou simulé garde son statut.
+- **Une seule règle** pour le Worker et la démo : `actionOutcome` (`@stayput/core`,
+  `outcomes.ts`).
+  - Le Worker lit les faits en SQL pour l'historique : la sauvegarde liée à l'action, le
+    dernier paiement, l'activité après l'envoi, le départ après l'envoi.
+  - Pas de migration.
+- **Dans la démo, chaque sauvegarde est une action de l'historique**, avant que l'argent
+  n'arrive :
+  - une relance de paiement (Clara Faure : relancée il y a 47 minutes, payée 4 minutes après) ;
+  - une demande de mise à jour de la carte ;
+  - une pause de 30 jours ;
+  - des jours offerts.
+  - L'historique compte 31 éléments, jusqu'en juin.
+  - La relance d'Elena Novak, il y a 2 heures, a échoué de nouveau (« Still failing ») ; le
+    fil le dit aussi.
+- Le bandeau « StayPut actions (30d) » du Tableau de bord compte désormais l'historique des 30
+  derniers jours, comme le Worker : 8 messages, 4 relances, 1 pause, 7 membres sauvés. Il
+  affichait des nombres fixes (43 actions, 31 messages), sans lien avec l'historique.
+
+### Les compteurs bougent ensemble (règle 7)
+
+- Valider une action la retire tout de suite de la liste. Le bouton « Approve all (5) » et
+  l'onglet « To approve (5) » changent dans la même image.
+- `withMoves` applique les derniers gestes du créateur en attendant la réponse du Worker. Les
+  nombres des onglets sont posés avant que l'écran ne se dessine (`useLayoutEffect`) ; avant,
+  l'onglet suivait une image plus tard, après la relecture.
+- Un test le vérifie à chaque changement du DOM. Il échoue avec l'ancien code.
+
+### Les messages comptés (règle 9)
+
+- Sur Intégrations › Activité, chaque plateforme dit maintenant la part de ses messages écrite
+  par les membres : « 367 by members ». Ce nombre est exactement la somme de leurs tiroirs.
+- Le reste vient de l'équipe, des invités et des comptes pas encore reliés.
+- Pour chaque membre, Whop, Discord et Telegram additionnent ses 30 jours.
+- **Vraies données : migration 0031** (`0031_platform_messages_by.sql`). Elle remplace
+  `stayput.platform_activity` par la même fonction, qui ajoute `messagesBy` (membres, équipe,
+  invités, à relier). Rien d'autre ne change.
+
+### Tests
+
+- `core/test/outcomes.test.ts` : la règle des résultats, cas par cas.
+- `worker/test/action-outcomes-sql.test.ts`, en SQL (PGlite), lu comme l'équipe :
+  « Recovered », « Still failing », « Paused », « Came back », « No reply yet », « Left ».
+- `worker/test/app.test.ts` : la pause acceptée dans l'espace membre ; son résultat et
+  `pausedUntil` sur la ligne du membre.
+- `worker/test/accounts-sql.test.ts` : `messagesBy`.
+- `web/test/demo.test.ts` : un test par règle (1 à 9), le 3 octobre à 16 h à Paris.
+- `web/test/app.test.tsx`, dans l'interface :
+  - Juliette en pause dans le tableau et le tiroir ; Paul Henry parti, « ended on » ;
+  - les badges de l'historique ;
+  - l'onglet et « Approve all » qui bougent ensemble ;
+  - « Unpaid since » dans « Needs attention » ;
+  - « by members » sur l'Activité.
+- `i18n` : la date courte garde son année quand ce n'est pas celle d'aujourd'hui.
+- Inspect (`look.mjs`) sur le site en ligne vérifie toutes ces lignes : Juliette, Hugo, Kevin,
+  Sarah, Paul, les badges, les compteurs 6 → 5, « by members ». Il ajoute trois captures :
+  `actions-history-1440.png`, `members-drawer-paused-1440.png`, `actions-queue-approved.png`.
+
+### Incertain
+
+- La pause des vraies données dépend du statut `paused` que Whop renvoie après `POST
+/memberships/{id}/pause`. Je ne l'ai pas vu dans le sandbox. En attendant la synchronisation,
+  la date vient de l'action de StayPut.
+- Un membre qui part et dont le paiement a échoué affiche sa date de départ plutôt que la date
+  impayée (la raison dit déjà « Payment failed »).

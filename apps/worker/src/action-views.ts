@@ -4,7 +4,9 @@ import {
   COACHING_MESSAGE_MAX,
   MESSAGE_ACTIONS,
   OFFER_LIMITS,
+  actionOutcome,
   isActionType,
+  isFailedPayment,
   isExitReason,
   templateProblems,
   timeZoneName,
@@ -109,9 +111,35 @@ export async function readActions(
       content: Record<string, unknown> | null;
       last_error: string | null;
       message_values: TemplateValues | null;
+      saved: { amount: number; currency: string } | null;
+      payment_status: string | null;
+      active_after: boolean | null;
+      left_after: boolean | null;
     }>(
       `select a.id, a.type, a.status, a.trigger, a.member_id, m.display_name, a.send_at,
               a.sent_at, a.created_at, a.blocked_reason, a.result,
+              -- What came of it (History only): the money saved through it, the member's latest
+              -- payment, whether they did anything since it reached them, or left since.
+              case when $3 = 'history' then (
+                select jsonb_build_object('amount', s.amount::float8, 'currency', s.currency)
+                  from stayput.saves s
+                 where s.company_id = a.company_id and s.action_id = a.id
+                 order by s.saved_at desc limit 1) end as saved,
+              case when $3 = 'history' then (
+                select y.status from stayput.payments y
+                 where y.company_id = a.company_id and y.member_id = a.member_id
+                 order by y.whop_created_at desc limit 1) end as payment_status,
+              case when $3 = 'history' and a.sent_at is not null then exists (
+                select 1 from stayput.activity_events e
+                 where e.company_id = a.company_id and e.member_id = a.member_id
+                   and e.occurred_at > a.sent_at) end as active_after,
+              -- Left since: their membership's last end, as the dashboard dates a departure.
+              case when $3 = 'history' and a.sent_at is not null
+                   then m.status = 'left' and coalesce(
+                     (select max(ms.current_period_end) from stayput.memberships ms
+                       where ms.company_id = a.company_id and ms.member_id = a.member_id
+                         and ms.current_period_end <= $4::timestamptz),
+                     m.updated_at) > a.sent_at end as left_after,
               case when a.trigger in ('exit_survey', 'alumni', 'milestone', 'member_request',
                                       'buddy_pair')
                    then a.content end as content,
@@ -193,6 +221,19 @@ export async function readActions(
           ...(step > 0 ? { alumniStep: step } : {}),
           ...(row.trigger === 'milestone' && Number(row.content?.percent) > 0
             ? { milestone: Number(row.content?.percent) }
+            : {}),
+          ...(view === 'history'
+            ? {
+                outcome: actionOutcome({
+                  type: row.type,
+                  status: row.status,
+                  saved: row.saved,
+                  paymentFailing: isFailedPayment(row.payment_status),
+                  activeAfter: row.active_after === true,
+                  leftAfter: row.left_after === true,
+                  resumesAt: text(row.result?.resumes_at),
+                }),
+              }
             : {}),
         },
       ];

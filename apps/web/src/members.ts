@@ -4,8 +4,8 @@ import { fold } from './text';
 
 /**
  * The Members page (brief v4 §9.3) as pure functions: what state a member is in (one word each,
- * the same everywhere: Leaving · Payment failed · Inactive · Active), what each filter keeps,
- * what a search finds, and every column's order.
+ * the same everywhere: Leaving · Payment failed · Inactive · Paused · Active), what each filter
+ * keeps, what a search finds, and every column's order.
  */
 
 /** The search waits this long after the last key before it goes into the address. */
@@ -40,13 +40,15 @@ const NEWCOMER_GRACE_DAYS = 3;
 /** A departure this close is urgent: the red dot (brief v4 §6: within 48 hours). */
 export const URGENT_MS = 48 * 3_600_000;
 
-export type MemberState = 'leaving' | 'paymentFailed' | 'inactive' | 'active' | 'team' | 'gone';
+export type MemberState =
+  'leaving' | 'paymentFailed' | 'inactive' | 'paused' | 'active' | 'team' | 'gone';
 
 /** The most pressing first: the order of the status column. */
 export const STATE_ORDER: readonly MemberState[] = [
   'leaving',
   'paymentFailed',
   'inactive',
+  'paused',
   'active',
   'team',
   'gone',
@@ -76,6 +78,30 @@ export function hasFailedPayment(member: MemberRow): boolean {
   return member.lastPayment !== null && isFailedPayment(member.lastPayment.status);
 }
 
+/**
+ * Their membership is paused (fix prompt v4.1, block 4): Whop says so, or a pause StayPut applied
+ * has not ended yet.
+ */
+export function isPaused(member: MemberRow, now: number): boolean {
+  const membership = member.membership;
+  if (!membership) return false;
+  return membership.status === 'paused' || (pausedUntil(member) ?? 0) > now;
+}
+
+/** When their pause ends, in ms; null when no pause end is known. */
+export function pausedUntil(member: MemberRow): number | null {
+  const until = member.membership?.pausedUntil;
+  return until ? Date.parse(until) : null;
+}
+
+/**
+ * Since when their payment is unpaid, in ms: their latest payment failed and nothing came in
+ * since. Null otherwise.
+ */
+export function unpaidSince(member: MemberRow): number | null {
+  return hasFailedPayment(member) ? Date.parse(member.lastPayment!.at) : null;
+}
+
 /** When they were last active anywhere, in ms; null when never. */
 export function lastActive(member: MemberRow): number | null {
   const at = member.lastActivityAt ?? member.lastActionAt;
@@ -84,13 +110,15 @@ export function lastActive(member: MemberRow): number | null {
 
 /**
  * One word for where a member stands: gone, the team, leaving (a cancellation scheduled), a
- * payment failed, inactive (nothing for 14 days, or nothing at all 3 days after joining), active.
+ * payment failed, paused, inactive (nothing for 14 days, or nothing at all 3 days after joining),
+ * active.
  */
 export function memberState(member: MemberRow, now: number): MemberState {
   if (member.status === 'left') return 'gone';
   if (member.accessLevel === 'admin') return 'team';
   if (isLeaving(member)) return 'leaving';
   if (hasFailedPayment(member)) return 'paymentFailed';
+  if (isPaused(member, now)) return 'paused';
   const last = lastActive(member);
   if (last === null) {
     const joined = member.joinedAt ? Date.parse(member.joinedAt) : null;

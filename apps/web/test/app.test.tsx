@@ -4714,6 +4714,117 @@ describe('the demo (/demo)', () => {
   });
 });
 
+describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
+  const number = (text: string | null | undefined) => /(\d+)\)?\s*$/.exec(text ?? '')?.[1] ?? '';
+
+  it('shows a paused member as paused, and a member gone as ended', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo/members');
+    const table = await screen.findByRole('table', { name: 'All members' }, { timeout: 3_000 });
+    const row = (name: string) =>
+      within(table)
+        .getAllByRole('row')
+        .find((r) => r.textContent?.includes(name))!;
+    await within(table).findByText('Juliette Caron', undefined, { timeout: 3_000 });
+    expect(row('Juliette Caron').textContent).toMatch(/Paused · resumes \w{3} \d{1,2}/);
+    // Paul Henry has no score among the others: he left, at the end of the month he paid.
+    expect(row('Paul Henry').textContent).toContain('Gone');
+    expect(within(row('Paul Henry')).queryByRole('img')).toBeNull();
+    // Her drawer says the pause too; Paul's, that his membership ended.
+    fireEvent.click(within(row('Juliette Caron')).getByRole('button', { name: /^Open/ }));
+    const juliette = await screen.findByRole('dialog', { name: 'Juliette Caron' });
+    await within(juliette).findByText(/^Paused · \$149\.00 per month · resumes on /);
+    expect(within(juliette).getByText(/^Paused · resumes /)).toBeTruthy();
+    fireEvent.click(within(juliette).getByRole('button', { name: 'Close' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(within(row('Paul Henry')).getByRole('button', { name: /^Open/ }));
+    const paul = await screen.findByRole('dialog', { name: 'Paul Henry' });
+    const line = await within(paul).findByText(/^Canceled · \$49\.00 per month · /);
+    expect(line.textContent).toMatch(/ended on/);
+    expect(paul.textContent).not.toMatch(/renews/i);
+  }, 20_000);
+
+  it('says what came of each action in the History, the proof of value', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo/actions/history');
+    await screen.findByText('Clara Faure', undefined, { timeout: 3_000 });
+    const badge = (name: string) =>
+      [...document.querySelectorAll<HTMLElement>('[data-outcome]')]
+        .filter((b) => b.closest('li')?.textContent?.includes(name))
+        .map((b) => b.textContent);
+    expect(badge('Clara Faure')).toContain('Recovered $49.00');
+    expect(badge('Elena Novak')).toContain('Still failing');
+    expect(badge('Juliette Caron')[0]).toMatch(/^Paused until \w{3} \d{1,2}/);
+    expect(badge('Victor Leclerc')).toContain('Came back');
+    expect(badge('Lou Marchand')).toContain('No reply yet');
+    expect(badge('Sabrina Aït')).toContain('Left');
+    // What was blocked says so, as before.
+    const tom = screen
+      .getAllByText('Tom Barbier')
+      .map((name) => name.closest('li')!)
+      .find((li) => li.textContent?.includes('Blocked'));
+    expect(tom).toBeTruthy();
+  }, 20_000);
+
+  it('moves the tab and « Approve all » together when one action is approved', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo/actions/queue');
+    const all = await screen.findByRole('button', { name: /^Approve all/ }, { timeout: 3_000 });
+    const tab = () => screen.getByRole('link', { name: /^To approve/ });
+    await vi.waitFor(() => expect(number(tab().textContent)).toBe('6'));
+    expect(all.textContent).toBe('Approve all (6)');
+    // Every change the page shows, the two counts side by side: never one without the other.
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => {
+      const button = screen.queryByRole('button', { name: /^Approve all/ });
+      seen.push(`${number(tab().textContent)}|${number(button?.textContent)}`);
+    });
+    observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Approve' })[0]!);
+    await vi.waitFor(
+      () =>
+        expect(screen.getByRole('button', { name: /^Approve all/ }).textContent).toBe(
+          'Approve all (5)',
+        ),
+      { timeout: 3_000 },
+    );
+    expect(number(tab().textContent)).toBe('5');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    observer.disconnect();
+    expect(seen.length).toBeGreaterThan(0);
+    for (const pair of seen) {
+      const [inTab, inButton] = pair.split('|');
+      if (inButton) expect(inTab, pair).toBe(inButton);
+    }
+  }, 20_000);
+
+  it('says since when a failed payment is unpaid, never a renewal still to come', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo');
+    const attention = await screen.findByRole(
+      'region',
+      { name: 'Needs attention' },
+      {
+        timeout: 3_000,
+      },
+    );
+    const sarah = (await within(attention).findByText('Sarah Cohen')).closest('li')!;
+    expect(sarah.textContent).toMatch(/Unpaid since \w{3} \d{1,2}/);
+    expect(sarah.textContent).not.toMatch(/Renews/);
+  }, 20_000);
+
+  it('counts the members’ part of each platform’s messages on Integrations › Activity', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo/sources/activity');
+    await vi.waitFor(() => expect(document.querySelectorAll('[data-by-members]').length).toBe(2), {
+      timeout: 3_000,
+    });
+    for (const line of document.querySelectorAll('[data-by-members]')) {
+      expect(line.textContent).toMatch(/^\d[\d,]* by members$/);
+    }
+  }, 20_000);
+});
+
 describe('the actions (SPEC Phase 4)', () => {
   const ID = '11111111-1111-4111-8111-111111111111';
   const row = (over: Partial<ActionRow> = {}): ActionRow => ({

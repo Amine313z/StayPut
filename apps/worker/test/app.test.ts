@@ -2369,11 +2369,21 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     const history = (await (
       await request(`/api/creator/${company}/actions?view=history`, await boss())
     ).json()) as ActionsPage;
-    expect(history.actions.find((a) => a.type === 'pause_offer')).toMatchObject({
+    const pause = history.actions.find((a) => a.type === 'pause_offer');
+    expect(pause).toMatchObject({
       status: 'sent',
       message: null,
       offer: { reason: 'no_time', days: 30, keep: true, resumesAt: expect.any(String) as string },
     });
+    // What came of it (fix prompt v4.1, block 4): paused, until the day the pause ends…
+    expect(pause?.outcome).toEqual({ kind: 'paused', until: pause?.offer?.resumesAt });
+    // …which the member's row says too: « Paused · resumes Nov 2 » on Members and in the drawer.
+    const members = (await (
+      await request(`/api/creator/${company}/members`, await boss())
+    ).json()) as MembersPage;
+    expect(members.members.find((m) => m.id === 'mber_Ret1')?.membership?.pausedUntil).toBe(
+      pause?.offer?.resumesAt,
+    );
   });
 
   it('waits for the creator in manual mode, and the team sees a preview', async () => {
