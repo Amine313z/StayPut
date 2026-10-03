@@ -2604,6 +2604,13 @@ une capture. Le bloc 1 refait la lumière de la visite et de « Show me ».
   `stayput.platform_activity` par la même fonction, qui ajoute `messagesBy` (membres, équipe,
   invités, à relier). Rien d'autre ne change.
 
+### Corrigé en passant
+
+- Le compte Telegram de Kevin Nguyen avait le même identifiant (`6120000002`) que le compte
+  « Alex » à relier. React prévenait d'une clé en double sur Intégrations, et relier l'un
+  pouvait toucher l'autre. Les comptes des membres ont désormais leur propre plage
+  d'identifiants, et un test vérifie qu'aucun identifiant ne revient deux fois.
+
 ### Tests
 
 - `core/test/outcomes.test.ts` : la règle des résultats, cas par cas.

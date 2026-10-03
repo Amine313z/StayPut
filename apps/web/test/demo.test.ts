@@ -661,6 +661,9 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
   });
 
   it('9. counts on Integrations › Activity the messages each member’s 30 days add up to', () => {
+    // Each account once: one id, one person.
+    const ids = world.pages.people().people.map((p) => `${p.platform}:${p.accountId}`);
+    expect(new Set(ids).size).toBe(ids.length);
     const activity = world.pages.platformActivity();
     const drawers = joined.map((m) => world.memberDetail(m.id)!);
     for (const tile of activity.platforms) {
