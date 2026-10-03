@@ -193,7 +193,7 @@ export async function readMembers(
           where company_id = $1 and day >= $2::timestamptz::date
           group by member_id
        )
-       select m.id, m.display_name as name, m.status, m.access_level, m.joined_at,
+       select m.id, m.display_name as name, m.username, m.status, m.access_level, m.joined_at,
               m.last_action_at, a.last_activity_at, m.do_not_contact,
               coalesce(r.messages, 0) as messages, coalesce(r.reactions, 0) as reactions,
               coalesce(r.posts, 0) as posts, coalesce(r.lessons, 0) as lessons,
@@ -249,6 +249,7 @@ export async function readMembers(
 interface MemberSqlRow {
   id: string;
   name: string | null;
+  username: string | null;
   status: 'joined' | 'left';
   access_level: string | null;
   joined_at: Date | string | null;
@@ -331,6 +332,7 @@ function toMemberRow(r: MemberSqlRow): MemberRow {
   return {
     id: r.id,
     name: r.name,
+    username: r.username,
     status: r.status,
     accessLevel: isAccessLevel(r.access_level) ? r.access_level : null,
     joinedAt: iso(r.joined_at),

@@ -369,6 +369,18 @@ dialog.drawer::backdrop {
   background-color: rgb(5 6 7 / 0.5);
 }
 
+/*
+ * The page keeps its scrollbar's room whether it scrolls or not, so nothing moves when a window
+ * or a drawer locks it still (ui/scrollLock.ts) or a page grows long enough to scroll.
+ */
+html {
+  scrollbar-gutter: stable;
+}
+
+html[data-scroll-lock] {
+  overflow: hidden;
+}
+
 /* Less motion asked for: no light passing over loading blocks. */
 @media (prefers-reduced-motion: reduce) {
   .skeleton::after {

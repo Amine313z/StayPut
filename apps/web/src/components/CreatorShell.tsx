@@ -13,9 +13,9 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { Link, useLocation, useNavigate } from 'react-router';
 import { TOUR, pageHref, type GuideCard, type Targets } from '../guide';
 import { useI18n } from '../i18n';
+import { matchesSearch } from '../members';
 import { ease } from '../motion';
 import { readPreference, writePreference } from '../storage';
-import { fold } from '../text';
 import { ActionButton } from '../ui/ActionButton';
 import { StayPutMark } from '../ui/BrandIcons';
 import { Button, buttonClass } from '../ui/Button';
@@ -407,9 +407,8 @@ function MemberSearch({ root, members }: { root: string; members: readonly Membe
   const box = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const found = useMemo(() => {
-    const words = fold(query.trim());
-    if (!words) return [];
-    return members.filter((m) => fold(m.name ?? '').includes(words)).slice(0, 6);
+    if (!query.trim()) return [];
+    return members.filter((m) => matchesSearch(m, query)).slice(0, 6);
   }, [members, query]);
   useEffect(() => {
     const close = (event: MouseEvent) => {

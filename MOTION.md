@@ -57,8 +57,9 @@ No bounce on data: a figure lands where it is, once.
   balance's « Oct 1 » mark (where the month starts) fades in at its new place in 500 ms; its
   date steps aside (200 ms) while a day is read. The hairline, the dots on the lines, the
   tooltip and the day under the pointer follow it (or the arrow keys) with 80 ms of smoothing.
-- **Tooltips** (a label's, a chart's): fade in in 120 ms; a label's says two lines at most, a
-  chart's one line per figure, the value first.
+- **Tooltips** (a label's, a chart's, an icon button's): fade in in 120 ms; a label's says two
+  lines at most, a chart's one line per figure, the value first, an icon button's its one word
+  (`IconTip`, above it, while it is hovered or focused).
 - **Choices side by side** (a period, as small pills): the chosen one's pill slides to it
   (300 ms). The side menu's 2 px turquoise bar slides to the open section the same way.
 - **Progress** (« Getting started »): the bar grows from the left (`scaleX`).
@@ -66,16 +67,20 @@ No bounce on data: a figure lands where it is, once.
   a turquoise edge on its left that lights and fades (600 ms, opacity only); one who leaves it
   goes in 250 ms and the rows below close up (the table's row folds its height away; in « Needs
   attention » it fades out, then the rows below slide up, 250 ms). On hover a row lifts 2 px
-  while black-700 fades in behind it (200 ms). Never `AnimatePresence mode="popLayout"`: it
-  injects a style block that the Content Security Policy refuses (`test/csp.test.ts`).
+  while black-700 fades in behind it (200 ms). In « Needs attention » a « › » rests at the row's
+  end; hovered or focused, it fades out and the icon actions (Message, Pause, Offer) fade in in
+  its place (120 ms each, their room kept so nothing moves; on a touch screen they always show).
+  Never `AnimatePresence mode="popLayout"`: it injects a style block that the Content Security
+  Policy refuses (`test/csp.test.ts`).
 - **The Members table** (brief v4 §9.3): its first ten rows fade in 30 ms apart (the others are
   there at once), their rings drawing 40 ms apart; the filter chips' pill slides to the chosen
   one (300 ms) and the list cross-fades (200 ms); a new order moves the rows at once.
 - **Buttons**: press scales to 0.98; while working, a spinner takes the label's place without
   changing the button's size (the label stays for screen readers); on success a check mark
   shows for 1.2 s.
-- **Drawers**: slide in from the right on the spring (stiffness 380, damping 32); the page
-  behind dims to 50 % black (a window's, 70 %); a member's drawer brings its sections in 60 ms
+- **Drawers**: slide in from the right on the spring (stiffness 380, damping 32), against the
+  window's right edge; the page behind dims to 50 % black (a window's, 70 %) and stays still
+  until it closes (`useScrollLock`); a member's drawer brings its sections in 60 ms
   apart, its activity bars growing from the left (`scaleX`, 700 ms). Switches move their knob
   on the same spring.
 - **The guide** (brief v4 §10): its panel is a drawer; its cards come in 60 ms apart. Each
@@ -137,5 +142,8 @@ loaded, chart drawn, the guide's pictures, the tour and each « Show me » light
 wholly with the tooltip beside it, screenshots of the Dashboard, the guide, each step of the
 tour, each « Show me » and the welcome. The spotlight's geometry has its own browser tests
 (`apps/web/e2e/spotlight.e2e.ts`, Playwright): the tour and every « Show me », in English and
-French, at 1280×720 and 1024×768, once the light has landed; in CI on the build, and on the live
-site in Inspect's `spotlight` job.
+French, at 1280×720 and 1024×768, once the light has landed. So do the Members page
+(`apps/web/e2e/members.e2e.ts`: the search typed key by key, a member's drawer at 1024 and
+1440 px, the page locked behind it) and the « Needs attention » rows' hover actions. They run in
+CI on the build, and on the live site in Inspect's `browser` job, with visible scrollbars (as on
+Windows), not headless Chrome's hidden ones.

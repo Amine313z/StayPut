@@ -1,11 +1,33 @@
 import type { MemberRow } from '@stayput/core';
 import { isFailedPayment } from '@stayput/core';
+import { fold } from './text';
 
 /**
  * The Members page (brief v4 §9.3) as pure functions: what state a member is in (one word each,
  * the same everywhere: Leaving · Payment failed · Inactive · Active), what each filter keeps,
- * and every column's order.
+ * what a search finds, and every column's order.
  */
+
+/** The search waits this long after the last key before it goes into the address. */
+export const SEARCH_DELAY_MS = 250;
+
+/**
+ * Whether a member is one a search asks for (fix prompt v4.1, block 3): each word typed is in
+ * their name or their Whop username, case and accents aside (« hugo », « HUGO » and « Hugó » find
+ * Hugo Bernard); « @hugo » looks the same. Nothing typed: everyone.
+ */
+export function matchesSearch(
+  member: Pick<MemberRow, 'name' | 'username'>,
+  query: string,
+): boolean {
+  const words = fold(query)
+    .split(/\s+/)
+    .map((word) => word.replace(/^@/, ''))
+    .filter(Boolean);
+  if (words.length === 0) return true;
+  const known = fold([member.name, member.username].filter(Boolean).join(' '));
+  return words.every((word) => known.includes(word));
+}
 
 const DAY = 86_400_000;
 

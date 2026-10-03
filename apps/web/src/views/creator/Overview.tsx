@@ -821,6 +821,7 @@ function NeedsAttention({
                   <AttentionRow
                     item={item}
                     api={api}
+                    root={root}
                     testMode={testMode}
                     onDone={onDone}
                     delay={0.15 + index * STAGGER}
@@ -840,6 +841,7 @@ function NeedsAttention({
 function AttentionRow({
   item,
   api,
+  root,
   testMode,
   onDone,
   delay,
@@ -847,6 +849,8 @@ function AttentionRow({
 }: {
   item: Urgency;
   api: string;
+  /** The dashboard's root: the row opens the member's drawer in Members. */
+  root: string;
   testMode: boolean;
   onDone: () => void;
   delay: number;
@@ -867,6 +871,7 @@ function AttentionRow({
   return (
     <MemberListRow
       name={member.name ?? t('members.unnamed')}
+      href={`${root}/members?member=${encodeURIComponent(member.id)}`}
       reason={reason}
       reasonUrgent={paymentFailed}
       risk={
@@ -898,7 +903,9 @@ function AttentionRow({
             })
           : null
       }
-      actions={<MemberActions member={member} api={api} testMode={testMode} onDone={onDone} />}
+      actions={
+        <MemberActions member={member} api={api} testMode={testMode} compact onDone={onDone} />
+      }
       delay={delay}
       rowTour={first ? 'attention-row' : undefined}
       ringTour={first ? 'risk-ring' : undefined}

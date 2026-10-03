@@ -1,9 +1,11 @@
 import type { MemberRow } from '@stayput/core';
 import { describe, expect, it } from 'vitest';
+import { createWorld } from '../src/demo/world';
 import {
   FIRST_DIRECTION,
   isUrgent,
   keepMember,
+  matchesSearch,
   memberState,
   monthlyOf,
   sortMembers,
@@ -22,6 +24,7 @@ const at = (ms: number) => new Date(NOW + ms).toISOString();
 /** A member who pays $49 a month, active yesterday, unless `over` says otherwise. */
 const member = (over: Partial<MemberRow> & Pick<MemberRow, 'id'>): MemberRow => ({
   name: null,
+  username: null,
   status: 'joined',
   accessLevel: 'customer',
   joinedAt: at(-100 * DAY),
@@ -240,5 +243,33 @@ describe('the columns’ order', () => {
       'gone',
       'free',
     ]);
+  });
+});
+
+describe('the search (fix prompt v4.1, block 3)', () => {
+  const demo = createWorld(Date.parse('2026-10-03T14:00:00Z')).members.members;
+  const found = (query: string) => demo.filter((m) => matchesSearch(m, query)).map((m) => m.name);
+
+  it('finds Hugo Bernard alone, whatever the case and the accents', () => {
+    for (const query of ['hugo', 'HUGO', 'Hugó', '  hugo ', 'Hugo Bernard', 'bernard hugo']) {
+      expect(found(query), query).toEqual(['Hugo Bernard']);
+    }
+    // Accents the other way round: « theo » finds Théo, « ines » Inès.
+    expect(found('theo')).toEqual(['Théo Fontaine']);
+    expect(found('INES')).toEqual(['Inès Haddad']);
+    expect(found('zzz')).toEqual([]);
+    // Nothing typed: everyone.
+    expect(found('')).toHaveLength(demo.length);
+    expect(found('   ')).toHaveLength(demo.length);
+  });
+
+  it('reads the Whop username too, with or without its @', () => {
+    const hugo = demo.find((m) => m.name === 'Hugo Bernard')!;
+    expect(hugo.username).toBeTruthy();
+    expect(found(hugo.username!)).toEqual(['Hugo Bernard']);
+    expect(found(`@${hugo.username!.toUpperCase()}`)).toEqual(['Hugo Bernard']);
+    expect(matchesSearch({ name: null, username: 'kev.trades' }, 'kev')).toBe(true);
+    expect(matchesSearch({ name: null, username: null }, 'kev')).toBe(false);
+    expect(matchesSearch({ name: null, username: null }, '')).toBe(true);
   });
 });

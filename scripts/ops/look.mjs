@@ -24,10 +24,14 @@ const [base, out] = process.argv.slice(2);
 if (!base || !out) throw new Error('usage: node look.mjs <StayPut URL> <out dir>');
 mkdirSync(out, { recursive: true });
 
-// The runner's Chrome; elsewhere, the browser CHROME_PATH names.
-const browser = await chromium.launch(
-  process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chrome' },
-);
+// The runner's Chrome; elsewhere, the browser CHROME_PATH names. With the scrollbars a desktop
+// shows (headless Chrome hides them): the page's room is what a creator on Windows gets.
+const browser = await chromium.launch({
+  ignoreDefaultArgs: ['--hide-scrollbars'],
+  ...(process.env.CHROME_PATH
+    ? { executablePath: process.env.CHROME_PATH }
+    : { channel: 'chrome' }),
+});
 const problems = [];
 const report = {};
 
@@ -226,10 +230,25 @@ report.firstNeedingAttention = await desktop.page.evaluate(() => {
   const title = [...document.querySelectorAll('h2')].find(
     (h) => h.textContent === 'Needs attention',
   );
-  return title?.closest('section')?.querySelector('li p')?.textContent ?? null;
+  return title?.closest('section')?.querySelector('li a')?.textContent ?? null;
 });
 await desktop.page.screenshot({ path: `${out}/dashboard-1440.png` });
 await desktop.page.screenshot({ path: `${out}/dashboard-1440-full.png`, fullPage: true });
+// « Needs attention » (fix prompt v4.1, block 3): a « › » at rest, the actions when hovered.
+const attentionList = desktop.page.locator('[data-tour="attention"]');
+const attentionRow = attentionList.getByRole('listitem').nth(1);
+const actionsOpacity = () =>
+  attentionRow
+    .locator('[data-row-actions]')
+    .evaluate((element) => getComputedStyle(element).opacity);
+await desktop.page.mouse.move(0, 0);
+await desktop.page.waitForTimeout(300);
+report.attentionRow = { atRest: await actionsOpacity() };
+await attentionRow.hover();
+await desktop.page.waitForTimeout(400);
+report.attentionRow.hovered = await actionsOpacity();
+await attentionList.screenshot({ path: `${out}/dashboard-attention-hover.png` });
+await desktop.page.mouse.move(0, 0);
 await balance.screenshot({ path: `${out}/dashboard-balance.png` });
 const chart = desktop.page.getByRole('group', { name: 'Revenue saved vs at risk' });
 const box = await chart.boundingBox();
@@ -376,6 +395,18 @@ report.members.chipsTop = await desktop.page.evaluate(() =>
 );
 await desktop.page.screenshot({ path: `${out}/members-1440-scrolled.png` });
 await desktop.page.mouse.wheel(0, -5_000);
+// The search, typed fast (fix prompt v4.1, block 3): every key kept, Hugo Bernard alone.
+const searchField = desktop.page.getByRole('searchbox', { name: 'Search a member' });
+await searchField.pressSequentially('hugo', { delay: 30 });
+await desktop.page.waitForTimeout(600);
+report.members.search = {
+  value: await searchField.inputValue(),
+  rows: (await rowsOf()).map((cells) => cells[0] ?? ''),
+  address: new URL(desktop.page.url()).searchParams.get('q'),
+};
+await desktop.page.screenshot({ path: `${out}/members-1440-search.png` });
+await searchField.fill('');
+await desktop.page.waitForTimeout(600);
 await desktop.page.getByRole('button', { name: /^High/ }).click();
 await desktop.page.waitForTimeout(800);
 report.members.high = (await rowsOf()).length;
@@ -397,6 +428,10 @@ await drawer.waitFor({ timeout: 30_000 });
 await desktop.page.waitForTimeout(1_800);
 report.members.drawer = await drawer.evaluate((dialog) => ({
   width: Math.round(dialog.getBoundingClientRect().width),
+  left: Math.round(dialog.getBoundingClientRect().left),
+  right: Math.round(dialog.getBoundingClientRect().right),
+  window: window.innerWidth,
+  pageLocked: document.documentElement.hasAttribute('data-scroll-lock'),
   sections: [...dialog.querySelectorAll('section h3')].map((title) => title.textContent),
   scoreDrawn: Boolean(dialog.querySelector('figure svg[role=img] path')),
   doNotContact: dialog.querySelector('[role=switch]')?.getAttribute('aria-checked') ?? null,
@@ -456,6 +491,8 @@ const ok =
   /^[+−]\$[\d,]+\.\d{2} vs last month$/.test(report.balance.delta ?? '') &&
   report.balance.periods.join(' ') === '7D 30D 90D' &&
   report.firstNeedingAttention === 'Hugo Bernard' &&
+  report.attentionRow.atRest === '0' &&
+  report.attentionRow.hovered === '1' &&
   report.activity.loadingAfter5s === 0 &&
   report.guide.width === 420 &&
   report.guide.cards.length === 5 &&
@@ -482,6 +519,13 @@ const ok =
   report.members.high > 0 &&
   report.members.sortedByMrr &&
   report.members.drawer.width === 420 &&
+  report.members.drawer.left >= 0 &&
+  report.members.drawer.right <= report.members.drawer.window &&
+  report.members.drawer.pageLocked &&
+  report.members.search.value === 'hugo' &&
+  report.members.search.rows.length === 1 &&
+  report.members.search.rows[0].includes('Hugo Bernard') &&
+  report.members.search.address === 'hugo' &&
   ['Why', 'Quick actions', 'Risk over 30 days', 'Payments', 'Activity over 30 days'].every(
     (title) => report.members.drawer.sections.includes(title),
   ) &&
@@ -492,7 +536,7 @@ writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members or its drawer is not as the brief says: see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest: see the report above.',
   );
   process.exitCode = 1;
 }

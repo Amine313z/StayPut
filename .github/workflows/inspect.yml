@@ -79,8 +79,10 @@ jobs:
 
   # The browser tests (apps/web/e2e) on the deployed demo, its fonts loaded as creators get
   # them: the tour and every « Show me » light their place wholly, the tooltip beside it, in
-  # English and French, at 1280×720 and 1024×768. No secret, no write.
-  spotlight:
+  # English and French, at 1280×720 and 1024×768; the members' search keeps every key and finds
+  # Hugo Bernard alone; a member's drawer stands wholly in the window at 1024 and 1440 px; a
+  # « Needs attention » row shows its actions only when hovered. No secret, no write.
+  browser:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -90,7 +92,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Run the spotlight tests on the deployed demo in Chrome
+      - name: Run the browser tests on the deployed demo in Chrome
         env:
           STAYPUT_URL: ${{ vars.STAYPUT_URL || 'https://stayput.chezbenz18.workers.dev' }}
         run: npm run e2e

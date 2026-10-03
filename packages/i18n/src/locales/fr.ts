@@ -205,6 +205,8 @@ export const fr: Messages = {
   'members.filter.left': 'Partis',
   'members.search': 'Chercher un membre',
   'members.noMatch': 'Aucun membre ne correspond.',
+  'members.noMatch.search': 'Aucun membre ne correspond à « {query} ».',
+  'members.clearSearch': 'Effacer la recherche et les filtres',
   'discord.description':
     'Comptez les messages des membres de votre serveur, dans les salons que vous choisissez.',
   'discord.add': 'Ajouter le bot à mon serveur',

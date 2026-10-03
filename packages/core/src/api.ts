@@ -307,6 +307,8 @@ export interface MemberRisk {
 export interface MemberRow {
   id: string;
   name: string | null;
+  /** The member's Whop username (without the @), when Whop gave it: the search finds it too. */
+  username: string | null;
   status: 'joined' | 'left';
   accessLevel: AccessLevel | null;
   joinedAt: string | null;

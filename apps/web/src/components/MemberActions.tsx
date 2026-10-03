@@ -14,6 +14,7 @@ import { ActionButton } from '../ui/ActionButton';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
+import { IconTip } from '../ui/IconTip';
 import { Skeleton } from '../ui/Skeleton';
 import { useToast } from '../ui/Toast';
 
@@ -45,6 +46,7 @@ export function MemberActions({
   testMode,
   offers = true,
   wide = false,
+  compact = false,
   onDone,
 }: {
   member: MemberRow;
@@ -54,6 +56,8 @@ export function MemberActions({
   offers?: boolean;
   /** Pause and Offer say their words whatever the room (a member's drawer). */
   wide?: boolean;
+  /** Icons only, each named over it on hover and focus (the dashboard's « Needs attention »). */
+  compact?: boolean;
   /** Something was queued: the figures and the feed may have changed. */
   onDone: () => void;
 }) {
@@ -62,6 +66,16 @@ export function MemberActions({
   const [asking, setAsking] = useState<CreatorOfferKind | null>(null);
   const [offered, setOffered] = useState<CreatorOfferKind | null>(null);
   const name = member.name ?? t('members.unnamed');
+  if (member.doNotContact && compact) {
+    return (
+      <IconTip label={t('dash.act.never')}>
+        <span className="flex size-8 items-center justify-center text-subtle">
+          <BellOff aria-hidden="true" className="size-4" />
+          <span className="sr-only">{t('dash.act.neverContact')}</span>
+        </span>
+      </IconTip>
+    );
+  }
   if (member.doNotContact) {
     return (
       <span title={t('dash.act.neverContact')}>
@@ -86,6 +100,86 @@ export function MemberActions({
     );
     onDone();
   };
+  const dialog = asking ? (
+    <OfferDialog
+      kind={asking}
+      name={name}
+      api={api}
+      memberId={member.id}
+      onClose={() => setAsking(null)}
+      onMade={(made) => {
+        setAsking(null);
+        setOffered(made.kind);
+        toast({
+          title: t(
+            made.kind === 'pause_offer' ? 'dash.toast.offered.pause' : 'dash.toast.offered.promo',
+            { name },
+          ),
+          body: t('dash.toast.offered.body'),
+        });
+        onDone();
+      }}
+    />
+  ) : null;
+  if (compact) {
+    // Square ghosts, their words in the tooltip over them and in their names.
+    const square = 'w-8 px-0';
+    return (
+      <div className="flex items-center gap-1">
+        <IconTip label={t('dash.act.message')}>
+          <ActionButton
+            variant="ghost"
+            size="sm"
+            className={square}
+            stayDone
+            run={message}
+            onError={(error) => toast({ tone: 'error', title: failureText(error, t) })}
+            icon={<MessageSquareText aria-hidden="true" className="size-4" />}
+            doneLabel={<span className="sr-only">{t('dash.act.queued')}</span>}
+            aria-label={t('dash.act.messageLabel', { name })}
+          >
+            <span className="sr-only">{t('dash.act.message')}</span>
+          </ActionButton>
+        </IconTip>
+        {!paying ? null : offered ? (
+          <IconTip
+            label={t(offered === 'pause_offer' ? 'dash.act.pauseOffered' : 'dash.act.offerMade')}
+          >
+            <span className="flex size-8 items-center justify-center text-accent">
+              <Check aria-hidden="true" className="size-4" />
+              <span className="sr-only">
+                {t(offered === 'pause_offer' ? 'dash.act.pauseOffered' : 'dash.act.offerMade')}
+              </span>
+            </span>
+          </IconTip>
+        ) : (
+          <>
+            <IconTip label={t('dash.act.pause')}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={square}
+                onClick={() => setAsking('pause_offer')}
+                aria-label={t('dash.act.pauseLabel', { name })}
+                icon={<PauseCircle aria-hidden="true" className="size-4" />}
+              />
+            </IconTip>
+            <IconTip label={t('dash.act.offer')}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={square}
+                onClick={() => setAsking('promo_offer')}
+                aria-label={t('dash.act.offerLabel', { name })}
+                icon={<Gift aria-hidden="true" className="size-4" />}
+              />
+            </IconTip>
+          </>
+        )}
+        {dialog}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <ActionButton
@@ -133,29 +227,7 @@ export function MemberActions({
           </Button>
         </>
       )}
-      {asking ? (
-        <OfferDialog
-          kind={asking}
-          name={name}
-          api={api}
-          memberId={member.id}
-          onClose={() => setAsking(null)}
-          onMade={(made) => {
-            setAsking(null);
-            setOffered(made.kind);
-            toast({
-              title: t(
-                made.kind === 'pause_offer'
-                  ? 'dash.toast.offered.pause'
-                  : 'dash.toast.offered.promo',
-                { name },
-              ),
-              body: t('dash.toast.offered.body'),
-            });
-            onDone();
-          }}
-        />
-      ) : null}
+      {dialog}
     </div>
   );
 }

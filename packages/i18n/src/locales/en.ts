@@ -200,6 +200,8 @@ export const en = {
   'members.filter.left': 'Gone',
   'members.search': 'Search a member',
   'members.noMatch': 'No member matches.',
+  'members.noMatch.search': 'No member matches “{query}”.',
+  'members.clearSearch': 'Clear search and filters',
   'discord.description':
     "Count the messages of your server's members, from the channels you choose.",
   'discord.add': 'Add the bot to my server',

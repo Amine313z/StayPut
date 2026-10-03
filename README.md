@@ -77,14 +77,16 @@ s'additionne depuis le premier jour affiché, la courbe ne fait que monter, un t
 du mois, et chaque jour est celui du fuseau de la communauté), l'action prioritaire du
 jour en un bouton (approuver, relancer les paiements échoués, proposer une pause, écrire ; jamais
 « rien d'urgent » tant qu'un paiement échoué ou un départ demeure), les cinq membres les plus
-urgents avec Écrire / Pause / Offre, et ce que StayPut a fait en 30 jours. Tant que la mise en
+urgents (chaque ligne ouvre le membre ; Écrire / Pause / Offre apparaissent au survol), et ce
+que StayPut a fait en 30 jours. Tant que la mise en
 route n'est pas finie, la pastille « Getting started » (Discord, première automatisation,
 membres à risque passés en revue, limites) s'affiche sous le titre.
 
 La page Membres est un tableau compact, une ligne par membre : son anneau de risque, son état en
 un mot (Leaving · Payment failed · Inactive · Active), ce qu'il paie par mois, sa dernière
 activité et son prochain renouvellement. Chaque colonne se trie ; les puces de filtre et la
-recherche restent en haut pendant le défilement. Une ligne ouvre le tiroir du membre : pourquoi
+recherche (par nom ou nom d'utilisateur Whop, sans tenir compte des majuscules ni des accents)
+restent en haut pendant le défilement. Une ligne ouvre le tiroir du membre : pourquoi
 il est à risque, les actions rapides, son score sur 30 jours, son abonnement et ses paiements,
 son activité par plateforme, et l'interrupteur « Ne pas contacter ».
 

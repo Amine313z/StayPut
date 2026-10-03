@@ -4,12 +4,15 @@ import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { useI18n } from '../i18n';
 import { SPRING } from '../motion';
 import { buttonClass } from './Button';
+import { useScrollLock } from './scrollLock';
 
 /**
- * A panel that slides in from the right on the drawers' spring (brief v4 §14), 420 px on an
- * elevated surface, the page behind dimmed to 50 % black: the browser's own modal <dialog>, so
- * the page behind is out of reach and Escape closes it, like its « Close » button and a click
- * beside it. It exists only while open: the parent shows it, and removes it on `onClose`.
+ * A panel that slides in from the right on the drawers' spring (brief v4 §14), on an elevated
+ * surface, the page behind dimmed to 50 % black: the browser's own modal <dialog>, so the page
+ * behind is out of reach and Escape closes it, like its « Close » button and a click beside it.
+ * Anchored to the window's right edge (`right: 0`, never left to the margins), `min(420px,
+ * 100vw)` wide, the page behind locked still (fix prompt v4.1, block 3). It exists only while
+ * open: the parent shows it, and removes it on `onClose`.
  */
 export function Drawer({
   title,
@@ -26,6 +29,7 @@ export function Drawer({
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const descriptionId = useId();
+  useScrollLock();
   useEffect(() => {
     const dialog = ref.current;
     if (dialog && !dialog.open) dialog.showModal();
@@ -40,7 +44,7 @@ export function Drawer({
       onClick={(event) => {
         if (event.target === event.currentTarget) close();
       }}
-      className="drawer ms-auto me-0 my-0 h-dvh max-h-dvh w-[min(420px,100vw)] max-w-none overflow-hidden border-0 border-s border-line bg-transparent p-0 text-fg"
+      className="drawer fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-dvh w-[min(420px,100vw)] max-w-none overflow-hidden border-0 border-s border-line bg-transparent p-0 text-fg"
     >
       <motion.div
         initial={{ x: '100%' }}

@@ -2377,3 +2377,116 @@ une capture. Le bloc 1 refait la lumière de la visite et de « Show me ».
   démo, c'est celle d'Arthur Lemoine, 41 heures avant l'ouverture de la page : à partir de 17 h
   environ, elle tombe le 2 octobre. Les jours viennent désormais d'un seul fuseau partout. Un
   « il y a 2 jours » qui voulait dire « hier » ne peut plus faire croire à un décalage.
+
+## 2026-10-03 — Correctifs v4.1, bloc 3 : la page Membres et le tiroir du membre
+
+### Ce que le fondateur a vu
+
+- Le tiroir d'un membre dépassait de l'écran : 419 px de large, mais commencé environ 130 px
+  trop à droite (« Ends Oct 9 », « Pause » et « Offer » coupés).
+- La recherche perdait des lettres tapées, et « Hugo » montrait encore les 39 membres.
+
+### Le tiroir
+
+- **Il est ancré au bord droit de la fenêtre** : `position: fixed`, `right: 0`, largeur
+  `min(420px, 100vw)`. Avant, il était placé par les marges automatiques du `<dialog>` modal
+  (`ms-auto`), ce qui dépend du navigateur.
+- La page garde la place de sa barre de défilement, qu'elle défile ou non
+  (`scrollbar-gutter: stable`) : rien ne bouge quand elle se bloque.
+- **Tant qu'un tiroir ou une fenêtre est ouvert, la page derrière ne défile plus** :
+  - `ui/scrollLock.ts` pose `<html data-scroll-lock>`, et `styles.css` le traduit en
+    `overflow: hidden` ;
+  - pas de `style` écrit à la main, que la politique de sécurité refuserait ;
+  - si plusieurs sont ouverts, la page reste bloquée jusqu'à la fermeture du dernier.
+- **Pas reproduit ici.** Chrome sans écran n'a pas montré le décalage :
+  - avec ou sans barres de défilement visibles ;
+  - sur les 39 membres ;
+  - en anglais à 1024 px et en français à 1440 px.
+  - Le tiroir est donc placé explicitement, et les tests mesurent sa place dans un vrai
+    navigateur.
+
+### La recherche
+
+- **Le bug.** Le champ affichait l'adresse (`?q=`), et React Router met l'adresse à jour dans
+  une transition. Une touche tapée avant que la précédente n'y soit arrivée se perdait, et la
+  liste suivait l'adresse, pas le champ. Le nouveau test de navigateur, lancé sur l'ancienne
+  version, tape « hugo » et lit « hgo ».
+- **Désormais :**
+  - le champ garde lui-même ce qui est tapé, et la liste se filtre sur le champ, aussitôt ;
+  - l'adresse suit 250 ms après la dernière touche (`q`, remplacée, jamais empilée dans
+    l'historique) ;
+  - quand l'adresse change autrement (Retour, un lien, « Clear search and filters »), le champ
+    la suit, sauf s'il a le focus : on ne réécrit jamais ce que le créateur est en train de
+    taper.
+- **Ce qui est cherché** (`matchesSearch`, `src/members.ts`) :
+  - le nom et le nom d'utilisateur Whop, sans tenir compte des majuscules ni des accents ;
+  - chaque mot tapé doit s'y trouver, dans n'importe quel ordre (« bernard hugo ») ;
+  - « @hugo » cherche aussi le nom d'utilisateur.
+  - La recherche de la barre du haut (⌘K) suit la même règle.
+- **Écart avec le brief : pas de recherche par e-mail.** StayPut ne garde jamais l'e-mail des
+  membres (migration 0005 : « Emails and phone numbers that Whop returns are never stored »).
+  La recherche porte donc sur le nom et le nom d'utilisateur Whop :
+  - `members.username`, lu par la synchronisation depuis la migration 0012 ;
+  - désormais renvoyé par `GET /members` (`MemberRow.username`) ;
+  - **pas de migration**.
+- La démo donne un nom d'utilisateur à chaque membre, sous quatre formes : `hugo.bernard`,
+  `hugobernard`, `hugo_bernard`, `hbernard`.
+
+### Aucun résultat
+
+- Le message dit les mots cherchés : « No member matches “zzz”. » / « Aucun membre ne
+  correspond à « zzz ». ».
+- Un bouton discret « Clear search and filters » / « Effacer la recherche et les filtres » vide
+  le champ et revient au filtre « All ».
+- Avec un filtre seul (rien de tapé), le message d'avant reste, avec le même bouton.
+
+### « Needs attention »
+
+- **Au repos**, une ligne ne montre qu'un chevron « › ».
+- **Survolée ou avec le focus clavier**, les actions Message, Pause et Offer prennent sa place :
+  - en icônes, chacune avec son infobulle (`ui/IconTip.tsx`, 120 ms) ;
+  - leur place est gardée, rien ne bouge ;
+  - les lecteurs d'écran entendent le nom complet (« Message Hugo Bernard »).
+- **Toute la ligne ouvre le membre**, dans son tiroir de Membres : le nom est un lien qui
+  couvre la ligne, sous les actions.
+- **Sur un écran tactile**, qui ne survole rien, les actions restent visibles et le chevron
+  disparaît.
+- Un membre sur « Do not contact » a une cloche barrée, avec son infobulle. Une offre déjà
+  envoyée devient une coche.
+- La version large des actions, dans le tiroir du membre, ne change pas.
+
+### Tests
+
+- `web/test/members.test.ts`, sur les membres de la démo :
+  - « hugo », « HUGO », « Hugó », « hugo » entouré d'espaces, « Hugo Bernard » et
+    « bernard hugo » ne trouvent que Hugo Bernard ;
+  - « theo » trouve Théo Fontaine, « INES » Inès Haddad ;
+  - « zzz » ne trouve personne, et rien de tapé montre tout le monde ;
+  - le nom d'utilisateur se trouve avec ou sans @.
+- `web/test/app.test.tsx` :
+  - la recherche par nom d'utilisateur ;
+  - le message sans résultat ;
+  - le bouton qui vide le champ et remet le filtre « All » ;
+  - la ligne de « Needs attention » : lien vers le membre, chevron, infobulles.
+- `apps/web/e2e/members.e2e.ts` (Playwright, Chrome) :
+  - la recherche tapée touche par touche (« hugo », « HUGO », « Hugó ») garde chaque lettre et
+    ne montre que Hugo Bernard ; l'adresse suit ;
+  - le tiroir à 1024 et 1440 px fait 420 px, entièrement dans la fenêtre, sans élément coupé ;
+    la page est bloquée derrière, puis débloquée à la fermeture ;
+  - une ligne de « Needs attention » : actions invisibles au repos, visibles au survol, et la
+    ligne ouvre le membre.
+  - Ces tests tournent en CI et sur le site en ligne : le job `spotlight` d'Inspect devient
+    `browser`, puisqu'il ne teste plus seulement le projecteur.
+- Les tests de navigateur et `look.mjs` montrent désormais de vraies barres de défilement, comme
+  sous Windows. Chrome sans écran les cache par défaut, ce qui masquerait justement ce genre de
+  décalage.
+- Inspect (`look.mjs`) ajoute trois captures, avec leurs mesures :
+  - la recherche « hugo » ;
+  - le tiroir à 1440 px, bords mesurés ;
+  - la ligne de « Needs attention » au repos et survolée.
+
+### Incertain
+
+- Le décalage du tiroir n'a pas été reproduit ici (voir « Le tiroir ») : à vérifier sur l'écran
+  du fondateur.
+- La recherche ne trouve pas par e-mail (voir « La recherche »).

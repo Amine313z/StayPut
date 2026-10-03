@@ -2,7 +2,7 @@ import type { MemberRow, MembersPage } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
 import { BellOff, Search, Users } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useId, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { postJson, type Loadable } from '../../api';
 import { MemberDrawer } from '../../components/MemberDrawer';
@@ -13,14 +13,16 @@ import {
   FIRST_DIRECTION,
   MEMBER_FILTERS,
   MEMBER_SORTS,
+  SEARCH_DELAY_MS,
   keepMember,
+  matchesSearch,
   sortMembers,
   type MemberFilter,
   type MemberSort,
   type SortDirection,
 } from '../../members';
 import { ease } from '../../motion';
-import { fold } from '../../text';
+import { Button } from '../../ui/Button';
 import { EmptyState } from '../../ui/EmptyState';
 import { RowsSkeleton } from '../../ui/Skeleton';
 import { useCreatorData } from '../CreatorView';
@@ -50,7 +52,7 @@ export function MembersTab() {
   useReviewed(api);
   const table = useTableAddress();
   const filter = MEMBER_FILTERS.find((f) => f === table.params.get('filter')) ?? 'all';
-  const query = table.params.get('q') ?? '';
+  const search = useSearchField(table);
   const isNew = useNewcomers(members.state);
   const compare = useCompareNames();
   // The moment the page opened: who is « inactive » does not change while the creator reads.
@@ -63,13 +65,20 @@ export function MembersTab() {
       ) as Record<MemberFilter, number>,
     [page],
   );
+  // Filtered on what the field holds, at once: the address follows on its own time.
   const shown = useMemo(() => {
-    const words = fold(query.trim());
     const kept = (page?.members ?? []).filter(
-      (m) => keepMember(filter, m) && (!words || fold(m.name ?? '').includes(words)),
+      (m) => keepMember(filter, m) && matchesSearch(m, search.text),
     );
     return sortMembers(kept, table.sort, table.direction, now, compare);
-  }, [page, filter, query, table.sort, table.direction, now, compare]);
+  }, [page, filter, search.text, table.sort, table.direction, now, compare]);
+  const clear = () => {
+    search.set('');
+    table.change((address) => {
+      address.delete('q');
+      address.delete('filter');
+    });
+  };
 
   if (members.state.status === 'error') {
     return (
@@ -103,13 +112,10 @@ export function MembersTab() {
             />
             <input
               type="search"
-              value={query}
-              onChange={(event) =>
-                table.change((search) => {
-                  if (event.target.value) search.set('q', event.target.value);
-                  else search.delete('q');
-                })
-              }
+              value={search.text}
+              onChange={(event) => search.set(event.target.value)}
+              onFocus={() => search.focus(true)}
+              onBlur={() => search.focus(false)}
               placeholder={t('members.search')}
               className="h-9 w-full rounded-lg border border-line bg-surface ps-9 pe-3 text-[0.8125rem] text-fg transition-colors duration-150 placeholder:text-subtle hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />
@@ -130,7 +136,16 @@ export function MembersTab() {
                   body={t('members.empty')}
                 />
               ) : shown.length === 0 ? (
-                <p className="py-10 text-center text-sm text-muted">{t('members.noMatch')}</p>
+                <div className="flex flex-col items-center gap-3 py-10 text-center">
+                  <p className="text-sm text-muted">
+                    {search.text.trim()
+                      ? t('members.noMatch.search', { query: search.text.trim() })
+                      : t('members.noMatch')}
+                  </p>
+                  <Button variant="ghost" size="sm" onClick={clear}>
+                    {t('members.clearSearch')}
+                  </Button>
+                </div>
               ) : (
                 <MemberTable
                   members={shown}
@@ -352,6 +367,35 @@ function useTableAddress() {
     open: (member: MemberRow) => change((search) => search.set('member', member.id)),
     close: () => change((search) => search.delete('member')),
   };
+}
+
+/**
+ * The search field (fix prompt v4.1, block 3). It keeps what is typed itself, so no key is ever
+ * lost to the address catching up, and the address follows 250 ms after the last key (`q`,
+ * replaced, never pushed). When the address changes otherwise (Back, a link, « Clear search and
+ * filters »), the field follows it, unless the creator is typing in it.
+ */
+function useSearchField(table: ReturnType<typeof useTableAddress>) {
+  const fromAddress = table.params.get('q') ?? '';
+  const [text, setText] = useState(fromAddress);
+  const [focused, setFocused] = useState(false);
+  const [seen, setSeen] = useState(fromAddress);
+  if (fromAddress !== seen) {
+    setSeen(fromAddress);
+    if (!focused) setText(fromAddress);
+  }
+  const write = useEffectEvent((words: string) =>
+    table.change((address) => {
+      if (words) address.set('q', words);
+      else address.delete('q');
+    }),
+  );
+  useEffect(() => {
+    if (text === fromAddress) return;
+    const later = window.setTimeout(() => write(text), SEARCH_DELAY_MS);
+    return () => window.clearTimeout(later);
+  }, [text, fromAddress]);
+  return { text, set: setText, focus: setFocused };
 }
 
 /** Names in the creator's language's order, accents and case aside. */

@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { useI18n } from '../i18n';
 import { buttonClass } from './Button';
+import { useScrollLock } from './scrollLock';
 
 /**
  * A window over StayPut: the browser's own modal <dialog>, so the page behind is out of reach and
@@ -23,6 +24,8 @@ export function Dialog({
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const descriptionId = useId();
+  // The page behind stays still while the window is open.
+  useScrollLock();
   useEffect(() => {
     const dialog = ref.current;
     if (dialog && !dialog.open) dialog.showModal();

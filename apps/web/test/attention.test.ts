@@ -22,6 +22,7 @@ function member(
   return {
     id: `m_${name}`,
     name,
+    username: null,
     status: over.status ?? 'joined',
     accessLevel: 'customer',
     joinedAt: '2026-05-01T10:00:00.000Z',

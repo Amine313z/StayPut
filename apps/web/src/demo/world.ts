@@ -25,6 +25,7 @@ import {
   zonedDay,
 } from '@stayput/core';
 import { DEMO_COMPANY_ID } from '../api';
+import { fold } from '../text';
 import { createDemoPages, type DemoPages } from './pages';
 
 /**
@@ -288,6 +289,15 @@ function monthly(plan: Plan | null): number {
   return days >= 365 ? price / 12 : (price * 30) / days;
 }
 
+/** A Whop username as members pick theirs: their name, lowercase, in one of a few shapes. */
+function usernameOf(name: string, index: number): string {
+  const [first = '', last = ''] = fold(name)
+    .replace(/[^a-z ]/g, '')
+    .split(' ');
+  const shapes = [`${first}.${last}`, `${first}${last}`, `${first}_${last}`, `${first[0]}${last}`];
+  return shapes[index % shapes.length]!;
+}
+
 function memberId(index: number): string {
   return `mber_demo${String(index + 1).padStart(2, '0')}`;
 }
@@ -363,6 +373,7 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
     return {
       id: memberId(index),
       name: p.name,
+      username: usernameOf(p.name, index),
       status: leftAt === null ? 'joined' : 'left',
       accessLevel: leftAt === null ? 'customer' : 'no_access',
       joinedAt: at(p.joined * DAY),

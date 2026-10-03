@@ -18,9 +18,13 @@ export default defineConfig({
   use: {
     baseURL: url ?? 'http://localhost:4173',
     locale: 'en-US',
-    ...(process.env.CHROME_PATH
-      ? { launchOptions: { executablePath: process.env.CHROME_PATH } }
-      : { channel: 'chrome' }),
+    // With the scrollbars a desktop shows (Chrome hides them when headless): the page's
+    // room is then what a creator on Windows gets.
+    launchOptions: {
+      ignoreDefaultArgs: ['--hide-scrollbars'],
+      ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}),
+    },
+    ...(process.env.CHROME_PATH ? {} : { channel: 'chrome' }),
   },
   projects: [
     { name: '1280x720', use: { viewport: { width: 1280, height: 720 } } },

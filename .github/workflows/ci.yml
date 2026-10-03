@@ -22,5 +22,6 @@ jobs:
       - run: npm run build
       - run: npm run bundle -w @stayput/worker
       # The build in the runner's Chrome (apps/web/e2e): the tour and every « Show me » light
-      # their place wholly, the tooltip beside it, in English and French, at 1280×720 and 1024×768.
+      # their place wholly, the tooltip beside it, in English and French, at 1280×720 and 1024×768;
+      # the members' search, a member's drawer at 1024 and 1440 px, the rows' hover actions.
       - run: npm run e2e

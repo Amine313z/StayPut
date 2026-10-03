@@ -122,6 +122,7 @@ const SCORED_AT = '2026-10-01T11:00:00.000Z';
 
 /** A member who pays $49 a month and is fine, unless `over` says otherwise. */
 const memberRow = (over: Partial<MemberRow> & Pick<MemberRow, 'id' | 'name'>): MemberRow => ({
+  username: null,
   status: 'joined',
   accessLevel: 'customer',
   joinedAt: '2026-06-01T10:00:00.000Z',
@@ -208,6 +209,7 @@ const MEMBERS: MembersPage = {
     memberRow({
       id: 'mber_3',
       name: 'Bruno Petit',
+      username: 'bpetit',
       lastActivityAt: '2026-09-10T10:00:00.000Z',
       risk: risk({
         score: 78,
@@ -681,6 +683,21 @@ describe('creator view', () => {
     expect(within(attention).getByRole('link', { name: 'See all (2)' }).getAttribute('href')).toBe(
       '/dashboard/biz_A1/members',
     );
+    // Each row opens its member; at rest a « › », the actions in its place on hover or focus.
+    expect(within(rows[1]!).getByRole('link', { name: 'Bruno Petit' }).getAttribute('href')).toBe(
+      '/dashboard/biz_A1/members?member=mber_3',
+    );
+    expect(rows[1]!.querySelector('[data-row-chevron]')).not.toBeNull();
+    const actions = rows[1]!.querySelector('[data-row-actions]')!;
+    expect(actions.className).toContain('opacity-0');
+    expect(actions.className).toContain('group-hover:opacity-100');
+    expect(actions.className).toContain('group-focus-within:opacity-100');
+    // Icons named over them: Message, Pause, Offer.
+    expect([...actions.querySelectorAll('[data-tip]')].map((tip) => tip.textContent)).toEqual([
+      'Message',
+      'Pause',
+      'Offer',
+    ]);
     // Each one with the means to act on the spot: Message, Pause, Offer.
     expect(within(attention).getByRole('button', { name: 'Message Bruno Petit' })).toBeTruthy();
     expect(
@@ -740,7 +757,7 @@ describe('creator view', () => {
       kind: 'pause_offer',
     });
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(screen.getByText('Pause offered')).toBeTruthy();
+    expect(screen.getByText('Pause offered', { selector: '.sr-only' })).toBeTruthy();
 
     // A member who already has an open offer: said in words, never a code.
     fireEvent.click(screen.getByRole('button', { name: 'Make Member without a name an offer' }));
@@ -834,7 +851,7 @@ describe('creator view', () => {
     await within(attention).findByText('Ben Soon');
     // Leaving within 48 hours, a payment failed; then the departures; then the highest scores.
     const rows = within(attention).getAllByRole('listitem');
-    expect(rows.map((li) => li.querySelector('p')?.textContent)).toEqual([
+    expect(rows.map((li) => li.querySelector('a')?.textContent)).toEqual([
       'Ben Soon',
       'Cleo Card',
       'Dan Later',
@@ -1291,10 +1308,23 @@ describe('creator view', () => {
       target: { value: 'ALÎCE' },
     });
     await vi.waitFor(() => expect(names()).toEqual(['Alice Martin']));
+    // Its Whop username too.
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search a member' }), {
+      target: { value: '@bpetit' },
+    });
+    await vi.waitFor(() => expect(names()).toEqual(['Bruno Petit']));
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search a member' }), {
       target: { value: 'nobody' },
     });
-    expect(await screen.findByText('No member matches.')).toBeTruthy();
+    expect(await screen.findByText('No member matches “nobody”.')).toBeTruthy();
+    // One click back to everyone: the words and the filter gone.
+    fireEvent.click(screen.getByRole('button', { name: /^High/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear search and filters' }));
+    await vi.waitFor(() => expect(names()).toHaveLength(5));
+    expect(screen.getByRole<HTMLInputElement>('searchbox', { name: 'Search a member' }).value).toBe(
+      '',
+    );
+    expect(screen.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('keeps a member off every action from their drawer, and says when that was not saved', async () => {
@@ -4121,7 +4151,7 @@ describe('the creator’s frame', () => {
     fireEvent.change(search, { target: { value: 'zzz' } });
     expect(await screen.findByText('No member by that name.')).toBeTruthy();
     fireEvent.keyDown(search, { key: 'Enter' });
-    expect(await screen.findByText('No member matches.')).toBeTruthy();
+    expect(await screen.findByText('No member matches “zzz”.')).toBeTruthy();
     expect(screen.getByPlaceholderText<HTMLInputElement>('Search a member').value).toBe('zzz');
   });
 
