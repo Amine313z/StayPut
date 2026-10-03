@@ -1,7 +1,7 @@
 import type { AccountPlatform, PlatformActivity, PlatformActivityView } from '@stayput/core';
 import { Activity, MapPin, Trophy } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { ApiError, postJson, type Loadable } from '../api';
+import { useApi, usePolling, useReloadOnReturn, type Loadable } from '../api';
 import { useI18n } from '../i18n';
 import { Badge } from '../ui/Badge';
 import { DiscordIcon, TelegramIcon } from '../ui/BrandIcons';
@@ -73,60 +73,45 @@ export function PlatformActivityCard({
 
 /**
  * The activity kept current while the page is open: read at once (the server reads Discord's
- * channels first, Telegram sends its messages itself), then every 10 seconds while the tab is
- * visible, at once when the creator comes back to it, and when `refreshKey` changes. What is shown
- * stays when a read fails: the next one tries again.
+ * channels first, for 2.5 seconds at most; Telegram sends its messages itself), then every
+ * 10 seconds while the tab is visible, at once when the creator comes back to it, and when
+ * `refreshKey` changes. One reading at a time, as every block reads (useApi): a reading never
+ * cancels the one under way, so the answers come in order, and the block shows its data, or
+ * says it is taking long with « Retry », within 5 seconds. What is shown stays when a reading
+ * fails: the next one tries again.
  */
 function useLiveActivity(
   api: string,
   refreshKey: number,
   onNews: (() => void) | undefined,
 ): { state: Loadable<PlatformActivityView>; retry: () => void } {
-  const [state, setState] = useState<Loadable<PlatformActivityView>>({ status: 'loading' });
-  const [attempt, setAttempt] = useState(0);
+  const { state, retry, reload } = useApi<PlatformActivityView>(
+    `${api}/platform-activity/refresh`,
+    { method: 'POST' },
+  );
+  usePolling(reload, LIVE_REFRESH_MS);
+  useReloadOnReturn(reload);
+  const latestReload = useRef(reload);
+  useEffect(() => {
+    latestReload.current = reload;
+  });
+  useEffect(() => {
+    if (refreshKey > 0) latestReload.current();
+  }, [refreshKey]);
+  // New messages since the last answer: the accounts to tie and the people may have moved.
   const news = useRef(onNews);
-  const seen = useRef<string | null>(null);
   useEffect(() => {
     news.current = onNews;
   });
+  const seen = useRef<string | null>(null);
+  const view = state.status === 'ready' ? state.data : null;
   useEffect(() => {
-    let alive = true;
-    const read = async () => {
-      if (document.visibilityState === 'hidden') return;
-      try {
-        const view = await postJson<PlatformActivityView>(`${api}/platform-activity/refresh`);
-        if (!alive) return;
-        const mark = signature(view);
-        if (seen.current !== null && seen.current !== mark) news.current?.();
-        seen.current = mark;
-        setState({ status: 'ready', data: view });
-      } catch (error) {
-        if (!alive) return;
-        const failure = error instanceof ApiError ? error : new ApiError('internal', String(error));
-        setState((current) =>
-          current.status === 'ready' ? current : { status: 'error', error: failure },
-        );
-      }
-    };
-    void read();
-    const timer = window.setInterval(() => void read(), LIVE_REFRESH_MS);
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void read();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [api, refreshKey, attempt]);
-  return {
-    state,
-    retry: () => {
-      setState({ status: 'loading' });
-      setAttempt((n) => n + 1);
-    },
-  };
+    if (!view) return;
+    const mark = signature(view);
+    if (seen.current !== null && seen.current !== mark) news.current?.();
+    seen.current = mark;
+  }, [view]);
+  return { state, retry };
 }
 
 /** What changes when a message arrives. */

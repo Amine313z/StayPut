@@ -4,10 +4,11 @@
  * it. Says whether StayPut's fonts loaded (Satoshi for the numbers and titles, Geist for the UI:
  * no fallback rendering), which font every figure and text is drawn in, whether the amounts carry
  * their cents and the demo opened in English, whether the chart drew its data and ends on the
- * balance's amount (brief v4 §13), who comes first in « Needs attention », and what the browser
+ * balance's amount (brief v4 §13), who comes first in « Needs attention », whether every block of
+ * Integrations › Activity is past « Loading… » within 5 seconds (§9.6), and what the browser
  * complained about; keeps screenshots of the Dashboard (desktop, the balance, phone, the chart's
- * tooltip). Fails when any of these is wrong. Reads nothing private: the demo is answered in the
- * browser.
+ * tooltip) and of the Activity tab. Fails when any of these is wrong. Reads nothing private: the
+ * demo is answered in the browser.
  *
  *   node look.mjs https://stayput.example.workers.dev <out dir>
  */
@@ -146,6 +147,14 @@ if (box) {
     clip: { x: box.x - 90, y: box.y - 130, width: box.width + 120, height: box.height + 190 },
   });
 }
+// Integrations › Activity: no block may still say « Loading… » after 5 seconds (brief v4 §9.6).
+await desktop.page.goto(`${base}/demo/sources/activity`, { waitUntil: 'domcontentloaded' });
+await desktop.page.waitForTimeout(5_000);
+report.activity = {
+  loadingAfter5s: await desktop.page.getByText('Loading…').count(),
+  slow: await desktop.page.getByText('This is taking longer than usual.').count(),
+};
+await desktop.page.screenshot({ path: `${out}/integrations-activity.png`, fullPage: true });
 await desktop.context.close();
 
 const phone = await open({ width: 390, height: 844 });
@@ -166,12 +175,13 @@ const ok =
   report.balance.amount === report.balance.chartEnds &&
   /^[+−]\$[\d,]+\.\d{2} vs last month$/.test(report.balance.delta ?? '') &&
   report.balance.periods.join(' ') === '7D 30D 90D' &&
-  report.firstNeedingAttention === 'Hugo Bernard';
+  report.firstNeedingAttention === 'Hugo Bernard' &&
+  report.activity.loadingAfter5s === 0;
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing or does not end on the balance, or « Needs attention » is out of order: see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing or does not end on the balance, « Needs attention » is out of order, or a block of Integrations › Activity still says « Loading… » after 5 seconds: see the report above.',
   );
   process.exitCode = 1;
 }

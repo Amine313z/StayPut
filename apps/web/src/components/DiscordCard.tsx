@@ -18,6 +18,7 @@ import { Card } from '../ui/Card';
 import { ExternalButton } from '../ui/ExternalLink';
 import { ConfirmButton } from './ConfirmButton';
 import { LinkedMembers, Steps } from './SourceParts';
+import { ErrorPanel } from './Status';
 
 /**
  * Discord (SPEC Phase 2, 5): add StayPut's bot to a server, choose the channels it reads, see
@@ -187,6 +188,13 @@ function ChannelChooser({
         <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
         {t('common.loading')}
       </p>
+    );
+  }
+  if (state.status === 'error' && state.error.code === 'slow') {
+    return (
+      <div className="mt-4">
+        <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
+      </div>
     );
   }
   if (state.status === 'error') {

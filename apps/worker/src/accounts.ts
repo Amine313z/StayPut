@@ -23,17 +23,7 @@ export interface AccountClients {
   telegram: TelegramClient | null;
 }
 
-/** The accounts a creator sees, after asking for a few names StayPut lacks. */
-export async function readAccounts(
-  db: TransactionalDb,
-  userId: string,
-  companyId: string,
-  clients: AccountClients,
-): Promise<AccountsView | null> {
-  await fillNames(db, companyId, clients);
-  return accountsView(db, userId, companyId);
-}
-
+/** The accounts a creator sees (ask for the names StayPut lacks first: `fillNames`). */
 export async function accountsView(
   db: TransactionalDb,
   userId: string,
@@ -52,7 +42,7 @@ export async function accountsView(
  * user's names, Telegram those of someone in one of the bot's groups. Noting them may tie the
  * account to its member by name.
  */
-async function fillNames(db: Db, companyId: string, clients: AccountClients): Promise<void> {
+export async function fillNames(db: Db, companyId: string, clients: AccountClients): Promise<void> {
   const missing = await db.query<{
     platform: AccountPlatform;
     account_id: string;
@@ -108,17 +98,15 @@ const HEAD_COUNTS_PER_REQUEST = 4;
 
 /**
  * Everyone StayPut knows on the company's Discord servers and Telegram groups (the founder,
- * 2026-10-01: « je veux qu'on puisse voir les membres »), after reading again how many people the
- * servers and groups have, and the groups' administrators (Telegram lists no one else).
+ * 2026-10-01: « je veux qu'on puisse voir les membres »); how many people the servers and groups
+ * have, and the groups' administrators (Telegram lists no one else), are read by `countPlaces`.
  */
-export async function readPeople(
+export async function peopleView(
   db: TransactionalDb,
   userId: string,
   companyId: string,
-  clients: AccountClients,
   now: Date,
 ): Promise<PeopleView | null> {
-  await countPlaces(db, companyId, clients, now);
   const [row] = await withUser(db, userId, (tx) =>
     tx.query<{ view: PeopleView | null }>(
       'select stayput.platform_people($1, $2::timestamptz) as view',
@@ -133,7 +121,7 @@ export async function readPeople(
  * keeps the last count, stamped, so that a group the bot can no longer read is not asked again
  * at each reading.
  */
-async function countPlaces(
+export async function countPlaces(
   db: Db,
   companyId: string,
   clients: AccountClients,

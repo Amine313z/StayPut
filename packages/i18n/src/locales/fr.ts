@@ -785,6 +785,8 @@ export const fr: Messages = {
   'error.not_configured': 'StayPut est encore en cours de configuration. Réessayez plus tard.',
   'error.internal': 'Un problème est survenu de notre côté. Réessayez dans une minute.',
   'error.network': 'Pas de connexion. Vérifiez votre réseau et réessayez.',
+  'error.slow': 'Cela prend plus de temps que d’habitude.',
+  'error.timeout': 'StayPut n’a pas répondu à temps. Réessayez dans un instant.',
 
   'auth.signIn': 'Se connecter avec Whop',
   'auth.failed': "La connexion avec Whop n'a pas abouti. Réessayez.",

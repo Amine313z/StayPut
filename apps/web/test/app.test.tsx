@@ -1137,7 +1137,7 @@ describe('creator view', () => {
     expect(
       await screen.findByText('Only the team of this community can open this dashboard.'),
     ).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 
   it('lists the members on the « never contact » list in their own tab', async () => {
@@ -1196,7 +1196,7 @@ describe('creator view', () => {
   it('offers to try again after a network failure, and succeeds', async () => {
     mockApi({ '/api/creator/biz_A1/session': [new TypeError('offline'), creatorSession] });
     renderAt('/dashboard/biz_A1');
-    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
   });
 });

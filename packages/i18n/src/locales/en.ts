@@ -7,7 +7,7 @@ export const en = {
   'app.tagline': 'Keep your members, and see the revenue you saved.',
 
   'common.loading': 'Loading…',
-  'common.retry': 'Try again',
+  'common.retry': 'Retry',
   'common.backHome': 'Back to the home page',
 
   'settings.language': 'Language',
@@ -766,6 +766,8 @@ export const en = {
   'error.not_configured': 'StayPut is still being set up. Try again later.',
   'error.internal': 'Something went wrong on our side. Try again in a minute.',
   'error.network': 'No connection. Check your network and try again.',
+  'error.slow': 'This is taking longer than usual.',
+  'error.timeout': 'StayPut did not answer in time. Try again in a moment.',
 
   'auth.signIn': 'Sign in with Whop',
   'auth.failed': 'Signing in with Whop did not work. Try again.',

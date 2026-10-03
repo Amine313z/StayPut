@@ -59,8 +59,9 @@ import { alumniOfMember, createAlumniOffer, readAlumni } from './alumni';
 import {
   accountOf,
   accountsView,
-  readAccounts,
-  readPeople,
+  countPlaces,
+  fillNames,
+  peopleView,
   readPlatformActivity,
 } from './accounts';
 import { isActionView, readActionSettings, readActions, validActionSettings } from './action-views';
@@ -177,6 +178,8 @@ export interface AppDeps {
   accessCache: AccessCache;
   /** Reads an image Whop links to (the community's logo); the global fetch by default. */
   fetchImage?(url: string): Promise<Response>;
+  /** How long a reading waits for Discord or Telegram: OUTSIDE_WAIT_MS unless a test says. */
+  outsideWaitMs?: number;
 }
 
 export function productionDeps(): AppDeps {
@@ -258,6 +261,12 @@ export const OPEN_SYNC_INTERVAL_SECONDS = 10 * 60;
 export const MANUAL_SYNC_INTERVAL_SECONDS = 60;
 /** « Sync now » also reads the Discord channels not read for this long (their cadence is 3 h). */
 export const MANUAL_DISCORD_REFRESH_SECONDS = 10 * 60;
+/**
+ * How long a reading waits for Discord or Telegram before it answers with what the database
+ * has (the rest finishes after the response): with the database's own time, well within the
+ * 5 seconds a block of the screen may wait (brief v4 §9.6).
+ */
+export const OUTSIDE_WAIT_MS = 2_500;
 /** Actions run right after the creator approves some (the hourly cron runs the rest). */
 const REQUEST_ACTION_BATCH = 5;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -424,6 +433,36 @@ export function createApp(deps: AppDeps) {
         })
         .finally(() => db.close()),
     );
+  }
+
+  /**
+   * Calls to Discord or Telegram before a reading answers (names, head counts, Discord's new
+   * messages), on a database client of their own: waited for OUTSIDE_WAIT_MS at most, then the
+   * reading answers with what the database has and they finish after the response; the next
+   * reading shows what they brought. A block of the screen never waits on Discord or Telegram
+   * (brief v4 §9.6: an answer within 5 seconds).
+   */
+  async function waitAtMost(
+    c: Context<AppEnv>,
+    label: string,
+    work: (db: ClosableDb) => Promise<void>,
+  ): Promise<void> {
+    const db = deps.openDb(c.env);
+    if (!db) return;
+    const running = work(db)
+      .catch((error: unknown) => {
+        console.error(`${label} failed:`, describe(error));
+      })
+      .finally(() => db.close());
+    defer(c, running);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      running,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, deps.outsideWaitMs ?? OUTSIDE_WAIT_MS);
+      }),
+    ]);
+    clearTimeout(timer);
   }
 
   /**
@@ -1536,10 +1575,11 @@ export function createApp(deps: AppDeps) {
     const db = c.get('db');
     if (!db) return apiError('not_configured', 'the database is not configured');
     const config = c.get('config');
-    const view = await readAccounts(db, c.get('userId'), c.get('companyId'), {
-      discord: deps.discord(config),
-      telegram: deps.telegram(config),
-    });
+    const companyId = c.get('companyId');
+    const clients = { discord: deps.discord(config), telegram: deps.telegram(config) };
+    // A few names StayPut lacks, asked first: noting one may tie its account to a member.
+    await waitAtMost(c, 'Account names', (names) => fillNames(names, companyId, clients));
+    const view = await accountsView(db, c.get('userId'), companyId);
     return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
   });
 
@@ -1558,9 +1598,10 @@ export function createApp(deps: AppDeps) {
   );
 
   /**
-   * The same, live: the page asks every half minute while it is open. Telegram's messages are
-   * already in (Telegram sends them); Discord's channels are read first when not read for a
-   * minute, since Discord sends nothing.
+   * The same, live: the page asks every 10 seconds while it is open. Telegram's messages are
+   * already in (Telegram sends them); Discord's channels are read first when not read for 15
+   * seconds, since Discord sends nothing (waited for 2.5 seconds at most: what comes later shows
+   * at the next reading).
    */
   app.post(
     '/api/creator/:companyId/platform-activity/refresh',
@@ -1576,11 +1617,13 @@ export function createApp(deps: AppDeps) {
       const whop = deps.whopClient(config, { maxRetries: 0 });
       const discord = deps.discord(config);
       if (whop && discord) {
-        const read = await refreshDiscordNow(
-          { db, whop, discord, now, budget: { left: LIVE_DISCORD_BUDGET } },
-          companyId,
-        );
-        if (read && read.calls > 0) console.info(summarize(read));
+        await waitAtMost(c, 'Live Discord read', async (live) => {
+          const read = await refreshDiscordNow(
+            { db: live, whop, discord, now, budget: { left: LIVE_DISCORD_BUDGET } },
+            companyId,
+          );
+          if (read && read.calls > 0) console.info(summarize(read));
+        });
       }
       const view = await readPlatformActivity(db, c.get('userId'), companyId, now);
       return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
@@ -1595,13 +1638,12 @@ export function createApp(deps: AppDeps) {
     const db = c.get('db');
     if (!db) return apiError('not_configured', 'the database is not configured');
     const config = c.get('config');
-    const view = await readPeople(
-      db,
-      c.get('userId'),
-      c.get('companyId'),
-      { discord: deps.discord(config), telegram: deps.telegram(config) },
-      deps.now(),
-    );
+    const companyId = c.get('companyId');
+    const now = deps.now();
+    const clients = { discord: deps.discord(config), telegram: deps.telegram(config) };
+    // How many people the servers and groups have, read again when older than 10 minutes.
+    await waitAtMost(c, 'Head counts', (counts) => countPlaces(counts, companyId, clients, now));
+    const view = await peopleView(db, c.get('userId'), companyId, now);
     return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
   });
 

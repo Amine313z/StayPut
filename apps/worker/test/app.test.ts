@@ -195,6 +195,8 @@ function setup(
     experiences?: Record<string, string>;
     /** What the address of an image answers (the community's logo). */
     fetchImage?: (url: string) => Promise<Response>;
+    /** How long a reading waits for Discord or Telegram. */
+    outsideWaitMs?: number;
   } = {},
 ) {
   const db = options.db === undefined ? t.db : options.db;
@@ -215,6 +217,7 @@ function setup(
     telegram: (config) => (config.telegram ? (options.telegram ?? null) : null),
     accessCache: new AccessCache(),
     ...(options.fetchImage ? { fetchImage: options.fetchImage } : {}),
+    ...(options.outsideWaitMs === undefined ? {} : { outsideWaitMs: options.outsideWaitMs }),
   };
   const app = createApp(deps);
   const request = (path: string, init: RequestInit = {}, env: Env = ENV) =>
@@ -1598,6 +1601,41 @@ describe('everyone on Discord and Telegram (the people)', () => {
     expect((await request('/api/creator/biz_Ppl1/people', await asUser('user_eve'))).status).toBe(
       403,
     );
+  });
+
+  it('never keeps the screen waiting on Telegram: what comes late shows at the next reading', async () => {
+    // Telegram takes its time to count the group (brief v4 §9.6: an answer within 5 seconds).
+    let count: (value: number) => void = () => {};
+    const telegram = {
+      memberCount: () =>
+        new Promise<number>((resolve) => {
+          count = resolve;
+        }),
+      administrators: () => Promise.resolve([]),
+    } as unknown as TelegramClient;
+    const app = setup({ 'user_owner62:biz_Ppl2': 'admin' }, { telegram, outsideWaitMs: 20 });
+    const request = (path: string, init: RequestInit = {}) => app.request(path, init, MODULES);
+    const owner = await asUser('user_owner62');
+    await request('/api/creator/biz_Ppl2/session', owner);
+    await settle();
+    await t.db.query('select stayput.connect_telegram_chat($1, $2, $3, $4::timestamptz)', [
+      'biz_Ppl2',
+      '-1009000000062',
+      'VIP',
+      NOW.toISOString(),
+    ]);
+    const read = async () =>
+      (await (await request('/api/creator/biz_Ppl2/people', owner)).json()) as PeopleView;
+    // The answer does not wait for the count...
+    expect((await read()).places).toEqual([
+      expect.objectContaining({ platform: 'telegram', name: 'VIP', total: null }),
+    ]);
+    // ...which arrives after it, and shows at the next reading.
+    count(34);
+    await settle();
+    expect((await read()).places).toEqual([
+      expect.objectContaining({ platform: 'telegram', name: 'VIP', total: 34 }),
+    ]);
   });
 });
 

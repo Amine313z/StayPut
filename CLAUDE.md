@@ -157,7 +157,11 @@ npm run db:bundle    # after adding a migration: supabase/install.sql + schema-v
   ExternalButton, Figures for the amounts inside a sentence); icons from `lucide-react`. Fonts served by StayPut: Geist (npm) and Satoshi,
   downloaded from Fontshare at each deployment (`scripts/deploy/satoshi.ts`) and **never
   committed** (its license forbids redistribution and the repository is public). Motion rules:
-  `MOTION.md`. The creator view loads its data once (`CreatorView`, read by
+  `MOTION.md`. Every block reads its data with `useApi` (`apps/web/src/api.ts`): one reading at
+  a time (a reload never cancels the one under way), after 5 seconds without an answer « This
+  is taking longer than usual. » with « Retry », a silent call given up after 20 seconds; the
+  Worker waits for Discord or Telegram 2.5 seconds at most before answering (`waitAtMost`). The
+  creator view loads its data once (`CreatorView`, read by
   the sections with `useCreatorData()`). Links that leave StayPut (Discord, Telegram) go through
   `ExternalButton`: inside Whop's frame it asks Whop to open them (`src/external.ts`).
 - **Risk score** (DECISIONS.md « Phase 3 »): `risk_features` gathers each member as one compact

@@ -1,10 +1,12 @@
 import type { MessageKey } from '@stayput/i18n';
 import { CircleCheck, Clock, LoaderCircle, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ApiError } from '../api';
 import { useI18n } from '../i18n';
 import type { SyncState } from '../sync';
 import { Notice } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
+import { ErrorPanel } from './Status';
 
 const STREAM_LABELS: Record<string, MessageKey> = {
   plans: 'sync.stream.plans',
@@ -23,7 +25,7 @@ const STREAM_LABELS: Record<string, MessageKey> = {
 /** Where the reading of Whop's data stands, what could not be read, and "Sync now". */
 export function SyncPanel({ sync }: { sync: SyncState }) {
   const { t, relative, dateTime } = useI18n();
-  const { status, running, notice } = sync;
+  const { status, slow, running, notice } = sync;
   // One line per kind of data (all chat channels together).
   const problems = new Map<string, string>();
   let permissionMissing = false;
@@ -55,7 +57,9 @@ export function SyncPanel({ sync }: { sync: SyncState }) {
       description={
         <span role="status">
           {state === null
-            ? t('common.loading')
+            ? slow
+              ? null
+              : t('common.loading')
             : state === 'never'
               ? t('sync.never')
               : state === 'upToDate'
@@ -76,7 +80,13 @@ export function SyncPanel({ sync }: { sync: SyncState }) {
       }
     >
       <div className="space-y-3">
-        {status?.lastSyncAt ? (
+        {slow ? (
+          <ErrorPanel
+            error={new ApiError('slow', 'no status yet')}
+            forbiddenKey="error.forbidden.creator"
+            onRetry={sync.retry}
+          />
+        ) : status?.lastSyncAt ? (
           <p className="flex items-center gap-2 text-sm text-muted">
             {state === 'importing' ? (
               <LoaderCircle aria-hidden="true" className="size-4 animate-spin text-info" />

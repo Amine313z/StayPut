@@ -2,14 +2,15 @@ import { CSRF_HEADER, type ApiErrorBody, type ApiErrorCode } from '@stayput/core
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * A failed call: the Worker's error code, "network" when it could not be reached, or "demo" for a
- * page the demo has no data for (demo/api.ts).
+ * A failed call: the Worker's error code, "network" when it could not be reached, "demo" for a
+ * page the demo has no data for (demo/api.ts), "slow" while a first answer is late (useApi), and
+ * "timeout" when none came.
  */
 export class ApiError extends Error {
   override readonly name = 'ApiError';
 
   constructor(
-    readonly code: ApiErrorCode | 'network' | 'demo',
+    readonly code: ApiErrorCode | 'network' | 'demo' | 'slow' | 'timeout',
     message: string,
     /** With `unauthenticated` in the sandbox: where to sign in with Whop outside the iframe. */
     readonly login: string | null = null,
@@ -99,43 +100,117 @@ export type Loadable<T> =
   { status: 'loading' } | { status: 'ready'; data: T } | { status: 'error'; error: ApiError };
 
 /**
- * Loads `path`, with `retry()` to try again; a newer request always wins over an older one.
- * `reload()` reads it again while the screen keeps showing what it has.
+ * A block's first answer is awaited this long; then the block says it is taking long, with
+ * « Retry » (brief v4 §9.6: never « Loading… » for more than 5 seconds).
  */
-export function useApi<T>(path: string): {
+export const SLOW_MS = 5_000;
+
+/** A reading with no answer after this long is given up: the next one can start. */
+export const GIVE_UP_MS = 20_000;
+
+/**
+ * Loads `path` (read with GET, or POST for a read that refreshes first), with `retry()` to start
+ * over and `reload()` to read again while the screen keeps what it shows, even when that reading
+ * fails. One reading at a time: a reload asked while one is under way runs right after it,
+ * never cancelling it, so an answer slower than the screen's own polling still shows (the
+ * Activity tab stayed on « Loading… »: each new reading cancelled the last). Within 5 seconds
+ * the block shows its data, or says it is taking long with « Retry », and still shows an answer
+ * that comes later; a reading is given up after 20 seconds.
+ */
+export function useApi<T>(
+  path: string,
+  options: { method?: 'GET' | 'POST' } = {},
+): {
   state: Loadable<T>;
   retry: () => void;
   reload: () => void;
 } {
-  const [attempt, setAttempt] = useState({ n: 0, quiet: false });
-  const key = `${attempt.n}:${path}`;
-  const [result, setResult] = useState<{ key: string; path: string; state: Loadable<T> } | null>(
-    null,
-  );
+  const method = options.method ?? 'GET';
+  const [attempt, setAttempt] = useState(0);
+  const [shown, setShown] = useState<{
+    path: string;
+    attempt: number;
+    state: Loadable<T>;
+  } | null>(null);
+  // How to read again: set by the reading under way, called by `reload()`.
+  const reader = useRef<() => void>(() => {});
 
   useEffect(() => {
-    const controller = new AbortController();
-    getJson<T>(path, controller.signal).then(
-      (data) => setResult({ key, path, state: { status: 'ready', data } }),
-      (error: unknown) => {
-        if (controller.signal.aborted) return;
-        const apiError =
-          error instanceof ApiError ? error : new ApiError('internal', String(error));
-        setResult({ key, path, state: { status: 'error', error: apiError } });
-      },
-    );
-    return () => controller.abort();
-  }, [path, key]);
+    let closed = false;
+    let running: AbortController | null = null;
+    let again = false;
+    let answered = false;
+    const show = (state: Loadable<T>) => setShown({ path, attempt, state });
+    const read = () => {
+      const controller = new AbortController();
+      running = controller;
+      let gaveUp = false;
+      const giveUp = window.setTimeout(() => {
+        gaveUp = true;
+        controller.abort();
+      }, GIVE_UP_MS);
+      requestJson<T>(method, path, controller.signal)
+        .then(
+          (data) => {
+            if (closed) return;
+            answered = true;
+            show({ status: 'ready', data });
+          },
+          (error: unknown) => {
+            // What is shown stays: the next reading tries again.
+            if (closed || answered) return;
+            show({
+              status: 'error',
+              error: gaveUp
+                ? new ApiError('timeout', `no answer in ${GIVE_UP_MS / 1000} seconds`)
+                : error instanceof ApiError
+                  ? error
+                  : new ApiError('internal', String(error)),
+            });
+          },
+        )
+        .finally(() => {
+          window.clearTimeout(giveUp);
+          running = null;
+          if (closed || !again) return;
+          again = false;
+          read();
+        });
+    };
+    read();
+    // No answer yet after 5 seconds: the block says so; an answer that comes later still shows.
+    const slow = window.setTimeout(() => {
+      if (closed || answered) return;
+      setShown((current) =>
+        current?.path === path && current.attempt === attempt
+          ? current
+          : {
+              path,
+              attempt,
+              state: {
+                status: 'error',
+                error: new ApiError('slow', `no answer in ${SLOW_MS / 1000} seconds`),
+              },
+            },
+      );
+    }, SLOW_MS);
+    reader.current = () => {
+      if (running) again = true;
+      else read();
+    };
+    return () => {
+      closed = true;
+      window.clearTimeout(slow);
+      running?.abort();
+    };
+  }, [method, path, attempt]);
 
-  let state: Loadable<T> = { status: 'loading' };
-  if (result?.key === key) state = result.state;
-  else if (attempt.quiet && result?.path === path && result.state.status === 'ready') {
-    state = result.state;
-  }
+  const state: Loadable<T> =
+    shown?.path === path && shown.attempt === attempt ? shown.state : { status: 'loading' };
   return {
     state,
-    retry: () => setAttempt((a) => ({ n: a.n + 1, quiet: false })),
-    reload: () => setAttempt((a) => ({ n: a.n + 1, quiet: true })),
+    retry: () => setAttempt((n) => n + 1),
+    reload: () => reader.current(),
   };
 }
 

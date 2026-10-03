@@ -65,7 +65,9 @@ No bounce on data: a figure lands where it is, once.
 - **Drawers**: slide in from the right; the page behind dims.
 - **Toasts**: slide in at the bottom right, stack, leave after 4 s.
 - **Loading**: every block shows its own shape on black-700 with a black-600 light passing over
-  it; never an empty box, never a page-wide spinner.
+  it; never an empty box, never a page-wide spinner. Never longer than 5 seconds: then the
+  block says « This is taking longer than usual. » with « Retry », and still shows the answer
+  when it comes (`useApi`, brief v4 §9.6).
 
 ## Less motion
 

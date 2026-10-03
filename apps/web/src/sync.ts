@@ -1,6 +1,6 @@
 import type { SyncRun, SyncStatus } from '@stayput/core';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getJson, postJson } from './api';
+import { SLOW_MS, getJson, postJson } from './api';
 
 /** While the history is being imported, the status is read again this often. */
 export const SYNC_POLL_MS = 10_000;
@@ -9,6 +9,10 @@ export type SyncNotice = 'tooSoon' | 'failed' | null;
 
 export interface SyncState {
   status: SyncStatus | null;
+  /** No status yet after 5 seconds: the screen says so, with « Retry » (brief v4 §9.6). */
+  slow: boolean;
+  /** Reads the status again. */
+  retry: () => void;
   /** "Sync now" is under way. */
   running: boolean;
   notice: SyncNotice;
@@ -22,6 +26,7 @@ export interface SyncState {
 export function useSync(companyId: string, onChange: () => void): SyncState {
   const base = `/api/creator/${encodeURIComponent(companyId)}/sync`;
   const [status, setStatus] = useState<SyncStatus | null>(null);
+  const [waited, setWaited] = useState(false);
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState<SyncNotice>(null);
   const change = useRef(onChange);
@@ -48,11 +53,17 @@ export function useSync(companyId: string, onChange: () => void): SyncState {
     [base],
   );
 
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     read(controller.signal);
-    return () => controller.abort();
-  }, [read]);
+    // Five seconds without a status: said, with « Retry »; one that comes later still shows.
+    const timer = setTimeout(() => setWaited(true), SLOW_MS);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [read, attempt]);
 
   // While the history is being imported, read again every few seconds.
   const backfillDone = status?.backfillDone ?? false;
@@ -84,5 +95,15 @@ export function useSync(companyId: string, onChange: () => void): SyncState {
     );
   }, [base]);
 
-  return { status, running, notice, syncNow };
+  return {
+    status,
+    slow: status === null && waited,
+    retry: () => {
+      setWaited(false);
+      setAttempt((n) => n + 1);
+    },
+    running,
+    notice,
+    syncNow,
+  };
 }

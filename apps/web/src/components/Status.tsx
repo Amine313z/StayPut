@@ -1,5 +1,5 @@
 import type { MessageKey } from '@stayput/i18n';
-import { CircleAlert, LoaderCircle, LogIn, RotateCw } from 'lucide-react';
+import { CircleAlert, Clock, LoaderCircle, LogIn, RotateCw } from 'lucide-react';
 import { useLocation } from 'react-router';
 import type { ApiError } from '../api';
 import { useI18n } from '../i18n';
@@ -34,6 +34,23 @@ export function ErrorPanel({
   const { t } = useI18n();
   const location = useLocation();
   if (error.code === 'demo') return <EmptyState body={t('error.demo')} />;
+  // No answer yet after 5 seconds (useApi): said in a line, with « Retry »; the answer still
+  // shows when it comes (brief v4 §9.6).
+  if (error.code === 'slow') {
+    return (
+      <div role="status" className="flex flex-wrap items-center gap-x-4 gap-y-3 py-4">
+        <p className="flex items-center gap-2 text-muted">
+          <Clock aria-hidden="true" className="size-4 shrink-0 text-subtle" />
+          {t('error.slow')}
+        </p>
+        {onRetry ? (
+          <Button onClick={onRetry} icon={<RotateCw aria-hidden="true" className="size-4" />}>
+            {t('common.retry')}
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
   const signIn = error.code === 'unauthenticated' ? signInHref(error.login, location) : null;
   const signInFailed = new URLSearchParams(location.search).get('login') === 'failed';
   const messageKey: MessageKey =
@@ -42,9 +59,13 @@ export function ErrorPanel({
       : signIn
         ? 'error.unauthenticated.login'
         : (`error.${error.code}` as const);
-  const retryable = ['network', 'whop_unavailable', 'internal', 'not_configured'].includes(
-    error.code,
-  );
+  const retryable = [
+    'network',
+    'timeout',
+    'whop_unavailable',
+    'internal',
+    'not_configured',
+  ].includes(error.code);
   return (
     <section
       role="alert"

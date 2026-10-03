@@ -1918,3 +1918,47 @@ le tri « Needs attention » ; 2. le bug Activity ; 3. le Guide (§10, §11) ; 4
   un solde après un versement, et c'est ce qui fait finir la courbe sur le grand chiffre. Si le
   fondateur préfère une courbe qui ne fait que monter sur la période choisie, le grand chiffre
   devra alors suivre la période (« sur 30 jours ») plutôt que « ce mois-ci ».
+
+## 2026-10-03 — Le bug Activity : jamais « Loading… » plus de 5 secondes
+
+Ordre du fondateur n° 2 (brief v4 §9.6 : chaque bloc de données se termine en moins de
+5 secondes sur ses données, un état vide ou une erreur avec « Retry »).
+
+### La cause
+
+- **Côté navigateur.** Chaque bloc relisait ses données en annulant la lecture encore en cours
+  (`useApi`). Or l'onglet Activity relance ses blocs souvent : le bloc en direct toutes les
+  10 secondes, et chaque nouveau message relance « comptes à relier » et « membres » ; le bloc en
+  direct lançait aussi une lecture toutes les 10 secondes même si la précédente n'était pas finie,
+  donc des réponses dans le désordre et de fausses « nouveautés ». Dès qu'une lecture prenait plus
+  de temps que l'intervalle, aucune n'aboutissait : « Loading… » pour toujours. Un test le
+  reproduit (`apps/web/test/loading.test.tsx`, il échouait sur l'ancien code).
+- **Côté Worker.** Trois routes attendaient Discord ou Telegram avant de répondre : les noms
+  manquants (`/accounts`, jusqu'à 10 appels), les nombres de membres des serveurs et groupes
+  (`/people`), les nouveaux messages Discord (`/platform-activity/refresh`, jusqu'à 10 appels).
+  Un service lent suffisait à suspendre la réponse : le test Worker ajouté expirait au bout de
+  30 secondes sur l'ancien code.
+- **Mesuré en production** (Inspect, lu comme l'équipe le lit, durées et nombres seulement) : les
+  trois requêtes SQL de l'onglet répondent en 0,26 à 0,28 s, trajet réseau compris ; 0 nom à
+  demander, 2 comptages. La base n'est pas en cause.
+
+### La correction
+
+- `useApi` : une seule lecture à la fois ; une relecture demandée pendant une lecture part juste
+  après, sans l'annuler. Après 5 secondes sans réponse : « This is taking longer than usual. »
+  (FR « Cela prend plus de temps que d'habitude. ») avec « Retry », et la réponse s'affiche quand
+  même si elle arrive ensuite. Un appel muet est abandonné au bout de 20 secondes (« StayPut did
+  not answer in time »). Une relecture qui échoue laisse affiché ce qui l'était. Le bloc en
+  direct de l'onglet Activity utilise désormais le même mécanisme.
+- Le panneau de synchronisation (Intégrations › Whop), qui affichait aussi « Loading… » sans
+  limite avant son premier état, suit la même règle.
+- Worker : Discord et Telegram sont attendus 2,5 secondes au plus (`waitAtMost`, sur une connexion
+  à la base à part) ; au-delà, la route répond avec ce que la base contient et le reste se termine
+  après la réponse : la lecture suivante le montre.
+- Le bouton s'appelle « Retry » en anglais, comme dans le brief (« Réessayer » en français).
+
+### Ce qui n'est pas fait ici
+
+- La fusion de l'onglet Activity dans chaque onglet de plateforme et la reconstruction des
+  Intégrations en tableaux de bord (§9.6) : c'est l'étape « Intégrations » du brief, pas encore
+  demandée.
