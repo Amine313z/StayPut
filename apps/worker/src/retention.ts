@@ -306,14 +306,18 @@ function offerResult(action: {
   const text = (key: string) => (typeof result[key] === 'string' ? result[key] : undefined);
   switch (action.status) {
     case 'sent':
-    case 'simulated':
+    case 'simulated': {
+      // A discount on the membership needs no code; an offer made before that gave one to type.
+      const applied = result.applied === true;
       return {
         status: 'applied',
         ...(result.kept === true ? { kept: true } : {}),
-        ...(text('code') ? { promoCode: text('code') } : {}),
-        ...(text('expires_at') ? { expiresAt: text('expires_at') } : {}),
+        ...(applied ? { promoApplied: true } : {}),
+        ...(!applied && text('code') ? { promoCode: text('code') } : {}),
+        ...(!applied && text('expires_at') ? { expiresAt: text('expires_at') } : {}),
         ...(text('resumes_at') ? { resumesAt: text('resumes_at') } : {}),
       };
+    }
     case 'failed':
       return { status: 'failed' };
     case 'cancelled':

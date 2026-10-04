@@ -14,7 +14,7 @@ describe('the departure survey’s offers (SPEC Phase 4)', () => {
   it('answers each reason with the SPEC’s offer, in the creator’s numbers', () => {
     const settings = { ...DEFAULT_OFFERS, pauseDays: 45, coachingMessage: 'Écris-moi.' };
     expect(EXIT_REASONS.map((reason) => exitOffer(reason, settings))).toEqual([
-      { type: 'promo_offer', percentOff: 20, months: 3, validDays: 7, keep: 'never' },
+      { type: 'promo_offer', percentOff: 20, months: 3, keep: 'required' },
       { type: 'pause_offer', days: 45, keep: 'required' },
       { type: 'coaching_offer', message: 'Écris-moi.', keep: 'optional' },
       { type: 'affiliate_invite', keep: 'never' },
@@ -25,8 +25,9 @@ describe('the departure survey’s offers (SPEC Phase 4)', () => {
   it('keeps a membership only with consent, required where an ending one makes no sense', () => {
     // A pause of a membership that ends is meaningless: it needs the member to keep it.
     expect(KEEP_MEMBERSHIP[OFFER_FOR_REASON.no_time]).toBe('required');
-    // A code is for a later checkout: nothing to keep.
-    expect(KEEP_MEMBERSHIP[OFFER_FOR_REASON.too_expensive]).toBe('never');
+    // So is a discount: it comes off the next payments of a membership that continues.
+    expect(KEEP_MEMBERSHIP[OFFER_FOR_REASON.too_expensive]).toBe('required');
+    expect(KEEP_MEMBERSHIP[OFFER_FOR_REASON.goal_reached]).toBe('never');
   });
 
   it('knows the five answers and nothing else', () => {

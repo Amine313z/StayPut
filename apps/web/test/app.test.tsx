@@ -3675,19 +3675,15 @@ describe('member view', () => {
         leaving({ reason: 'no_time', offer: { type: 'pause_offer', days: 30, keep: 'required' } }),
         leaving({
           reason: 'too_expensive',
-          offer: { type: 'promo_offer', percentOff: 20, months: 3, validDays: 7, keep: 'never' },
+          offer: { type: 'promo_offer', percentOff: 20, months: 3, keep: 'required' },
         }),
       ],
       'POST /api/member/exp_E1/retention/offer': [
         leaving({
           reason: 'too_expensive',
-          offer: { type: 'promo_offer', percentOff: 20, months: 3, validDays: 7, keep: 'never' },
+          offer: { type: 'promo_offer', percentOff: 20, months: 3, keep: 'required' },
           outcome: 'accepted',
-          result: {
-            status: 'applied',
-            promoCode: 'STAY-ABCD2345',
-            expiresAt: '2026-10-08T12:00:00.000Z',
-          },
+          result: { status: 'applied', kept: true, promoApplied: true },
         }),
       ],
     });
@@ -3720,18 +3716,37 @@ describe('member view', () => {
     );
     expect(pause.hasAttribute('disabled')).toBe(false);
 
-    // The member changes their answer: too expensive, a code, nothing to consent to.
+    // The member changes their answer: too expensive, a discount on the membership, which has
+    // to continue: their consent again, and no code to type.
     fireEvent.click(screen.getByRole('button', { name: 'Change my answer' }));
     fireEvent.click(await screen.findByRole('button', { name: 'It’s too expensive' }));
     expect(await screen.findByText('20% off for 3 months')).toBeTruthy();
-    expect(screen.queryByRole('checkbox')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Get my code' }));
-    expect(await screen.findByText('STAY-ABCD2345')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Your membership continues, and the discount comes off your next payments by itself: no code to type.',
+      ),
+    ).toBeTruthy();
+    const discount = screen.getByRole('button', { name: 'Take the discount' });
+    expect(discount.hasAttribute('disabled')).toBe(true);
+    const consent = screen.getByRole('checkbox', {
+      name: 'I keep my membership: my cancellation is withdrawn.',
+    });
+    expect(
+      screen.getByText(
+        'Needed for a discount: it comes off the payments of a membership that continues.',
+      ),
+    ).toBeTruthy();
+    fireEvent.click(consent);
+    fireEvent.click(discount);
+    expect(await screen.findByText('Done: 20% off your next 3 payments.')).toBeTruthy();
     expect(bodies.get('POST /api/member/exp_E1/retention/offer')).toEqual({
       accept: true,
-      keep: false,
+      keep: true,
     });
-    expect(screen.getByText('Valid once, until Oct 8, 2026.')).toBeTruthy();
+    expect(
+      screen.getByText('Your membership continues: your cancellation is withdrawn.'),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Copy' })).toBeNull();
     expect(calls.filter((call) => call.startsWith('POST'))).toHaveLength(3);
   });
 
@@ -3833,7 +3848,7 @@ describe('member view', () => {
           departure: {
             endsAt: '2026-10-20T12:00:00.000Z',
             reason: 'too_expensive',
-            offer: { type: 'promo_offer', percentOff: 20, months: 3, validDays: 7, keep: 'never' },
+            offer: { type: 'promo_offer', percentOff: 20, months: 3, keep: 'required' },
             outcome: 'pending',
             result: null,
           },
@@ -6009,7 +6024,7 @@ describe('the actions (SPEC Phase 4)', () => {
     expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull();
   });
 
-  it('shows an offer a member accepted: their reason, the offer, the code and consent', async () => {
+  it('shows an offer a member accepted: their reason, the offer, the discount and consent', async () => {
     mockApi({
       ...dashboard(),
       '/api/creator/biz_A1/actions?view=queue': [page('queue', [])],
@@ -6026,9 +6041,25 @@ describe('the actions (SPEC Phase 4)', () => {
               reason: 'too_expensive',
               percentOff: 20,
               months: 3,
+              keep: true,
+              promoApplied: true,
+            },
+          }),
+          // Before discounts went on the membership: a code to type, kept as it was.
+          row({
+            id: 'o',
+            type: 'promo_offer',
+            trigger: 'exit_survey',
+            status: 'sent',
+            sentAt: '2026-09-20T11:00:00.000Z',
+            message: null,
+            offer: {
+              reason: 'too_expensive',
+              percentOff: 20,
+              months: 3,
               keep: false,
               promoCode: 'STAY-ABCD2345',
-              expiresAt: '2026-10-08T12:00:00.000Z',
+              expiresAt: '2026-09-27T12:00:00.000Z',
             },
           }),
           row({
@@ -6044,15 +6075,18 @@ describe('the actions (SPEC Phase 4)', () => {
       ],
     });
     renderAt('/dashboard/biz_A1/actions?view=history');
-    expect(await screen.findByText('Code STAY-ABCD2345, valid until Oct 8, 2026')).toBeTruthy();
-    expect(screen.getByText('Reason: “It’s too expensive”')).toBeTruthy();
-    expect(screen.getByText('20% off for 3 months')).toBeTruthy();
-    expect(screen.getAllByText('· Answer to the departure survey')).toHaveLength(2);
+    expect(
+      await screen.findByText('Applied to the membership: it comes off the next payments'),
+    ).toBeTruthy();
+    expect(screen.getByText('Code STAY-ABCD2345, valid until Sep 27, 2026')).toBeTruthy();
+    expect(screen.getAllByText('Reason: “It’s too expensive”')).toHaveLength(2);
+    expect(screen.getAllByText('20% off for 3 months')).toHaveLength(2);
+    expect(screen.getAllByText('· Answer to the departure survey')).toHaveLength(3);
     expect(screen.getByText('Reason: “I’m not getting the results I expected”')).toBeTruthy();
-    expect(screen.getByText('Membership kept, with the member’s consent')).toBeTruthy();
+    expect(screen.getAllByText('Membership kept, with the member’s consent')).toHaveLength(2);
     expect(screen.getByText('Your turn: write to the member on Whop.')).toBeTruthy();
     // Applied to the membership, not sent.
-    expect(screen.getAllByText('Applied')).toHaveLength(2);
+    expect(screen.getAllByText('Applied')).toHaveLength(3);
     expect(screen.queryByText('Sent')).toBeNull();
   });
 

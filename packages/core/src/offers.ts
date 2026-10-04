@@ -24,9 +24,9 @@ export type OfferType =
   'pause_offer' | 'promo_offer' | 'coaching_offer' | 'affiliate_invite' | 'extend_offer';
 
 /**
- * The SPEC's answers: no time, a pause; too expensive, a single-use promo code; no results, the
- * creator's help; goal reached, an invitation to recommend the community; another reason, free
- * days.
+ * The SPEC's answers: no time, a pause; too expensive, a discount on the membership; no results,
+ * the creator's help; goal reached, an invitation to recommend the community; another reason,
+ * free days.
  */
 export const OFFER_FOR_REASON: Readonly<Record<ExitReason, OfferType>> = {
   too_expensive: 'promo_offer',
@@ -38,14 +38,15 @@ export const OFFER_FOR_REASON: Readonly<Record<ExitReason, OfferType>> = {
 
 /**
  * Whether accepting an offer undoes the cancellation, which StayPut only does with the member's
- * explicit consent (a box they tick): a pause makes no sense in a membership that ends, so it
- * requires it; free days and help leave it to the member; a promo code is for a later checkout.
+ * explicit consent (a box they tick): a pause and a discount make no sense in a membership that
+ * ends (a member's renewals pass no checkout where a code could be typed: the discount goes on the
+ * membership itself), so they require it; free days and help leave it to the member.
  */
 export type KeepMembership = 'required' | 'optional' | 'never';
 
 export const KEEP_MEMBERSHIP: Readonly<Record<OfferType, KeepMembership>> = {
   pause_offer: 'required',
-  promo_offer: 'never',
+  promo_offer: 'required',
   coaching_offer: 'optional',
   affiliate_invite: 'never',
   extend_offer: 'optional',
@@ -82,7 +83,10 @@ export const OFFER_LIMITS = {
 /** The creator's message to a member without results is at most this long. */
 export const COACHING_MESSAGE_MAX = 400;
 
-/** A promo code is valid this long (decision of 2026-09-30). */
+/**
+ * A promo code is valid this long (decision of 2026-09-30): an Alumni's return code; a member's
+ * discount is applied to their membership at once, its code never typed.
+ */
 export const PROMO_VALID_DAYS = 7;
 
 /** One offer, as the member sees it and the action applies it. */
@@ -90,10 +94,9 @@ export interface ExitOffer {
   type: OfferType;
   /** Pause length, or free days. */
   days?: number;
-  /** The promo code's discount and duration. */
+  /** The discount and for how many months of payments. */
   percentOff?: number;
   months?: number;
-  validDays?: number;
   /** The creator's words (coaching). */
   message?: string | null;
   keep: KeepMembership;
@@ -107,13 +110,7 @@ export function exitOffer(reason: ExitReason, settings: OfferSettings): ExitOffe
     case 'pause_offer':
       return { type, days: settings.pauseDays, keep };
     case 'promo_offer':
-      return {
-        type,
-        percentOff: settings.promoPercent,
-        months: settings.promoMonths,
-        validDays: PROMO_VALID_DAYS,
-        keep,
-      };
+      return { type, percentOff: settings.promoPercent, months: settings.promoMonths, keep };
     case 'extend_offer':
       return { type, days: settings.extendDays, keep };
     case 'coaching_offer':
@@ -157,7 +154,7 @@ export function returnOfferText(locale: 'en' | 'fr', offer: ReturnOffer): string
   return `${offer.code} (${offer.percentOff}% off for ${months}, valid ${PROMO_VALID_DAYS} days)`;
 }
 
-/** The offers the creator makes from the dashboard: a pause, or a promo code. */
+/** The offers the creator makes from the dashboard: a pause, or a discount. */
 export type CreatorOfferKind = 'pause_offer' | 'promo_offer';
 
 export function isCreatorOfferKind(value: unknown): value is CreatorOfferKind {

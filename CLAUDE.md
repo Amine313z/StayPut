@@ -152,7 +152,12 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   `PUT /platforms/:platform/signals`): silent / drop / left, each 0–30 points added to the five
   factors' score; `member_risk.signals` keeps what each score is made of so the browser previews
   the levels exactly (`scoreDistribution`); `platform_people` keeps 500 people per platform with
-  per-platform `totals`. Privacy line everywhere: « only who wrote, where and when ». Before
+  per-platform `totals`. Privacy line everywhere: « only who wrote, where and when ». Then
+  (#148): a member's discount goes on their membership (`existing_memberships_only` code, then
+  `POST /memberships/{id}/apply_promo_code`, then the cancellation withdrawn, in that order),
+  which needs the membership kept (`KEEP_MEMBERSHIP.promo_offer = 'required'`; migration **0034**
+  keeps it for the creator's discount too); a cancellation is withdrawn, and `kept` recorded,
+  only when one was scheduled; Alumni return codes are `churned_users_only`. Before
   it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard

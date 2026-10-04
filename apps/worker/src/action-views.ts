@@ -452,12 +452,15 @@ function offerOf(
   result: Record<string, unknown> | null,
 ): ActionOffer {
   const reason = content.reason;
+  // A discount on the membership needs no code; an offer made before that gave one to type.
+  const applied = result?.applied === true;
   const optional = {
     days: count(content.days),
     percentOff: count(content.percentOff),
     months: count(content.months),
-    promoCode: text(result?.code) ?? undefined,
-    expiresAt: text(result?.expires_at) ?? undefined,
+    promoApplied: applied ? true : undefined,
+    promoCode: applied ? undefined : (text(result?.code) ?? undefined),
+    expiresAt: applied ? undefined : (text(result?.expires_at) ?? undefined),
     resumesAt: text(result?.resumes_at) ?? undefined,
   };
   return {

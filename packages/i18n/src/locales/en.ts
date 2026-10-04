@@ -647,8 +647,8 @@ export const en = {
   'member.offer.promo.title.one': '{discount} off for {count} month',
   'member.offer.promo.title.other': '{discount} off for {count} months',
   'member.offer.promo.body':
-    'A personal, single-use code, valid for {days} days, for your next checkout on Whop.',
-  'member.offer.promo.accept': 'Get my code',
+    'Your membership continues, and the discount comes off your next payments by itself: no code to type.',
+  'member.offer.promo.accept': 'Take the discount',
   'member.offer.extend.title.one': '{count} day on us',
   'member.offer.extend.title.other': '{count} days on us',
   'member.offer.extend.body':
@@ -665,6 +665,8 @@ export const en = {
   'member.offer.keep.required': 'I keep my membership: my cancellation is withdrawn.',
   'member.offer.keep.optional': 'I also keep my membership: my cancellation is withdrawn.',
   'member.offer.keep.hint': 'Needed for a break: a membership that ends cannot be paused.',
+  'member.offer.keep.hint.promo':
+    'Needed for a discount: it comes off the payments of a membership that continues.',
   'member.offer.decline': 'No thanks',
   'member.creatorOffer.title': 'An offer for you',
   'member.creatorOffer.from': 'From {creator}, open until {date}.',
@@ -675,6 +677,8 @@ export const en = {
   'member.result.waiting':
     'Noted! Your offer is being prepared: it will show here once it is applied.',
   'member.result.pause': 'Your membership is paused until {date}.',
+  'member.result.promo.one': 'Done: {discount} off your next payment.',
+  'member.result.promo.other': 'Done: {discount} off your next {count} payments.',
   'member.result.code': 'Your code',
   'member.result.codeUntil': 'Valid once, until {date}.',
   'member.result.copy': 'Copy',
@@ -1044,6 +1048,7 @@ export const en = {
   'actions.offer.extend.one': '{count} free day',
   'actions.offer.extend.other': '{count} free days',
   'actions.offer.code': 'Code {code}, valid until {date}',
+  'actions.offer.applied': 'Applied to the membership: it comes off the next payments',
   'actions.offer.resumes': 'Resumes on {date}',
   'actions.offer.kept': 'Membership kept, with the member’s consent',
   'actions.offer.followUp': 'Your turn: write to the member on Whop.',

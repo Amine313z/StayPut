@@ -187,7 +187,7 @@ describe('the demo community', () => {
   it('goes through the actions of the day the way the Worker chooses them, never calm', () => {
     const demo = createWorld(NOW);
     const queue = demo.pages.actions('queue');
-    expect(queue.counts).toEqual({ queue: 6, scheduled: 3, history: 31 });
+    expect(queue.counts).toEqual({ queue: 6, scheduled: 3, history: 32 });
     // What StayPut prepared first (Kevin's annual plan counts a twelfth a month).
     expect(demo.dashboard().priority).toEqual({
       kind: 'approve',
@@ -197,7 +197,7 @@ describe('the demo community', () => {
     });
     // Approved, they leave at their hour; the three failed payments come next (brief v3 §6.2).
     expect(demo.pages.approve()).toBe(6);
-    expect(demo.pages.actions('scheduled').counts).toEqual({ queue: 0, scheduled: 9, history: 31 });
+    expect(demo.pages.actions('scheduled').counts).toEqual({ queue: 0, scheduled: 9, history: 32 });
     expect(demo.dashboard().priority).toEqual({ kind: 'retry', payments: 3, revenue: 347 });
     expect(demo.retry()).toBe(3);
     expect(demo.retry()).toBe(0);
@@ -333,7 +333,11 @@ describe('the demo community', () => {
     expect(history.find((a) => a.status === 'blocked_by_guardrail')?.blockedReason).toBe(
       'message_spacing',
     );
-    expect(history.find((a) => a.type === 'promo_offer')?.offer?.promoCode).toMatch(/^STAY-/);
+    // A discount goes on the membership: nothing to type, the membership kept.
+    expect(history.find((a) => a.type === 'promo_offer')?.offer).toMatchObject({
+      promoApplied: true,
+      keep: true,
+    });
   });
 
   it('fills Analytics, Integrations › Activity and Settings › Risk score', () => {

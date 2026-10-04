@@ -602,7 +602,7 @@ function OutcomeBadge({ outcome }: { outcome: ActionOutcome }) {
 
 /**
  * An offer a member accepted in the departure survey: their reason in their words, the offer, and
- * once applied, the code or the end of the pause. Help and the affiliate invitation are the
+ * once applied, the discount on the membership (or an older offer's code) or the end of the pause. Help and the affiliate invitation are the
  * creator's to follow up.
  */
 function OfferDetails({ type, offer }: { type: ActionType; offer: ActionOffer }) {
@@ -621,9 +621,11 @@ function OfferDetails({ type, offer }: { type: ActionType; offer: ActionOffer })
   const lines = [
     offer.reason ? t('actions.offer.reason', { reason: t(REASON_LABELS[offer.reason]) }) : null,
     what,
-    offer.promoCode
-      ? t('actions.offer.code', { code: offer.promoCode, date: day(offer.expiresAt) })
-      : null,
+    offer.promoApplied
+      ? t('actions.offer.applied')
+      : offer.promoCode
+        ? t('actions.offer.code', { code: offer.promoCode, date: day(offer.expiresAt) })
+        : null,
     offer.resumesAt ? t('actions.offer.resumes', { date: day(offer.resumesAt) }) : null,
     offer.keep ? t('actions.offer.kept') : null,
   ].filter((line): line is string => line !== null);

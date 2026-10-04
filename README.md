@@ -321,11 +321,11 @@ par semaine), **Réglages** choisit la niche, les poids et les seuils. Détails 
 **Actions** liste ce que StayPut propose pour chaque membre (à valider en mode manuel), ce qui
 est programmé et ce qui s'est passé ; tout passe par les garde-fous, et le mode test calcule
 sans rien envoyer. Dans la **vue membre**, un membre qui a programmé son annulation dit pourquoi
-en un clic et reçoit l'offre qui répond à sa raison (pause, code promo, aide, jours offerts) ;
+en un clic et reçoit l'offre qui répond à sa raison (pause, réduction posée sur son abonnement, aide, jours offerts) ;
 un membre dont le paiement attend voit le bouton pour le régler. L'équipe y voit un aperçu, où
 rien n'est enregistré. L'**offre Alumni** (Automatisations → File d'attente → Offre Alumni) se crée en un clic sur Whop : une
 offre gratuite et cachée où les anciens membres gardent le contact. 7, 30 et 60 jours après leur
-départ, ils y reçoivent des nouvelles de la communauté avec un code de retour à usage unique, et
+départ, ils y reçoivent des nouvelles de la communauté avec un code de retour à usage unique, réservé aux anciens clients, et
 le retrouvent dans leur vue de l'espace Alumni avec le bouton pour revenir. Détails :
 `DECISIONS.md`, « Phase 4 ».
 
@@ -335,7 +335,7 @@ le retrouvent dans leur vue de l'espace Alumni avec le bouton pour revenir. Dét
 > `MEMBER_SPACE_ENABLED = "false"` (Worker, `apps/worker/wrangler.toml`) et
 > `VITE_MEMBER_SPACE_ENABLED` (absent au build du site) : ni rubrique, ni onglet, ses routes
 > répondent 404 et les pages publiques des cartes disent qu'elles n'existent plus. La vue membre
-> garde l'abonnement : le questionnaire de départ et ses offres (pause, jours offerts, code promo,
+> garde l'abonnement : le questionnaire de départ et ses offres (pause, jours offerts, réduction,
 > aide, lien d'affiliation), le paiement à régler, l'Alumni et le lien Telegram. Pour le
 > rallumer : les deux variables à `true`, puis redéployer. Ce qui suit décrit l'espace allumé.
 

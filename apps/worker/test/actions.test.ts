@@ -605,21 +605,30 @@ describe('running the actions', () => {
     expect(help.calls).toEqual([]);
   });
 
-  it('creates a single-use promo code, the same on every attempt, simulated in test mode', async () => {
+  it('puts the discount on the membership, then withdraws the cancellation, the same every time', async () => {
     const at = NOW.getTime();
-    const promo = offer({ type: 'promo_offer', content: { percentOff: 20, months: 3 } });
-    const { whop, calls } = fakeWhop();
+    const promo = offer({
+      type: 'promo_offer',
+      content: { percentOff: 20, months: 3, keep: true },
+    });
+    const { whop, calls } = fakeWhop((path) => (path === '/promo_codes' ? { id: 'promo_D1' } : {}));
     const sent = await runAction(promo, whop, at);
     expect(sent).toMatchObject({
       status: 'sent',
       result: {
+        kept: true,
         code: expect.stringMatching(/^STAY-[A-HJ-NP-Z2-9]{8}$/) as string,
         expires_at: '2026-10-08T08:00:00.000Z',
         percent_off: 20,
         months: 3,
+        applied: true,
+        promo_code_id: 'promo_D1',
       },
     });
     const code = (sent as unknown as { result: { code: string } }).result.code;
+    const key = (step: string) => `stayput-action-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6-${step}`;
+    // The code, for existing memberships only; on the membership; then the cancellation withdrawn:
+    // never kept at the full price because the discount did not go through.
     expect(calls).toEqual([
       {
         method: 'POST',
@@ -632,12 +641,25 @@ describe('running the actions', () => {
           promo_duration_months: 3,
           base_currency: 'eur',
           new_users_only: false,
+          existing_memberships_only: true,
           one_per_customer: true,
           stock: 1,
           expires_at: '2026-10-08T08:00:00.000Z',
           product_id: 'prod_X1',
         },
-        key: 'stayput-action-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6-promo',
+        key: key('promo'),
+      },
+      {
+        method: 'POST',
+        path: '/memberships/mem_X1/apply_promo_code',
+        body: { promo_code: code },
+        key: key('apply'),
+      },
+      {
+        method: 'PATCH',
+        path: '/memberships/mem_X1',
+        body: { cancel_at_period_end: false },
+        key: key('keep'),
       },
     ]);
     // Tried again an hour later, after an outage: the same code.
@@ -647,9 +669,55 @@ describe('running the actions', () => {
     const test = fakeWhop();
     expect(await runAction({ ...promo, dryRun: true }, test.whop, at)).toMatchObject({
       status: 'simulated',
-      result: { code },
+      result: { code, applied: true },
     });
     expect(test.calls).toEqual([]);
+
+    // Whop refuses to apply it: the cancellation stands, the member is not kept at full price.
+    const refused = fakeWhop((path) =>
+      path.endsWith('/apply_promo_code')
+        ? new WhopApiError(422, 'invalid', 'promo code cannot be applied', { method: 'POST', path })
+        : {},
+    );
+    expect(await runAction(promo, refused.whop, at)).toMatchObject({
+      status: 'failed',
+      retry: false,
+    });
+    expect(refused.calls.map((c) => c.path)).toEqual([
+      '/promo_codes',
+      '/memberships/mem_X1/apply_promo_code',
+    ]);
+  });
+
+  it('keeps a membership only when a cancellation was scheduled', async () => {
+    const at = NOW.getTime();
+    // The creator's discount to a member who is not leaving: on the membership, nothing to undo.
+    const renewing = fakeWhop();
+    const sent = await runAction(
+      offer({
+        type: 'promo_offer',
+        content: { percentOff: 20, months: 3, keep: true },
+        membership: { ...offer().membership!, canceling: false },
+      }),
+      renewing.whop,
+      at,
+    );
+    expect(sent).toMatchObject({ status: 'sent', result: { applied: true } });
+    expect((sent as { result: Record<string, unknown> }).result.kept).toBeUndefined();
+    expect(renewing.calls.map((c) => c.path)).toEqual([
+      '/promo_codes',
+      '/memberships/mem_X1/apply_promo_code',
+    ]);
+    // A pause for a member who renews: paused, not « kept » (no cancellation was undone).
+    const pause = fakeWhop();
+    expect(
+      await runAction(
+        offer({ membership: { ...offer().membership!, canceling: false } }),
+        pause.whop,
+        at,
+      ),
+    ).toEqual({ status: 'sent', result: { resumes_at: '2026-10-31T08:00:00.000Z' } });
+    expect(pause.calls.map((c) => c.path)).toEqual(['/memberships/mem_X1/pause']);
   });
 
   /** A former member's follow-up, 7 days after they left the paid product mem_X1 belongs to. */
@@ -664,7 +732,7 @@ describe('running the actions', () => {
       ...over,
     });
 
-  it('sends an Alumni follow-up: a return code for the product left, then the news', async () => {
+  it('sends an Alumni follow-up: a return code for former customers, then the news', async () => {
     const at = NOW.getTime();
     const { whop, calls } = fakeWhop((path) =>
       path === '/promo_codes' ? { id: 'promo_R1', expires_at: '2026-10-08T08:00:05.000Z' } : {},
@@ -704,6 +772,7 @@ describe('running the actions', () => {
           promo_duration_months: 3,
           base_currency: 'eur',
           new_users_only: false,
+          churned_users_only: true,
           one_per_customer: true,
           stock: 1,
           expires_at: '2026-10-08T08:00:00.000Z',

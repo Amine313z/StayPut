@@ -669,8 +669,8 @@ export const fr: Messages = {
   'member.offer.promo.title.one': '{discount} de réduction pendant {count} mois',
   'member.offer.promo.title.other': '{discount} de réduction pendant {count} mois',
   'member.offer.promo.body':
-    'Un code personnel à usage unique, valable {days} jours, pour votre prochain paiement sur Whop.',
-  'member.offer.promo.accept': 'Recevoir mon code',
+    'Votre abonnement continue, et la réduction s’applique toute seule à vos prochains paiements : aucun code à saisir.',
+  'member.offer.promo.accept': 'Prendre la réduction',
   'member.offer.extend.title.one': '{count} jour offert',
   'member.offer.extend.title.other': '{count} jours offerts',
   'member.offer.extend.body':
@@ -688,6 +688,8 @@ export const fr: Messages = {
   'member.offer.keep.optional': 'Je garde aussi mon abonnement : mon annulation est retirée.',
   'member.offer.keep.hint':
     'Nécessaire pour une pause : un abonnement qui se termine ne peut pas être suspendu.',
+  'member.offer.keep.hint.promo':
+    'Nécessaire pour une réduction : elle s’applique aux paiements d’un abonnement qui continue.',
   'member.offer.decline': 'Non merci',
   'member.creatorOffer.title': 'Une offre pour vous',
   'member.creatorOffer.from': 'De la part de {creator}, valable jusqu’au {date}.',
@@ -698,6 +700,9 @@ export const fr: Messages = {
   'member.result.waiting':
     'C’est noté ! Votre offre est en préparation : elle apparaîtra ici dès qu’elle sera appliquée.',
   'member.result.pause': 'Votre abonnement est en pause jusqu’au {date}.',
+  'member.result.promo.one': 'C’est fait : {discount} de réduction sur votre prochain paiement.',
+  'member.result.promo.other':
+    'C’est fait : {discount} de réduction sur vos {count} prochains paiements.',
   'member.result.code': 'Votre code',
   'member.result.codeUntil': 'Valable une fois, jusqu’au {date}.',
   'member.result.copy': 'Copier',
@@ -1076,6 +1081,7 @@ export const fr: Messages = {
   'actions.offer.extend.one': '{count} jour offert',
   'actions.offer.extend.other': '{count} jours offerts',
   'actions.offer.code': 'Code {code}, valable jusqu’au {date}',
+  'actions.offer.applied': 'Appliquée à l’abonnement : elle s’applique aux prochains paiements',
   'actions.offer.resumes': 'Reprise le {date}',
   'actions.offer.kept': 'Abonnement gardé, avec l’accord du membre',
   'actions.offer.followUp': 'À vous de jouer : écrivez au membre sur Whop.',

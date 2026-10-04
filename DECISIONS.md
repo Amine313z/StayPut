@@ -3020,3 +3020,66 @@ Telegram (§9.6).
   et les points proposés sont des choix de StayPut, à ajuster avec de vraies communautés.
 - Les sujets Telegram ne sont vus que si le bot est dans un groupe à sujets. Les noms des
   sujets créés avant son arrivée restent inconnus jusqu'à leur prochaine modification.
+
+## 2026-10-04 — Une réduction posée sur l'abonnement, un code Alumni pour les anciens clients
+
+Deux défauts trouvés en vérifiant les offres (rapport du 04/10), corrigés après le bloc 7 comme
+prévu.
+
+### La réduction d'un membre va sur son abonnement
+
+- **Le défaut** : un membre qui trouvait l'abonnement trop cher recevait un code valable 7 jours
+  « pour son prochain paiement ». Or un abonné ne repasse jamais par un paiement où taper un
+  code : son abonnement se renouvelle tout seul. Le code ne servait à rien.
+- **Maintenant**, quand le membre accepte la réduction :
+  1. StayPut crée un code unique, à usage unique, **réservé aux abonnements existants**
+     (`existing_memberships_only`, l'option de Whop prévue pour « retenir un membre qui
+     annule ») : personne ne peut s'en servir à un paiement ;
+  2. il le pose sur l'abonnement (`POST /memberships/{id}/apply_promo_code`) : la réduction
+     s'applique toute seule aux prochains paiements, pendant les mois prévus ;
+  3. puis il retire l'annulation programmée.
+- **L'ordre compte** : la réduction d'abord, l'annulation ensuite. Si Whop refuse la réduction,
+  l'annulation reste en place : un membre ne reste jamais au plein tarif après avoir accepté de
+  rester pour une réduction.
+- **L'accord du membre** : une réduction n'a de sens que sur un abonnement qui continue. Dans le
+  questionnaire de départ, elle demande donc la case « Je garde mon abonnement », comme la pause.
+  L'offre du créateur depuis le tableau de bord fait de même : l'accepter, c'est rester
+  (migration 0034, `decide_creator_offer`).
+- **« Gardé » seulement s'il y avait une annulation** : StayPut ne retire une annulation (et ne
+  compte un « abonnement gardé ») que si elle existait. Une pause ou une réduction pour un membre
+  qui ne partait pas ne compte plus comme une annulation reprise : la pause compte comme une
+  pause reprise.
+- Le membre lit « C'est fait : 20 % de réduction sur vos 3 prochains paiements » ; le créateur,
+  dans l'Historique, « Appliquée à l'abonnement ». Les offres d'avant gardent leur code affiché.
+
+### Le code de retour Alumni est réservé aux anciens clients
+
+- Il était déjà unique, à usage unique et valable 7 jours ; il est maintenant aussi réservé aux
+  clients qui ont quitté la communauté (`churned_users_only`). Partagé, il ne donne rien à
+  personne d'autre.
+
+### Démo
+
+- L'exemple de Sabrina (« trop cher », code non utilisé, partie quand même) racontait l'ancien
+  comportement. Sabrina garde son « Left » avec un message du créateur. L'exemple de réduction est
+  maintenant Laura : elle a pris la réduction et gardé son abonnement il y a 6 jours, et elle est
+  revenue depuis (« Came back »).
+
+### Tests
+
+- `apps/worker/test/actions.test.ts` : l'ordre des appels (code réservé aux abonnements
+  existants, réduction, annulation retirée) ; un refus de Whop laisse l'annulation ; pas de
+  « gardé » sans annulation ; le code Alumni réservé aux anciens clients (aussi dans
+  `alumni-followups.test.ts`).
+- `apps/worker/test/creator-actions-sql.test.ts` : l'offre de réduction du créateur, acceptée,
+  garde l'abonnement (échoue avant 0034).
+- `apps/web/test/app.test.tsx` : la case d'accord, le message « C'est fait », l'Historique.
+
+### Incertain
+
+- `apply_promo_code` est documenté dans l'OpenAPI de Whop mais absent du SDK 2.0.0 ; je ne l'ai
+  pas encore essayé dans la sandbox. Il demande une permission de gestion des abonnements, que
+  l'app a déjà pour la pause et l'annulation : à confirmer au premier essai réel.
+- Whop pourrait refuser de poser une réduction sur un abonnement dont l'annulation est
+  programmée. Dans ce cas, l'action échoue proprement (rien n'est changé) et il faudra inverser
+  l'ordre en gardant la garantie du plein tarif.

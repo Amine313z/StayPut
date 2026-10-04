@@ -639,7 +639,8 @@ export interface ActionOffer {
   months?: number;
   /** The member ticked it: their cancellation is withdrawn. */
   keep: boolean;
-  /** Once applied: the promo code and its end, or when the pause ends. */
+  /** Once applied: the discount on the membership (or, before that, a code and its end), or when the pause ends. */
+  promoApplied?: boolean;
   promoCode?: string;
   expiresAt?: string;
   resumesAt?: string;
@@ -808,6 +809,9 @@ export interface OfferResult {
   status: 'waiting' | 'applied' | 'failed' | 'cancelled';
   /** The membership was kept: the cancellation is withdrawn. */
   kept?: boolean;
+  /** The discount is on the membership: it comes off the next payments, no code to type. */
+  promoApplied?: boolean;
+  /** A code to type at a checkout: an offer made before discounts went on the membership. */
   promoCode?: string;
   expiresAt?: string;
   resumesAt?: string;

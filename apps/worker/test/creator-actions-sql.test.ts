@@ -199,6 +199,33 @@ describe('« Pause » and « Offer »: the member accepts in their space', () =>
     });
   });
 
+  it('puts an accepted discount on a membership that continues (0034)', async () => {
+    const club = await community();
+    const lea = await club.member('Lea');
+    const [made] = await t.db.query<{ made: { offerId: string } }>(
+      'select stayput.create_creator_offer($1, $2, $3, $4, $5::timestamptz) as made',
+      [club.c, lea.id, 'promo_offer', 'user_Owner', NOW.toISOString()],
+    );
+    const row = await readRetention(t.db, club.c, lea.user, NOW);
+    const decided = await decideCreatorOffer(
+      t.db,
+      club.c,
+      lea.user,
+      row,
+      made!.made.offerId,
+      true,
+      NOW,
+    );
+    expect(decided?.actionId).toMatch(/^[0-9a-f-]{36}$/);
+    // Accepting a discount on the membership is staying, as accepting a pause: the Worker
+    // withdraws a cancellation if one is scheduled, after the discount is on.
+    expect((await club.actions(lea.id)).find((a) => a.type === 'promo_offer')).toMatchObject({
+      status: 'approved',
+      trigger: 'creator_offer',
+      content: { percentOff: 20, months: 3, keep: true },
+    });
+  });
+
   it('records a refusal, and nothing once the week has passed or in test mode', async () => {
     const club = await community();
     const lea = await club.member('Lea');

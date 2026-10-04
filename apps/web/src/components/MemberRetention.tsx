@@ -260,9 +260,9 @@ function DepartureCard({
 }
 
 /**
- * An offer the creator made from their dashboard (a pause, a code): accepted here, it is applied
- * through StayPut like the departure survey's; a pause keeps the membership, which resumes by
- * itself.
+ * An offer the creator made from their dashboard (a pause, a discount): accepted here, it is
+ * applied through StayPut like the departure survey's; both keep the membership, which resumes by
+ * itself after a pause and is discounted on its next payments.
  */
 function CreatorOfferCard({
   api,
@@ -286,8 +286,7 @@ function CreatorOfferCard({
           type: 'promo_offer',
           percentOff: offer.terms.percentOff,
           months: offer.terms.months,
-          validDays: 7,
-          keep: 'never',
+          keep: 'required',
         };
   const decide = async (accept: boolean) => {
     setBusy(accept ? 'accept' : 'decline');
@@ -338,7 +337,7 @@ function CreatorOfferCard({
               <p className="mt-1 text-sm">
                 {'days' in offer.terms
                   ? t('member.offer.pause.body', { days: offer.terms.days })
-                  : t('member.offer.promo.body', { days: 7 })}
+                  : t('member.offer.promo.body')}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -507,7 +506,11 @@ function OfferChoice({
             </label>
             {required ? (
               <p id={`${id}-hint`} className="text-sm text-muted">
-                {t('member.offer.keep.hint')}
+                {t(
+                  offer.type === 'promo_offer'
+                    ? 'member.offer.keep.hint.promo'
+                    : 'member.offer.keep.hint',
+                )}
               </p>
             ) : null}
           </div>
@@ -556,7 +559,7 @@ function useOfferText(offer: ExitOffer): {
         title: plural('member.offer.promo.title', offer.months ?? 1, {
           discount: percent((offer.percentOff ?? 0) / 100),
         }),
-        body: t('member.offer.promo.body', { days: offer.validDays ?? 0 }),
+        body: t('member.offer.promo.body'),
         accept: t('member.offer.promo.accept'),
         Icon: Percent,
       };
@@ -595,7 +598,7 @@ function OfferOutcome({
   offer: ExitOffer;
   result: OfferResult | null;
 }) {
-  const { t, plural, date } = useI18n();
+  const { t, plural, percent, date } = useI18n();
   if (!result || result.status === 'waiting') {
     return (
       <Notice tone="info" icon={<Hourglass aria-hidden="true" className="size-4" />}>
@@ -620,7 +623,12 @@ function OfferOutcome({
       applied = t('member.result.pause', { date: when(result.resumesAt) });
       break;
     case 'promo_offer':
-      applied = result.promoCode ? (
+      // On the membership now; an offer made before that gave a code to type.
+      applied = result.promoApplied ? (
+        plural('member.result.promo', offer.months ?? 1, {
+          discount: percent((offer.percentOff ?? 0) / 100),
+        })
+      ) : result.promoCode ? (
         <PromoCode code={result.promoCode} until={when(result.expiresAt)} />
       ) : null;
       break;

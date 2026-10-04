@@ -239,6 +239,8 @@ describe('the Alumni follow-ups (0019)', () => {
           base_currency: 'eur',
           stock: 1,
           new_users_only: false,
+          // Former customers only: shared on, it gives nothing to anyone else.
+          churned_users_only: true,
         }) as unknown,
       },
       {

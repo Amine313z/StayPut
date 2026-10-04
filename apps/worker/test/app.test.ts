@@ -2478,14 +2478,14 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
       departure: { reason: null, offer: null, outcome: 'pending', result: null },
     });
 
-    // Too expensive: a single-use code. Then the member changes their mind: no time, a pause.
+    // Too expensive: a discount on the membership, which then has to continue. Then the member
+    // changes their mind: no time, a pause.
     const expensive = (await (await answer('too_expensive')).json()) as MemberRetentionView;
     expect(expensive.departure?.offer).toEqual({
       type: 'promo_offer',
       percentOff: 20,
       months: 3,
-      validDays: 7,
-      keep: 'never',
+      keep: 'required',
     });
     const busy = (await (await answer('no_time')).json()) as MemberRetentionView;
     expect(busy.departure?.offer).toEqual({ type: 'pause_offer', days: 30, keep: 'required' });

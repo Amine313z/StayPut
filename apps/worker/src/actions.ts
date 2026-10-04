@@ -476,11 +476,14 @@ const OFFERS: ReadonlySet<ActionType> = new Set([
 const DAY_MS = 86_400_000;
 
 /**
- * An offer a member accepted in the departure survey (SPEC Phase 4): their membership kept when
- * they ticked it, then the pause, the free days or the single-use promo code; help and the
- * affiliate invitation are the creator's to follow up, StayPut records them. Every Whop call has
- * its own idempotency key: a retry never pauses, extends or creates twice. The code and the dates
- * come from the action itself, the same on every attempt.
+ * An offer a member accepted in the departure survey or from the creator (SPEC Phase 4): their
+ * membership kept when they consented and it was ending, then the pause, the free days or the
+ * discount; help and the affiliate invitation are the creator's to follow up, StayPut records
+ * them. A discount goes on the membership itself (Whop's apply_promo_code): a member's renewals
+ * pass no checkout where a code could be typed. It is applied before the cancellation is
+ * withdrawn, so that a member never stays at the full price because applying it failed. Every
+ * Whop call has its own idempotency key: a retry never pauses, extends, creates or applies twice.
+ * The code and the dates come from the action itself, the same on every attempt.
  */
 async function runOffer(
   action: DueAction,
@@ -495,7 +498,9 @@ async function runOffer(
   const days = Number(content.days) || 0;
   const accepted = Date.parse(action.createdAt);
   const result: Record<string, unknown> = {};
-  if (content.keep === true) result.kept = true;
+  // Only a cancellation scheduled is withdrawn: a membership that renews anyway is not « kept ».
+  const keep = content.keep === true && membership.canceling;
+  if (keep) result.kept = true;
   if (type === 'pause_offer') result.resumes_at = new Date(accepted + days * DAY_MS).toISOString();
   if (type === 'extend_offer') result.days = days;
   if (type === 'promo_offer') {
@@ -503,6 +508,7 @@ async function runOffer(
     result.expires_at = new Date(accepted + PROMO_VALID_DAYS * DAY_MS).toISOString();
     result.percent_off = Number(content.percentOff);
     result.months = Number(content.months);
+    result.applied = true;
   }
   if (action.dryRun) return { status: 'simulated', result };
   if (!whop) return { status: 'failed', error: 'the Whop API key is not set', retry: false };
@@ -510,14 +516,13 @@ async function runOffer(
   const id = encodeURIComponent(membership.id);
   const key = (step: string) => `stayput-action-${action.id}-${step}`;
   const calls: (() => Promise<unknown>)[] = [];
-  if (content.keep === true) {
-    calls.push(() =>
-      whop.request('PATCH', `/memberships/${id}`, {
-        body: { cancel_at_period_end: false },
-        idempotencyKey: key('keep'),
-      }),
-    );
-  }
+  const keepMembership = () =>
+    whop.request('PATCH', `/memberships/${id}`, {
+      body: { cancel_at_period_end: false },
+      idempotencyKey: key('keep'),
+    });
+  // A pause or free days go on a membership that continues: kept first.
+  if (keep && type !== 'promo_offer') calls.push(keepMembership);
   if (type === 'pause_offer') {
     calls.push(() =>
       whop.request('POST', `/memberships/${id}/pause`, {
@@ -533,8 +538,8 @@ async function runOffer(
       }),
     );
   } else if (type === 'promo_offer') {
-    // Whop ties no code to a member: a random one, used once, for the creator's product. Its id
-    // is kept for the attribution: a payment with this code is a return (SPEC Phase 6.4).
+    // A random code, used once, for the creator's product, that only an existing membership can
+    // take (Whop's « cancellation retention offers »): no stranger can use it at a checkout.
     calls.push(async () => {
       const created = await whop.request<{ id?: unknown }>('POST', '/promo_codes', {
         body: {
@@ -545,6 +550,7 @@ async function runOffer(
           promo_duration_months: result.months,
           base_currency: (membership.currency ?? 'usd').toLowerCase(),
           new_users_only: false,
+          existing_memberships_only: true,
           one_per_customer: true,
           stock: 1,
           expires_at: result.expires_at,
@@ -554,6 +560,14 @@ async function runOffer(
       });
       if (typeof created.id === 'string') result.promo_code_id = created.id;
     });
+    // Then on the membership: its next payments are discounted, for the months the code says.
+    calls.push(() =>
+      whop.request('POST', `/memberships/${id}/apply_promo_code`, {
+        body: { promo_code: result.code },
+        idempotencyKey: key('apply'),
+      }),
+    );
+    if (keep) calls.push(keepMembership);
   }
   for (const call of calls) {
     const outcome = await callWhop(action, call);
@@ -586,7 +600,7 @@ export function followupMessage(
 
 /**
  * An Alumni follow-up (SPEC 5.9): a single-use return code for the product the member left, valid
- * 7 days and not reserved to new customers, then the notification through the Alumni space with
+ * 7 days and reserved to former customers, then the notification through the Alumni space with
  * the code in it. Each Whop call has its own idempotency key and the code comes from the action:
  * a retry never creates a second code, and the expiry Whop answers is the one kept.
  */
@@ -642,6 +656,8 @@ async function runAlumniFollowup(
             promo_duration_months: offer.months,
             base_currency: (membership?.currency ?? 'usd').toLowerCase(),
             new_users_only: false,
+            // Former customers only: shared on, it gives nothing to anyone else.
+            churned_users_only: true,
             one_per_customer: true,
             stock: 1,
             expires_at: result.expires_at,

@@ -419,22 +419,26 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
         offer: '20% off for 3 months with the code STAY-K7QM2XPA',
       }),
     }),
-    // Too expensive, a discount offered; she left all the same (« Left »).
-    action('Sabrina Aït', {
+    // Too expensive: she took the discount and kept her membership; it comes off her next
+    // payments, and she has been active since (« Came back »).
+    action('Laura Weber', {
       type: 'promo_offer',
       status: 'sent',
       trigger: 'exit_survey',
+      createdAt: ago(6 * DAY + 20 * MINUTE),
+      sendAt: ago(6 * DAY),
+      sentAt: ago(6 * DAY),
+      offer: { reason: 'too_expensive', percentOff: 20, months: 3, keep: true, promoApplied: true },
+    }),
+    // The creator wrote to her before her membership ended; she left all the same (« Left »).
+    action('Sabrina Aït', {
+      type: 'creator_message',
+      status: 'sent',
+      trigger: 'creator',
       createdAt: ago(24 * DAY + 20 * MINUTE),
       sendAt: ago(24 * DAY),
       sentAt: ago(24 * DAY),
-      offer: {
-        reason: 'too_expensive',
-        percentOff: 20,
-        months: 3,
-        keep: false,
-        promoCode: 'STAY-7QK2MX4P',
-        expiresAt: iso(now - 24 * DAY + 7 * DAY),
-      },
+      message: message('creator_message', 'Sabrina Aït'),
     }),
     ...savedActions,
   ];
