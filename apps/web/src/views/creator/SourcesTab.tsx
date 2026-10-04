@@ -40,7 +40,7 @@ function connected(status: IntegrationsStatus): boolean {
 
 /** Integrations › Discord: the servers StayPut reads, and connecting one. */
 export function DiscordTab() {
-  const { api, integrations, demo } = useCreatorData();
+  const { api, integrations } = useCreatorData();
   return (
     <WithIntegrations>
       {(status) => (
@@ -49,7 +49,6 @@ export function DiscordTab() {
             status={status.discord}
             whopAppId={status.whopAppId}
             api={api}
-            demo={demo}
             onChange={integrations.reload}
           />
           {status.discord.servers.length > 0 ? <PlatformAccounts platform="discord" /> : null}

@@ -2638,3 +2638,66 @@ une capture. Le bloc 1 refait la lumière de la visite et de « Show me ».
   la date vient de l'action de StayPut.
 - Un membre qui part et dont le paiement a échoué affiche sa date de départ plutôt que la date
   impayée (la raison dit déjà « Payment failed »).
+
+## 2026-10-04 — Correctifs v4.1, bloc 5 : rien ne sort de la démo
+
+### Ce qui est grisé : le choix du fondateur
+
+- Le bloc dit « every external link or send action in /demo is disabled ». Dans la démo, les
+  actions (Message, Pause, Offre, Relancer, Approuver) ne sortent déjà jamais du navigateur :
+  `demo/api.ts` y répond et ne change que la communauté imaginaire.
+- Question posée au fondateur le 4 octobre, réponse : **griser seulement ce qui sort de
+  StayPut**. Les actions simulées restent cliquables : la visite guidée et les compteurs 6 → 5
+  du bloc 4 marchent toujours dans la démo, et le bandeau dit déjà « nothing you do is sent ».
+- En échange, un test dans un vrai navigateur prouve que rien ne sort (voir Tests).
+
+### Un seul mécanisme
+
+- `apps/web/src/demoMode.tsx` : `DemoMode` (posé par `CreatorView` quand c'est `/demo`) et
+  `useDemo()`.
+- `ExternalButton` (`ui/ExternalLink.tsx`), le seul bouton de l'app qui ouvre une page hors de
+  StayPut, en dépend. Dans la démo, avec ou sans lien :
+  - c'est un `<button aria-disabled="true">`, jamais un lien ; il n'ouvre rien ;
+  - sa bulle « Disabled in the demo » (« Désactivé dans la démo ») apparaît au survol et au
+    focus (`IconTip`, qui accepte maintenant un `id` pour `aria-describedby`) ;
+  - touché sur un téléphone (pas de survol), il prend le focus : la bulle s'affiche aussi.
+- Hors de la démo, rien ne change. Un `ExternalButton` sans lien n'affiche plus rien : chaque
+  carte décide si elle le montre.
+- `Button` grise aussi tout bouton `aria-disabled` (même aspect que `disabled`, sans l'effet
+  d'appui).
+
+### Le lien Alumni (point 1)
+
+- La démo montre `https://whop.com/your-community/alumni` avec un badge « Example ». C'était
+  `https://whop.com/atlas-trading-club/atlas-alumni/`, qui ressemblait à une vraie communauté.
+- « Open » est grisé avec la bulle. « Copy » reste actif : il copie l'exemple.
+- Le message « User left » de Whop porte l'exemple lui aussi.
+
+### Les autres boutons (point 2)
+
+- Discord : le bouton grisé que la démo avait déjà (bulle native `title`) passe par
+  `ExternalButton`, avec la même bulle que les autres. Il garde `data-tour="connect-discord"`
+  pour la visite guidée.
+- Telegram : « Add another group » n'apparaissait pas du tout dans la démo (pas de lien). Il
+  apparaît maintenant, grisé, comme celui de Discord.
+- Le portail développeur Discord et les liens de l'espace membre passent par `ExternalButton` :
+  ils seraient grisés aussi dans la démo s'ils y apparaissaient.
+- « Connect Discord / Telegram » de l'invitation à connecter mène à l'onglet de la plateforme,
+  dans StayPut : il reste actif.
+
+### Tests
+
+- `apps/web/test/app.test.tsx`, « the demo leads nowhere outside StayPut » :
+  - le lien Alumni d'exemple, « Example », « Open » grisé et décrit, en anglais et en
+    français ;
+  - les boutons Discord et Telegram grisés ;
+  - chaque page de la démo, le Guide et un tiroir de membre : aucun lien vers un autre site ou
+    un nouvel onglet ;
+  - hors de la démo, « Open » reste un vrai lien.
+- `apps/web/e2e/demo-safety.e2e.ts`, dans Chrome, en local, en CI et sur le site en ligne
+  (Inspect, job `browser`) :
+  - chaque page de la démo n'appelle aucun autre site, ni l'API de StayPut (`/api/`) ;
+  - aucun lien n'en sort ;
+  - chaque bouton grisé montre sa bulle au survol et n'ouvre ni page ni onglet au clic.
+- Inspect (`look.mjs`) vérifie le lien d'exemple et les trois bulles, et ajoute trois
+  captures : `demo-alumni-1440.png`, `demo-discord-1440.png`, `demo-telegram-1440.png`.

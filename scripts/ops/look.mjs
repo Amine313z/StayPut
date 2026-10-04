@@ -502,6 +502,41 @@ await desktop.page.getByRole('button', { name: 'Approve', exact: true }).first()
 await desktop.page.getByRole('button', { name: 'Approve all (5)' }).waitFor({ timeout: 10_000 });
 report.queue.after = [await countIn(queueTab), await countIn(approveAll)];
 await desktop.page.screenshot({ path: `${out}/actions-queue-approved.png` });
+
+// Demo safety (fix prompt v4.1, block 5): the Alumni link an example, « Open » and the bots'
+// buttons said disabled, their tip over them when hovered; no link anywhere leads outside.
+report.demoSafety = { links: [], buttons: [] };
+const outsideLinks = () =>
+  desktop.page.evaluate(() =>
+    [...document.querySelectorAll('a[href]')]
+      .filter((a) => new URL(a.href).origin !== window.location.origin || a.target)
+      .map((a) => a.href),
+  );
+for (const [path, shot] of [
+  ['actions/alumni', 'demo-alumni-1440.png'],
+  ['sources/discord', 'demo-discord-1440.png'],
+  ['sources/telegram', 'demo-telegram-1440.png'],
+]) {
+  await desktop.page.goto(`${base}/demo/${path}`, { waitUntil: 'domcontentloaded' });
+  const button = desktop.page.locator('[data-demo-disabled]').first();
+  await button.waitFor({ timeout: 30_000 });
+  await button.scrollIntoViewIfNeeded();
+  await button.hover();
+  await desktop.page.waitForTimeout(400);
+  const tip = desktop.page.locator(`[id="${await button.getAttribute('aria-describedby')}"]`);
+  report.demoSafety.buttons.push({
+    path,
+    label: (await button.innerText()).trim(),
+    disabled: await button.getAttribute('aria-disabled'),
+    tip: await tip.innerText(),
+    tipShown: await tip.evaluate((element) => getComputedStyle(element).opacity),
+  });
+  report.demoSafety.links.push(...(await outsideLinks()));
+  if (path === 'actions/alumni') {
+    report.demoSafety.alumniUrl = await desktop.page.locator('code').first().innerText();
+  }
+  await desktop.page.screenshot({ path: `${out}/${shot}` });
+}
 await desktop.context.close();
 
 const phone = await open({ width: 390, height: 844 });
@@ -605,12 +640,22 @@ const ok =
   report.queue.before.join() === '6,6' &&
   report.queue.after.join() === '5,5' &&
   report.activity.byMembers.length === 2 &&
-  report.activity.byMembers.every((line) => /^[\d,]+ by members$/.test(line));
+  report.activity.byMembers.every((line) => /^[\d,]+ by members$/.test(line)) &&
+  // Demo safety (fix prompt v4.1, block 5).
+  report.demoSafety.alumniUrl === 'https://whop.com/your-community/alumni' &&
+  report.demoSafety.buttons.length === 3 &&
+  report.demoSafety.buttons.every(
+    (button) =>
+      button.disabled === 'true' &&
+      button.tip === 'Disabled in the demo' &&
+      button.tipShown === '1',
+  ) &&
+  report.demoSafety.links.length === 0;
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest, or the demo does not tell one story (a pause, an end, an unpaid date, a member gone, an outcome, a count): see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest, or the demo does not tell one story (a pause, an end, an unpaid date, a member gone, an outcome, a count), or something in the demo leads outside StayPut (a link, a button not said disabled): see the report above.',
   );
   process.exitCode = 1;
 }

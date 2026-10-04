@@ -4,6 +4,7 @@ import { Outlet, useLocation, useOutletContext, useParams, useSearchParams } fro
 import { DEMO_COMPANY_ID, postJson, useApi, useReloadOnReturn, type Loadable } from '../api';
 import { CreatorShell, ShellSkeleton, rememberDemoExit } from '../components/CreatorShell';
 import { ErrorPanel } from '../components/Status';
+import { DemoMode } from '../demoMode';
 import { useI18n } from '../i18n';
 import { useSync, type SyncState } from '../sync';
 import { shareTimeZone } from '../timezone';
@@ -114,21 +115,24 @@ function Dashboard({ session, demo }: { session: CreatorSession; demo: boolean }
   const section = sectionOf(pathname, root);
 
   return (
-    <CreatorShell
-      session={session}
-      root={root}
-      demo={demo}
-      testMode={testMode}
-      onTurnOffTestMode={turnOffTestMode}
-      members={members.state.status === 'ready' ? members.state.data.members : []}
-    >
-      {/* Each section comes in (MOTION.md); the frame around it never moves. */}
-      <Page key={section.id}>
-        {/* A container: the sections lay out by the room left beside the menu, not the window's. */}
-        <div className="@container min-w-0">
-          <Outlet context={data} />
-        </div>
-      </Page>
-    </CreatorShell>
+    // In the demo, no button leads outside StayPut (demoMode.tsx).
+    <DemoMode on={demo}>
+      <CreatorShell
+        session={session}
+        root={root}
+        demo={demo}
+        testMode={testMode}
+        onTurnOffTestMode={turnOffTestMode}
+        members={members.state.status === 'ready' ? members.state.data.members : []}
+      >
+        {/* Each section comes in (MOTION.md); the frame around it never moves. */}
+        <Page key={section.id}>
+          {/* A container: the sections lay out by the room left beside the menu, not the window's. */}
+          <div className="@container min-w-0">
+            <Outlet context={data} />
+          </div>
+        </Page>
+      </CreatorShell>
+    </DemoMode>
   );
 }

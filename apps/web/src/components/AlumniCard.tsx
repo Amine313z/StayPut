@@ -3,8 +3,9 @@ import type { MessageKey } from '@stayput/i18n';
 import { CircleAlert, CircleCheck, Copy, GraduationCap, Sparkles } from 'lucide-react';
 import { useId, useState } from 'react';
 import { ApiError, postJson, useApi } from '../api';
+import { useDemo } from '../demoMode';
 import { useI18n } from '../i18n';
-import { Notice } from '../ui/Badge';
+import { Badge, Notice } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ExternalButton } from '../ui/ExternalLink';
@@ -60,6 +61,7 @@ function Alumni({
   onAnswer: (view: AlumniView) => void;
 }) {
   const { t, number } = useI18n();
+  const demo = useDemo();
   const id = useId();
   const [name, setName] = useState(() => view.offer?.name ?? t('alumni.defaultName'));
   const [busy, setBusy] = useState(false);
@@ -86,7 +88,11 @@ function Alumni({
           {t('alumni.ready', { name: offer.name })}
         </Notice>
         <div className="space-y-2">
-          <p className="text-sm font-medium">{t('alumni.link')}</p>
+          <p className="flex items-center gap-2 text-sm font-medium">
+            {t('alumni.link')}
+            {/* The demo's link is a made-up address (fix prompt v4.1, block 5). */}
+            {demo ? <Badge>{t('alumni.example')}</Badge> : null}
+          </p>
           <div className="flex flex-wrap items-center gap-2">
             <code className="max-w-full truncate rounded-lg border border-line bg-surface-2 px-3 py-1.5 text-sm select-all">
               {offer.url}

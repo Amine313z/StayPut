@@ -1,6 +1,7 @@
 import type { TelegramGroupStatus, TelegramStatus } from '@stayput/core';
 import { CircleCheck, Megaphone, TriangleAlert, Unplug } from 'lucide-react';
 import { deleteJson } from '../api';
+import { useDemo } from '../demoMode';
 import { useI18n } from '../i18n';
 import { Badge, Notice } from '../ui/Badge';
 import { TelegramIcon } from '../ui/BrandIcons';
@@ -26,17 +27,20 @@ export function TelegramCard({
   onChange: () => void;
 }) {
   const { t } = useI18n();
-  const add = status.addToGroup ? (
-    <ExternalButton
-      href={status.addToGroup.url}
-      whopAppId={whopAppId}
-      variant={status.groups.length > 0 ? 'secondary' : 'primary'}
-      size="sm"
-      icon={<TelegramIcon className="size-4" />}
-    >
-      {t(status.groups.length > 0 ? 'telegram.addAnother' : 'telegram.add')}
-    </ExternalButton>
-  ) : null;
+  // The demo connects nothing: the button shows there, said disabled (ExternalButton).
+  const demo = useDemo();
+  const add =
+    demo || status.addToGroup ? (
+      <ExternalButton
+        href={status.addToGroup?.url ?? null}
+        whopAppId={whopAppId}
+        variant={status.groups.length > 0 ? 'secondary' : 'primary'}
+        size="sm"
+        icon={<TelegramIcon className="size-4" />}
+      >
+        {t(status.groups.length > 0 ? 'telegram.addAnother' : 'telegram.add')}
+      </ExternalButton>
+    ) : null;
   return (
     <Card
       icon={<TelegramIcon className="size-5 text-telegram" />}

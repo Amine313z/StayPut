@@ -949,6 +949,7 @@ export const en = {
   'alumni.linkHint':
     'Anyone with this link enters the Alumni for free. It is not shown in your store.',
   'alumni.open': 'Open',
+  'alumni.example': 'Example',
   'alumni.copy': 'Copy',
   'alumni.copied': 'Copied',
   'alumni.userLeft.title': 'Whop’s automatic « User left » message',

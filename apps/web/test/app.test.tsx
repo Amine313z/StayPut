@@ -36,7 +36,10 @@ import type { Locale } from '@stayput/i18n';
 import { RouterProvider, createMemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '../src/App';
+import { DEMO_COMPANY_ID } from '../src/api';
+import { AlumniCard } from '../src/components/AlumniCard';
 import { resetDemo } from '../src/demo/api';
+import { DemoMode } from '../src/demoMode';
 import { readScreenshot } from '../src/ocr';
 import { LIVE_REFRESH_MS } from '../src/components/PlatformActivityCard';
 import { I18nProvider, detectLocale } from '../src/i18n';
@@ -4539,6 +4542,26 @@ describe('the guide (brief v4 §10)', () => {
   });
 });
 
+/** Every page of the demo's menu but its home, each tab included. */
+const DEMO_PAGES = [
+  'members',
+  'members/never-contact',
+  'actions',
+  'actions/queue',
+  'actions/scheduled',
+  'actions/history',
+  'actions/alumni',
+  'insights',
+  'insights/lessons',
+  'sources',
+  'sources/discord',
+  'sources/telegram',
+  'sources/activity',
+  'settings',
+  'settings/risk',
+  'settings/actions',
+];
+
 describe('the demo (/demo)', () => {
   it('shows an imaginary community, said as such, without calling StayPut', async () => {
     const fetchMock = vi.fn();
@@ -4615,24 +4638,7 @@ describe('the demo (/demo)', () => {
 
   it('fills every page of the demo: none stops on an error', async () => {
     vi.stubGlobal('fetch', vi.fn());
-    for (const page of [
-      'members',
-      'members/never-contact',
-      'actions',
-      'actions/queue',
-      'actions/scheduled',
-      'actions/history',
-      'actions/alumni',
-      'insights',
-      'insights/lessons',
-      'sources',
-      'sources/discord',
-      'sources/telegram',
-      'sources/activity',
-      'settings',
-      'settings/risk',
-      'settings/actions',
-    ]) {
+    for (const page of DEMO_PAGES) {
       renderAt(`/demo/${page}`);
       await screen.findByRole('heading', { level: 1 }, { timeout: 3_000 });
       // Each page's own data, read by the demo (its loading done), and never an error panel.
@@ -4823,6 +4829,170 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
       expect(line.textContent).toMatch(/^\d[\d,]* by members$/);
     }
   }, 20_000);
+});
+
+describe('the demo leads nowhere outside StayPut (fix prompt v4.1, block 5)', () => {
+  /** The words an element's `aria-describedby` points at. */
+  const description = (element: Element) =>
+    (element.getAttribute('aria-describedby') ?? '')
+      .split(/\s+/)
+      .map((id) => (id ? (document.getElementById(id)?.textContent ?? '') : ''))
+      .join(' ')
+      .trim();
+
+  /**
+   * Nothing on the screen leads outside StayPut: links within it only, none to a new tab, and
+   * every button that would open a page outside said disabled.
+   */
+  const expectNoWayOut = (where: string) => {
+    for (const link of document.querySelectorAll('a[href]')) {
+      const href = link.getAttribute('href') ?? '';
+      expect(href.startsWith('/') && !href.startsWith('//'), `${where}: ${href}`).toBe(true);
+      expect(link.getAttribute('target'), `${where}: ${href}`).toBeNull();
+    }
+    for (const button of document.querySelectorAll('[data-demo-disabled]')) {
+      expect(button.getAttribute('aria-disabled'), where).toBe('true');
+      expect(description(button), where).toBe('Disabled in the demo');
+    }
+  };
+
+  it('shows the Alumni link as an example, « Open » said disabled', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo/actions/alumni');
+    expect(
+      await screen.findByText('https://whop.com/your-community/alumni', undefined, {
+        timeout: 3_000,
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText('Example')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /^Open/ })).toBeNull();
+    const open = screen.getByRole('button', { name: 'Open' });
+    expect(open.getAttribute('aria-disabled')).toBe('true');
+    expect(description(open)).toBe('Disabled in the demo');
+    // Tapped (a phone has no hover), it opens nothing and takes the focus: its tip shows.
+    fireEvent.click(open);
+    expect(document.activeElement).toBe(open);
+    expect(screen.getByText('https://whop.com/your-community/alumni')).toBeTruthy();
+    // Whop's « User left » message carries the example too.
+    expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: /User left/ }).value).toContain(
+      'join the Alumni: https://whop.com/your-community/alumni',
+    );
+    expectNoWayOut('actions/alumni');
+  });
+
+  it('says it in French too', async () => {
+    render(
+      <I18nProvider initialLocale="fr">
+        <DemoMode on>
+          <AlumniCard api={`/api/creator/${DEMO_COMPANY_ID}`} whopAppId={null} />
+        </DemoMode>
+      </I18nProvider>,
+    );
+    expect(
+      await screen.findByText('https://whop.com/your-community/alumni', undefined, {
+        timeout: 3_000,
+      }),
+    ).toBeTruthy();
+    expect(screen.getByText('Exemple')).toBeTruthy();
+    const open = screen.getByRole('button', { name: 'Ouvrir' });
+    expect(open.getAttribute('aria-disabled')).toBe('true');
+    expect(description(open)).toBe('Désactivé dans la démo');
+  });
+
+  it('shows the buttons that connect Discord and Telegram, said disabled', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo/sources/discord');
+    const discord = await screen.findByRole(
+      'button',
+      { name: 'Add another server' },
+      { timeout: 3_000 },
+    );
+    expect(discord.getAttribute('aria-disabled')).toBe('true');
+    // Where the tour's last step lights up.
+    expect(discord.getAttribute('data-tour')).toBe('connect-discord');
+    expect(description(discord)).toBe('Disabled in the demo');
+    cleanup();
+    renderAt('/demo/sources/telegram');
+    const telegram = await screen.findByRole(
+      'button',
+      { name: 'Add another group' },
+      { timeout: 3_000 },
+    );
+    expect(telegram.getAttribute('aria-disabled')).toBe('true');
+    expect(description(telegram)).toBe('Disabled in the demo');
+  });
+
+  it('leads nowhere outside StayPut from any page, the guide and a member’s drawer', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    for (const page of ['', ...DEMO_PAGES]) {
+      renderAt(`/demo${page ? `/${page}` : ''}`);
+      await screen.findByRole('heading', { level: 1 }, { timeout: 3_000 });
+      await vi.waitFor(
+        () => {
+          expect(screen.queryByText('Loading…')).toBeNull();
+          expect(document.querySelector('.skeleton')).toBeNull();
+        },
+        { timeout: 3_000 },
+      );
+      expectNoWayOut(page || 'home');
+      cleanup();
+    }
+    renderAt('/demo');
+    fireEvent.click(await screen.findByRole('button', { name: 'Guide' }, { timeout: 3_000 }));
+    await screen.findByRole('dialog', { name: 'Guide' });
+    expectNoWayOut('guide');
+    cleanup();
+    renderAt('/demo/members');
+    const table = await screen.findByRole('table', { name: 'All members' }, { timeout: 3_000 });
+    const hugo = await within(table).findByText('Hugo Bernard', undefined, { timeout: 3_000 });
+    fireEvent.click(
+      within(hugo.closest('[role=row]')!).getByRole('button', { name: /^Open Hugo Bernard/ }),
+    );
+    const drawer = await screen.findByRole('dialog', { name: 'Hugo Bernard' });
+    await within(drawer).findByRole('button', { name: /^Offer Hugo Bernard/ });
+    expectNoWayOut('drawer');
+  }, 40_000);
+
+  it('keeps the real link outside the demo', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/actions?view=queue': [
+        {
+          status: 200,
+          body: {
+            view: 'queue',
+            counts: { queue: 0, scheduled: 0, history: 0 },
+            actions: [],
+            mode: 'manual',
+            dryRun: false,
+            killSwitch: false,
+          } satisfies ActionsPage,
+        },
+      ],
+      '/api/creator/biz_A1/alumni': [
+        {
+          status: 200,
+          body: {
+            offer: {
+              name: 'Alumni du Club',
+              url: 'https://whop.com/le-club/alumni-du-club/',
+              createdAt: '2026-10-01T10:00:00.000Z',
+              completedAt: '2026-10-01T10:05:00.000Z',
+            },
+            entered: 3,
+            left: 0,
+            returned: 1,
+          } satisfies AlumniView,
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions/alumni');
+    const open = await screen.findByRole('link', { name: /^Open/ });
+    expect(open.getAttribute('href')).toBe('https://whop.com/le-club/alumni-du-club/');
+    expect(open.getAttribute('target')).toBe('_blank');
+    expect(screen.queryByText('Example')).toBeNull();
+    expect(document.querySelector('[data-demo-disabled]')).toBeNull();
+  });
 });
 
 describe('the actions (SPEC Phase 4)', () => {

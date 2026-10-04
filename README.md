@@ -221,7 +221,10 @@ on visite Membres et qu'on enregistre les limites). Pour les captures de l'App S
 y mène par « Explorer avec des données de démo ». La démo ne montre pas l'accueil d'elle-même :
 `/demo?welcome` l'ouvre. Chaque page raconte la même histoire : chaque date vient du jour où le
 membre a rejoint et de son offre, chaque argent sauvé est une action de l'historique, et des tests
-le vérifient règle par règle (`apps/web/test/demo.test.ts`).
+le vérifient règle par règle (`apps/web/test/demo.test.ts`). Rien n'en sort : un bouton qui
+ouvrirait une page hors de StayPut y est grisé (« Disabled in the demo »), le lien Alumni est un
+exemple, et un test dans Chrome vérifie qu'aucune page n'appelle un autre site ni l'API
+(`apps/web/e2e/demo-safety.e2e.ts`).
 
 ### Discord et Telegram (optionnels, gratuits)
 

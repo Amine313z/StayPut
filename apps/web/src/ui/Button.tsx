@@ -11,7 +11,8 @@ const BASE =
   'transition-[background-color,border-color,color,transform] duration-150 ease-brand ' +
   'active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 ' +
   'focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60 ' +
-  'disabled:active:scale-100 motion-reduce:active:scale-100';
+  'disabled:active:scale-100 aria-disabled:cursor-not-allowed aria-disabled:opacity-60 ' +
+  'aria-disabled:active:scale-100 motion-reduce:active:scale-100';
 
 /**
  * One primary button per screen at most (brief v3 §5): the signature gradient, black text.

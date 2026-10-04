@@ -971,6 +971,7 @@ export const fr: Messages = {
   'alumni.linkHint':
     'Toute personne qui a ce lien entre gratuitement dans l’Alumni. Il n’apparaît pas dans votre boutique.',
   'alumni.open': 'Ouvrir',
+  'alumni.example': 'Exemple',
   'alumni.copy': 'Copier',
   'alumni.copied': 'Copié',
   'alumni.userLeft.title': 'Message automatique « User left » de Whop',

@@ -45,6 +45,12 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+/**
+ * The Alumni offer's entry link, shown as an example (fix prompt v4.1, block 5): never a real
+ * community's page. « Open » is disabled in the demo (ui/ExternalLink.tsx).
+ */
+export const DEMO_ALUMNI_URL = 'https://whop.com/your-community/alumni';
+
 /** An offer applied to a membership, as the home counts them (the Worker's list). */
 const OFFER_TYPES: readonly ActionType[] = [
   'pause_offer',
@@ -1057,7 +1063,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     alumni: () => ({
       offer: {
         name: `${community} Alumni`,
-        url: 'https://whop.com/atlas-trading-club/atlas-alumni/',
+        url: DEMO_ALUMNI_URL,
         createdAt: ago(46 * DAY),
         completedAt: ago(46 * DAY),
       },

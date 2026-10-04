@@ -110,7 +110,14 @@ Guidance for Claude Code in this repository.
   yet, Left), every demo save being a History action; approving moves the tab and « Approve
   all » together (`withMoves`, `useLayoutEffect`); Integrations › Activity says each
   platform's members' part (migration **0031** `platform_activity.messagesBy`). The page's
-  diagonal streak was removed at the founder's request. Before
+  diagonal streak was removed at the founder's request. Block 5 (demo safety) done: in /demo
+  (`DemoMode` / `useDemo`, `src/demoMode.tsx`) every `ExternalButton` is a `<button
+aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hover, focus, tap);
+  Discord's and Telegram's add buttons show that way; the Alumni link is the example
+  `https://whop.com/your-community/alumni` (« Example »). The founder chose to grey out only
+  what leaves StayPut: the simulated actions (message, pause, offer, retry, approve) stay.
+  Checked by `apps/web/e2e/demo-safety.e2e.ts` (no request to another host nor to `/api/`, no
+  link out) and `look.mjs`. Before
   it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard
