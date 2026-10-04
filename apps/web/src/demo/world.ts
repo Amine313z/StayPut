@@ -6,6 +6,8 @@ import {
   MEMBER_PAYMENTS_LIMIT,
   addDays,
   choosePriority,
+  scoreWithSignals,
+  signalReasons,
   type ActionSettingsView,
   type CreatorOfferKind,
   type CreatorOfferMade,
@@ -20,6 +22,7 @@ import {
   type MemberPlatformActivity,
   type MemberRow,
   type MembersPage,
+  type PlatformSignals,
   type RevenueDay,
   type RiskDay,
   type RiskLevel,
@@ -32,6 +35,10 @@ import {
 import { DEMO_COMPANY_ID } from '../api';
 import { fold } from '../text';
 import { createDemoPages, type DemoPages } from './pages';
+import { seeded } from './random';
+
+/** The reasons computeRisk always names first: a departure scheduled, a payment failed. */
+const FACTS: ReadonlySet<string> = new Set(['cancel_scheduled', 'payment_failed']);
 
 /**
  * The demo community (/demo): an imaginary trading community of 36 members (39 with those who
@@ -290,18 +297,6 @@ function planPrice(name: string): number {
   return PLANS[plan].price;
 }
 
-/** Seeded random numbers (mulberry32): the same community at every visit. */
-function seeded(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
-  };
-}
-
 type Range = [number, number];
 
 const ACTIVITY_RANGES: Record<RiskLevel, readonly [Range, Range, Range, Range]> = {
@@ -425,6 +420,14 @@ export interface DemoWorld {
   memberDetail: (memberId: string) => MemberDetail | null;
   /** Analytics › Overview: the forecast's figures, the departure survey's reasons, 30 days. */
   overview: () => InsightsOverview;
+  /**
+   * A platform's signals saved (Integrations › Discord and › Telegram): the members' scores
+   * follow, as the Worker's next scoring would make them.
+   */
+  saveSignals: (
+    platform: 'discord' | 'telegram',
+    signals: PlatformSignals,
+  ) => Record<'discord' | 'telegram', PlatformSignals>;
 }
 
 /**
@@ -721,6 +724,7 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
     guildId: DISCORD_GUILD,
     chatId: TELEGRAM_CHAT,
     telegramTitle: TELEGRAM_TITLE,
+    zone,
   });
 
   const byName = (name: string) => rows.find((m) => m.name === name)!;
@@ -824,6 +828,71 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
       feed.splice(24);
       nextLive = moment + 25_000 + Math.floor(random() * 20_000);
     }
+  };
+
+  /**
+   * The platforms' signals saved (Integrations › Discord and › Telegram): each member's score
+   * from its making, as the Worker's next scoring would give it, the reasons of the signals that
+   * add points after the member's own, and the figures that count the levels. With no signal on,
+   * every member is back to the score the demo made.
+   */
+  const madeRisk = new Map(rows.flatMap((m) => (m.risk ? [[m.id, { ...m.risk }] as const] : [])));
+  const rescore = () => {
+    const signals = pages.platforms.signals();
+    const { mediumFrom, highFrom } = pages.riskSettings();
+    for (const member of joined) {
+      const made = madeRisk.get(member.id);
+      const making = pages.platforms.making(member);
+      if (!made || !making) continue;
+      const score = scoreWithSignals(making, signals, highFrom);
+      if (score === making.base) {
+        member.risk = { ...made };
+        continue;
+      }
+      const inactive = made.reasons.some((r) => r.code === 'inactive');
+      const added = signalReasons(pages.platforms.figures(member.id), signals, now).filter(
+        (r) => !(inactive && r.code === 'platform_silent'),
+      );
+      member.risk = {
+        ...made,
+        score,
+        level:
+          making.rule === 1
+            ? 'scheduled_departure'
+            : score >= highFrom
+              ? 'high'
+              : score >= mediumFrom
+                ? 'medium'
+                : 'low',
+        // As computeRisk: a scheduled departure or a failed payment first; then, the demo's own
+        // reasons carrying no weight, the signals just turned on before them, as they moved it.
+        reasons: [
+          ...made.reasons.filter((r) => FACTS.has(r.code)),
+          ...added,
+          ...made.reasons.filter((r) => !FACTS.has(r.code)),
+        ].slice(0, 2),
+      };
+    }
+    const atRiskNow = joined.filter(
+      (m) => m.risk?.level === 'high' || m.risk?.level === 'scheduled_departure',
+    );
+    const atRisk = round(atRiskNow.reduce((total, m) => total + price(m), 0));
+    Object.assign(members.summary.risk, {
+      high: levelCount('high'),
+      medium: levelCount('medium'),
+      low: levelCount('low'),
+      scheduledDeparture: levelCount('scheduled_departure'),
+    });
+    if (members.summary.revenue) members.summary.revenue.atRisk = atRisk;
+    atRiskBack[0] = atRisk;
+    const departures = levelCount('scheduled_departure');
+    riskHistory[29] = {
+      ...riskHistory[29]!,
+      departure: departures,
+      high: atRiskNow.length - departures,
+      medium: levelCount('medium'),
+      low: levelCount('low'),
+    };
   };
 
   const reached = new Map<string, number>();
@@ -1116,8 +1185,8 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
         },
         monthlyRevenue: revenue,
         atRisk: {
-          revenue: atRiskRevenue,
-          members: atRiskMembers.length,
+          revenue: atRiskBack[0]!,
+          members: levelCount('high') + levelCount('scheduled_departure'),
           departures: levelCount('scheduled_departure'),
           high: levelCount('high'),
         },
@@ -1245,6 +1314,11 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
       const moment = new Date().toISOString();
       sync.lastSyncAt = moment;
       for (const stream of sync.streams) stream.lastPassAt = moment;
+    },
+    saveSignals: (platform, signals) => {
+      const saved = pages.platforms.saveSignals(platform, signals);
+      rescore();
+      return saved;
     },
     overview: () => {
       const revenue = { low: 0, medium: 0, high: 0, scheduled_departure: 0 };

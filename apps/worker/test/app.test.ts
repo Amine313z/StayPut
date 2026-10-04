@@ -22,9 +22,11 @@ import type {
   MemberTelegramStatus,
   PeopleView,
   MembersPage,
+  PlatformDashboard,
   SyncRun,
   SyncStatus,
 } from '@stayput/core';
+import { DEFAULT_PLATFORM_SIGNALS } from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
 import { createHash } from 'node:crypto';
 import { SignJWT, generateKeyPair, type CryptoKey } from 'jose';
@@ -1603,6 +1605,53 @@ describe('everyone on Discord and Telegram (the people)', () => {
     expect((await request('/api/creator/biz_Ppl1/people', await asUser('user_eve'))).status).toBe(
       403,
     );
+
+    // A topic of the forum group is created, then written in: Integrations › Telegram names it
+    // (fix prompt v4.1, block 7), never what was written.
+    const update = async (updateId: number, message: Record<string, unknown>) =>
+      request('/webhooks/telegram', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-telegram-bot-api-secret-token': await telegramWebhookSecret('123456:telegram-token'),
+        },
+        body: JSON.stringify({
+          update_id: updateId,
+          message: {
+            date: Math.floor(NOW.getTime() / 1000),
+            chat: { id: Number(CHAT), type: 'supergroup', title: 'VIP', is_forum: true },
+            from: { id: 5552, is_bot: false, first_name: 'Nina' },
+            ...message,
+          },
+        }),
+      });
+    expect(
+      (
+        await update(62, {
+          message_id: 8,
+          message_thread_id: 8,
+          forum_topic_created: { name: 'Signals', icon_color: 7322096 },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await update(63, {
+          message_id: 9,
+          message_thread_id: 8,
+          is_topic_message: true,
+          text: 'never kept',
+        })
+      ).status,
+    ).toBe(200);
+    await settle();
+    const telegramView = (await (
+      await request('/api/creator/biz_Ppl1/platforms/telegram', owner)
+    ).json()) as PlatformDashboard;
+    expect(telegramView.places.map((p) => [p.kind, p.name, p.parent, p.messages])).toEqual([
+      ['topic', 'Signals', 'VIP', 1],
+      ['general', 'VIP', null, 0],
+    ]);
   });
 
   it('never keeps the screen waiting on Telegram: what comes late shows at the next reading', async () => {
@@ -1735,6 +1784,61 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
       reasons: [],
     });
     expect(overview.activity).toHaveLength(30);
+  });
+
+  it('reads Integrations › Discord and › Telegram, and saves a platform’s signals', async () => {
+    const { request } = setup({ 'user_rita:biz_Plat1': 'admin', 'user_sam:biz_Plat1': 'customer' });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Plat1/session', init);
+    await settle();
+    const path = '/api/creator/biz_Plat1/platforms';
+    const response = await request(`${path}/discord`, init);
+    expect(response.status).toBe(200);
+    const view = (await response.json()) as PlatformDashboard;
+    expect(view).toMatchObject({
+      platform: 'discord',
+      hero: { activeMembers7d: 0, silentMembers7d: 0, messages30d: 0, memberMessages30d: 0 },
+      heatmap: [],
+      places: [],
+      active: { d7: [], d14: [], d30: [] },
+      silent: { d7: { total: 0, members: [] } },
+    });
+    expect(view.daily).toHaveLength(30);
+    // The signals: StayPut's defaults until the creator saves theirs.
+    expect(view.signals.settings).toEqual({
+      discord: DEFAULT_PLATFORM_SIGNALS,
+      telegram: DEFAULT_PLATFORM_SIGNALS,
+    });
+    expect((await request(`${path}/irc`, init)).status).toBe(404);
+    // A day of the chart, an hour of the heatmap.
+    expect((await request(`${path}/telegram/days/2026-10-01`, init)).status).toBe(200);
+    expect((await request(`${path}/telegram/days/2026-02-30`, init)).status).toBe(400);
+    expect(await (await request(`${path}/discord/slots/7/21`, init)).json()).toEqual({
+      dow: 7,
+      hour: 21,
+      messages: 0,
+      others: 0,
+      members: [],
+    });
+    for (const wrong of ['8/21', '0/21', '1/24', '1/x']) {
+      expect((await request(`${path}/discord/slots/${wrong}`, init)).status, wrong).toBe(400);
+    }
+    const signals = { ...DEFAULT_PLATFORM_SIGNALS, silent: { on: true, points: 15 } };
+    const saved = await request(`${path}/discord/signals`, put(init, signals));
+    expect(await saved.json()).toEqual({
+      settings: { discord: signals, telegram: DEFAULT_PLATFORM_SIGNALS },
+    });
+    await settle();
+    for (const wrong of [{ ...signals, drop: { on: true, points: 50 } }, { silent: true }, null]) {
+      expect(
+        (await request(`${path}/discord/signals`, put(init, wrong))).status,
+        JSON.stringify(wrong),
+      ).toBe(400);
+    }
+    expect((await request(`${path}/irc/signals`, put(init, signals))).status).toBe(404);
+    const customer = await asUser('user_sam');
+    expect((await request(`${path}/discord`, customer)).status).toBe(403);
+    expect((await request(`${path}/discord/signals`, put(customer, signals))).status).toBe(403);
   });
 
   it('reads the weekly analyses once they ran', async () => {

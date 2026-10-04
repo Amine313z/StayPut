@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, monthStart, zonedDay } from '../src/calendar';
+import { addDays, monthStart, zonedClock, zonedDay, zonedMoment } from '../src/calendar';
 
 describe('a community’s calendar (fix prompt v4.1, block 2)', () => {
   it('puts a moment at 00:30 or at 23:30 there on that day, east or west of UTC', () => {
@@ -33,5 +33,26 @@ describe('a community’s calendar (fix prompt v4.1, block 2)', () => {
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
     expect(addDays('2026-10-03', -89)).toBe('2026-07-06');
     expect(monthStart('2026-10-03')).toBe('2026-10-01');
+  });
+
+  it('reads a moment’s day of the week and hour there, and finds a local hour’s moment', () => {
+    // Sunday 4 October 2026, 21:30 in Paris (UTC+2).
+    const sunday = Date.parse('2026-10-04T19:30:00Z');
+    expect(zonedClock(sunday, 'Europe/Paris')).toEqual({
+      day: '2026-10-04',
+      dow: 7,
+      hour: 21,
+      minute: 30,
+    });
+    // Monday already in Tokyo, still Sunday in Los Angeles.
+    expect(zonedClock(sunday, 'Asia/Tokyo')).toMatchObject({ day: '2026-10-05', dow: 1, hour: 4 });
+    expect(zonedClock(sunday, 'America/Los_Angeles')).toMatchObject({ dow: 7, hour: 12 });
+    expect(zonedClock(sunday, 'Mars/Olympus')).toMatchObject({ dow: 7, hour: 19 });
+    expect(zonedMoment('2026-10-04', 21, 30, 'Europe/Paris')).toBe(sunday);
+    // Across the change of time: 25 October, UTC+1 from 03:00.
+    expect(new Date(zonedMoment('2026-10-26', 9, 0, 'Europe/Paris')).toISOString()).toBe(
+      '2026-10-26T08:00:00.000Z',
+    );
+    expect(zonedMoment('2026-10-04', 0, 0, 'UTC')).toBe(Date.parse('2026-10-04T00:00:00Z'));
   });
 });

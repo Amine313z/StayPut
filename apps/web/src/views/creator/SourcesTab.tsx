@@ -1,20 +1,21 @@
 import type { AccountPlatform, IntegrationsStatus } from '@stayput/core';
 import { ShieldCheck } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { Navigate } from 'react-router';
 import { AccountsCard } from '../../components/AccountsCard';
 import { ConnectInvite } from '../../components/ConnectInvite';
 import { DiscordCard } from '../../components/DiscordCard';
-import { PeopleCard } from '../../components/PeopleCard';
-import { PlatformActivityCard } from '../../components/PlatformActivityCard';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { SyncPanel } from '../../components/SyncPanel';
 import { TelegramCard } from '../../components/TelegramCard';
 import { useI18n } from '../../i18n';
 import { useCreatorData } from '../CreatorView';
+import { PlatformDashboardView } from './platform/PlatformDashboard';
 
 /**
- * Where StayPut reads activity, one tab each: Whop (always), Discord and Telegram (if the creator
- * connects them), then the activity they bring. Only who wrote and when is ever kept.
+ * Where StayPut reads activity, one tab each: Whop (always), Discord and Telegram, each a
+ * dashboard of its own once connected (brief v4 §9.6; their activity, once a tab of its own, is
+ * in each). Only who wrote, where and when is ever kept.
  */
 
 /**
@@ -38,117 +39,78 @@ function connected(status: IntegrationsStatus): boolean {
   return status.discord.servers.length > 0 || status.telegram.groups.length > 0;
 }
 
-/** Integrations › Discord: the servers StayPut reads, and connecting one. */
+/** The platform has a server or a group connected. */
+function connectedTo(status: IntegrationsStatus, platform: AccountPlatform): boolean {
+  return platform === 'discord'
+    ? status.discord.servers.length > 0
+    : status.telegram.groups.length > 0;
+}
+
+/** Integrations › Discord: its dashboard; before a server is connected, how to connect one. */
 export function DiscordTab() {
-  const { api, integrations } = useCreatorData();
-  return (
-    <WithIntegrations>
-      {(status) => (
-        <div className="space-y-6">
-          <DiscordCard
-            status={status.discord}
-            whopAppId={status.whopAppId}
-            api={api}
-            onChange={integrations.reload}
-          />
-          {status.discord.servers.length > 0 ? <PlatformAccounts platform="discord" /> : null}
-          <Privacy />
-        </div>
-      )}
-    </WithIntegrations>
-  );
+  return <PlatformTab platform="discord" />;
 }
 
-/** Integrations › Telegram: the groups StayPut reads, and adding the bot to one. */
+/** Integrations › Telegram: its dashboard; before a group is connected, how to add the bot. */
 export function TelegramTab() {
-  const { api, integrations } = useCreatorData();
-  return (
-    <WithIntegrations>
-      {(status) => (
-        <div className="space-y-6">
-          <TelegramCard
-            status={status.telegram}
-            whopAppId={status.whopAppId}
-            api={api}
-            onChange={integrations.reload}
-          />
-          {status.telegram.groups.length > 0 ? <PlatformAccounts platform="telegram" /> : null}
-          <Privacy />
-        </div>
-      )}
-    </WithIntegrations>
-  );
+  return <PlatformTab platform="telegram" />;
 }
 
-/**
- * Integrations › Activity: what the connected servers and groups bring, the people in them, and
- * their accounts to tie to members.
- */
-export function ActivityTab() {
-  const { api, integrations, members, root } = useCreatorData();
-  // New messages may come from accounts to tie; tying one moves its messages.
-  const [accountsKey, setAccountsKey] = useState(0);
-  const [activityKey, setActivityKey] = useState(0);
-  // The people move with both: a new writer, an account tied.
-  const [peopleKey, setPeopleKey] = useState(0);
+function PlatformTab({ platform }: { platform: AccountPlatform }) {
+  const { api, integrations, members } = useCreatorData();
   return (
     <WithIntegrations>
-      {(status) => {
-        const platforms = [
-          ...(status.discord.servers.length > 0 ? (['discord'] as const) : []),
-          ...(status.telegram.groups.length > 0 ? (['telegram'] as const) : []),
-        ];
-        if (platforms.length === 0) return <ConnectInvite status={status} root={root} />;
-        return (
+      {(status) =>
+        connectedTo(status, platform) ? (
           <div className="space-y-6">
-            <PlatformActivityCard
-              api={api}
-              platforms={platforms}
-              refreshKey={activityKey}
-              onNews={() => {
-                integrations.reload();
-                setAccountsKey((key) => key + 1);
-                setPeopleKey((key) => key + 1);
-              }}
-            />
-            {/* What to do before what to read: the accounts to tie, then everyone. */}
+            <PlatformDashboardView key={platform} platform={platform} status={status} />
+            <Privacy />
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {platform === 'discord' ? (
+              <DiscordCard
+                status={status.discord}
+                whopAppId={status.whopAppId}
+                api={api}
+                onChange={integrations.reload}
+              />
+            ) : (
+              <TelegramCard
+                status={status.telegram}
+                whopAppId={status.whopAppId}
+                api={api}
+                onChange={integrations.reload}
+              />
+            )}
+            {/* Accounts seen writing before the server or group went away: still to tie. */}
             <AccountsCard
               api={api}
+              platform={platform}
               members={members.state.status === 'ready' ? members.state.data.members : []}
-              refreshKey={accountsKey}
               onChange={() => {
                 integrations.reload();
                 members.reload();
-                setActivityKey((key) => key + 1);
-                setPeopleKey((key) => key + 1);
               }}
             />
-            <PeopleCard api={api} whopAppId={status.whopAppId} refreshKey={peopleKey} />
             <Privacy />
           </div>
-        );
-      }}
+        )
+      }
     </WithIntegrations>
   );
 }
 
 /**
- * A platform's accounts to tie to members, right under its card, which says « tie the others
- * below » (the founder, 2 October: since the tabs, they were only at the bottom of Activity).
+ * The former Integrations › Activity (fix prompt v4.1, block 7: its content is in each platform's
+ * tab): Discord's, or Telegram's when only a group is connected.
  */
-function PlatformAccounts({ platform }: { platform: AccountPlatform }) {
-  const { api, integrations, members } = useCreatorData();
-  return (
-    <AccountsCard
-      api={api}
-      platform={platform}
-      members={members.state.status === 'ready' ? members.state.data.members : []}
-      onChange={() => {
-        integrations.reload();
-        members.reload();
-      }}
-    />
-  );
+export function ActivityAddress() {
+  const { integrations } = useCreatorData();
+  const status = integrations.state.status === 'ready' ? integrations.state.data : null;
+  const telegramOnly =
+    status !== null && status.discord.servers.length === 0 && status.telegram.groups.length > 0;
+  return <Navigate to={`../${telegramOnly ? 'telegram' : 'discord'}`} replace />;
 }
 
 /** The sources' state once read; meanwhile, the wait or what went wrong. */
@@ -167,7 +129,7 @@ function WithIntegrations({ children }: { children: (status: IntegrationsStatus)
   return <>{children(integrations.state.data)}</>;
 }
 
-/** Only who wrote and when: never what. */
+/** Only who wrote, where and when: never what. */
 function Privacy() {
   const { t } = useI18n();
   return (

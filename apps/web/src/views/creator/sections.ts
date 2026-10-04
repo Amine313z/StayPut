@@ -94,7 +94,6 @@ export const SECTIONS: readonly Section[] = [
       { path: '', label: 'sources.whop.name' },
       { path: 'discord', label: 'sources.discord.name' },
       { path: 'telegram', label: 'sources.telegram.name' },
-      { path: 'activity', label: 'tab.activity' },
     ],
   },
   {

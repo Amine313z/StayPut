@@ -6,7 +6,13 @@ import type {
   RiskSettingsView,
   SyncRun,
 } from '@stayput/core';
-import { ACTION_VIEWS, isCreatorOfferKind, isRuleId, timeZoneName } from '@stayput/core';
+import {
+  ACTION_VIEWS,
+  isCreatorOfferKind,
+  isRuleId,
+  parsePlatformSignals,
+  timeZoneName,
+} from '@stayput/core';
 import { ApiError, DEMO_API } from '../api';
 import { createWorld, type DemoWorld } from './world';
 
@@ -86,6 +92,19 @@ export async function answerDemo(method: string, path: string, body: unknown): P
         return answer(pages.accounts());
     }
     if (/^discord\/[^/]+\/channels$/.test(route)) return answer(pages.discordChannels());
+    // Integrations › Discord and › Telegram (fix prompt v4.1, block 7).
+    const platform = /^platforms\/(discord|telegram)$/.exec(route);
+    if (platform) return answer(pages.platforms.dashboard(platform[1] as 'discord' | 'telegram'));
+    const day = /^platforms\/(discord|telegram)\/days\/(\d{4}-\d{2}-\d{2})$/.exec(route);
+    if (day) {
+      return answer(pages.platforms.day(day[1] as 'discord' | 'telegram', day[2]!));
+    }
+    const slot = /^platforms\/(discord|telegram)\/slots\/([1-7])\/(\d{1,2})$/.exec(route);
+    if (slot && Number(slot[3]) < 24) {
+      return answer(
+        pages.platforms.slot(slot[1] as 'discord' | 'telegram', Number(slot[2]), Number(slot[3])),
+      );
+    }
     const member = /^members\/([^/]+)$/.exec(route);
     if (member) {
       const detail = demo.memberDetail(decodeURIComponent(member[1]!));
@@ -174,6 +193,12 @@ export async function answerDemo(method: string, path: string, body: unknown): P
   }
   if (method === 'PUT' && route === 'settings/actions') {
     return answer(demo.saveSettings(body as ActionSettingsView));
+  }
+  const signals = /^platforms\/(discord|telegram)\/signals$/.exec(route);
+  if (method === 'PUT' && signals) {
+    const parsed = parsePlatformSignals(body);
+    if (!parsed) throw new ApiError('invalid_request', 'expected { silent, drop, left }');
+    return answer({ settings: demo.saveSignals(signals[1] as 'discord' | 'telegram', parsed) });
   }
   const rule = /^rules\/([^/]+)$/.exec(route);
   if (method === 'PUT' && rule) {

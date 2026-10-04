@@ -3,6 +3,7 @@ import { useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent
 import { useI18n } from '../../i18n';
 import { ease } from '../../motion';
 import { polylinePath } from './curve';
+import { ChartTable } from './ChartTable';
 import { CHART } from './theme';
 
 /** The plot's own units: as wide as it likes (the SVG stretches), as tall as it is drawn. */
@@ -328,7 +329,7 @@ export function ForecastChart({
       <p aria-live="polite" className="sr-only">
         {spoken}
       </p>
-      <table className="sr-only">
+      <ChartTable>
         <caption>{label}</caption>
         <thead>
           <tr>
@@ -346,7 +347,7 @@ export function ForecastChart({
             </tr>
           ))}
         </tbody>
-      </table>
+      </ChartTable>
     </figure>
   );
 }

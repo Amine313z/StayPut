@@ -16,7 +16,7 @@ import { Overview } from './views/creator/Overview';
 import { MemberSpaceOnly, SectionHome, SectionLayout } from './views/creator/SectionLayout';
 import { GeneralSettingsTab, RiskSettingsTab, SpaceSettingsTab } from './views/creator/SettingsTab';
 import { SpaceCardsTab, SpaceOverviewTab, SpacePreviewTab } from './views/creator/SpaceTab';
-import { ActivityTab, DiscordTab, TelegramTab, WhopTab } from './views/creator/SourcesTab';
+import { ActivityAddress, DiscordTab, TelegramTab, WhopTab } from './views/creator/SourcesTab';
 import { Home } from './views/Home';
 import { MemberView } from './views/MemberView';
 import { NotFound } from './views/NotFound';
@@ -65,7 +65,8 @@ function creatorSections(): RouteObject[] {
       { index: true, element: <WhopTab /> },
       { path: 'discord', element: <DiscordTab /> },
       { path: 'telegram', element: <TelegramTab /> },
-      { path: 'activity', element: <ActivityTab /> },
+      // Its content is in each platform's tab now (fix prompt v4.1, block 7).
+      { path: 'activity', element: <ActivityAddress /> },
     ]),
     section('settings', 'settings', [
       { index: true, element: <GeneralSettingsTab /> },

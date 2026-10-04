@@ -565,6 +565,7 @@ describe('everyone on Discord and Telegram (0017)', () => {
       { platform: 'telegram', id: chat, name: 'Group', total: 34, known: 3, list: 'joins' },
     ]);
     expect(view.total).toBe(7);
+    expect(view.totals).toEqual({ discord: 3, telegram: 4 });
     const who = Object.fromEntries(view.people.map((p) => [p.accountId, p]));
     expect(who['9660001']).toMatchObject({
       platform: 'discord',
@@ -602,6 +603,48 @@ describe('everyone on Discord and Telegram (0017)', () => {
     const after = (await read('user_AccOwner4'))!;
     expect(after.places.map((p) => p.platform)).toEqual(['telegram']);
     expect(after.people.find((p) => p.accountId === '9660002')).toMatchObject({ here: null });
+  });
+
+  it('keeps 500 people of each platform: a big server does not hide the group (0033)', async () => {
+    const { c } = await community([]);
+    // 502 people seen writing on Discord, more recently than the 2 in the Telegram group.
+    await rows(
+      `insert into stayput.platform_accounts
+         (company_id, platform, account_id, display_name, first_seen_at, last_seen_at)
+       select $1, 'discord', (9680000000 + n)::text, 'D' || n, $2::timestamptz, $2::timestamptz
+         from generate_series(1, 502) n
+       union all
+       select $1, 'telegram', (7680 + n)::text, 'T' || n, $2::timestamptz, $2::timestamptz
+         from generate_series(1, 2) n`,
+      [c, NOW],
+    );
+    await rows(
+      `insert into stayput.pending_activity (company_id, user_id, type, occurred_at, external_id)
+       select $1, 'discord:' || (9680000000 + n)::text, 'discord_message',
+              $2::timestamptz - make_interval(mins => n), 'p:' || n
+         from generate_series(1, 502) n`,
+      [c, NOW],
+    );
+    await admin(c, 'user_AccOwner6');
+    const view = (
+      await withUser(t.db, 'user_AccOwner6', (tx) =>
+        tx.query<{ view: PeopleView }>(
+          'select stayput.platform_people($1, $2::timestamptz) as view',
+          [c, NOW],
+        ),
+      )
+    )[0]!.view;
+    expect(view.total).toBe(504);
+    expect(view.totals).toEqual({ discord: 502, telegram: 2 });
+    const on = (platform: string) => view.people.filter((p) => p.platform === platform);
+    expect(on('discord')).toHaveLength(500);
+    expect(
+      on('telegram')
+        .map((p) => p.name)
+        .sort(),
+    ).toEqual(['T1', 'T2']);
+    // The latest to write first: the two left out of Discord's 500 wrote the longest ago.
+    expect(on('discord').some((p) => p.name === 'D501' || p.name === 'D502')).toBe(false);
   });
 
   it('marks who left a server when its list no longer has them, and keeps a guest out', async () => {

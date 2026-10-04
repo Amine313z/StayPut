@@ -11,7 +11,14 @@ import type {
   ExitReason,
   OfferSettings,
 } from './offers';
-import type { Niche, RiskLevel, RiskReason, RiskWeights } from './risk';
+import type {
+  Niche,
+  PlatformSignals,
+  RiskLevel,
+  RiskReason,
+  RiskWeights,
+  SignalPlatform,
+} from './risk';
 import type { MessageAction, MessageTemplate, TemplateLocale } from './templates';
 
 /**
@@ -1213,14 +1220,127 @@ export interface AlumniCreation {
 }
 
 /**
+ * GET /api/creator/:companyId/platforms/:platform: Integrations › Discord or › Telegram (brief v4
+ * §9.6), in the company's calendar. Who wrote, where and when; never what.
+ */
+export interface PlatformDashboard {
+  platform: AccountPlatform;
+  /** The 30 days counted (yyyy-mm-dd). */
+  from: string;
+  to: string;
+  hero: {
+    /** Members who wrote there over the last 7 days. */
+    activeMembers7d: number;
+    /** Members who wrote there over 90 days, but not these 7 days. */
+    silentMembers7d: number;
+    /** Everyone's messages over 30 days: members, the team, guests, accounts not tied yet. */
+    messages30d: number;
+    /** Of them, the members'. */
+    memberMessages30d: number;
+  };
+  /** Each of the 30 days, the first first. */
+  daily: PlatformDay[];
+  /** When messages were written over 30 days: only the hours with some. */
+  heatmap: HeatCell[];
+  /** The channels (Discord), the groups and their topics (Telegram), the busiest first. */
+  places: PlatformPlace[];
+  /** The 10 members who wrote the most over 7, 14 and 30 days. */
+  active: Record<ActivityWindow, PlatformMember[]>;
+  /**
+   * The members who wrote there over 90 days but not over the last 7, 14 or 30 days: how many,
+   * and 10 of them, the riskiest first (`messages`: theirs over 90 days).
+   */
+  silent: Record<ActivityWindow, { total: number; members: PlatformMember[] }>;
+  signals: PlatformSignalsView;
+}
+
+export type ActivityWindow = 'd7' | 'd14' | 'd30';
+
+export interface PlatformDay {
+  day: string;
+  /** Everyone's messages that day. */
+  messages: number;
+  /** The members'. */
+  members: number;
+  /** The members' at high risk or leaving today. */
+  atRisk: number;
+}
+
+export interface HeatCell {
+  /** 1 Monday to 7 Sunday. */
+  dow: number;
+  /** 0 to 23, in the company's time zone. */
+  hour: number;
+  messages: number;
+  /** Members who wrote then. */
+  members: number;
+}
+
+export interface PlatformPlace {
+  /** A Discord channel's id; a Telegram group's, then its topic's after a colon. */
+  id: string;
+  /** `general`: a forum group's messages outside its topics. */
+  kind: 'channel' | 'group' | 'general' | 'topic';
+  /** Null while StayPut does not know it (a topic created before the bot came). */
+  name: string | null;
+  /** The Discord server, the topic's group. */
+  parent: string | null;
+  messages: number;
+  members: number;
+  lastAt: string | null;
+  /** Its 3 most active members. */
+  top: { id: string; name: string | null; messages: number }[];
+}
+
+export interface PlatformMember {
+  id: string;
+  name: string | null;
+  messages: number;
+  lastAt: string;
+  score: number | null;
+  level: RiskLevel | null;
+}
+
+/** The signals of a platform (brief v4 §9.6), and what the preview needs. */
+export interface PlatformSignalsView {
+  /** Both platforms' signals, as saved or StayPut's defaults. */
+  settings: Record<SignalPlatform, PlatformSignals>;
+  mediumFrom: number;
+  highFrom: number;
+  /** The members' scores as made: [base, discord bits, telegram bits, rule, how many]. */
+  groups: [number, number, number, number, number][];
+}
+
+/** GET …/platforms/:platform/days/:day: a day of the chart, picked. */
+export interface PlatformDayView {
+  day: string;
+  messages: number;
+  places: PlatformPlace[];
+  /** The members who wrote that day, the most first (20 at most). */
+  active: PlatformMember[];
+}
+
+/** GET …/platforms/:platform/slots/:dow/:hour: a cell of the heatmap, picked, over 30 days. */
+export interface PlatformSlotView {
+  dow: number;
+  hour: number;
+  messages: number;
+  /** Messages of others than the members listed: the team, guests, accounts not tied yet. */
+  others: number;
+  members: PlatformMember[];
+}
+
+/**
  * GET /api/creator/:companyId/people: everyone StayPut knows on the company's Discord servers and
  * Telegram groups, not only who writes there, and each server and group. Names and dates, never
  * what was written.
  */
 export interface PeopleView {
   places: PeoplePlace[];
-  /** How many people StayPut knows in all; `people` holds 500 at most, the latest to write first. */
+  /** How many people StayPut knows in all. */
   total: number;
+  /** How many on each platform; `people` holds 500 at most of each, the latest to write first. */
+  totals: Record<AccountPlatform, number>;
   people: PlatformPerson[];
 }
 

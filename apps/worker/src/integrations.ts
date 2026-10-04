@@ -9,7 +9,7 @@ import type {
 import type { WhopClient } from '@stayput/whop';
 import type { CryptoKey } from 'jose';
 import { withUser, type Db, type TransactionalDb } from './db';
-import { discordInstallUrl, isSnowflake, type DiscordClient } from './discord';
+import { discordInstallUrl, isSnowflake, type DiscordChannel, type DiscordClient } from './discord';
 import type { Config } from './env';
 import { DISCORD_INSTALL_TTL_SECONDS, sign } from './session';
 import {
@@ -235,6 +235,25 @@ export async function ensureTelegramWebhook(
   webhooksSet.set(telegram, url);
 }
 
+/**
+ * The names of a server's channels as Discord just listed them, kept for the dashboards (0033):
+ * Integrations › Discord names its channels without asking Discord on the way.
+ */
+export async function noteChannelNames(
+  db: Db,
+  companyId: string,
+  guildId: string,
+  channels: readonly DiscordChannel[],
+  now: Date,
+): Promise<void> {
+  await db.query('select stayput.note_discord_channels($1, $2, $3::text::jsonb, $4::timestamptz)', [
+    companyId,
+    guildId,
+    JSON.stringify(channels.map((c) => ({ id: c.id, name: c.name, category: c.category }))),
+    now.toISOString(),
+  ]);
+}
+
 /** The channels of a connected server, with the ones the company follows; null if not its. */
 export async function readDiscordChannels(
   db: TransactionalDb,
@@ -242,10 +261,12 @@ export async function readDiscordChannels(
   companyId: string,
   guildId: string,
   discord: DiscordClient,
+  now: Date,
 ): Promise<DiscordChannelChoice[] | null> {
   const followed = await followedChannels(db, userId, companyId, guildId);
   if (!followed) return null;
   const channels = await discord.guildChannels(guildId);
+  await noteChannelNames(db, companyId, guildId, channels, now);
   return channels.map((c) => ({ ...c, followed: followed.has(c.id) }));
 }
 
@@ -277,9 +298,11 @@ export async function chooseDiscordChannels(
   guildId: string,
   channelIds: readonly string[],
   discord: DiscordClient,
+  now: Date,
 ): Promise<DiscordChannelChoice[] | null> {
   if (!(await followedChannels(db, userId, companyId, guildId))) return null;
   const channels = await discord.guildChannels(guildId);
+  await noteChannelNames(db, companyId, guildId, channels, now);
   const wanted = new Set(channelIds);
   const chosen = channels.filter((c) => c.readable && wanted.has(c.id)).map((c) => c.id);
   await db.query('select stayput.set_discord_channels($1, $2, $3)', [
@@ -306,8 +329,10 @@ export async function connectDiscordServer(
     [input.companyId, guildId, guildName, input.userId, input.now.toISOString()],
   );
   let followed = row?.followed ?? 0;
+  const channels = await discord.guildChannels(guildId);
+  await noteChannelNames(db, input.companyId, guildId, channels, input.now);
   if (followed === 0) {
-    const readable = (await discord.guildChannels(guildId)).filter((c) => c.readable);
+    const readable = channels.filter((c) => c.readable);
     const [set] = await db.query<{ n: number }>(
       'select stayput.set_discord_channels($1, $2, $3) as n',
       [input.companyId, guildId, readable.map((c) => c.id).join(',')],
@@ -372,8 +397,16 @@ export async function fileTelegramUpdate(
   const nowSeconds = Math.floor(now.getTime() / 1000);
   switch (action.kind) {
     case 'message':
+      if (action.topicId && action.topicName) {
+        await db.query('select stayput.note_telegram_topic($1, $2, $3, $4::timestamptz)', [
+          action.chatId,
+          action.topicId,
+          action.topicName,
+          action.at.toISOString(),
+        ]);
+      }
       await db.query(
-        'select stayput.record_telegram_message($1, $2, $3, $4::timestamptz, $5, $6)',
+        'select stayput.record_telegram_message($1, $2, $3, $4::timestamptz, $5, $6, $7)',
         [
           action.chatId,
           action.fromId,
@@ -381,8 +414,17 @@ export async function fileTelegramUpdate(
           action.at.toISOString(),
           action.name,
           action.username,
+          action.topicId,
         ],
       );
+      return {};
+    case 'topic':
+      await db.query('select stayput.note_telegram_topic($1, $2, $3, $4::timestamptz)', [
+        action.chatId,
+        action.topicId,
+        action.name,
+        action.at.toISOString(),
+      ]);
       return {};
     case 'link': {
       const link = await readTelegramStartToken(action.token, nowSeconds, botToken);

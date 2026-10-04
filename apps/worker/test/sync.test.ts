@@ -81,8 +81,20 @@ function fakeWhop(lists: Record<string, unknown[]>, pageSize = 2) {
 function fakeDiscord(channels: Record<string, unknown[]>, servers: Record<string, unknown[]> = {}) {
   const calls: string[] = [];
   const memberCalls: string[] = [];
+  const channelCalls: string[] = [];
   const failures: Record<string, DiscordApiError> = {};
   const client = {
+    guildChannels(guildId: string) {
+      channelCalls.push(guildId);
+      return Promise.resolve(
+        Object.keys(channels).map((id) => ({
+          id,
+          name: `channel-${id.slice(-3)}`,
+          category: null,
+          readable: true,
+        })),
+      );
+    },
     messagesRaw(channelId: string, before: string | null) {
       calls.push(before ? `${channelId}@${before}` : channelId);
       const failure = failures[channelId];
@@ -100,7 +112,7 @@ function fakeDiscord(channels: Record<string, unknown[]>, servers: Record<string
       return Promise.resolve(JSON.stringify(members.slice(start, start + 1000)));
     },
   } as unknown as DiscordClient;
-  return { client, calls, memberCalls, failures };
+  return { client, calls, memberCalls, channelCalls, failures };
 }
 
 /** Someone on a Discord server, as its member list gives them. */
@@ -475,6 +487,30 @@ describe('Discord', () => {
     discord.calls.length = 0;
     await syncIfFree(context(whop.client, hours(4), 40, discord.client), id, 0);
     expect(discord.calls).toEqual([channel]);
+  });
+
+  it('reads the names of the channels once a day, for Integrations › Discord', async () => {
+    const { id, u } = await company();
+    const guild = `91000${companies}`;
+    const channel = `92000${companies}`;
+    await followDiscord(id, guild, [channel]);
+    const discord = fakeDiscord({ [channel]: [] });
+    const whop = fakeWhop(community(u));
+    const names = async () =>
+      (
+        await t.db.query<{ names: unknown }>(
+          'select channel_names as names from stayput.discord_guilds where guild_id = $1',
+          [guild],
+        )
+      )[0]?.names;
+    await syncIfFree(context(whop.client, hours(1), 40, discord.client), id, 0);
+    expect(discord.channelCalls).toEqual([guild]);
+    expect(await names()).toEqual({ [channel]: { name: `channel-${channel.slice(-3)}` } });
+    // Not again within the day; the day after, again.
+    await syncIfFree(context(whop.client, hours(5), 40, discord.client), id, 0);
+    expect(discord.channelCalls).toEqual([guild]);
+    await syncIfFree(context(whop.client, hours(26), 40, discord.client), id, 0);
+    expect(discord.channelCalls).toEqual([guild, guild]);
   });
 
   it('reads the channels again within seconds while the creator watches, Whop untouched', async () => {

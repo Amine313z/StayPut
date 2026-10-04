@@ -67,7 +67,7 @@ couleurs, polices et animations suivent [`docs/design-tokens.md`](./docs/design-
 | Members · Membres             | Tous les membres · Ne pas contacter                                            |
 | Automations · Automatisations | Règles · File d’attente (filtres : À valider, Programmées, Historique, Alumni) |
 | Analytics · Analyses          | Vue d'ensemble · Cohortes · Leçons                                             |
-| Integrations · Intégrations   | Whop · Discord · Telegram · Activité                                           |
+| Integrations · Intégrations   | Whop · Discord · Telegram                                                      |
 | Settings · Réglages           | Général · Score de risque · Automatisations                                    |
 
 La page d'accueil répond à une seule question, « Est-ce que je perds de l'argent, et que faire
@@ -108,6 +108,18 @@ sauvés) sont remplacées par celles de votre communauté dès 60 jours d'histor
 pourquoi les membres partent (le questionnaire de départ, en donut) et leur activité jour par
 jour sur 30 jours. Les onglets Cohortes et Leçons montrent leurs courbes et barres au-dessus des
 tableaux ; le mois signalé a un liseré turquoise, jamais de rouge.
+
+Intégrations › Discord et › Telegram sont chacun un tableau de bord : la connexion (un point
+turquoise qui pulse en direct, la dernière lecture, « Reconnect ») et trois chiffres (membres
+actifs sur 7 jours, devenus silencieux, messages sur 30 jours) ; les messages jour par jour (un
+clic sur un jour montre ses salons et qui a écrit) ; une carte de chaleur jour × heure (un clic
+sur une heure liste qui a écrit) ; les salons Discord, ou les groupes et leurs sujets Telegram,
+en barres triables ; les plus actifs et les devenus silencieux sur 7, 14 ou 30 jours ; les
+signaux (silence, écrit moins, a quitté), chacun allumé ou non avec ses points, et l'aperçu des
+niveaux avant d'enregistrer ; qui est qui ; les réglages du bot (ce qu'il voit, un test de
+connexion, les salons). Chaque bloc montre ses données, dit qu'il n'y en a pas, ou dit ce qui ne
+va pas avec « Retry » en moins de 5 secondes. StayPut ne lit jamais ce que les membres écrivent :
+seulement qui a écrit, où et quand.
 
 Dans Automatisations › File d'attente › Historique, chaque action qui a atteint un membre dit ce qu'il en est sorti
 : « Recovered $49.00 » (l'argent sauvé grâce à elle), « Still failing », « Paused until Nov 2 »,

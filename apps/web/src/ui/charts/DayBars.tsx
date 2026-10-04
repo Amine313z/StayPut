@@ -2,6 +2,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useState, type KeyboardEvent } from 'react';
 import { useI18n } from '../../i18n';
 import { ease } from '../../motion';
+import { ChartTable } from './ChartTable';
 import { CHART } from './theme';
 
 export interface DayBar {
@@ -130,7 +131,7 @@ export function DayBars({
           </span>
         ))}
       </div>
-      <table className="sr-only">
+      <ChartTable>
         <caption>{label}</caption>
         <thead>
           <tr>
@@ -148,7 +149,7 @@ export function DayBars({
             </tr>
           ))}
         </tbody>
-      </table>
+      </ChartTable>
     </figure>
   );
 }

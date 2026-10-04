@@ -1,6 +1,7 @@
 import { WhopApiError, type QueryValue, type WhopClient } from '@stayput/whop';
 import type { Db } from './db';
 import { DiscordApiError, type DiscordClient } from './discord';
+import { noteChannelNames } from './integrations';
 
 /**
  * The synchronization with Whop (SPEC Phase 2, 2 to 4): each creator's lists read into the
@@ -340,8 +341,40 @@ export async function syncCompany(
     result.calls += linking.calls;
     result.profiles = linking.calls;
     if (linking.stop) result.stopped = linking.stop;
+    if (!ctx.discordPaused) await readChannelNames(ctx, ctx.discord, companyId);
   }
   return result;
+}
+
+/** A server's channel names are read again after this long (Integrations › Discord, 0033). */
+export const CHANNEL_NAMES_MAX_AGE_HOURS = 24;
+
+/**
+ * The names of the company's servers' channels, once a day: Integrations › Discord names its
+ * channels from them without asking Discord on the way. A server Discord does not answer for
+ * keeps the names it had; the next run asks again.
+ */
+async function readChannelNames(
+  ctx: SyncContext,
+  discord: DiscordClient,
+  companyId: string,
+): Promise<void> {
+  const guilds = await ctx.db.query<{ guild_id: string }>(
+    `select guild_id from stayput.discord_guilds
+      where company_id = $1
+        and (channel_names_at is null
+             or channel_names_at <= $2::timestamptz - make_interval(hours => $3))
+      order by guild_id`,
+    [companyId, ctx.now.toISOString(), CHANNEL_NAMES_MAX_AGE_HOURS],
+  );
+  for (const { guild_id: guildId } of guilds) {
+    try {
+      const channels = await discord.guildChannels(guildId);
+      await noteChannelNames(ctx.db, companyId, guildId, channels, ctx.now);
+    } catch (error) {
+      console.warn(`The channels of Discord server ${guildId} were not read: ${describe(error)}`);
+    }
+  }
 }
 
 /**

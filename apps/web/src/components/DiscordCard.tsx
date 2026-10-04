@@ -30,11 +30,14 @@ export function DiscordCard({
   whopAppId,
   api,
   onChange,
+  tour = 'connect-discord',
 }: {
   status: DiscordStatus;
   whopAppId: string | null;
   api: string;
   onChange: () => void;
+  /** Where the guide lights up the connect button; none when another button has it. */
+  tour?: string | null;
 }) {
   const { t } = useI18n();
   // The demo connects nothing: the button shows there, said disabled (ExternalButton).
@@ -49,7 +52,7 @@ export function DiscordCard({
         variant={variant}
         size="sm"
         icon={<DiscordIcon className="size-4" />}
-        tour="connect-discord"
+        tour={tour ?? undefined}
       >
         {label}
       </ExternalButton>

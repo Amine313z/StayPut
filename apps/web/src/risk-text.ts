@@ -14,6 +14,12 @@ export const LEVEL_LABELS: Readonly<Record<RiskLevel, MessageKey>> = {
   low: 'risk.level.low',
 };
 
+/** Discord's and Telegram's names, in the reasons that come from them. */
+const PLATFORM_NAMES: Readonly<Record<'discord' | 'telegram', MessageKey>> = {
+  discord: 'sources.discord.name',
+  telegram: 'sources.telegram.name',
+};
+
 /** A reason in the creator's language: « No activity for 12 days ». Null for a code unknown here. */
 export function reasonText(reason: RiskReason, i18n: Translator): string | null {
   const { t, plural, percent, date } = i18n;
@@ -45,6 +51,21 @@ export function reasonText(reason: RiskReason, i18n: Translator): string | null 
       return reason.percent >= 100
         ? t('risk.reason.no_reactions')
         : t('risk.reason.reactions_drop', { percent: percent(reason.percent / 100) });
+    case 'platform_silent':
+      return plural('risk.reason.platform_silent', reason.days, {
+        platform: t(PLATFORM_NAMES[reason.platform]),
+      });
+    case 'platform_drop':
+      return t('risk.reason.platform_drop', {
+        percent: percent(reason.percent / 100),
+        platform: t(PLATFORM_NAMES[reason.platform]),
+      });
+    case 'platform_left':
+      return t(
+        reason.platform === 'discord'
+          ? 'risk.reason.platform_left.discord'
+          : 'risk.reason.platform_left.telegram',
+      );
     default:
       // A newer Worker may know more reasons than this page: say nothing rather than a code.
       return null;

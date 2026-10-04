@@ -49,6 +49,7 @@ export function MemberListRow({
   rowTour?: string;
   ringTour?: string;
 }) {
+  const single = when === null && paid === null;
   return (
     <div
       data-tour={rowTour}
@@ -76,7 +77,8 @@ export function MemberListRow({
             {reason ? (
               <p className="flex items-center gap-1.5 text-[0.8125rem] text-subtle">
                 {reasonUrgent ? <Urgent /> : null}
-                <span className="truncate">{reason}</span>
+                {/* Alone on its row beside the actions, it may take two lines on a phone. */}
+                <span className={single ? 'line-clamp-2' : 'truncate'}>{reason}</span>
               </p>
             ) : null}
           </div>
@@ -89,8 +91,13 @@ export function MemberListRow({
               tour={ringTour}
             />
           ) : null}
+          {/* Nothing to say on a second line: the actions stay on the first. */}
+          {single ? href ? <RowActions>{actions}</RowActions> : actions : null}
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 ps-12 @2xl/list:flex-nowrap @2xl/list:ps-0">
+        <div
+          hidden={single}
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 ps-12 @2xl/list:flex-nowrap @2xl/list:ps-0"
+        >
           <div className="text-[0.8125rem] @2xl/list:w-40">
             {when ? (
               <p className="tabular flex items-center gap-1.5 text-muted">
@@ -101,7 +108,7 @@ export function MemberListRow({
             {/* A list's amount: Satoshi 500, 14 px, white (brief v4 §7). */}
             {paid ? <p className="metric text-sm text-fg">{paid}</p> : null}
           </div>
-          {href ? <RowActions>{actions}</RowActions> : actions}
+          {single ? null : href ? <RowActions>{actions}</RowActions> : actions}
         </div>
       </div>
     </div>

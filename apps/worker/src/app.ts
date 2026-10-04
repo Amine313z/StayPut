@@ -18,6 +18,7 @@ import {
   parseCardRequest,
   parseGoalInput,
   parseGoalProposals,
+  parsePlatformSignals,
   parseResultEntry,
   timeZoneName,
   type AccessLevel,
@@ -104,6 +105,14 @@ import {
   retentionView,
 } from './retention';
 import { REQUEST_RISK_BATCH, refreshDetection } from './risk';
+import {
+  isDay,
+  isPlatform,
+  readPlatformDashboard,
+  readPlatformDay,
+  readPlatformSlot,
+  savePlatformSignals,
+} from './platforms';
 import { LATEST_MIGRATION } from './schema-version';
 import { goneProofPage, proofPage } from './public-proof';
 import {
@@ -1609,6 +1618,7 @@ export function createApp(deps: AppDeps) {
           c.get('companyId'),
           c.req.param('guildId'),
           discord,
+          deps.now(),
         );
         return channels ? c.json(channels) : apiError('not_found', 'no such server here');
       } catch (error) {
@@ -1642,6 +1652,7 @@ export function createApp(deps: AppDeps) {
           c.req.param('guildId'),
           ids,
           discord,
+          deps.now(),
         );
       } catch (error) {
         console.error('Discord channels not saved:', describe(error));
@@ -1752,6 +1763,115 @@ export function createApp(deps: AppDeps) {
       }
       const view = await readPlatformActivity(db, c.get('userId'), companyId, now);
       return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+    },
+  );
+
+  /**
+   * Integrations › Discord or › Telegram (brief v4 §9.6): the platform's dashboard, over 30 days
+   * (90 for who went silent), in the company's calendar.
+   */
+  app.get(
+    '/api/creator/:companyId/platforms/:platform',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const platform = c.req.param('platform');
+      if (!isPlatform(platform)) return apiError('not_found', 'no such platform');
+      const view = await readPlatformDashboard(
+        db,
+        c.get('userId'),
+        c.get('companyId'),
+        platform,
+        deps.now(),
+      );
+      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+    },
+  );
+
+  /** A day of the dashboard's chart, picked: its places and the members who wrote. */
+  app.get(
+    '/api/creator/:companyId/platforms/:platform/days/:day',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const platform = c.req.param('platform');
+      const day = c.req.param('day');
+      if (!isPlatform(platform)) return apiError('not_found', 'no such platform');
+      if (!isDay(day)) return apiError('invalid_request', 'expected a day, yyyy-mm-dd');
+      const view = await readPlatformDay(
+        db,
+        c.get('userId'),
+        c.get('companyId'),
+        platform,
+        day,
+        deps.now(),
+      );
+      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+    },
+  );
+
+  /** A cell of the dashboard's heatmap, picked (1 Monday to 7 Sunday, 0 to 23): who wrote. */
+  app.get(
+    '/api/creator/:companyId/platforms/:platform/slots/:dow/:hour',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const platform = c.req.param('platform');
+      if (!isPlatform(platform)) return apiError('not_found', 'no such platform');
+      const dow = /^[1-7]$/.test(c.req.param('dow')) ? Number(c.req.param('dow')) : null;
+      const hour = /^(?:[0-9]|1[0-9]|2[0-3])$/.test(c.req.param('hour'))
+        ? Number(c.req.param('hour'))
+        : null;
+      if (dow === null || hour === null) {
+        return apiError('invalid_request', 'expected a day of the week (1-7) and an hour (0-23)');
+      }
+      const view = await readPlatformSlot(
+        db,
+        c.get('userId'),
+        c.get('companyId'),
+        platform,
+        dow,
+        hour,
+        deps.now(),
+      );
+      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+    },
+  );
+
+  /**
+   * A platform's signals (brief v4 §9.6), as the creator set them: every score is due again and
+   * the first ones are computed at once, as for the risk settings.
+   */
+  app.put(
+    '/api/creator/:companyId/platforms/:platform/signals',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const platform = c.req.param('platform');
+      if (!isPlatform(platform)) return apiError('not_found', 'no such platform');
+      const signals = parsePlatformSignals(await c.req.json<unknown>().catch(() => null));
+      if (!signals) {
+        return apiError('invalid_request', 'expected { silent, drop, left }: { on, points 0-30 }');
+      }
+      const companyId = c.get('companyId');
+      const now = deps.now();
+      const settings = await savePlatformSignals(db, companyId, platform, signals, now);
+      inBackground(c, 'Rescoring', async (work) => {
+        await refreshDetection(work, companyId, now, REQUEST_RISK_BATCH);
+      });
+      return c.json({ settings });
     },
   );
 

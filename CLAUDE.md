@@ -141,7 +141,18 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   « and if » slider (a saved member then stays like a low-risk one). Charts in
   `apps/web/src/ui/charts/` (ForecastChart, RetentionChart, Donut, DayBars, LessonBars): one
   accent, the donut's main reason turquoise and the others white steps with a legend in words.
-  The demo's activity is now in proportion to each member's tenure. Before
+  The demo's activity is now in proportion to each member's tenure. Block 7c (brief v4 §9.6)
+  done: Integrations › Discord and › Telegram are each a dashboard
+  (`apps/web/src/views/creator/platform/`: hero, MessagesChart, Heatmap, PlaceBars, members,
+  SignalsPanel with ScoreHistogram, BotSettings with a connection test); the Activity tab is gone
+  (`/sources/activity` redirects). Migration **0033**: `platform_dashboard` / `platform_day` /
+  `platform_slot` (routes `GET /platforms/:platform[/days/:day|/slots/:dow/:hour]`), Discord
+  channel names (`note_discord_channels`, daily in `sync.ts`), Telegram forum topics
+  (`telegram_topics`), and platform **signals** (`company_settings.platform_signals`,
+  `PUT /platforms/:platform/signals`): silent / drop / left, each 0–30 points added to the five
+  factors' score; `member_risk.signals` keeps what each score is made of so the browser previews
+  the levels exactly (`scoreDistribution`); `platform_people` keeps 500 people per platform with
+  per-platform `totals`. Privacy line everywhere: « only who wrote, where and when ». Before
   it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard

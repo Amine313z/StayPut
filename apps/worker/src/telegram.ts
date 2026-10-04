@@ -340,8 +340,14 @@ export type TelegramAction =
       /** The author's first and last names, and username: for the creator to recognize them. */
       name: string | null;
       username: string | null;
+      /** The topic of a forum group it was written in; null outside topics. */
+      topicId: string | null;
+      /** The topic's name, when the message carries the message that created the topic. */
+      topicName: string | null;
     }
   | { kind: 'membership'; chatId: string; present: boolean }
+  /** A topic of a forum group was created or renamed (its service message). */
+  | { kind: 'topic'; chatId: string; topicId: string; name: string | null; at: Date }
   /** People joined or left a group: its service messages, or `chat_member` (bot is admin). */
   | { kind: 'people'; chatId: string; joined: TelegramPerson[]; left: string[]; at: Date }
   | { kind: 'migrate'; fromChatId: string; toChatId: string }
@@ -466,6 +472,21 @@ export function telegramAction(update: unknown): TelegramAction {
       at: new Date(date * 1000),
     };
   }
+  // A forum group's topic was created or renamed: its name, for the channels' bars (brief v4
+  // §9.6). The topic's id is the thread the service message belongs to.
+  const threadId = id(message.message_thread_id);
+  const created = record(message.forum_topic_created);
+  const edited = record(message.forum_topic_edited);
+  if ((created || edited) && threadId && date !== null) {
+    const named = created?.name ?? edited?.name;
+    return {
+      kind: 'topic',
+      chatId,
+      topicId: threadId,
+      name: typeof named === 'string' && named.trim() !== '' ? named.trim() : null,
+      at: new Date(date * 1000),
+    };
+  }
   if (!fromId || from?.is_bot === true || !messageId || date === null) return { kind: 'ignore' };
   // Sent on behalf of a chat, not by a person: a channel's post that Telegram copies into the
   // channel's discussion group, an anonymous administrator, someone writing as their channel.
@@ -477,6 +498,10 @@ export function telegramAction(update: unknown): TelegramAction {
   const nonEmpty = (value: unknown) =>
     typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
   const name = [nonEmpty(from?.first_name), nonEmpty(from?.last_name)].filter(Boolean).join(' ');
+  // In a forum group, a message of a topic answers the message that created it, unless it
+  // answers another one: the topic's name comes with it.
+  const topicId = message.is_topic_message === true ? threadId : null;
+  const origin = record(record(message.reply_to_message)?.forum_topic_created);
   return {
     kind: 'message',
     chatId,
@@ -485,6 +510,8 @@ export function telegramAction(update: unknown): TelegramAction {
     at: new Date(date * 1000),
     name: name || null,
     username: nonEmpty(from?.username),
+    topicId,
+    topicName: topicId ? nonEmpty(origin?.name) : null,
   };
 }
 
@@ -506,8 +533,8 @@ function inGroup(member: Record<string, unknown> | null): boolean {
 /** What the bot says, in French for a French-speaking Telegram user, in English otherwise. */
 export const BOT_TEXTS = {
   groupLinked: {
-    fr: '✅ Ce groupe est relié à StayPut. Seuls l’auteur et l’heure des messages sont comptés, jamais leur contenu. Pour que votre activité compte, ouvrez StayPut dans la communauté Whop et touchez « Relier mon Telegram ».',
-    en: '✅ This group is now linked to StayPut. Only who wrote and when is counted, never what was written. For your activity to count, open StayPut in the Whop community and tap “Link my Telegram”.',
+    fr: '✅ Ce groupe est relié à StayPut. Seuls l’auteur, le lieu et l’heure des messages sont comptés, jamais leur contenu. Pour que votre activité compte, ouvrez StayPut dans la communauté Whop et touchez « Relier mon Telegram ».',
+    en: '✅ This group is now linked to StayPut. Only who wrote, where and when is counted, never what was written. For your activity to count, open StayPut in the Whop community and tap “Link my Telegram”.',
   },
   groupLinkExpired: {
     fr: 'Ce lien a expiré : demandez-en un nouveau dans StayPut (Sources d’activité → Telegram).',
@@ -526,8 +553,8 @@ export const BOT_TEXTS = {
     en: 'This link has expired or is not valid: open StayPut in the Whop community and tap “Link my Telegram”.',
   },
   help: {
-    fr: 'Je compte l’activité des groupes Telegram reliés à StayPut (l’auteur et l’heure, jamais le contenu). Pour relier votre compte, ouvrez StayPut dans votre communauté Whop.',
-    en: 'I count activity in the Telegram groups linked to StayPut (who and when, never the content). To link your account, open StayPut in your Whop community.',
+    fr: 'Je compte l’activité des groupes Telegram reliés à StayPut (l’auteur, le lieu et l’heure, jamais le contenu). Pour relier votre compte, ouvrez StayPut dans votre communauté Whop.',
+    en: 'I count activity in the Telegram groups linked to StayPut (who, where and when, never the content). To link your account, open StayPut in your Whop community.',
   },
 } as const;
 

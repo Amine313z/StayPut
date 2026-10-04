@@ -12,6 +12,7 @@ import { useI18n } from '../../i18n';
 import { DURATION, EASE, ease } from '../../motion';
 import { LabelTip } from '../LabelTip';
 import { monotoneSample, polylinePath } from './curve';
+import { ChartTable } from './ChartTable';
 import { CHART } from './theme';
 
 /** The plot's own units: as wide as it likes (the SVG stretches), as tall as it is drawn. */
@@ -466,7 +467,7 @@ export function BalanceChart({
       <p aria-live="polite" className="sr-only">
         {spoken}
       </p>
-      <table className="sr-only">
+      <ChartTable>
         <caption>{label}</caption>
         <thead>
           <tr>
@@ -486,7 +487,7 @@ export function BalanceChart({
             </tr>
           ))}
         </tbody>
-      </table>
+      </ChartTable>
     </figure>
   );
 }

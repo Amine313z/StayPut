@@ -145,6 +145,7 @@ describe('risk_features', () => {
       mediumFrom: 40,
       highFrom: 70,
       tracksProgress: true,
+      platformSignals: {},
     });
     const byId = new Map(result.members.map((m) => [m[0], m]));
     // The team and those who left are not scored.
@@ -164,6 +165,8 @@ describe('risk_features', () => {
       0,
       0,
       true,
+      // Discord and Telegram (0033): none here.
+      ...[0, 0, null, null, 0, 0, null, null],
     ]);
     expect(byId.get(u('mber_B'))?.slice(7, 9)).toEqual(['failed', false]);
     expect(byId.get(u('mber_H'))?.[7]).toBe('action_required');
@@ -184,6 +187,7 @@ describe('risk_features', () => {
       0,
       0,
       false,
+      ...[0, 0, null, null, 0, 0, null, null],
     ]);
   });
 

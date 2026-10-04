@@ -6,6 +6,7 @@ import {
   type CohortCounts,
   type LessonCounts,
   type PaymentState,
+  type PlatformInputs,
   type RiskInputs,
   type RiskSettings,
 } from '@stayput/core';
@@ -23,7 +24,11 @@ export const RISK_BATCH = 1500;
 /** Fewer during a request (opening the dashboard, « Sync now »): the cron does the rest. */
 export const REQUEST_RISK_BATCH = 500;
 
-/** One member as risk_features writes it (see the migration 0008 for the order). */
+/**
+ * One member as risk_features writes it (see the migration 0008 for the order), then their
+ * messages on Discord and Telegram (0033): this week's, the 4 weeks' before, the last one, and when
+ * they left the platform. A row of an older Postgres function stops at `activeSinceJoin`.
+ */
 type FeatureRow = [
   id: string,
   joinedAt: number | null,
@@ -39,7 +44,26 @@ type FeatureRow = [
   reactions14d: number,
   reactionsPrev14d: number,
   activeSinceJoin: boolean,
+  discordWeek?: number,
+  discordBefore?: number,
+  discordLastAt?: number | null,
+  discordLeftAt?: number | null,
+  telegramWeek?: number,
+  telegramBefore?: number,
+  telegramLastAt?: number | null,
+  telegramLeftAt?: number | null,
 ];
+
+/** A platform's figures from a row, from its first position on; none on an older row. */
+function platformInputs(row: FeatureRow, from: 14 | 18): PlatformInputs | undefined {
+  if (row.length < from + 4) return undefined;
+  return {
+    week: Number(row[from] ?? 0),
+    before: Number(row[from + 1] ?? 0),
+    lastAt: (row[from + 2] as number | null | undefined) ?? null,
+    leftAt: (row[from + 3] as number | null | undefined) ?? null,
+  };
+}
 
 function toInputs(row: FeatureRow): RiskInputs {
   return {
@@ -56,6 +80,7 @@ function toInputs(row: FeatureRow): RiskInputs {
     reactions14d: row[11],
     reactionsPrev14d: row[12],
     activeSinceJoin: row[13],
+    platforms: { discord: platformInputs(row, 14), telegram: platformInputs(row, 18) },
   };
 }
 
@@ -88,6 +113,7 @@ export async function scoreCompany(
       RISK_FACTORS.map((factor) => result.subScores[factor]),
       result.reasons,
       result.inactiveNewcomer,
+      result.making,
     ];
   });
   const [saved] = await db.query<{ saved: number }>(

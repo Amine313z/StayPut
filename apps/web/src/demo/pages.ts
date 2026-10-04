@@ -33,6 +33,7 @@ import {
   type TemplateValues,
   type UnlinkedAccount,
 } from '@stayput/core';
+import { createPlatformLog, type LogPlace, type PlatformLog } from './platforms';
 
 /**
  * The demo's other pages (Automations, Analytics, Integrations › Activity, Settings › Risk
@@ -81,6 +82,8 @@ export interface DemoPagesInput {
   guildId: string;
   chatId: string;
   telegramTitle: string;
+  /** The community's time zone: its days and hours (Integrations › Discord and › Telegram). */
+  zone: string;
 }
 
 export interface DemoPages {
@@ -110,6 +113,8 @@ export interface DemoPages {
   exitReasons: () => { reason: ExitReason; count: number }[];
   platformActivity: () => PlatformActivityView;
   people: () => PeopleView;
+  /** Integrations › Discord and › Telegram (fix prompt v4.1, block 7): every message, counted. */
+  platforms: PlatformLog;
   accounts: () => AccountsView;
   changeAccount: (what: string, body: Record<string, unknown>) => AccountsView | null;
   /**
@@ -559,6 +564,8 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     setAsideAt: number | null;
     /** The creator's latest change comes first in its list. */
     changed: number;
+    /** It left the server or the group then; null while there. */
+    leftAt: number | null;
   }
   const account = (over: Partial<DemoAccount> & Pick<DemoAccount, 'platform' | 'accountId'>) =>
     ({
@@ -573,6 +580,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       joinedAt: now - 120 * DAY,
       setAsideAt: null,
       changed: 0,
+      leftAt: null,
       ...over,
     }) satisfies DemoAccount;
 
@@ -695,6 +703,29 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     }),
   );
 
+  // Two members left: Yanis the Discord server five days ago, Omar the Telegram group three days
+  // ago (Integrations: the signal « Left », the people no longer there).
+  const leaves: [string, AccountPlatform, number][] = [
+    ['Yanis Benali', 'discord', 5],
+    ['Omar Fassi', 'telegram', 3],
+  ];
+  for (const [name, platform, daysAgo] of leaves) {
+    const theirs = accounts.find((a) => a.platform === platform && a.member?.name === name);
+    if (theirs) theirs.leftAt = now - daysAgo * DAY - 3 * HOUR;
+  }
+
+  // Three members active elsewhere went quiet on Discord a week or more ago (Integrations ›
+  // Discord: the signal « Gone quiet », and what it would change): Lou, Nora and Laura.
+  const quiet: [string, number][] = [
+    ['Lou Marchand', 9],
+    ['Nora Chabane', 11],
+    ['Laura Weber', 8],
+  ];
+  for (const [name, daysAgo] of quiet) {
+    const theirs = accounts.find((a) => a.platform === 'discord' && a.member?.name === name);
+    if (theirs && theirs.messages > 0) theirs.lastAt = now - daysAgo * DAY - 5 * HOUR;
+  }
+
   const on = (platform: AccountPlatform) => accounts.filter((a) => a.platform === platform);
   const wrote = (platform: AccountPlatform) => on(platform).filter((a) => a.messages > 0);
   const latest = (list: readonly DemoAccount[]) =>
@@ -702,27 +733,75 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       (last, a) => (a.lastAt !== null && a.lastAt > (last ?? 0) ? a.lastAt : last),
       null,
     );
-  // Each platform's days: the 30 days' messages spread as a trading community writes (busy on
-  // weekdays, quieter at the weekend), adding up to them; what is written while the demo is
-  // open goes to today.
-  const spread = (total: number, salt: number) => {
-    const weights = days.map((day, i) => {
-      const weekend = day.getDay() === 0 || day.getDay() === 6;
-      return (weekend ? 0.45 : 1) * (1 + Math.sin((i + salt) * 1.7) * 0.18);
-    });
-    const scale = total / sum(weights);
-    const counts = weights.map((w) => Math.floor(w * scale));
-    const order = weights
-      .map((w, i) => ({ i, left: w * scale - Math.floor(w * scale) }))
-      .sort((a, b) => b.left - a.left);
-    const left = total - sum(counts);
-    for (let k = 0; k < left; k++) counts[order[k % order.length]!.i]! += 1;
-    return counts;
+
+  // ---- The Discord channels, and where messages are written ----
+  let channels: DiscordChannelChoice[] = [
+    ['general', 'Community', true, true],
+    ['trade-ideas', 'Community', true, true],
+    ['wins', 'Community', true, true],
+    ['questions', 'Course', true, true],
+    ['module-help', 'Course', true, false],
+    ['announcements', 'Info', false, false],
+  ].map(([name, category, readable, followed], i) => ({
+    id: `11874200000000${String(i + 1).padStart(5, '0')}`,
+    name: String(name),
+    category: String(category),
+    readable: Boolean(readable),
+    followed: Boolean(followed),
+  }));
+  // Each followed channel's share of what members write, and the group's topics'.
+  const SHARES: Readonly<Record<string, number>> = {
+    general: 0.42,
+    'trade-ideas': 0.3,
+    questions: 0.16,
+    wins: 0.12,
   };
-  const daily: Record<AccountPlatform, number[]> = {
-    discord: spread(sum(wrote('discord').map((a) => a.messages)), 1),
-    telegram: spread(sum(wrote('telegram').map((a) => a.messages)), 4),
-  };
+  const places = (platform: AccountPlatform): LogPlace[] =>
+    platform === 'discord'
+      ? channels.map((c) => ({
+          id: c.id,
+          kind: 'channel' as const,
+          name: c.name,
+          parent: community,
+          weight: c.followed ? (SHARES[c.name] ?? 0) : 0,
+          followed: c.followed,
+        }))
+      : [
+          {
+            id: `${input.chatId}:`,
+            kind: 'general' as const,
+            name: input.telegramTitle,
+            parent: null,
+            weight: 0.3,
+            followed: true,
+          },
+          {
+            id: `${input.chatId}:2`,
+            kind: 'topic' as const,
+            name: 'Signals',
+            parent: input.telegramTitle,
+            weight: 0.5,
+            followed: true,
+          },
+          {
+            id: `${input.chatId}:3`,
+            kind: 'topic' as const,
+            name: 'Questions',
+            parent: input.telegramTitle,
+            weight: 0.2,
+            followed: true,
+          },
+        ];
+
+  // ---- Every message, one by one (Integrations › Discord and › Telegram) ----
+  const log = createPlatformLog({
+    now,
+    zone: input.zone,
+    accounts,
+    rows,
+    places,
+    thresholds: () => ({ mediumFrom: riskSettings.mediumFrom, highFrom: riskSettings.highFrom }),
+  });
 
   const platformActivity = (): PlatformActivityView => {
     const tile = (platform: AccountPlatform) => {
@@ -747,7 +826,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
         guests: count('guest'),
         unlinked: count('unlinked'),
         lastAt: latest(authors) === null ? null : iso(latest(authors)!),
-        daily: [...daily[platform]],
+        daily: log.daily(platform),
       };
     };
     const platforms = [tile('discord'), tile('telegram')];
@@ -798,9 +877,9 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       username: a.username,
       status: a.status,
       member: a.status === 'member' && a.member ? { id: a.member.id, name: a.member.name } : null,
-      here: true,
+      here: a.leftAt === null,
       joinedAt: iso(a.joinedAt),
-      leftAt: null,
+      leftAt: a.leftAt === null ? null : iso(a.leftAt),
       messages: a.messages,
       lastMessageAt: a.lastAt === null ? null : iso(a.lastAt),
     }));
@@ -828,6 +907,10 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
         },
       ],
       total: list.length,
+      totals: {
+        discord: list.filter((p) => p.platform === 'discord').length,
+        telegram: list.filter((p) => p.platform === 'telegram').length,
+      },
       people: list,
     };
   };
@@ -887,20 +970,6 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     mediumFrom: DEFAULT_MEDIUM_FROM,
     highFrom: DEFAULT_HIGH_FROM,
   };
-  let channels: DiscordChannelChoice[] = [
-    ['general', 'Community', true, true],
-    ['trade-ideas', 'Community', true, true],
-    ['wins', 'Community', true, true],
-    ['questions', 'Course', true, true],
-    ['module-help', 'Course', true, false],
-    ['announcements', 'Info', false, false],
-  ].map(([name, category, readable, followed], i) => ({
-    id: `11874200000000${String(i + 1).padStart(5, '0')}`,
-    name: String(name),
-    category: String(category),
-    readable: Boolean(readable),
-    followed: Boolean(followed),
-  }));
 
   const memberPlatforms = (memberId: string) => {
     const of = (platform: AccountPlatform) => {
@@ -1013,6 +1082,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     insights,
     platformActivity,
     people,
+    platforms: log,
     accounts: accountsView,
     integrations: (status) => {
       const counts = (platform: AccountPlatform) => ({
@@ -1035,13 +1105,17 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       if (!theirs) return null;
       theirs.messages += 1;
       theirs.lastAt = Math.max(theirs.lastAt ?? 0, at);
-      daily[theirs.platform][29]! += 1;
+      log.record(theirs, at);
       return theirs.platform;
     },
     noteMessage: (memberId, at, preferred) => {
       const theirs = memberAccount(memberId, preferred);
       if (!theirs) return null;
-      if (theirs.messages > 0) theirs.lastAt = Math.max(theirs.lastAt ?? 0, at);
+      if (theirs.messages > 0 && at > (theirs.lastAt ?? 0)) {
+        // The feed's message is their last one there: so is it in the log.
+        log.moveLast(theirs, at);
+        theirs.lastAt = at;
+      }
       return theirs.platform;
     },
     changeAccount: (what, body) => {

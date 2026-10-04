@@ -28,12 +28,15 @@ import type {
   MemberTelegramStatus,
   MembersPage,
   PeopleView,
+  PlatformDashboard,
+  PlatformDayView,
+  PlatformSlotView,
   RevenueDay,
   RiskSettingsView,
   SyncRun,
   SyncStatus,
 } from '@stayput/core';
-import { forecastRevenue } from '@stayput/core';
+import { DEFAULT_PLATFORM_SIGNALS, forecastRevenue } from '@stayput/core';
 import type { Locale } from '@stayput/i18n';
 import { RouterProvider, createMemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -43,7 +46,7 @@ import { AlumniCard } from '../src/components/AlumniCard';
 import { resetDemo } from '../src/demo/api';
 import { DemoMode } from '../src/demoMode';
 import { readScreenshot } from '../src/ocr';
-import { LIVE_REFRESH_MS } from '../src/components/PlatformActivityCard';
+import { LIVE_REFRESH_MS } from '../src/views/creator/platform/PlatformDashboard';
 import { I18nProvider, detectLocale } from '../src/i18n';
 import { ErrorPanel } from '../src/components/Status';
 import { ToastProvider } from '../src/ui/Toast';
@@ -51,7 +54,8 @@ import { ToastProvider } from '../src/ui/Toast';
 // Tesseract reads screenshots in a real browser only: the tests say what it read.
 vi.mock('../src/ocr', () => ({ readScreenshot: vi.fn() }));
 
-type Answer = { status: number; body: unknown } | Error;
+/** `never`: a call that never answers (until the page gives it up). */
+type Answer = { status: number; body: unknown } | Error | 'never';
 
 /**
  * Answers the Worker's routes from a table (`/path` for a GET, `POST /path` otherwise), in order
@@ -68,6 +72,13 @@ function mockApi(answers: Record<string, Answer[]>) {
     const answer = answers[path]?.shift();
     if (!answer) return Promise.reject(new Error(`unexpected ${path}`));
     if (answer instanceof Error) return Promise.reject(answer);
+    if (answer === 'never') {
+      return new Promise<Response>((_, reject) =>
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('The operation was aborted.', 'AbortError')),
+        ),
+      );
+    }
     return Promise.resolve(
       new Response(JSON.stringify(answer.body), {
         status: answer.status,
@@ -91,6 +102,12 @@ function renderAt(path: string, locale: Locale = 'en') {
     </I18nProvider>,
   );
 }
+
+/** The three figures of a platform's hero, as drawn. */
+const heroFiguresOf = (hero: HTMLElement) =>
+  within(hero)
+    .getAllByRole('definition')
+    .map((d) => d.textContent ?? '');
 
 const creatorSession = {
   status: 200,
@@ -1735,103 +1752,466 @@ describe('activity sources', () => {
   };
 
   const NO_ACCOUNTS: AccountsView = { unlinked: [], linked: [], dismissed: [] };
-  const NOBODY_THERE: PeopleView = { places: [], total: 0, people: [] };
+  const NOBODY_THERE: PeopleView = {
+    places: [],
+    total: 0,
+    totals: { discord: 0, telegram: 0 },
+    people: [],
+  };
+  /** The same answer, `count` times: the reads of a block, then its reloads. */
+  const times = (count: number, body: unknown) =>
+    Array.from({ length: count }, () => ({ status: 200, body }));
   /** The people card's reads: the first, then after news, changes and its own polling. */
-  const PEOPLE_READS = (times: number, view: PeopleView = NOBODY_THERE) =>
-    Array.from({ length: times }, () => ({ status: 200, body: view }));
-  /** The live card's reads: the first, then one after each change. */
-  const READ_ACTIVITY = (times: number) =>
-    Array.from({ length: times }, () => ({ status: 200, body: ACTIVITY }));
+  const PEOPLE_READS = (count: number, view: PeopleView = NOBODY_THERE) => times(count, view);
+  /** What arrives, read every 10 seconds: the dashboard's « new message » mark. */
   const ACTIVITY: PlatformActivityView = {
     from: '2026-09-02',
     to: '2026-10-01',
     platforms: [
       {
         platform: 'discord',
-        messages: 12,
+        messages: 14,
         authors: 3,
-        members: 1,
-        team: 1,
-        guests: 0,
-        unlinked: 1,
-        lastAt: '2026-10-01T09:00:00.000Z',
-        daily: [...Array<number>(29).fill(0), 12],
-      },
-      {
-        platform: 'telegram',
-        messages: 2,
-        authors: 1,
-        members: 0,
+        members: 2,
         team: 1,
         guests: 0,
         unlinked: 0,
-        lastAt: '2026-09-30T08:00:00.000Z',
-        daily: [...Array<number>(28).fill(0), 2, 0],
-      },
-    ],
-    places: [
-      {
-        platform: 'discord',
-        id: '910000000000000001',
-        name: 'Le Club',
-        messages: 12,
         lastAt: '2026-10-01T09:00:00.000Z',
+        daily: [...Array<number>(27).fill(0), 2, 0, 12],
       },
       {
         platform: 'telegram',
-        id: '-1009000000001',
-        name: 'VIP',
-        messages: 2,
+        messages: 3,
+        authors: 1,
+        members: 1,
+        team: 0,
+        guests: 0,
+        unlinked: 0,
         lastAt: '2026-09-30T08:00:00.000Z',
+        daily: [...Array<number>(28).fill(0), 3, 0],
       },
     ],
-    topMembers: [
-      {
-        id: 'mber_1',
-        name: 'Alice Martin',
-        discord: 8,
-        telegram: 0,
-        lastAt: '2026-10-01T09:00:00.000Z',
-      },
-    ],
+    places: [],
+    topMembers: [],
   };
+  const READ_ACTIVITY = (count: number) => times(count, ACTIVITY);
+  /** The 30 days counted, Sep 2 to Oct 1. */
+  const DAYS = Array.from({ length: 30 }, (_, i) =>
+    new Date(Date.UTC(2026, 8, 2 + i)).toISOString().slice(0, 10),
+  );
+  const ALICE = { id: 'mber_1', name: 'Alice Martin', score: 3, level: 'low' } as const;
+  const BRUNO = { id: 'mber_3', name: 'Bruno Petit', score: 78, level: 'high' } as const;
+  const DENIS = { id: 'mber_4', name: 'Denis Moreau', score: 52, level: 'medium' } as const;
+  /**
+   * Discord over 30 days: 14 messages, 2 on Sep 29 and 12 on Oct 1, all in #general; Alice and
+   * Bruno wrote these 7 days, Denis went silent. Four scores, one of them gone quiet on Discord.
+   */
+  const DISCORD_VIEW: PlatformDashboard = {
+    platform: 'discord',
+    from: DAYS[0]!,
+    to: DAYS[29]!,
+    hero: { activeMembers7d: 2, silentMembers7d: 1, messages30d: 14, memberMessages30d: 11 },
+    daily: DAYS.map((day, i) => ({
+      day,
+      messages: i === 27 ? 2 : i === 29 ? 12 : 0,
+      members: i === 27 ? 2 : i === 29 ? 9 : 0,
+      atRisk: i === 29 ? 1 : 0,
+    })),
+    heatmap: [
+      { dow: 2, hour: 9, messages: 10, members: 2 },
+      { dow: 4, hour: 21, messages: 4, members: 1 },
+    ],
+    places: [
+      {
+        id: '920000000000000001',
+        kind: 'channel',
+        name: 'general',
+        parent: 'Le Club',
+        messages: 14,
+        members: 2,
+        lastAt: '2026-10-01T09:00:00.000Z',
+        top: [
+          { id: 'mber_1', name: 'Alice Martin', messages: 8 },
+          { id: 'mber_3', name: 'Bruno Petit', messages: 3 },
+        ],
+      },
+      {
+        id: '920000000000000002',
+        kind: 'channel',
+        name: 'wins',
+        parent: 'Le Club',
+        messages: 0,
+        members: 0,
+        lastAt: null,
+        top: [],
+      },
+    ],
+    active: {
+      d7: [
+        { ...ALICE, messages: 8, lastAt: '2026-10-01T09:00:00.000Z' },
+        { ...BRUNO, messages: 3, lastAt: '2026-09-29T18:00:00.000Z' },
+      ],
+      d14: [
+        { ...ALICE, messages: 8, lastAt: '2026-10-01T09:00:00.000Z' },
+        { ...BRUNO, messages: 3, lastAt: '2026-09-29T18:00:00.000Z' },
+      ],
+      d30: [
+        { ...ALICE, messages: 8, lastAt: '2026-10-01T09:00:00.000Z' },
+        { ...BRUNO, messages: 3, lastAt: '2026-09-29T18:00:00.000Z' },
+      ],
+    },
+    silent: {
+      d7: { total: 1, members: [{ ...DENIS, messages: 6, lastAt: '2026-09-12T10:00:00.000Z' }] },
+      d14: { total: 1, members: [{ ...DENIS, messages: 6, lastAt: '2026-09-12T10:00:00.000Z' }] },
+      d30: { total: 0, members: [] },
+    },
+    signals: {
+      settings: { discord: DEFAULT_PLATFORM_SIGNALS, telegram: DEFAULT_PLATFORM_SIGNALS },
+      mediumFrom: 40,
+      highFrom: 70,
+      // Alice 3, Denis 52 and another member 62 gone quiet on Discord, Bruno 78.
+      groups: [
+        [3, 0, 0, 0, 1],
+        [52, 1, 0, 0, 1],
+        [62, 1, 0, 0, 1],
+        [78, 0, 0, 0, 1],
+      ],
+    },
+  };
+  /** Telegram: one group, its « General » and a topic; 3 messages by Alice. */
+  const TELEGRAM_VIEW: PlatformDashboard = {
+    ...DISCORD_VIEW,
+    platform: 'telegram',
+    hero: { activeMembers7d: 1, silentMembers7d: 0, messages30d: 3, memberMessages30d: 3 },
+    daily: DAYS.map((day, i) => ({
+      day,
+      messages: i === 28 ? 3 : 0,
+      members: i === 28 ? 3 : 0,
+      atRisk: 0,
+    })),
+    heatmap: [{ dow: 3, hour: 8, messages: 3, members: 1 }],
+    places: [
+      {
+        id: '-1009000000001:2',
+        kind: 'topic',
+        name: 'Signals',
+        parent: 'VIP',
+        messages: 2,
+        members: 1,
+        lastAt: '2026-09-30T08:00:00.000Z',
+        top: [{ id: 'mber_1', name: 'Alice Martin', messages: 2 }],
+      },
+      {
+        id: '-1009000000001:',
+        kind: 'general',
+        name: 'VIP',
+        parent: null,
+        messages: 1,
+        members: 1,
+        lastAt: '2026-09-30T07:00:00.000Z',
+        top: [{ id: 'mber_1', name: 'Alice Martin', messages: 1 }],
+      },
+    ],
+    active: {
+      d7: [{ ...ALICE, messages: 3, lastAt: '2026-09-30T08:00:00.000Z' }],
+      d14: [{ ...ALICE, messages: 3, lastAt: '2026-09-30T08:00:00.000Z' }],
+      d30: [{ ...ALICE, messages: 3, lastAt: '2026-09-30T08:00:00.000Z' }],
+    },
+    silent: {
+      d7: { total: 0, members: [] },
+      d14: { total: 0, members: [] },
+      d30: { total: 0, members: [] },
+    },
+  };
+  /**
+   * The reads of a platform's tab: its dashboard, what arrives, the accounts to tie and everyone
+   * there (`reads` of each: the first, then those after news or a change).
+   */
+  const platformPage = (
+    platform: 'discord' | 'telegram',
+    { reads = 3, people = NOBODY_THERE }: { reads?: number; people?: PeopleView } = {},
+  ) => ({
+    [`/api/creator/biz_A1/platforms/${platform}`]: times(
+      reads,
+      platform === 'discord' ? DISCORD_VIEW : TELEGRAM_VIEW,
+    ),
+    'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(reads),
+    '/api/creator/biz_A1/accounts': times(reads, NO_ACCOUNTS),
+    '/api/creator/biz_A1/people': PEOPLE_READS(reads * 2, people),
+  });
 
-  it('shows what StayPut saw on Discord and Telegram: per day, author, place and member', async () => {
+  /** The three figures of the platform's hero, once drawn. */
+  const heroFigures = () =>
+    heroFiguresOf(document.querySelector<HTMLElement>('[data-hero="platform"]')!);
+
+  it('gives Discord a dashboard of its own: connection, figures, days, hours, channels, members', async () => {
+    mockApi({ ...dashboard(MEMBERS, connected), ...platformPage('discord') });
+    renderAt('/dashboard/biz_A1/sources/discord');
+    // A channel the bot cannot read: the connection needs the creator, and says what to do.
+    const hero = (await screen.findByText('Needs your attention')).closest<HTMLElement>(
+      '[data-hero]',
+    )!;
+    expect(hero.getAttribute('data-connection')).toBe('problem');
+    expect(within(hero).getByText(/^1 channel refused: give StayPut’s role/)).toBeTruthy();
+    await vi.waitFor(() => expect(heroFigures()).toEqual(['2', '1', '14']));
+    // The 30 days, and when the community writes: said and tabled for screen readers.
+    expect(
+      within(screen.getByRole('table', { name: 'Messages per day' })).getAllByRole('row'),
+    ).toHaveLength(31);
+    expect(screen.getByText('The busiest hour: Tuesday at 9 AM, 10 messages.')).toBeTruthy();
+    expect(document.querySelector('[data-cell="2:9"]')?.getAttribute('data-step')).toBe('5');
+    expect(document.querySelector('[data-cell="4:21"]')?.getAttribute('data-step')).toBe('2');
+    expect(document.querySelector('[data-cell="1:0"]')?.getAttribute('data-step')).toBe('0');
+    // Each channel: its messages and members, its three most active; one server, no name.
+    const general = document.querySelector('[data-place="920000000000000001"]')!;
+    expect(general.textContent).toContain('#general');
+    expect(general.textContent).toContain('Most active here: Alice Martin 8 · Bruno Petit 3');
+    expect(general.textContent).not.toContain('Le Club');
+    expect(document.querySelector('[data-place="920000000000000002"]')!.textContent).toContain(
+      'No message there over this period.',
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Name' }));
+    expect(
+      Array.from(document.querySelectorAll('[data-place]')).map((p) =>
+        p.getAttribute('data-place'),
+      ),
+    ).toEqual(['920000000000000001', '920000000000000002']);
+    // The most active and who went silent, each with their ring.
+    const active = document.querySelector<HTMLElement>('[data-list="active"]')!;
+    expect(within(active).getByText('Alice Martin')).toBeTruthy();
+    expect(within(active).getByText('8 messages')).toBeTruthy();
+    const silent = document.querySelector<HTMLElement>('[data-list="silent"]')!;
+    expect(within(silent).getByText('Denis Moreau')).toBeTruthy();
+    expect(within(silent).getByText(/^Last message \d+ days ago$/)).toBeTruthy();
+    expect(within(silent).getByRole('img', { name: 'Medium risk · 52' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: '30 days' }));
+    expect(
+      within(silent).getByText('Nobody went silent: every member who wrote here still does.'),
+    ).toBeTruthy();
+    // Who is who, everyone there, and the bot: what it can see, and the channel to fix.
+    expect(screen.getByRole('region', { name: 'Discord accounts' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Everyone on Discord' })).toBeTruthy();
+    const checks = document.querySelector<HTMLElement>('[data-checks="discord"]')!;
+    expect(within(checks).getByText('StayPut’s bot is set up')).toBeTruthy();
+    expect(within(checks).getByText('Reads 1 channel')).toBeTruthy();
+    expect(checks.querySelector('[data-check="refused"]')?.getAttribute('data-state')).toBe(
+      'problem',
+    );
+    expect(
+      screen.getByText('StayPut never reads what members write: only who wrote, where and when.'),
+    ).toBeTruthy();
+  });
+
+  it('picks a day on the chart: its channels and who wrote, until « Back to 30 days »', async () => {
+    const day: PlatformDayView = {
+      day: '2026-09-29',
+      messages: 2,
+      places: [
+        {
+          ...DISCORD_VIEW.places[0]!,
+          messages: 2,
+          members: 2,
+          top: [
+            { id: 'mber_3', name: 'Bruno Petit', messages: 1 },
+            { id: 'mber_1', name: 'Alice Martin', messages: 1 },
+          ],
+        },
+      ],
+      active: [
+        { ...BRUNO, messages: 1, lastAt: '2026-09-29T18:00:00.000Z' },
+        { ...ALICE, messages: 1, lastAt: '2026-09-29T09:00:00.000Z' },
+      ],
+    };
+    const calls = mockApi({
+      ...dashboard(MEMBERS, connected),
+      ...platformPage('discord'),
+      '/api/creator/biz_A1/platforms/discord/days/2026-09-29': [{ status: 200, body: day }],
+    });
+    renderAt('/dashboard/biz_A1/sources/discord');
+    const chart = await screen.findByRole('group', { name: 'Messages per day' });
+    // From today, two days back with the arrows, then Enter.
+    fireEvent.keyDown(chart, { key: 'ArrowLeft' });
+    fireEvent.keyDown(chart, { key: 'ArrowLeft' });
+    fireEvent.keyDown(chart, { key: 'Enter' });
+    expect(await screen.findAllByText('Showing Tuesday, September 29')).toHaveLength(2);
+    expect(calls).toContain('/api/creator/biz_A1/platforms/discord/days/2026-09-29');
+    expect(document.querySelector('[data-place="920000000000000001"]')!.textContent).toContain(
+      'Most active here: Bruno Petit 1 · Alice Martin 1',
+    );
+    // A channel nobody wrote in that day is not listed.
+    expect(document.querySelector('[data-place="920000000000000002"]')).toBeNull();
+    const active = () => document.querySelector<HTMLElement>('[data-list="active"]')!;
+    expect(within(active()).getAllByText('1 message')).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Back to 30 days' })[0]!);
+    expect(screen.queryByText(/^Showing /)).toBeNull();
+    expect(within(active()).getByText('8 messages')).toBeTruthy();
+  });
+
+  it('lists who wrote in an hour of the heatmap, and how much the others wrote', async () => {
+    const slot: PlatformSlotView = {
+      dow: 2,
+      hour: 9,
+      messages: 10,
+      others: 1,
+      members: [
+        { ...ALICE, messages: 6, lastAt: '2026-09-29T09:20:00.000Z' },
+        { ...BRUNO, messages: 3, lastAt: '2026-09-22T09:40:00.000Z' },
+      ],
+    };
     mockApi({
       ...dashboard(MEMBERS, connected),
-      '/api/creator/biz_A1/people': PEOPLE_READS(4),
-      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
-      '/api/creator/biz_A1/accounts': [{ status: 200, body: NO_ACCOUNTS }],
+      ...platformPage('discord'),
+      '/api/creator/biz_A1/platforms/discord/slots/2/9': [{ status: 200, body: slot }],
     });
+    renderAt('/dashboard/biz_A1/sources/discord');
+    expect(await screen.findByText('Click an hour to see who wrote then.')).toBeTruthy();
+    fireEvent.click(document.querySelector('[data-cell="2:9"]')!);
+    expect(await screen.findByText('Tuesday, 9 AM to 10 AM')).toBeTruthy();
+    const picked = document.querySelector<HTMLElement>('[data-slot="2/9"]')!;
+    expect(await within(picked).findByText('Alice Martin')).toBeTruthy();
+    expect(within(picked).getByText('Bruno Petit')).toBeTruthy();
+    expect(
+      within(picked).getByText('+ 1 message from your team, guests or accounts not tied yet'),
+    ).toBeTruthy();
+    fireEvent.click(within(picked).getByRole('button', { name: 'Close' }));
+    expect(document.querySelector('[data-slot]')).toBeNull();
+    expect(screen.getByText('Click an hour to see who wrote then.')).toBeTruthy();
+  });
+
+  it('previews what a signal does to the levels before saving it, then saves it', async () => {
+    const quiet = { ...DEFAULT_PLATFORM_SIGNALS, silent: { on: true, points: 10 } };
+    const calls = mockApi({
+      ...dashboard(MEMBERS, connected),
+      ...platformPage('discord'),
+      'PUT /api/creator/biz_A1/platforms/discord/signals': [
+        { status: 200, body: { settings: { discord: quiet, telegram: DEFAULT_PLATFORM_SIGNALS } } },
+      ],
+      '/api/creator/biz_A1/members': times(3, MEMBERS),
+    });
+    renderAt('/dashboard/biz_A1/sources/discord');
+    const toggle = await screen.findByRole('switch', { name: 'Gone quiet' });
+    expect(within(toggle.closest('li')!).getByText('2 members now')).toBeTruthy();
+    expect(screen.getByText('No member changes level with these settings.')).toBeTruthy();
+    const points = screen.getByRole<HTMLInputElement>('slider', {
+      name: /^Points of “Gone quiet”/,
+    });
+    expect(points.disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Save the signals' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    // On, +10 points: the score at 62 crosses 70; the one at 52 stays medium.
+    fireEvent.click(toggle);
+    expect(screen.getByText('High risk: 1 → 2 · Medium risk: 2 → 1')).toBeTruthy();
+    fireEvent.change(points, { target: { value: '20' } });
+    expect(screen.getByText('High risk: 1 → 3 · Medium risk: 2 → 0')).toBeTruthy();
+    fireEvent.change(points, { target: { value: '10' } });
+    expect(screen.getByText('Not saved yet')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save the signals' }));
+    expect(await screen.findByText('Signals saved')).toBeTruthy();
+    const put = 'PUT /api/creator/biz_A1/platforms/discord/signals';
+    expect(bodies.get(put)).toEqual(quiet);
+    expect(headersOf.get(put)?.get('x-stayput-csrf')).toBe('1');
+    // Every score is due again: the dashboard and the members are read again.
+    await vi.waitFor(() => {
+      expect(calls.filter((c) => c === '/api/creator/biz_A1/platforms/discord')).toHaveLength(2);
+      expect(calls.filter((c) => c === '/api/creator/biz_A1/members').length).toBeGreaterThan(1);
+    });
+  });
+
+  it('tests the connection: a message written meanwhile shows within seconds', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date('2026-10-01T12:00:00.000Z'));
+    try {
+      const arrived: PlatformActivityView = {
+        ...ACTIVITY,
+        platforms: ACTIVITY.platforms.map((p) =>
+          p.platform === 'discord' ? { ...p, messages: 15, lastAt: '2026-10-01T12:00:02.000Z' } : p,
+        ),
+      };
+      mockApi({
+        ...dashboard(MEMBERS, connected),
+        ...platformPage('discord'),
+        'POST /api/creator/biz_A1/platform-activity/refresh': [
+          { status: 200, body: ACTIVITY },
+          ...times(5, arrived),
+        ],
+        '/api/creator/biz_A1/integrations?lang=en': times(4, connected),
+      });
+      renderAt('/dashboard/biz_A1/sources/discord');
+      const start = await screen.findByRole('button', { name: 'Start the test' });
+      await vi.waitFor(() => expect(heroFigures()).toEqual(['2', '1', '14']));
+      fireEvent.click(start);
+      expect(screen.getByText('Waiting for a message…')).toBeTruthy();
+      // Read every 3 seconds meanwhile, not 10: the message shows, its time only.
+      await vi.advanceTimersByTimeAsync(3_100);
+      expect(await screen.findByText(/^Received: a message at \d{1,2}:\d{2}/)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Test again' })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says within 5 seconds that a block takes long, with « Retry », never « Loading… »', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mockApi({
+        ...dashboard(MEMBERS, connected),
+        ...platformPage('discord'),
+        '/api/creator/biz_A1/platforms/discord': ['never', { status: 200, body: DISCORD_VIEW }],
+      });
+      renderAt('/dashboard/biz_A1/sources/discord');
+      await screen.findByRole('button', { name: 'Start the test' });
+      expect(screen.queryByText('This is taking longer than usual.')).toBeNull();
+      await vi.advanceTimersByTimeAsync(5_100);
+      expect(await screen.findByText('This is taking longer than usual.')).toBeTruthy();
+      expect(screen.queryByText('Loading…')).toBeNull();
+      // One error for the blocks that share the reading: no empty card, no figure skeleton.
+      expect(screen.queryByRole('heading', { name: 'Channels' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      await vi.waitFor(() => expect(heroFigures()).toEqual(['2', '1', '14']));
+      expect(screen.getByRole('heading', { name: 'Channels' })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends the former Activity tab to Discord, or to Telegram when only a group is connected', async () => {
+    mockApi({ ...dashboard(MEMBERS, connected), ...platformPage('discord') });
     renderAt('/dashboard/biz_A1/sources/activity');
-    const places = (await screen.findByText('Servers and groups')).closest('section')!;
-    const card = places.parentElement!.parentElement!;
-    expect(within(card).getByText('12 messages')).toBeTruthy();
-    expect(within(card).getByText('1 member')).toBeTruthy();
-    expect(within(card).getAllByText('1 of the team')).toHaveLength(2);
-    expect(within(card).getByText('1 to tie')).toBeTruthy();
-    // Each chart says its last day, and holds its figures for screen readers.
-    expect(within(card).getByText('Messages per day on Discord')).toBeTruthy();
-    expect(within(card).getByText(/· 12 messages$/)).toBeTruthy();
-    expect(within(places).getByText('Le Club')).toBeTruthy();
-    expect(within(places).getByText('VIP')).toBeTruthy();
-    expect(within(card).getByText('Alice Martin')).toBeTruthy();
-    expect(within(card).getByText('8 on Discord')).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Channels' })).toBeTruthy();
+    cleanup();
+    const groupOnly: IntegrationsStatus = {
+      ...connected,
+      discord: { ...connected.discord, servers: [] },
+    };
+    mockApi({ ...dashboard(MEMBERS, groupOnly), ...platformPage('telegram') });
+    renderAt('/dashboard/biz_A1/sources/activity');
+    expect(await screen.findByRole('heading', { name: 'Groups and topics' })).toBeTruthy();
+    // Its topics by name, « General » for what is outside them; one group, said once above.
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-place="-1009000000001:2"]')?.textContent).toContain(
+        'Signals',
+      ),
+    );
+    expect(document.querySelector('[data-place="-1009000000001:"]')!.textContent).toContain(
+      'General',
+    );
+    expect(document.querySelector('[data-places]')!.textContent).not.toContain('VIP ›');
   });
 
   it('ties an account to a member in one click, from what StayPut suggests', async () => {
     const alice = {
-      platform: 'discord',
-      accountId: '940000000000000001',
+      platform: 'telegram',
+      accountId: '5550009',
       name: 'Alice',
-      username: 'alice.m',
+      username: 'alice_m',
       member: { id: 'mber_1', name: 'Alice Martin' },
       via: 'name',
     } satisfies AccountsView['linked'][number];
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
-      '/api/creator/biz_A1/people': PEOPLE_READS(4),
-      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
+      ...platformPage('telegram'),
       '/api/creator/biz_A1/accounts': [
         {
           status: 200,
@@ -1881,7 +2261,7 @@ describe('activity sources', () => {
         { status: 200, body: MEMBERS },
       ],
     });
-    renderAt('/dashboard/biz_A1/sources/activity');
+    renderAt('/dashboard/biz_A1/sources/telegram');
     expect(await screen.findByText('To tie (1)')).toBeTruthy();
     expect(screen.getByText('@bruno_p')).toBeTruthy();
     expect(screen.getByText(/2 messages waiting/)).toBeTruthy();
@@ -1904,13 +2284,14 @@ describe('activity sources', () => {
     });
     expect(headersOf.get(post)?.get('x-stayput-csrf')).toBe('1');
     expect(screen.getByText('by you')).toBeTruthy();
-    // The counts of the sources and the members' activity are read again.
-    await vi.waitFor(() =>
-      expect(calls.filter((c) => c === '/api/creator/biz_A1/integrations?lang=en')).toHaveLength(2),
-    );
+    // The counts of the sources and the group's dashboard are read again.
+    await vi.waitFor(() => {
+      expect(calls.filter((c) => c === '/api/creator/biz_A1/integrations?lang=en')).toHaveLength(2);
+      expect(calls.filter((c) => c === '/api/creator/biz_A1/platforms/telegram')).toHaveLength(2);
+    });
   });
 
-  it('ties each platform’s accounts under its own tab, where its card says « below »', async () => {
+  it('ties each platform’s accounts under its own tab, in « Who is who »', async () => {
     // The founder, 2 October: since the tabs, the accounts to tie were only at the bottom of
     // Activity, while the Discord and Telegram tabs said « tie the others below ».
     const kev = {
@@ -1934,6 +2315,9 @@ describe('activity sources', () => {
     const both: AccountsView = { unlinked: [kev, bruno], linked: [], dismissed: [] };
     mockApi({
       ...dashboard(MEMBERS, connected),
+      ...platformPage('discord'),
+      ...platformPage('telegram'),
+      '/api/creator/biz_A1/platforms/discord': times(3, DISCORD_VIEW),
       '/api/creator/biz_A1/accounts': [
         { status: 200, body: both },
         { status: 200, body: both },
@@ -1967,8 +2351,9 @@ describe('activity sources', () => {
       ],
     });
     renderAt('/dashboard/biz_A1/sources/discord');
-    // Under the server's card, Discord's accounts only.
+    // Under « Who is who », Discord's accounts only; the bot's card says where they are.
     const discord = await screen.findByRole('region', { name: 'Discord accounts' });
+    expect(screen.getByText(/tie the others under “Who is who”/)).toBeTruthy();
     expect(await within(discord).findByText('To tie (1)')).toBeTruthy();
     expect(within(discord).getByText('@kev.trades')).toBeTruthy();
     expect(within(discord).queryByText('@bruno_p')).toBeNull();
@@ -1999,8 +2384,7 @@ describe('activity sources', () => {
     const waiting = { ...mine, messages: 2, lastAt: '2026-10-01T09:00:00.000Z', suggestions: [] };
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
-      '/api/creator/biz_A1/people': PEOPLE_READS(4),
-      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
+      ...platformPage('telegram'),
       '/api/creator/biz_A1/accounts': [
         { status: 200, body: { unlinked: [waiting], linked: [], dismissed: [] } },
       ],
@@ -2026,7 +2410,7 @@ describe('activity sources', () => {
         body: MEMBERS,
       })),
     });
-    renderAt('/dashboard/biz_A1/sources/activity');
+    renderAt('/dashboard/biz_A1/sources/telegram');
     expect(await screen.findByText(/Your own account, or a teammate’s\?/)).toBeTruthy();
     // Only Whop members can be tied: someone invited to Discord alone is not in the list.
     expect(screen.getByText(/Only someone who joined your community on Whop/)).toBeTruthy();
@@ -2053,7 +2437,7 @@ describe('activity sources', () => {
           p.platform === 'telegram'
             ? {
                 ...p,
-                messages: 3,
+                messages: 4,
                 lastAt: '2026-10-01T10:00:00.000Z',
                 daily: [...p.daily.slice(0, 29), 1],
               }
@@ -2062,39 +2446,41 @@ describe('activity sources', () => {
       };
       const calls = mockApi({
         ...dashboard(MEMBERS, connected),
-        '/api/creator/biz_A1/people': PEOPLE_READS(4),
+        ...platformPage('telegram'),
+        '/api/creator/biz_A1/platforms/telegram': [
+          { status: 200, body: TELEGRAM_VIEW },
+          {
+            status: 200,
+            body: {
+              ...TELEGRAM_VIEW,
+              hero: { ...TELEGRAM_VIEW.hero, messages30d: 4, memberMessages30d: 4 },
+            },
+          },
+        ],
         'POST /api/creator/biz_A1/platform-activity/refresh': [
           { status: 200, body: ACTIVITY },
           { status: 200, body: later },
         ],
-        '/api/creator/biz_A1/accounts': [
-          { status: 200, body: NO_ACCOUNTS },
-          { status: 200, body: NO_ACCOUNTS },
-        ],
-        '/api/creator/biz_A1/integrations?lang=en': [
-          { status: 200, body: connected },
-          { status: 200, body: connected },
-        ],
+        '/api/creator/biz_A1/integrations?lang=en': times(2, connected),
       });
-      renderAt('/dashboard/biz_A1/sources/activity');
-      const places = (await screen.findByText('Servers and groups')).closest('section')!;
-      const card = places.parentElement!.parentElement!;
-      expect(within(card).getByText('2 messages')).toBeTruthy();
-      expect(screen.getByText('Live')).toBeTruthy();
+      renderAt('/dashboard/biz_A1/sources/telegram');
+      expect(await screen.findByText('Live')).toBeTruthy();
+      await vi.waitFor(() => expect(heroFigures()).toEqual(['1', '0', '3']));
 
       // Seconds later, a Telegram message: it shows, and what may have moved is read again.
       await vi.advanceTimersByTimeAsync(LIVE_REFRESH_MS);
-      expect(await within(card).findByText('3 messages')).toBeTruthy();
+      await vi.waitFor(() => expect(heroFigures()).toEqual(['1', '0', '4']));
       const reads = (path: string) => calls.filter((call) => call === path).length;
       expect(reads('POST /api/creator/biz_A1/platform-activity/refresh')).toBe(2);
       await vi.waitFor(() => expect(reads('/api/creator/biz_A1/accounts')).toBe(2));
       expect(reads('/api/creator/biz_A1/integrations?lang=en')).toBe(2);
+      expect(reads('/api/creator/biz_A1/platforms/telegram')).toBe(2);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('shows everyone on the server and in the group, not only who writes', async () => {
+  it('shows everyone in the group and on the server, each in its tab, not only who writes', async () => {
     const people: PeopleView = {
       places: [
         {
@@ -2115,6 +2501,7 @@ describe('activity sources', () => {
         },
       ],
       total: 3,
+      totals: { discord: 0, telegram: 3 },
       people: [
         {
           platform: 'telegram',
@@ -2159,25 +2546,17 @@ describe('activity sources', () => {
     };
     mockApi({
       ...dashboard(MEMBERS, connected),
-      '/api/creator/biz_A1/people': PEOPLE_READS(4, people),
-      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(2),
-      '/api/creator/biz_A1/accounts': [{ status: 200, body: NO_ACCOUNTS }],
+      ...platformPage('telegram', { people }),
+      '/api/creator/biz_A1/platforms/discord': times(2, DISCORD_VIEW),
     });
-    renderAt('/dashboard/biz_A1/sources/activity');
+    renderAt('/dashboard/biz_A1/sources/telegram');
     const card = (
-      await screen.findByRole('heading', { name: 'Members on Discord and Telegram' })
+      await screen.findByRole('heading', { name: 'Everyone in your Telegram group' })
     ).closest('section')!;
     expect(await within(card).findByText('Marc Dupont')).toBeTruthy();
     expect(within(card).getByText(/Members in the group: 34 · StayPut knows 3/)).toBeTruthy();
-    // Discord keeps its list until the application turns the Server Members Intent on.
-    expect(
-      within(card).getByText(/Discord does not give StayPut the member list yet/),
-    ).toBeTruthy();
-    expect(
-      within(card)
-        .getByRole('link', { name: /Open the Discord Developer Portal/ })
-        .getAttribute('href'),
-    ).toBe('https://discord.com/developers/applications');
+    // The server is in Discord's tab, not here.
+    expect(within(card).queryByText(/Discord does not give StayPut/)).toBeNull();
     expect(within(card).getByText('Not tied yet')).toBeTruthy();
     expect(within(card).getByText('Member: Léa Martin')).toBeTruthy();
     expect(within(card).getByText(/No message in 30 days · there since/)).toBeTruthy();
@@ -2192,11 +2571,26 @@ describe('activity sources', () => {
       target: { value: 'nobody' },
     });
     expect(within(card).getByText('No one matches this search.')).toBeTruthy();
-    fireEvent.change(within(card).getByRole('searchbox', { name: 'Search by name' }), {
-      target: { value: '' },
-    });
-    fireEvent.click(within(card).getByRole('button', { name: /Discord/ }));
-    expect(within(card).getByText('No one matches this search.')).toBeTruthy();
+
+    // Discord keeps its list until the application turns the Server Members Intent on.
+    fireEvent.click(screen.getByRole('link', { name: 'Discord' }));
+    const discord = (await screen.findByRole('heading', { name: 'Everyone on Discord' })).closest(
+      'section',
+    )!;
+    expect(
+      await within(discord).findByText(/Discord does not give StayPut the member list yet/),
+    ).toBeTruthy();
+    expect(
+      within(discord)
+        .getByRole('link', { name: /Open the Discord Developer Portal/ })
+        .getAttribute('href'),
+    ).toBe('https://discord.com/developers/applications');
+    expect(within(discord).getByText(/Members on the server: 12/)).toBeTruthy();
+    expect(within(discord).queryByText('Marc Dupont')).toBeNull();
+    // The bot's check says it too.
+    expect(document.querySelector('[data-check="members"]')?.getAttribute('data-state')).toBe(
+      'problem',
+    );
   });
 
   it('offers to connect Discord and Telegram, with the steps', async () => {
@@ -2239,8 +2633,7 @@ describe('activity sources', () => {
   it('chooses the channels of a connected server, then saves them', async () => {
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
-      '/api/creator/biz_A1/people': PEOPLE_READS(4),
-      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
+      ...platformPage('discord'),
       '/api/creator/biz_A1/discord/910000000000000001/channels': [
         {
           status: 200,
@@ -2304,8 +2697,7 @@ describe('activity sources', () => {
   it('disconnects a group after asking once more', async () => {
     const calls = mockApi({
       ...dashboard(MEMBERS, connected),
-      '/api/creator/biz_A1/people': PEOPLE_READS(4),
-      'POST /api/creator/biz_A1/platform-activity/refresh': READ_ACTIVITY(3),
+      ...platformPage('telegram'),
       'DELETE /api/creator/biz_A1/telegram/-1009000000001': [
         { status: 200, body: { removed: true } },
       ],
@@ -4405,7 +4797,7 @@ describe('the guide (brief v4 §10)', () => {
       'StayPut watches every member for you. When someone goes quiet, misses a payment or schedules a cancellation, they show up here with the reason. You never have to dig.',
     );
     expect(guide.textContent).toContain(
-      'StayPut never reads what members write: only who wrote and when.',
+      'StayPut never reads what members write: only who wrote, where and when.',
     );
     expect(within(guide).getAllByRole('button', { name: 'Show me' })).toHaveLength(5);
     // Each card loops its picture while on screen; nothing here says how StayPut computes.
@@ -4616,7 +5008,7 @@ describe('the guide (brief v4 §10)', () => {
       within(welcome).getByRole('link', { name: 'Connect Telegram' }).getAttribute('href'),
     ).toBe(INTEGRATIONS.telegram.addToGroup!.url);
     expect(welcome.textContent).toContain(
-      'StayPut never reads what members write: only who wrote and when.',
+      'StayPut never reads what members write: only who wrote, where and when.',
     );
     fireEvent.click(within(welcome).getByRole('button', { name: 'Next' }));
     // Automatic or manual: the community's mode first, the choice saved on Next.
@@ -4703,7 +5095,6 @@ const DEMO_PAGES = [
   'sources',
   'sources/discord',
   'sources/telegram',
-  'sources/activity',
   'settings',
   'settings/risk',
   'settings/actions',
@@ -4993,15 +5384,33 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
     expect(sarah.textContent).not.toMatch(/Renews/);
   }, 20_000);
 
-  it('counts the members’ part of each platform’s messages on Integrations › Activity', async () => {
-    vi.stubGlobal('fetch', vi.fn());
-    renderAt('/demo/sources/activity');
-    await vi.waitFor(() => expect(document.querySelectorAll('[data-by-members]').length).toBe(2), {
+  it('gives Discord and Telegram each a dashboard of its own, live, from the demo’s members', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    renderAt('/demo/sources/telegram');
+    const hero = await vi.waitFor(
+      () => {
+        const found = document.querySelector<HTMLElement>('[data-hero="platform"]');
+        if (!found) throw new Error('no hero yet');
+        return found;
+      },
+      { timeout: 3_000 },
+    );
+    expect(hero.getAttribute('data-connection')).toBe('live');
+    await vi.waitFor(() => expect(heroFiguresOf(hero).every((f) => /^\d+$/.test(f))).toBe(true), {
       timeout: 3_000,
     });
-    for (const line of document.querySelectorAll('[data-by-members]')) {
-      expect(line.textContent).toMatch(/^\d[\d,]* by members$/);
-    }
+    // Its group's topics by name, its members with their rings; nothing asked of StayPut.
+    expect(await screen.findByRole('heading', { name: 'Groups and topics' })).toBeTruthy();
+    expect(document.querySelectorAll('[data-place][data-kind="topic"]').length).toBe(2);
+    expect(document.querySelector('[data-list="active"] [data-member]')).toBeTruthy();
+    expect(fetchMock).not.toHaveBeenCalled();
+    // The former Activity tab leads to Discord's.
+    cleanup();
+    renderAt('/demo/sources/activity');
+    expect(
+      await screen.findByRole('heading', { name: 'Channels' }, { timeout: 3_000 }),
+    ).toBeTruthy();
   }, 20_000);
 });
 
@@ -5082,9 +5491,12 @@ describe('the demo leads nowhere outside StayPut (fix prompt v4.1, block 5)', ()
       { timeout: 3_000 },
     );
     expect(discord.getAttribute('aria-disabled')).toBe('true');
-    // Where the tour's last step lights up.
-    expect(discord.getAttribute('data-tour')).toBe('connect-discord');
     expect(description(discord)).toBe('Disabled in the demo');
+    // The dashboard's « Reconnect » too: where the tour's last step lights up.
+    const reconnect = screen.getByRole('button', { name: 'Reconnect' });
+    expect(reconnect.getAttribute('aria-disabled')).toBe('true');
+    expect(reconnect.getAttribute('data-tour')).toBe('connect-discord');
+    expect(description(reconnect)).toBe('Disabled in the demo');
     cleanup();
     renderAt('/demo/sources/telegram');
     const telegram = await screen.findByRole(

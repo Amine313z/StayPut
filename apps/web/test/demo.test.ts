@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_HIGH_FROM,
   RISK_FACTORS,
+  scoreDistribution,
   zonedDay,
   type MemberRow,
   type RevenueDay,
@@ -727,5 +728,111 @@ describe('Analytics › Overview in the demo (fix prompt v4.1, block 7)', () => 
     expect(sum(overview.reasons.map((r) => r.count))).toBe(
       new Set(offers.map((a) => a.member.id)).size,
     );
+  });
+});
+
+describe('Integrations › Discord and › Telegram in the demo (fix prompt v4.1, block 7)', () => {
+  const PLATFORMS = ['discord', 'telegram'] as const;
+
+  it('adds up: the hero is its lists, the days its 30 days, the places and the hours its messages', () => {
+    const world = createWorld(NOW);
+    const joined = world.members.members.filter((m) => m.status === 'joined');
+    const activity = world.pages.platformActivity();
+    for (const platform of PLATFORMS) {
+      const view = world.pages.platforms.dashboard(platform);
+      const { hero } = view;
+      expect(view.daily).toHaveLength(30);
+      expect(view.to).toBe(zonedDay(NOW, 'Europe/Paris'));
+      expect(sum(view.daily.map((d) => d.messages))).toBe(hero.messages30d);
+      expect(sum(view.daily.map((d) => d.members))).toBe(hero.memberMessages30d);
+      expect(sum(view.heatmap.map((c) => c.messages))).toBe(hero.messages30d);
+      // Each message in one place: a channel, a group, its « General » or one of its topics.
+      expect(sum(view.places.map((p) => p.messages))).toBe(hero.messages30d);
+      // The live tile (the dashboard's « new message » mark) counts the same messages.
+      const tile = activity.platforms.find((p) => p.platform === platform)!;
+      expect(tile.messages).toBe(hero.messages30d);
+      expect(tile.daily).toEqual(view.daily.map((d) => d.messages));
+      // Active or gone silent: every member who wrote there over 90 days is one or the other.
+      expect(view.silent.d7.total).toBe(hero.silentMembers7d);
+      expect(view.active.d7).toHaveLength(Math.min(10, hero.activeMembers7d));
+      expect(view.silent.d14.total).toBeLessThanOrEqual(view.silent.d7.total);
+      expect(view.silent.d30.total).toBeLessThanOrEqual(view.silent.d14.total);
+      // Each one listed is a member, with the ring the Members page shows.
+      for (const listed of [...view.active.d30, ...view.silent.d7.members]) {
+        const member = joined.find((m) => m.id === listed.id)!;
+        expect(member.name).toBe(listed.name);
+        expect(listed.score).toBe(member.risk?.score ?? null);
+        expect(listed.level).toBe(member.risk?.level ?? null);
+      }
+      // The riskiest silent first; the most active first.
+      const scores = view.silent.d7.members.map((m) => m.score ?? -1);
+      expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+      const counts = view.active.d30.map((m) => m.messages);
+      expect([...counts].sort((a, b) => b - a)).toEqual(counts);
+      // A day picked, an hour picked: the same messages.
+      for (const day of view.daily.filter((d) => d.messages > 0).slice(-3)) {
+        const picked = world.pages.platforms.day(platform, day.day);
+        expect(picked.messages).toBe(day.messages);
+        expect(sum(picked.places.map((p) => p.messages))).toBe(day.messages);
+        expect(sum(picked.active.map((m) => m.messages))).toBe(day.members);
+      }
+      for (const cell of view.heatmap.slice(0, 5)) {
+        const slot = world.pages.platforms.slot(platform, cell.dow, cell.hour);
+        expect(slot.messages).toBe(cell.messages);
+        expect(slot.members).toHaveLength(cell.members);
+        expect(sum(slot.members.map((m) => m.messages)) + slot.others).toBe(cell.messages);
+      }
+    }
+  });
+
+  it('previews exactly what saving the signals does to the levels, and undoes it', () => {
+    const world = createWorld(NOW);
+    const joined = world.members.members.filter((m) => m.status === 'joined');
+    const levels = () => {
+      const counts = { scheduled_departure: 0, high: 0, medium: 0, low: 0 };
+      for (const member of joined) if (member.risk) counts[member.risk.level] += 1;
+      return counts;
+    };
+    const before = levels();
+    const risks = joined.map((m) => m.risk);
+    const { signals } = world.pages.platforms.dashboard('discord');
+    const groups = signals.groups.map(([base, discord, telegram, rule, count]) => ({
+      base,
+      discord,
+      telegram,
+      rule,
+      count,
+    }));
+    const thresholds = { mediumFrom: signals.mediumFrom, highFrom: signals.highFrom };
+    // Today's settings: the preview's « Today » is the Members page.
+    expect(scoreDistribution(groups, signals.settings, thresholds).levels).toEqual(before);
+
+    const silent = { ...signals.settings.discord, silent: { on: true, points: 30 } };
+    const preview = scoreDistribution(
+      groups,
+      { ...signals.settings, discord: silent },
+      thresholds,
+    ).levels;
+    world.saveSignals('discord', silent);
+    expect(levels()).toEqual(preview);
+    expect(levels()).not.toEqual(before);
+    expect(world.members.summary.risk).toMatchObject({
+      high: preview.high,
+      medium: preview.medium,
+      low: preview.low,
+      scheduledDeparture: preview.scheduled_departure,
+    });
+    expect(world.pages.platforms.dashboard('discord').signals.settings.discord).toEqual(silent);
+    // Its reason, where it adds points and inactivity does not already say it.
+    const quiet = joined.filter(
+      (m) =>
+        m.risk?.reasons.some((r) => r.code === 'platform_silent') &&
+        !m.risk.reasons.some((r) => r.code === 'inactive'),
+    );
+    expect(quiet.length).toBeGreaterThan(0);
+
+    world.saveSignals('discord', { ...silent, silent: { on: false, points: 30 } });
+    expect(levels()).toEqual(before);
+    expect(joined.map((m) => m.risk)).toEqual(risks);
   });
 });

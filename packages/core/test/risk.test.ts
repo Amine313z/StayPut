@@ -11,6 +11,16 @@ import {
   isInactiveNewcomer,
   isNiche,
   normalizeWeights,
+  DEFAULT_PLATFORM_SIGNALS,
+  SIGNAL_BITS,
+  allPlatformSignals,
+  firedSignals,
+  parsePlatformSignals,
+  platformSignals,
+  scoreDistribution,
+  scoreWithSignals,
+  type PlatformInputs,
+  type PlatformSignals,
   type RiskInputs,
   type RiskSettings,
 } from '../src';
@@ -55,6 +65,7 @@ describe('computeRisk', () => {
       subScores: { recency: 0, frequency: 0, progress: 0, payment: 0, friction: 0 },
       reasons: [],
       inactiveNewcomer: false,
+      making: { base: 0, discord: 0, telegram: 0, rule: 0 },
     });
   });
 
@@ -392,5 +403,153 @@ describe('niche presets', () => {
     expect(NICHE_PRESETS.other.weights).toEqual(DEFAULT_WEIGHTS);
     expect(isNiche('fitness')).toBe(true);
     expect(isNiche('poker')).toBe(false);
+  });
+});
+
+describe("the platforms' signals (brief v4 §9.6)", () => {
+  /** A member's Discord: as busy this week as the 4 weeks before. */
+  const there = (over: Partial<PlatformInputs> = {}): PlatformInputs => ({
+    week: 5,
+    before: 20,
+    lastAt: daysAgo(1),
+    leftAt: null,
+    ...over,
+  });
+  /** Discord's signals with these on, the others at their default points, off. */
+  const on = (...ids: (keyof PlatformSignals)[]) => ({
+    discord: Object.fromEntries(
+      Object.entries(DEFAULT_PLATFORM_SIGNALS).map(([id, s]) => [
+        id,
+        { ...s, on: ids.includes(id as keyof PlatformSignals) },
+      ]),
+    ),
+  });
+
+  it('tells which signal holds: gone quiet, writes less, left', () => {
+    expect(firedSignals(there(), NOW)).toEqual([]);
+    expect(firedSignals(there({ week: 0, lastAt: daysAgo(9) }), NOW)).toEqual(['silent']);
+    // Nothing before either: nothing to go quiet from.
+    expect(firedSignals(there({ week: 0, before: 0, lastAt: null }), NOW)).toEqual([]);
+    // Under half the weekly average of 5…
+    expect(firedSignals(there({ week: 2 }), NOW)).toEqual(['drop']);
+    expect(firedSignals(there({ week: 3 }), NOW)).toEqual([]);
+    // …from 2 a week at least: 1 → 0.25 says nothing.
+    expect(firedSignals(there({ week: 0.5, before: 4 }), NOW)).toEqual([]);
+    // Left within 30 days, and only that: leaving says more than going quiet.
+    expect(firedSignals(there({ week: 0, leftAt: daysAgo(3) }), NOW)).toEqual(['left']);
+    expect(firedSignals(there({ week: 0, leftAt: daysAgo(31), lastAt: daysAgo(31) }), NOW)).toEqual(
+      ['silent'],
+    );
+  });
+
+  it("adds nothing while off: the score is the five factors'", () => {
+    const quiet = steady({ platforms: { discord: there({ week: 0, lastAt: daysAgo(9) }) } });
+    const result = computeRisk(quiet, settings(), NOW);
+    expect(result.score).toBe(0);
+    expect(result.reasons).toEqual([]);
+    expect(result.making).toEqual({ base: 0, discord: SIGNAL_BITS.silent, telegram: 0, rule: 0 });
+  });
+
+  it('adds the points of a signal on, and names it among the reasons', () => {
+    const quiet = steady({ platforms: { discord: there({ week: 0, lastAt: daysAgo(9) }) } });
+    const result = computeRisk(quiet, settings({ platformSignals: on('silent') }), NOW);
+    expect(result.score).toBe(10);
+    expect(result.reasons).toEqual([{ code: 'platform_silent', platform: 'discord', days: 9 }]);
+    // The points as the creator set them, both platforms counted.
+    const both = steady({
+      platforms: {
+        discord: there({ leftAt: daysAgo(2) }),
+        telegram: there({ week: 1, before: 16 }),
+      },
+    });
+    const custom = {
+      discord: { ...DEFAULT_PLATFORM_SIGNALS, left: { on: true, points: 25 } },
+      telegram: { ...DEFAULT_PLATFORM_SIGNALS, drop: { on: true, points: 15 } },
+    };
+    const scored = computeRisk(both, settings({ platformSignals: custom }), NOW);
+    expect(scored.score).toBe(40);
+    expect(scored.level).toBe('medium');
+    expect(scored.reasons).toEqual([
+      { code: 'platform_left', platform: 'discord' },
+      { code: 'platform_drop', platform: 'telegram', percent: 75 },
+    ]);
+  });
+
+  it('keeps the two rules over the signals, and 100 at most', () => {
+    const left = { discord: there({ leftAt: daysAgo(2) }) };
+    const many = { discord: { ...DEFAULT_PLATFORM_SIGNALS, left: { on: true, points: 30 } } };
+    const late = computeRisk(
+      steady({ lastActivityAt: daysAgo(60), activity7d: 0, platforms: left }),
+      settings({ platformSignals: many }),
+      NOW,
+    );
+    expect(late.making.base).toBe(55);
+    expect(late.score).toBe(85);
+    const leaving = computeRisk(
+      steady({ cancelAtPeriodEnd: true, platforms: left }),
+      settings({ platformSignals: many }),
+      NOW,
+    );
+    expect(leaving.score).toBe(100);
+    expect(leaving.making.rule).toBe(1);
+    const unpaid = computeRisk(
+      steady({ payment: 'failed', platforms: left }),
+      settings({ platformSignals: many }),
+      NOW,
+    );
+    expect(unpaid.score).toBe(DEFAULT_RISK_SETTINGS.highFrom);
+    expect(unpaid.making.rule).toBe(2);
+  });
+
+  it('never says « quiet on Discord » beside « no activity »', () => {
+    const away = steady({
+      lastActivityAt: daysAgo(12),
+      activity7d: 0,
+      platforms: { discord: there({ week: 0, lastAt: daysAgo(12) }) },
+    });
+    const result = computeRisk(away, settings({ platformSignals: on('silent') }), NOW);
+    expect(result.reasons.map((r) => r.code)).not.toContain('platform_silent');
+    expect(result.reasons[0]).toEqual({ code: 'inactive', days: 12 });
+  });
+
+  it('reads the settings strictly from the API, loosely from the database', () => {
+    expect(parsePlatformSignals(DEFAULT_PLATFORM_SIGNALS)).toEqual(DEFAULT_PLATFORM_SIGNALS);
+    expect(parsePlatformSignals({ ...DEFAULT_PLATFORM_SIGNALS, left: { on: true } })).toBeNull();
+    expect(
+      parsePlatformSignals({ ...DEFAULT_PLATFORM_SIGNALS, drop: { on: true, points: 31 } }),
+    ).toBeNull();
+    expect(
+      parsePlatformSignals({ ...DEFAULT_PLATFORM_SIGNALS, drop: { on: true, points: 2.5 } }),
+    ).toBeNull();
+    expect(parsePlatformSignals(null)).toBeNull();
+    // Saved in part, or not at all: the defaults complete it.
+    expect(platformSignals({ silent: { on: true, points: 15 } })).toEqual({
+      ...DEFAULT_PLATFORM_SIGNALS,
+      silent: { on: true, points: 15 },
+    });
+    expect(allPlatformSignals(undefined)).toEqual({
+      discord: DEFAULT_PLATFORM_SIGNALS,
+      telegram: DEFAULT_PLATFORM_SIGNALS,
+    });
+  });
+
+  it('previews the scores other settings would give, as computeRisk would', () => {
+    const settingsOn = allPlatformSignals({ discord: { silent: { on: true, points: 10 } } });
+    const making = { base: 35, discord: SIGNAL_BITS.silent, telegram: 0, rule: 0 } as const;
+    expect(scoreWithSignals(making, settingsOn, 70)).toBe(45);
+    expect(scoreWithSignals({ ...making, rule: 1 }, settingsOn, 70)).toBe(100);
+    expect(scoreWithSignals({ ...making, rule: 2 }, settingsOn, 70)).toBe(70);
+    const groups = [
+      { base: 35, discord: SIGNAL_BITS.silent, telegram: 0, rule: 0, count: 3 },
+      { base: 65, discord: SIGNAL_BITS.silent, telegram: 0, rule: 0, count: 2 },
+      { base: 5, discord: 0, telegram: 0, rule: 0, count: 4 },
+      { base: 50, discord: 0, telegram: 0, rule: 1, count: 1 },
+    ];
+    const off = scoreDistribution(groups, allPlatformSignals({}), { mediumFrom: 40, highFrom: 70 });
+    expect(off.levels).toEqual({ low: 7, medium: 2, high: 0, scheduled_departure: 1 });
+    const withSignal = scoreDistribution(groups, settingsOn, { mediumFrom: 40, highFrom: 70 });
+    expect(withSignal.levels).toEqual({ low: 4, medium: 3, high: 2, scheduled_departure: 1 });
+    expect(withSignal.bins).toEqual([4, 0, 0, 0, 3, 0, 0, 2, 0, 1]);
+    expect(withSignal.bins.reduce((a, b) => a + b, 0)).toBe(10);
   });
 });

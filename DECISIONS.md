@@ -2894,3 +2894,129 @@ Telegram (§9.6).
 - `apps/web/test/demo.test.ts` : la démo cohérente (activité, revenus, raisons).
 - Inspect (`look.mjs`) vérifie tout cela en ligne, avec trois captures :
   `analytics-overview-1440.png`, `analytics-cohorts-1440.png`, `analytics-lessons-1440.png`.
+
+## 2026-10-04 — Correctifs v4.1, bloc 7c : Discord et Telegram, un tableau de bord chacun
+
+### Ce qui change
+
+- **Intégrations › Discord** et **› Telegram** sont chacun un tableau de bord, dès qu'un serveur
+  ou un groupe est connecté (cahier v4 §9.6). Avant la connexion, l'onglet garde la carte qui
+  explique comment ajouter le bot.
+- **L'onglet Activité disparaît** : son contenu est dans chaque onglet. L'ancienne adresse
+  `/sources/activity` mène à Discord, ou à Telegram quand seul un groupe est connecté.
+- Le même ordre pour les deux :
+  1. la connexion (point turquoise qui pulse en direct, dernière lecture, « Reconnect ») et
+     trois chiffres : membres actifs sur 7 jours, devenus silencieux, messages sur 30 jours ;
+  2. les messages jour par jour, dessinés comme la balance (§8) : tous les messages, et en
+     pointillés ceux des membres à risque aujourd'hui. Un clic sur un jour montre ses salons
+     et qui a écrit ce jour-là ;
+  3. une carte de chaleur jour × heure, du noir au turquoise clair, dans le fuseau de la
+     communauté. Un clic sur une heure liste qui a écrit à cette heure-là sur 30 jours ;
+  4. les salons Discord, ou les groupes et leurs sujets Telegram, en barres triables (messages,
+     membres, nom) ; au survol, les 3 membres les plus actifs ;
+  5. les plus actifs et les devenus silencieux, sur 7, 14 ou 30 jours, avec leur anneau de
+     risque et leurs actions au survol ;
+  6. les signaux et l'aperçu de la répartition des scores ;
+  7. qui est qui (les comptes à relier, tout le monde sur la plateforme) et les réglages du bot.
+
+### Les chiffres (migration 0033)
+
+- `platform_dashboard`, `platform_day` et `platform_slot` lisent `activity_events` sous
+  l'identité du créateur (`is_company_admin`). Ce sont des lectures seules.
+- **Actif** : un membre qui a écrit sur la plateforme ces 7 derniers jours. **Devenu
+  silencieux** : un membre qui y a écrit sur 90 jours, mais pas sur la période choisie.
+- Les messages comptent tout le monde : membres, équipe, invités, comptes pas encore reliés.
+  L'infobulle du chiffre dit la part des membres.
+- Les listes montrent 10 membres ; « + N de plus » dit le reste.
+- **Noms des salons Discord** : relus une fois par jour au plus (`note_discord_channels`), et
+  à chaque choix de salons. Un salon dont StayPut ne connaît pas encore le nom le dit.
+- **Sujets Telegram** (`telegram_topics`) : un groupe à sujets compte ses messages par sujet,
+  et « General » pour ce qui est hors sujet. Le nom d'un sujet vient de sa création ou de sa
+  modification ; un sujet créé avant l'arrivée du bot le dit.
+
+### Les signaux
+
+- Trois signaux par plateforme, **éteints par défaut** :
+  - **Silence** : a écrit les 4 semaines d'avant, rien cette semaine (+10 points proposés) ;
+  - **Écrit moins** : écrit encore, mais moins de la moitié de sa moyenne par semaine des 4
+    semaines d'avant, à partir de 2 messages par semaine (+5) ;
+  - **A quitté** le serveur ou le groupe ces 30 derniers jours (+20). Partir dit plus que se
+    taire : un membre parti ne compte que pour ce signal.
+- Chaque signal allumé **ajoute ses points** au score des 5 facteurs (0 à 30, par pas de 5 ;
+  plafond 100). Les règles d'avant gardent la priorité : départ programmé → 100, paiement
+  échoué → au moins « risque élevé ».
+- Les raisons du score rangent les signaux avec les facteurs, par points. « Silence » ne
+  s'affiche pas quand « Inactif » le dit déjà.
+- **L'aperçu est exact sans demander au serveur** : chaque score enregistre de quoi il est fait
+  (`member_risk.signals` : le score des facteurs, les signaux vrais par plateforme, la règle).
+  Le navigateur recalcule la répartition avec les réglages en cours et dit combien de membres
+  changent de niveau (« High risk: 6 → 8 »).
+- Enregistrer rend tous les scores dus : ils sont recalculés dans l'heure (dans la démo, tout
+  de suite).
+
+### Le test de connexion
+
+- « Start the test » : le créateur écrit un message dans un salon ou un groupe que StayPut lit.
+  Pendant le test, la page relit ce qui arrive toutes les 3 secondes (10 sinon).
+- Le message s'affiche avec son heure seulement, jamais son texte. Au bout de 2 minutes sans
+  message, la page dit quoi vérifier.
+- Dans la démo, rien n'est écrit : le message est simulé au bout de 2,5 secondes, et la page le
+  dit.
+
+### La phrase de confidentialité
+
+- Le cahier proposait « StayPut never reads what members write: only who wrote and when. » et
+  demandait de l'ajuster si le bot fait autrement.
+- StayPut garde aussi **où** (le salon, le groupe, le sujet) : c'est ce qui permet le bloc des
+  salons. La phrase devient donc « …only who wrote, where and when. » (« …seulement qui a
+  écrit, où et quand. »).
+- Une seule clé (`sources.privacy`) pour les intégrations, le guide et l'accueil : la même
+  phrase partout. Les textes du bot Telegram disent la même chose.
+
+### Corrigé en passant
+
+- **Tout le monde sur Discord / dans votre groupe Telegram** : la liste gardait 500 personnes
+  en tout. Un grand serveur pouvait cacher tout le groupe Telegram, et le total était celui des
+  deux. `platform_people` (remplacée dans 0033) garde **500 personnes par plateforme** et donne
+  le total de chacune (`totals`).
+- **Téléphone** : les tableaux des graphiques destinés aux lecteurs d'écran élargissaient la
+  page (970 px pour un écran de 390). Un tableau n'est jamais plus étroit que son contenu :
+  `ChartTable` le cache dans un conteneur, pour les 6 graphiques.
+- **Une lecture qui échoue** : les blocs qui partagent la même lecture (chiffres, jours,
+  heures, salons, membres, signaux) affichent un seul message d'erreur avec « Retry », sans
+  cartes vides ni chiffres en attente.
+- Les textes « reliez les autres ci-dessous » disent maintenant « dans “Qui est qui” », le bloc
+  qui les contient.
+
+### Démo
+
+- Un journal message par message (graine fixe) donne tous les chiffres : jours, heures, salons,
+  sujets, listes et la tuile en direct. Les tests vérifient que tout s'additionne.
+- Deux départs (Yanis de Discord il y a 5 jours, Omar du groupe Telegram il y a 3 jours) et des
+  membres silencieux près du seuil, pour que les signaux changent des niveaux.
+- Enregistrer des signaux recalcule les scores, les niveaux et les totaux de la démo. Leurs
+  raisons viennent après un départ programmé ou un paiement échoué, et avant les autres.
+
+### Tests
+
+- `packages/core/test/risk.test.ts` : signaux, points, règles, raisons, répartition.
+- `apps/worker/test/platform-dashboard-sql.test.ts` : chiffres, jours, heures, salons, sujets,
+  listes, signaux enregistrés et score refait. `accounts-sql.test.ts` : 500 personnes par
+  plateforme et leurs totaux.
+- `apps/web/test/app.test.tsx` : le tableau de bord entier, un jour choisi, une heure choisie,
+  l'aperçu puis l'enregistrement des signaux, le test de connexion, « Retry » sous 5 secondes,
+  la redirection de l'ancien onglet, les comptes à relier dans chaque onglet.
+- `apps/web/test/demo.test.ts` : la démo s'additionne, et l'aperçu donne exactement les
+  niveaux qu'on obtient en enregistrant.
+- Inspect (`look.mjs`) vérifie les deux tableaux de bord en ligne (aucun bloc en attente après
+  5 secondes, un jour et une heure choisis, l'aperçu qui bouge, rien de plus large qu'un
+  téléphone) avec les captures `integrations-discord.png`, `integrations-telegram.png`,
+  `integrations-discord-day.png`, `integrations-discord-hour.png`,
+  `integrations-discord-signals.png` et `integrations-discord-390.png`.
+
+### Incertain
+
+- Les seuils des signaux (4 semaines, moitié de la moyenne, 2 messages par semaine, 30 jours)
+  et les points proposés sont des choix de StayPut, à ajuster avec de vraies communautés.
+- Les sujets Telegram ne sont vus que si le bot est dans un groupe à sujets. Les noms des
+  sujets créés avant son arrivée restent inconnus jusqu'à leur prochaine modification.

@@ -32,7 +32,6 @@ const PAGES = [
   'sources',
   'sources/discord',
   'sources/telegram',
-  'sources/activity',
   'settings',
   'settings/risk',
   'settings/actions',

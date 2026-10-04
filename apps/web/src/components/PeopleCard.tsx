@@ -13,14 +13,12 @@ import { Card } from '../ui/Card';
 import { ExternalButton } from '../ui/ExternalLink';
 import { ErrorPanel, Loading } from './Status';
 
-/** While the Sources tab is open, the list is read again this often. */
+/** While the platform's tab is open, the list is read again this often. */
 export const PEOPLE_REFRESH_MS = 30_000;
-/** People shown at first, then this many more at each « Show more ». */
-const PAGE = 50;
+/** People shown at first, then this many more at each « Show more »: one block among many. */
+const PAGE = 8;
 
 const DISCORD_PORTAL = 'https://discord.com/developers/applications';
-
-type Filter = 'all' | AccountPlatform;
 
 const STATUS: Readonly<
   Record<Exclude<PlatformPerson['status'], 'member'>, { label: MessageKey; tone: Tone }>
@@ -31,21 +29,23 @@ const STATUS: Readonly<
 };
 
 /**
- * Everyone on the creator's Discord server and in their Telegram group, not only who writes (the
- * founder, 2026-10-01: « je veux qu'on puisse voir les membres »): who each person is for the
- * community, their messages over 30 days, when they joined or left. Discord gives the whole list
- * once the bot's application has the Server Members Intent on; Telegram gives none, so StayPut
- * knows who writes, who joins since the bot is there, and the administrators.
+ * Everyone on the creator's Discord server, or in their Telegram group, not only who writes (the
+ * founder, 2026-10-01: « je veux qu'on puisse voir les membres »), in the platform's tab: who each
+ * person is for the community, their messages over 30 days, when they joined or left. Discord
+ * gives the whole list once the bot's application has the Server Members Intent on; Telegram gives
+ * none, so StayPut knows who writes, who joins since the bot is there, and the administrators.
  */
 export function PeopleCard({
   api,
   whopAppId,
   refreshKey = 0,
+  platform,
 }: {
   api: string;
   whopAppId: string | null;
   /** Read again at once when it changes: new messages, or an account tied. */
   refreshKey?: number;
+  platform: AccountPlatform;
 }) {
   const { t } = useI18n();
   const { state, retry, reload } = useApi<PeopleView>(`${api}/people`);
@@ -60,83 +60,63 @@ export function PeopleCard({
   return (
     <Card
       icon={<UsersRound aria-hidden="true" className="size-4" />}
-      title={t('people.title')}
-      description={t('people.description')}
+      title={t(platform === 'discord' ? 'people.title.discord' : 'people.title.telegram')}
+      description={t(
+        platform === 'discord' ? 'people.description.discord' : 'people.description.telegram',
+      )}
     >
       {state.status === 'loading' ? (
         <Loading />
       ) : state.status === 'error' ? (
         <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
       ) : (
-        <People view={state.data} whopAppId={whopAppId} />
+        <People
+          places={state.data.places.filter((p) => p.platform === platform)}
+          people={state.data.people.filter((p) => p.platform === platform)}
+          total={state.data.totals[platform]}
+          whopAppId={whopAppId}
+        />
       )}
     </Card>
   );
 }
 
-function People({ view, whopAppId }: { view: PeopleView; whopAppId: string | null }) {
+function People({
+  places,
+  people,
+  total,
+  whopAppId,
+}: {
+  places: readonly PeoplePlace[];
+  /** The latest to write first, 500 at most. */
+  people: readonly PlatformPerson[];
+  /** How many people StayPut knows there in all. */
+  total: number;
+  whopAppId: string | null;
+}) {
   const { t, number } = useI18n();
-  const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(PAGE);
-  const counts: Record<Filter, number> = {
-    all: view.people.length,
-    discord: view.people.filter((p) => p.platform === 'discord').length,
-    telegram: view.people.filter((p) => p.platform === 'telegram').length,
-  };
   const wanted = fold(query.trim());
-  const matching = view.people.filter(
+  const matching = people.filter(
     (p) =>
-      (filter === 'all' || p.platform === filter) &&
-      (!wanted ||
-        fold([p.name, p.username, p.member?.name].filter(Boolean).join(' ')).includes(wanted)),
+      !wanted ||
+      fold([p.name, p.username, p.member?.name].filter(Boolean).join(' ')).includes(wanted),
   );
-  const filters: readonly { value: Filter; label: MessageKey }[] = [
-    { value: 'all', label: 'people.all' },
-    { value: 'discord', label: 'sources.discord.name' },
-    { value: 'telegram', label: 'sources.telegram.name' },
-  ];
   return (
     <div className="space-y-5">
-      {view.places.length > 0 ? (
+      {places.length > 0 ? (
         <ul className="space-y-3">
-          {view.places.map((place) => (
+          {places.map((place) => (
             <Place key={`${place.platform}:${place.id}`} place={place} whopAppId={whopAppId} />
           ))}
         </ul>
       ) : null}
-      {view.people.length === 0 ? (
+      {people.length === 0 ? (
         <p className="text-sm text-muted">{t('people.empty')}</p>
       ) : (
         <>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div
-              role="group"
-              aria-label={t('people.filter')}
-              className="flex flex-wrap gap-1 rounded-xl bg-surface-2 p-1"
-            >
-              {filters.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  aria-pressed={filter === f.value}
-                  onClick={() => {
-                    setFilter(f.value);
-                    setShown(PAGE);
-                  }}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-                    filter === f.value
-                      ? 'bg-surface text-fg shadow-card'
-                      : 'text-muted hover:text-fg'
-                  }`}
-                >
-                  {t(f.label)}
-                  <span className="tabular ms-1.5 text-xs text-muted">
-                    {number(counts[f.value])}
-                  </span>
-                </button>
-              ))}
-            </div>
+          <div>
             <label className="relative block sm:w-64">
               <span className="sr-only">{t('people.search')}</span>
               <Search
@@ -169,12 +149,9 @@ function People({ view, whopAppId }: { view: PeopleView; whopAppId: string | nul
               {t('people.more', { count: number(matching.length - shown) })}
             </Button>
           ) : null}
-          {view.total > view.people.length ? (
+          {total > people.length ? (
             <p className="text-sm text-muted">
-              {t('people.truncated', {
-                shown: number(view.people.length),
-                total: number(view.total),
-              })}
+              {t('people.truncated', { shown: number(people.length), total: number(total) })}
             </p>
           ) : null}
         </>

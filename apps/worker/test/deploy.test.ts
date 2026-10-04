@@ -508,7 +508,7 @@ describe('checkTelegram', () => {
       { level: 'ok', text: 'Telegram accepts TELEGRAM_BOT_TOKEN: @StayPutBot.' },
       {
         level: 'ok',
-        text: 'Privacy mode is off: the bot sees every message of its groups (StayPut keeps only who and when).',
+        text: 'Privacy mode is off: the bot sees every message of its groups (StayPut keeps only who wrote, where and when).',
       },
       {
         level: 'note',

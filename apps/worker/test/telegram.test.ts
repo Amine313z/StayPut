@@ -212,6 +212,8 @@ describe('telegramAction', () => {
       at: new Date(1_790_000_000_000),
       name: 'Ana',
       username: null,
+      topicId: null,
+      topicName: null,
     });
     expect(telegramAction(message({ photo: [{}] }))).toMatchObject({ kind: 'message' });
     // First and last names together; nothing when Telegram gives none.
@@ -226,6 +228,55 @@ describe('telegramAction', () => {
     expect(
       telegramAction(message({ text: 'x', from: { id: 44, is_bot: false, first_name: '' } })),
     ).toMatchObject({ name: null, username: null });
+  });
+
+  it('notes the topic of a forum group, and its name when the message carries it', () => {
+    // A message of a topic answers the message that created it: the topic's name comes along.
+    expect(
+      telegramAction(
+        message({
+          text: 'x',
+          message_thread_id: 42,
+          is_topic_message: true,
+          reply_to_message: { message_id: 42, forum_topic_created: { name: ' Signals ' } },
+        }),
+      ),
+    ).toMatchObject({ kind: 'message', topicId: '42', topicName: 'Signals' });
+    // Answering another message of the topic: the topic, not its name.
+    expect(
+      telegramAction(
+        message({
+          text: 'x',
+          message_thread_id: 42,
+          is_topic_message: true,
+          reply_to_message: { message_id: 50, text: 'never read' },
+        }),
+      ),
+    ).toMatchObject({ topicId: '42', topicName: null });
+    // A thread of replies outside a forum is no topic.
+    expect(telegramAction(message({ text: 'x', message_thread_id: 9 }))).toMatchObject({
+      topicId: null,
+      topicName: null,
+    });
+    // A topic created, then renamed: its service messages.
+    expect(
+      telegramAction(
+        message({ message_thread_id: 42, forum_topic_created: { name: 'Signals', icon_color: 1 } }),
+      ),
+    ).toEqual({
+      kind: 'topic',
+      chatId: '-1001234567890',
+      topicId: '42',
+      name: 'Signals',
+      at: new Date(1_790_000_000_000),
+    });
+    expect(
+      telegramAction(message({ message_thread_id: 42, forum_topic_edited: { name: 'Daily' } })),
+    ).toMatchObject({ kind: 'topic', name: 'Daily' });
+    // An edit of the icon only: the topic, no name.
+    expect(
+      telegramAction(message({ message_thread_id: 42, forum_topic_edited: { icon: 'x' } })),
+    ).toMatchObject({ kind: 'topic', name: null });
   });
 
   it('skips what a chat sends instead of a person: channel posts copied into its group', () => {

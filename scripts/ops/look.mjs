@@ -4,14 +4,15 @@
  * it. Says whether StayPut's fonts loaded (Satoshi for the numbers and titles, Geist for the UI:
  * no fallback rendering), which font every figure and text is drawn in, whether the amounts carry
  * their cents and the demo opened in English, whether the chart drew its data and ends on the
- * balance's amount (brief v4 §13), who comes first in « Needs attention », whether every block of
- * Integrations › Activity is past « Loading… » within 5 seconds (§9.6), whether the guide shows
+ * balance's amount (brief v4 §13), who comes first in « Needs attention », whether Integrations ›
+ * Discord and › Telegram each show their whole dashboard, every block past « Loading… » within
+ * 5 seconds, a day and an hour picked, the signals' preview moving (§9.6), whether the guide shows
  * its five cards and pictures, the tour and every « Show me » light their place wholly with the
  * tooltip beside it, never over it, the tour ending where it began (fix prompt v4.1, block 1),
  * and the welcome has its four steps (§10), whether Members is a one-line-a-row table whose
  * columns sort, whose chips stay on top and whose rows open a 420 px drawer (§9.3), and what the
  * browser complained about; keeps screenshots of the Dashboard (desktop, the balance, phone, the
- * chart's tooltip), of the Activity tab, of the guide, of each step of the tour and each « Show
+ * chart's tooltip), of the Discord and Telegram dashboards, of the guide, of each step of the tour and each « Show
  * me », of the welcome, and of Members and a member's drawer (desktop and phone). Fails when any
  * of these is wrong. Reads nothing private: the demo is answered in the browser.
  *
@@ -272,18 +273,79 @@ if (box) {
     if (days !== '30D') await balance.screenshot({ path: `${out}/dashboard-balance-${days}.png` });
   }
 }
-// Integrations › Activity: no block may still say « Loading… » after 5 seconds (brief v4 §9.6).
-await desktop.page.goto(`${base}/demo/sources/activity`, { waitUntil: 'domcontentloaded' });
-await desktop.page.waitForTimeout(5_000);
-report.activity = {
-  loadingAfter5s: await desktop.page.getByText('Loading…').count(),
-  slow: await desktop.page.getByText('This is taking longer than usual.').count(),
-  // Each platform's members' part (fix prompt v4.1, block 4): what their 30 days add up to.
-  byMembers: await desktop.page.evaluate(() =>
-    [...document.querySelectorAll('[data-by-members]')].map((line) => line.textContent),
-  ),
+// Integrations › Discord and › Telegram, a dashboard each (brief v4 §9.6, fix prompt v4.1 block 7):
+// after 5 seconds no block may still be loading; the connection, three figures, the 30 days, the
+// hours, the places, the members, the signals and the bot's checks are all there.
+report.platforms = {};
+for (const platform of ['discord', 'telegram']) {
+  await desktop.page.goto(`${base}/demo/sources/${platform}`, { waitUntil: 'domcontentloaded' });
+  await desktop.page.waitForTimeout(5_000);
+  report.platforms[platform] = {
+    loadingAfter5s: await desktop.page.getByText('Loading…').count(),
+    slow: await desktop.page.getByText('This is taking longer than usual.').count(),
+    ...(await desktop.page.evaluate(() => ({
+      skeletons: document.querySelectorAll('main .skeleton').length,
+      connection:
+        document.querySelector('[data-hero="platform"]')?.getAttribute('data-connection') ?? null,
+      figures: [...document.querySelectorAll('[data-hero="platform"] dd')].map(
+        (figure) => figure.textContent,
+      ),
+      chartDrawn:
+        (
+          document.querySelector('[data-chart="messages"] [data-chart="all"]')?.getAttribute('d') ??
+          ''
+        ).length > 20,
+      cells: document.querySelectorAll('[data-cell]').length,
+      lit: document.querySelectorAll('[data-cell]:not([data-step="0"])').length,
+      places: document.querySelectorAll('[data-place]').length,
+      active: document.querySelectorAll('[data-list="active"] [data-member]').length,
+      silent: document.querySelectorAll('[data-list="silent"] [data-member]').length,
+      signals: document.querySelectorAll('[data-signal]').length,
+      checks: [...document.querySelectorAll('[data-check]')].map((check) =>
+        check.getAttribute('data-state'),
+      ),
+    }))),
+  };
+  await desktop.page.screenshot({ path: `${out}/integrations-${platform}.png`, fullPage: true });
+}
+// Discord's: a day picked lists its channels and who wrote; an hour picked, who wrote then; a
+// signal turned on moves the preview of the levels.
+await desktop.page.goto(`${base}/demo/sources/discord`, { waitUntil: 'domcontentloaded' });
+const messages = desktop.page.locator('[data-chart="messages"]');
+await messages.waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(1_500);
+await messages.scrollIntoViewIfNeeded();
+const plot = await messages.boundingBox();
+await desktop.page.mouse.click(plot.x + plot.width * 0.95, plot.y + plot.height / 2);
+await desktop.page.locator('[data-picked-day]').first().waitFor({ timeout: 10_000 });
+report.platformPick = {
+  day: await desktop.page.locator('[data-picked-day]').first().getAttribute('data-picked-day'),
+  dayPlaces: await desktop.page.locator('[data-place]').count(),
 };
-await desktop.page.screenshot({ path: `${out}/integrations-activity.png`, fullPage: true });
+await desktop.page.screenshot({ path: `${out}/integrations-discord-day.png`, fullPage: true });
+await desktop.page.getByRole('button', { name: 'Back to 30 days' }).first().click();
+const busiest = await desktop.page.evaluate(() => {
+  const cells = [...document.querySelectorAll('[data-cell]')];
+  const top = Math.max(...cells.map((cell) => Number(cell.getAttribute('data-step'))));
+  return cells
+    .find((cell) => Number(cell.getAttribute('data-step')) === top)
+    ?.getAttribute('data-cell');
+});
+await desktop.page.locator(`[data-cell="${busiest}"]`).click();
+await desktop.page.locator('[data-slot] li').first().waitFor({ timeout: 10_000 });
+report.platformPick.slotMembers = await desktop.page.locator('[data-slot] li').count();
+await desktop.page
+  .locator('[data-slot]')
+  .screenshot({ path: `${out}/integrations-discord-hour.png` });
+const quiet = desktop.page.locator('[data-signal="silent"]');
+await quiet.getByRole('switch').click();
+await quiet.locator('input[type="range"]').fill('20');
+await desktop.page.waitForTimeout(600);
+report.platformPick.preview = await desktop.page.locator('[data-preview-moved]').innerText();
+await desktop.page
+  .locator('[data-signals]')
+  .locator('xpath=ancestor::section[1]')
+  .screenshot({ path: `${out}/integrations-discord-signals.png` });
 
 // The guide (brief v4 §10): a 420 px panel, five cards with their pictures, four shortcuts.
 await desktop.page.goto(`${base}/demo`, { waitUntil: 'domcontentloaded' });
@@ -703,6 +765,14 @@ await phoneMembers.getByRole('row').nth(1).click();
 await phone.page.getByRole('dialog').waitFor({ timeout: 30_000 });
 await phone.page.waitForTimeout(1_500);
 await phone.page.screenshot({ path: `${out}/members-drawer-390.png` });
+// Integrations › Discord on a phone: nothing wider than the screen.
+await phone.page.goto(`${base}/demo/sources/discord`, { waitUntil: 'domcontentloaded' });
+await phone.page.locator('[data-chart="messages"]').waitFor({ timeout: 30_000 });
+await phone.page.waitForTimeout(1_500);
+report.platformPhoneOverflow = await phone.page.evaluate(
+  () => document.scrollingElement.scrollWidth - window.innerWidth,
+);
+await phone.page.screenshot({ path: `${out}/integrations-discord-390.png`, fullPage: true });
 await phone.context.close();
 await browser.close();
 
@@ -724,7 +794,30 @@ const ok =
   report.firstNeedingAttention === 'Margaux Picard' &&
   report.attentionRow.atRest === '0' &&
   report.attentionRow.hovered === '1' &&
-  report.activity.loadingAfter5s === 0 &&
+  ['discord', 'telegram'].every((platform) => {
+    const there = report.platforms[platform];
+    return (
+      there.loadingAfter5s === 0 &&
+      there.slow === 0 &&
+      there.skeletons === 0 &&
+      there.connection === 'live' &&
+      there.figures.length === 3 &&
+      there.figures.every((figure) => /^\d[\d,]*$/.test(figure ?? '')) &&
+      there.chartDrawn &&
+      there.cells === 168 &&
+      there.lit > 0 &&
+      there.places > 0 &&
+      there.active > 0 &&
+      there.signals === 3 &&
+      there.checks.length > 0 &&
+      there.checks.every((state) => state === 'ok')
+    );
+  }) &&
+  /^\d{4}-\d{2}-\d{2}$/.test(report.platformPick.day ?? '') &&
+  report.platformPick.dayPlaces > 0 &&
+  report.platformPick.slotMembers > 0 &&
+  /→/.test(report.platformPick.preview) &&
+  report.platformPhoneOverflow <= 0 &&
   report.guide.width === 420 &&
   report.guide.cards.length === 5 &&
   report.guide.pictures === 5 &&
@@ -776,8 +869,6 @@ const ok =
   report.history.some((item) => /^Paused until /.test(item.outcome)) &&
   report.queue.before.join() === '6,6' &&
   report.queue.after.join() === '5,5' &&
-  report.activity.byMembers.length === 2 &&
-  report.activity.byMembers.every((line) => /^[\d,]+ by members$/.test(line)) &&
   // Demo safety (fix prompt v4.1, block 5).
   report.demoSafety.alumniUrl === 'https://whop.com/your-community/alumni' &&
   report.demoSafety.buttons.length === 3 &&
@@ -835,7 +926,7 @@ writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest, or the demo does not tell one story (a pause, an end, an unpaid date, a member gone, an outcome, a count), or something in the demo leads outside StayPut (a link, a button not said disabled), or the words are not those of block 6 (« Skip », no « golden hour », “ ” quotes, English first), or Automations is not two tabs with a switch per rule, the mode, the limits, EN/FR previews, the three ready-made rules and one primary button, or Analytics lacks its forecast, slider, donut, bars, curves or turquoise-edged flagged month (block 7): see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, Integrations › Discord or › Telegram has a block still loading after 5 seconds or lacks its connection, figures, chart, hours, places, members, signals or checks, a day, an hour or the signals’ preview does not answer, or it is wider than a phone, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest, or the demo does not tell one story (a pause, an end, an unpaid date, a member gone, an outcome, a count), or something in the demo leads outside StayPut (a link, a button not said disabled), or the words are not those of block 6 (« Skip », no « golden hour », “ ” quotes, English first), or Automations is not two tabs with a switch per rule, the mode, the limits, EN/FR previews, the three ready-made rules and one primary button, or Analytics lacks its forecast, slider, donut, bars, curves or turquoise-edged flagged month (block 7): see the report above.',
   );
   process.exitCode = 1;
 }

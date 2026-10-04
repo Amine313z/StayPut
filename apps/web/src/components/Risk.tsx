@@ -6,8 +6,10 @@ import {
   CircleAlert,
   Clock,
   CreditCard,
+  DoorOpen,
   LifeBuoy,
   LogOut,
+  MessageSquareOff,
   ShieldCheck,
   Sprout,
   TrendingDown,
@@ -65,6 +67,9 @@ const REASON_ICONS: Readonly<Record<RiskReason['code'], LucideIcon>> = {
   cancel_scheduled: CalendarClock,
   ticket_open: LifeBuoy,
   reactions_drop: TrendingDown,
+  platform_silent: MessageSquareOff,
+  platform_drop: TrendingDown,
+  platform_left: DoorOpen,
 };
 
 /** The reasons of a score, one line each, the one weighing most first. */

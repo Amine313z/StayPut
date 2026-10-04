@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApi, usePolling } from '../src/api';
-import { PlatformActivityCard } from '../src/components/PlatformActivityCard';
+import { useLiveNews } from '../src/views/creator/platform/PlatformDashboard';
 import { SyncPanel } from '../src/components/SyncPanel';
 import { I18nProvider } from '../src/i18n';
 import { useSync } from '../src/sync';
@@ -126,7 +126,7 @@ describe('a block of the screen never waits for ever', () => {
     expect(calls.calls()).toBe(2);
   });
 
-  it('keeps the Activity tab live without ever staying on « Loading… »', async () => {
+  it('keeps a platform’s news live while its readings take longer than their interval', async () => {
     // Discord read first: 8 seconds the first time, then 12, longer than the 10 between readings.
     const activity = (messages: number): PlatformActivityView => ({
       from: '2026-09-04',
@@ -140,7 +140,7 @@ describe('a block of the screen never waits for ever', () => {
           team: 0,
           guests: 0,
           unlinked: 0,
-          lastAt: '2026-10-03T09:00:00.000Z',
+          lastAt: new Date(Date.UTC(2026, 9, 3, 9, messages)).toISOString(),
           daily: [...Array.from({ length: 29 }, () => 0), messages],
         },
       ],
@@ -148,31 +148,23 @@ describe('a block of the screen never waits for ever', () => {
       topMembers: [],
     });
     const calls = serverOf((n) => activity(n * 3), 8_000, 12_000);
-    let news = 0;
-    render(
-      <MemoryRouter>
-        <I18nProvider initialLocale="en">
-          <PlatformActivityCard
-            api="/api/creator/biz_A1"
-            platforms={['discord']}
-            onNews={() => (news += 1)}
-          />
-        </I18nProvider>
-      </MemoryRouter>,
-    );
-    expect(screen.getByText('Loading…')).toBeTruthy();
-    await wait(5_100);
-    // Five seconds: no more « Loading… », what happens and « Retry ».
-    expect(screen.queryByText('Loading…')).toBeNull();
-    expect(screen.getByText('This is taking longer than usual.')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy();
-    await wait(3_000);
-    expect(screen.getByText('3 messages')).toBeTruthy();
-    // Then every 10 seconds, each reading after the last: the counts move, never back.
+    const news: string[] = [];
+    function Live() {
+      const { lastAt } = useLiveNews('/api/creator/biz_A1', 'discord', false, () =>
+        news.push('news'),
+      );
+      return <p>{lastAt ?? 'Nothing yet'}</p>;
+    }
+    render(<Live />);
+    expect(screen.getByText('Nothing yet')).toBeTruthy();
+    // Slower than the 5 seconds a block waits: the reading goes on, and its answer shows.
+    await wait(8_100);
+    expect(screen.getByText('2026-10-03T09:03:00.000Z')).toBeTruthy();
+    // Then every 10 seconds, each reading after the last: the last message moves, never back.
     await wait(40_000);
-    expect(screen.getByText(/^(6|9|12) messages$/)).toBeTruthy();
+    expect(screen.getByText(/^2026-10-03T09:(06|09|12):00\.000Z$/)).toBeTruthy();
     expect(calls.mostAtOnce()).toBe(1);
-    expect(news).toBeGreaterThan(0);
+    expect(news.length).toBeGreaterThan(0);
   });
 
   it('says when the state of the synchronization is late, and reads it again on « Retry »', async () => {

@@ -238,7 +238,7 @@ export async function checkTelegram(
   if (bot.can_read_all_group_messages === true) {
     findings.push({
       level: 'ok',
-      text: 'Privacy mode is off: the bot sees every message of its groups (StayPut keeps only who and when).',
+      text: 'Privacy mode is off: the bot sees every message of its groups (StayPut keeps only who wrote, where and when).',
     });
   } else {
     findings.push({
