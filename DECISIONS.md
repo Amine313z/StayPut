@@ -2701,3 +2701,16 @@ une capture. Le bloc 1 refait la lumière de la visite et de « Show me ».
   - chaque bouton grisé montre sa bulle au survol et n'ouvre ni page ni onglet au clic.
 - Inspect (`look.mjs`) vérifie le lien d'exemple et les trois bulles, et ajoute trois
   captures : `demo-alumni-1440.png`, `demo-discord-1440.png`, `demo-telegram-1440.png`.
+
+## 2026-10-04 — Le prix de StayPut : payé sur Whop, rien dans l'app
+
+- Décision du fondateur, le 4 octobre : StayPut s'installe dans la communauté du créateur et lui
+  appartient. Le créateur paie le fondateur sur Whop : 29 $, 99 $ ou 500 $ (accès complet).
+- StayPut ne prend aucun paiement : ni bouton de paiement, ni facture, ni prélèvement dans
+  l'app. L'achat dans l'app de Whop (`inAppPurchase`), évoqué le même jour, est écarté.
+- À préciser en Phase 7 (le fondateur veut voir les prix en dernier) :
+  - ce que donne chaque prix ;
+  - si les 500 $ sont payés une fois ou chaque mois ;
+  - si le plan gratuit, le plan Performance et l'offre Founder de `SPEC.md` restent.
+- Si les trois prix ne donnent pas les mêmes fonctions, StayPut lit sur Whop celui que le
+  créateur a payé, pour ouvrir les bonnes. Il ne fait que le lire.
