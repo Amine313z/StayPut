@@ -66,7 +66,7 @@ couleurs, polices et animations suivent [`docs/design-tokens.md`](./docs/design-
 | Dashboard · Tableau de bord   | une page                                                                       |
 | Members · Membres             | Tous les membres · Ne pas contacter                                            |
 | Automations · Automatisations | Règles · File d’attente (filtres : À valider, Programmées, Historique, Alumni) |
-| Analytics · Analyses          | Vue d'ensemble · Cohortes · Leçons                                             |
+| Analytics · Analyses          | Vue d'ensemble · Cohortes · Leçons · Rapports (le rapport du lundi)            |
 | Integrations · Intégrations   | Whop · Discord · Telegram                                                      |
 | Settings · Réglages           | Général · Score de risque · Automatisations                                    |
 

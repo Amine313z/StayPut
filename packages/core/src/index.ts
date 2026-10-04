@@ -15,3 +15,4 @@ export * from './dashboard';
 export * from './calendar';
 export * from './outcomes';
 export * from './forecast';
+export * from './weekly';

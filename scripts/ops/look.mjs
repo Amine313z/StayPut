@@ -646,6 +646,18 @@ report.analytics.lessons = await desktop.page.evaluate(() => ({
   flagged: document.querySelectorAll('[data-lesson][data-flagged="true"]').length,
 }));
 await desktop.page.screenshot({ path: `${out}/analytics-lessons-1440.png`, fullPage: true });
+// Analytics › Reports (SPEC 6.9): the Monday reports, the newest first.
+await desktop.page.goto(`${base}/demo/insights/reports`, { waitUntil: 'domcontentloaded' });
+await desktop.page.locator('[data-report]').first().waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(800);
+report.analytics.reports = await desktop.page.evaluate(() => ({
+  weeks: document.querySelectorAll('[data-report]').length,
+  sent: [...document.querySelectorAll('[data-report]')].every((card) =>
+    /Sent /.test(card.textContent ?? ''),
+  ),
+  switchOn: document.querySelector('[role="switch"]')?.getAttribute('aria-checked') === 'true',
+}));
+await desktop.page.screenshot({ path: `${out}/analytics-reports-1440.png`, fullPage: true });
 
 // Automations › Queue › History: what came of each action, the proof of value (block 4).
 await desktop.page.goto(`${base}/demo/actions/queue/history`, { waitUntil: 'domcontentloaded' });
@@ -685,6 +697,7 @@ for (const path of [
   'insights',
   'insights/cohorts',
   'insights/lessons',
+  'insights/reports',
   'actions',
   'actions/queue',
   'actions/queue/scheduled',
@@ -908,7 +921,7 @@ const ok =
   report.automations.queue.rowButtons.length > 0 &&
   report.automations.queue.rowButtons.every(Boolean) &&
   // Analytics (fix prompt v4.1, block 7; brief v4 §9.5).
-  report.analytics.tabs.join() === 'Overview,Cohorts,Lessons' &&
+  report.analytics.tabs.join() === 'Overview,Cohorts,Lessons,Reports' &&
   /^\+\$[\d,]+\.\d{2}$/.test(report.analytics.gain) &&
   Math.abs(
     Number(report.analytics.gainAtHalf.replace(/[^\d.]/g, '')) * 2 -
@@ -921,7 +934,10 @@ const ok =
   report.analytics.cohorts.edge.every((color) => color === 'rgb(94, 234, 212)') &&
   report.analytics.cohorts.highlighted === 1 &&
   report.analytics.lessons.bars > 0 &&
-  report.analytics.lessons.flagged > 0;
+  report.analytics.lessons.flagged > 0 &&
+  report.analytics.reports.weeks === 6 &&
+  report.analytics.reports.sent &&
+  report.analytics.reports.switchOn;
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {

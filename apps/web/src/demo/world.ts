@@ -4,8 +4,11 @@ import {
   DEFAULT_SAVE_RATE,
   DEFAULT_STAY,
   MEMBER_PAYMENTS_LIMIT,
+  WEEKLY_REPORT_HOUR,
   addDays,
   choosePriority,
+  nextReportAt,
+  reportedWeek,
   scoreWithSignals,
   signalReasons,
   type ActionSettingsView,
@@ -13,6 +16,7 @@ import {
   type CreatorOfferMade,
   type CreatorSession,
   type DashboardView,
+  type ExitReason,
   type FeedItem,
   type GettingStarted,
   type InsightsOverview,
@@ -23,14 +27,18 @@ import {
   type MemberRow,
   type MembersPage,
   type PlatformSignals,
+  type PriorityAction,
   type RevenueDay,
   type RiskDay,
   type RiskLevel,
   type RiskReason,
   type RuleId,
+  type SentWeeklyReport,
   type SyncStatus,
+  type WeeklyReportsView,
   monthStart,
   zonedDay,
+  zonedMoment,
 } from '@stayput/core';
 import { DEMO_COMPANY_ID } from '../api';
 import { fold } from '../text';
@@ -428,6 +436,10 @@ export interface DemoWorld {
     platform: 'discord' | 'telegram',
     signals: PlatformSignals,
   ) => Record<'discord' | 'telegram', PlatformSignals>;
+  /** Analytics › Reports: the Monday reports of the last 6 weeks, from the demo's own story. */
+  reports: () => WeeklyReportsView;
+  /** The Monday report turned on or off. */
+  setReports: (enabled: boolean) => WeeklyReportsView;
 }
 
 /**
@@ -1137,7 +1149,89 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
     };
   };
 
-  return {
+  /**
+   * The Monday reports (SPEC 6.9) as the Worker makes them, from the demo's own story: each week
+   * in the community's calendar, its saves (each member once), the members who left, the departure
+   * survey's answers. The week's priority is what StayPut did next (the following week's saves);
+   * the last report's, the dashboard's. Each one sent on its Monday at 8:00.
+   */
+  let reportsOn = true;
+  const weeklyReports = (current: PriorityAction | null): WeeklyReportsView => {
+    const zone = settings.timezone;
+    const answers = pages.exitAnswers();
+    const bounds = (start: string) => [
+      zonedMoment(start, 0, 0, zone),
+      zonedMoment(addDays(start, 7), 0, 0, zone),
+    ];
+    const savesOf = (start: string) => {
+      const [from, to] = bounds(start) as [number, number];
+      return savesMade.filter((save) => now - save.ago >= from && now - save.ago < to);
+    };
+    const priorityOf = (saves: typeof savesMade): PriorityAction | null => {
+      const of = (vias: readonly SaveVia[]) => saves.filter((save) => vias.includes(save.via));
+      const total = (list: typeof savesMade) => round(list.reduce((t, x) => t + x.amount, 0));
+      const failed = of(['retry', 'notice']);
+      if (failed.length > 0)
+        return { kind: 'retry', payments: failed.length, revenue: total(failed) };
+      const paused = of(['pause']);
+      if (paused.length > 0) {
+        return {
+          kind: 'pause',
+          memberIds: paused.map((save) => byName(save.name).id),
+          revenue: total(paused),
+        };
+      }
+      const kept = of(['extend']);
+      return kept.length > 0
+        ? { kind: 'review', filter: 'cancelling', members: kept.length, revenue: total(kept) }
+        : null;
+    };
+    // The week that ended last Monday, once its report went (Monday 8:00 there).
+    let latest = reportedWeek(now, zone).start;
+    if (zonedMoment(addDays(latest, 7), WEEKLY_REPORT_HOUR, 0, zone) > now) {
+      latest = addDays(latest, -7);
+    }
+    const reports: SentWeeklyReport[] = [];
+    for (let k = 0; k < 6; k++) {
+      const start = addDays(latest, -7 * k);
+      const [from, to] = bounds(start) as [number, number];
+      const saves = savesOf(start);
+      const counts = new Map<ExitReason, number>();
+      for (const answer of answers) {
+        if (answer.at >= from && answer.at < to) {
+          counts.set(answer.reason, (counts.get(answer.reason) ?? 0) + 1);
+        }
+      }
+      reports.push({
+        weekStart: start,
+        currency: CURRENCY,
+        saved: {
+          members: new Set(saves.map((save) => save.name)).size,
+          direct: round(saves.reduce((t, save) => t + save.amount, 0)),
+          influenced: 0,
+        },
+        lost: PEOPLE.filter(
+          (p) => p.left !== undefined && now - p.left * DAY >= from && now - p.left * DAY < to,
+        ).length,
+        reasons: [...counts.entries()]
+          .map(([reason, count]) => ({ reason, count }))
+          .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason)),
+        priority: k === 0 ? current : priorityOf(savesOf(addDays(start, 7))),
+        sentAt: new Date(
+          zonedMoment(addDays(start, 7), WEEKLY_REPORT_HOUR, 0, zone) + 4_000,
+        ).toISOString(),
+        failed: false,
+      });
+    }
+    return {
+      enabled: reportsOn,
+      nextAt: new Date(nextReportAt(now, zone)).toISOString(),
+      timezone: zone,
+      reports,
+    };
+  };
+
+  const world: DemoWorld = {
     memberDetail,
     session: {
       companyId: DEMO_COMPANY_ID,
@@ -1346,5 +1440,11 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
         })),
       };
     },
+    reports: () => weeklyReports(world.dashboard().priority),
+    setReports: (enabled) => {
+      reportsOn = enabled;
+      return weeklyReports(world.dashboard().priority);
+    },
   };
+  return world;
 }

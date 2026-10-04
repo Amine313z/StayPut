@@ -3108,3 +3108,54 @@ prévu.
 
 - `apps/web/test/app.test.tsx` : la niche choisie écrit ses préréglages en gardant les seuils ;
   l'offre Alumni créée depuis l'audit donne le texte « User left » avec son lien.
+
+## 2026-10-04 — Phase 6.9 : le rapport du lundi
+
+### Ce qui part, et quand
+
+- Chaque lundi à partir de 8 h **dans le fuseau de la communauté**, une notification Whop à toute
+  son équipe (`POST /notifications` avec `account_id`, comme le prévoit Whop pour les apps de
+  tableau de bord). Le job tourne chaque heure (`weekly-reports`, après le calcul des
+  sauvetages) : à 8 h là-bas pour un fuseau entier, à 8 h 30 pour un fuseau à la demi-heure.
+- La semaine rapportée va du lundi 0 h au lundi 0 h, là-bas : celle qui vient de finir.
+- Contenu : membres sauvés (sauvetages directs, chaque membre une fois), argent sauvé (direct, et
+  l'influencé à part), membres perdus (abonnement terminé dans la semaine, comme la rétention du
+  tableau de bord), première raison de départ, et la priorité de la semaine, celle que le tableau
+  de bord donne ce lundi matin. Jamais un nom de membre : la notification s'affiche sur l'écran
+  verrouillé d'un téléphone.
+- Langue : celle de la communauté (`companies.locale`, la langue des messages).
+
+### Une fois, et gardé
+
+- Chaque rapport est fait une fois et gardé tel quel (`weekly_reports`, migration 0035) : une
+  nouvelle tentative renvoie le même texte, même si un sauvetage de la semaine a été compté entre
+  temps. Clé d'idempotence Whop par communauté et par semaine.
+- Si Whop refuse, StayPut réessaie les heures suivantes, 3 fois au plus, puis le rapport reste
+  « Non envoyé : Whop l'a refusé » dans l'app. Un rapport raté le lundi ne part pas le mardi.
+- Pas de rapport pour la communauté de démo, ni pour une communauté installée le lundi même.
+
+### Dans l'app
+
+- Analytique › **Rapports** : l'interrupteur « L'envoyer à mon équipe » (activé par défaut,
+  `company_settings.options.weekly_report`), la date du prochain, puis les 12 dernières semaines
+  telles qu'envoyées. C'est aussi la synthèse des raisons de départ par semaine (SPEC 6.8).
+- Démo : 6 semaines tirées de son histoire (ses sauvetages, ses départs, ses réponses au
+  questionnaire) ; la priorité du dernier rapport est celle du tableau de bord.
+
+### Tests
+
+- `packages/core/test/weekly.test.ts` : la semaine dans le fuseau (Paris, New York, Tokyo,
+  changement d'heure), le prochain envoi, le texte EN/FR, une semaine calme, aucun nom.
+- `apps/worker/test/reports-sql.test.ts` : dû le lundi à 8 h là-bas seulement, jamais deux fois,
+  ni démo ni désactivé ni installé le jour même ; les chiffres de la semaine (sauvetages, départs,
+  réponses, bornes à 23 h 30 / 0 h 30) ; l'envoi une fois ; le refus réessayé avec le même
+  rapport, puis abandonné après 3 refus ; lu sous RLS par l'équipe seulement.
+- `apps/web/test/app.test.tsx` et `demo.test.ts` : la page, l'interrupteur, l'état vide en
+  français, la démo cohérente avec ses propres chiffres.
+
+### Incertain
+
+- L'envoi à l'équipe par `account_id` est documenté par Whop mais pas encore essayé dans la
+  sandbox : le premier lundi le dira (la page affichera « Envoyé » ou « Non envoyé »).
+- Pas de `rest_path` : le chemin de la vue tableau de bord de l'app n'a pas `[restPath]`, donc
+  toucher la notification ouvre l'accueil de StayPut.

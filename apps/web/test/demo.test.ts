@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_HIGH_FROM,
   RISK_FACTORS,
+  addDays,
   scoreDistribution,
   zonedDay,
+  zonedMoment,
   type MemberRow,
   type RevenueDay,
 } from '@stayput/core';
@@ -732,6 +734,52 @@ describe('Analytics › Overview in the demo (fix prompt v4.1, block 7)', () => 
     expect(sum(overview.reasons.map((r) => r.count))).toBe(
       new Set(offers.map((a) => a.member.id)).size,
     );
+  });
+});
+
+describe('Analytics › Reports in the demo (SPEC Phase 6.9)', () => {
+  const world = createWorld(NOW);
+  const view = world.reports();
+  const moment = (day: string) => zonedMoment(day, 0, 0, 'Europe/Paris');
+
+  it('lists six Mondays, the week that ended last first, each sent that Monday at 8:00', () => {
+    // Friday 2 October: the last report went on Monday 28 September, for the week of the 21st.
+    expect(view.reports.map((r) => r.weekStart)).toEqual([
+      '2026-09-21',
+      '2026-09-14',
+      '2026-09-07',
+      '2026-08-31',
+      '2026-08-24',
+      '2026-08-17',
+    ]);
+    expect(view.reports[0]!.sentAt).toBe('2026-09-28T06:00:04.000Z');
+    expect(view.nextAt).toBe('2026-10-05T06:00:00.000Z');
+  });
+
+  it('counts the demo’s own saves, departures and answers, week by week', () => {
+    for (const report of view.reports) {
+      const from = moment(report.weekStart);
+      const to = moment(addDays(report.weekStart, 7));
+      const within = (at: number) => at >= from && at < to;
+      const saves = world.saves.filter((save) => within(Date.parse(save.at)));
+      expect(report.saved.direct, report.weekStart).toBeCloseTo(
+        sum(saves.map((save) => save.amount)),
+        2,
+      );
+      expect(report.saved.members).toBe(new Set(saves.map((save) => save.memberId)).size);
+      const answers = world.pages.exitAnswers().filter((a) => within(a.at));
+      expect(sum(report.reasons.map((r) => r.count))).toBe(answers.length);
+    }
+    // The four members who left, each in the week they left.
+    expect(sum(view.reports.map((r) => r.lost))).toBe(
+      world.members.members.filter((m) => m.status === 'left').length,
+    );
+  });
+
+  it('gives the last report the dashboard’s priority, and turns off', () => {
+    expect(view.reports[0]!.priority).toEqual(world.dashboard().priority);
+    expect(world.setReports(false).enabled).toBe(false);
+    expect(world.reports().enabled).toBe(false);
   });
 });
 

@@ -25,6 +25,7 @@ import type {
   PlatformDashboard,
   SyncRun,
   SyncStatus,
+  WeeklyReportsView,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS } from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
@@ -1784,6 +1785,28 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
       reasons: [],
     });
     expect(overview.activity).toHaveLength(30);
+  });
+
+  it('reads the Monday reports and turns them off and on (Analytics › Reports)', async () => {
+    const { request } = setup({ 'user_rita:biz_Week1': 'admin', 'user_sam:biz_Week1': 'customer' });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Week1/session', init);
+    await settle();
+    const path = '/api/creator/biz_Week1/reports';
+    const response = await request(path, init);
+    expect(response.status).toBe(200);
+    const view = (await response.json()) as WeeklyReportsView;
+    expect(view).toMatchObject({ enabled: true, reports: [] });
+    expect(Date.parse(view.nextAt)).toBeGreaterThan(Date.now() - 60_000);
+    const off = await request(path, put(init, { enabled: false }));
+    expect(((await off.json()) as WeeklyReportsView).enabled).toBe(false);
+    expect((await request(path, put(init, { enabled: 'no' }))).status).toBe(400);
+    const on = await request(path, put(init, { enabled: true }));
+    expect(((await on.json()) as WeeklyReportsView).enabled).toBe(true);
+    await settle();
+    const customer = await asUser('user_sam');
+    expect((await request(path, customer)).status).toBe(403);
+    expect((await request(path, put(customer, { enabled: false }))).status).toBe(403);
   });
 
   it('reads Integrations › Discord and › Telegram, and saves a platform’s signals', async () => {

@@ -10,6 +10,7 @@ import {
   runActions,
   scoreMembers,
   syncWithWhop,
+  weeklyReports,
 } from './jobs';
 
 /** Must match `triggers.crons` in wrangler.toml (runtime.test.ts checks it). */
@@ -40,11 +41,12 @@ export interface CronJob {
  * What each trigger runs. Every 10 minutes, a slice of the synchronization with Whop (Phase 2):
  * each run reads the companies that waited longest, so that the free plan's 50 subrequests per
  * run still cover every company each hour (DECISIONS.md). Every hour, scores (3), due actions
- * (4) and the money they saved (6); every week, cohorts and blocking lessons (3).
+ * (4), the money they saved (6) and, on Mondays from 8:00 where each community is, its Monday
+ * report (6.9); every week, cohorts and blocking lessons (3).
  */
 export const SCHEDULE: Readonly<Record<string, readonly CronJob[]>> = {
   [SYNC_CRON]: [replayWebhooks, syncWithWhop, refreshStats],
-  [HOURLY_CRON]: [scoreMembers, runActions, countSaves],
+  [HOURLY_CRON]: [scoreMembers, runActions, countSaves, weeklyReports],
   [WEEKLY_CRON]: [],
 };
 

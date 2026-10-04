@@ -2,6 +2,7 @@ import { EXECUTE_BATCH, executeDueActions, prepareActions } from './actions';
 import { planRescues } from './space';
 import type { CronJob } from './cron';
 import { scoreDueCompanies } from './risk';
+import { sendWeeklyReports } from './reports';
 import { recordSaves } from './saves';
 import { SYNC_REQUEST_BUDGET, summarize, syncDueCompanies } from './sync';
 
@@ -121,6 +122,21 @@ export const countSaves: CronJob = {
     for (const { id } of companies) {
       const saved = await recordSaves(db, id, now);
       if (saved > 0) console.info(`Saves ${id}: ${saved} new.`);
+    }
+  },
+};
+
+/**
+ * SPEC Phase 6.9: after the saves (the report counts them), the Monday report of each community
+ * where it is Monday past 8:00, to its team on Whop.
+ */
+export const weeklyReports: CronJob = {
+  name: 'weekly-reports',
+  async run({ db, whop, now }) {
+    if (!db) return;
+    const { sent, failed } = await sendWeeklyReports(db, whop, now);
+    if (sent.length + failed.length > 0) {
+      console.info(`Monday reports: ${sent.length} sent, ${failed.length} refused.`);
     }
   },
 };

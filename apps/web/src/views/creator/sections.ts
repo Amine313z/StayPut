@@ -82,6 +82,7 @@ export const SECTIONS: readonly Section[] = [
       { path: '', label: 'tab.overview' },
       { path: 'cohorts', label: 'tab.cohorts' },
       { path: 'lessons', label: 'tab.lessons' },
+      { path: 'reports', label: 'tab.reports' },
     ],
   },
   {

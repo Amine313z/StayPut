@@ -29,6 +29,7 @@ const PAGES = [
   'insights',
   'insights/cohorts',
   'insights/lessons',
+  'insights/reports',
   'sources',
   'sources/discord',
   'sources/telegram',

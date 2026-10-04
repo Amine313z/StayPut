@@ -35,6 +35,8 @@ import type {
   RiskSettingsView,
   SyncRun,
   SyncStatus,
+  SentWeeklyReport,
+  WeeklyReportsView,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS, forecastRevenue } from '@stayput/core';
 import type { Locale } from '@stayput/i18n';
@@ -2947,7 +2949,7 @@ describe('Analytics › Overview (brief v4 §9.5)', () => {
     expect(
       screen.getByText('Aucun questionnaire de départ rempli ces 90 derniers jours.'),
     ).toBeTruthy();
-    // Its tabs: the overview, then the weekly analyses.
+    // Its tabs: the overview, the weekly analyses, then the Monday reports.
     const tabs = screen.getByRole('navigation', { name: 'Onglets : Analyses' });
     expect(
       within(tabs)
@@ -2957,7 +2959,89 @@ describe('Analytics › Overview (brief v4 §9.5)', () => {
       '/dashboard/biz_A1/insights',
       '/dashboard/biz_A1/insights/cohorts',
       '/dashboard/biz_A1/insights/lessons',
+      '/dashboard/biz_A1/insights/reports',
     ]);
+  });
+});
+
+describe('Analytics › Reports (SPEC Phase 6.9)', () => {
+  const SENT: SentWeeklyReport = {
+    weekStart: '2026-09-21',
+    currency: 'USD',
+    saved: { members: 2, direct: 98, influenced: 49 },
+    lost: 1,
+    reasons: [
+      { reason: 'too_expensive', count: 2 },
+      { reason: 'no_time', count: 1 },
+    ],
+    priority: { kind: 'retry', payments: 2, revenue: 98 },
+    sentAt: '2026-09-28T06:00:04.000Z',
+    failed: false,
+  };
+  const REFUSED: SentWeeklyReport = {
+    weekStart: '2026-09-14',
+    currency: 'USD',
+    saved: { members: 0, direct: 0, influenced: 0 },
+    lost: 0,
+    reasons: [],
+    priority: null,
+    sentAt: null,
+    failed: true,
+  };
+  const VIEW: WeeklyReportsView = {
+    enabled: true,
+    nextAt: '2026-10-05T06:00:00.000Z',
+    timezone: 'Europe/Paris',
+    reports: [SENT, REFUSED],
+  };
+
+  it('lists the weeks as they were sent, and turns the report off', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/reports': [{ status: 200, body: VIEW }],
+      'PUT /api/creator/biz_A1/reports': [{ status: 200, body: { ...VIEW, enabled: false } }],
+    });
+    renderAt('/dashboard/biz_A1/insights/reports');
+    expect(await screen.findByRole('heading', { name: 'Monday report' })).toBeTruthy();
+    expect(
+      await screen.findByText(
+        'Every Monday at 8:00 (Europe/Paris), a Whop notification to your team: members saved and lost, money saved, why members left and the week’s priority.',
+      ),
+    ).toBeTruthy();
+    // When the next one goes, on the community's clock.
+    expect(screen.getByText(/^Next one: Monday, October 5 at 8:00/)).toBeTruthy();
+    const list = screen.getByRole('list', { name: 'Monday reports, the newest first' });
+    const [sent, refused] = within(list).getAllByRole('article');
+    expect(
+      within(sent!).getByRole('heading', { name: 'Week of Sep 21 to Sep 27, 2026' }),
+    ).toBeTruthy();
+    expect(sent!.textContent).toContain('Sent Mon, Sep 28');
+    expect(sent!.textContent).toContain('$98.00');
+    expect(sent!.textContent).toContain('+ $49.00 influenced');
+    expect(sent!.textContent).toContain('Too expensive· 2 answers');
+    expect(sent!.textContent).toContain('Retry 2 failed payments: $98.00 at risk');
+    expect(refused!.textContent).toContain('Not sent: Whop refused it');
+    expect(refused!.textContent).toContain('No departure survey answered that week.');
+    expect(refused!.textContent).toContain('Nothing urgent');
+
+    const toggle = screen.getByRole('switch', { name: 'Send it to my team' });
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(toggle);
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('false'));
+    expect(bodies.get('PUT /api/creator/biz_A1/reports')).toEqual({ enabled: false });
+    expect(headersOf.get('PUT /api/creator/biz_A1/reports')?.get('x-stayput-csrf')).toBe('1');
+    expect(screen.queryByText(/^Next one:/)).toBeNull();
+    expect(calls).toContain('PUT /api/creator/biz_A1/reports');
+  });
+
+  it('says when the first one arrives, in French too', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/reports': [{ status: 200, body: { ...VIEW, reports: [] } }],
+    });
+    renderAt('/dashboard/biz_A1/insights/reports', 'fr');
+    expect(await screen.findByText(/^Le premier arrive lundi 5 octobre à 8:00\.$/)).toBeTruthy();
+    expect(screen.getByRole('switch', { name: 'L’envoyer à mon équipe' })).toBeTruthy();
   });
 });
 
@@ -5155,6 +5239,7 @@ const DEMO_PAGES = [
   'insights',
   'insights/cohorts',
   'insights/lessons',
+  'insights/reports',
   'sources',
   'sources/discord',
   'sources/telegram',

@@ -58,6 +58,7 @@ import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
+import { readWeeklyReports, saveWeeklyReportSetting } from './reports';
 import { alumniOfMember, createAlumniOffer, readAlumni } from './alumni';
 import { readInsightsOverview } from './analytics';
 import {
@@ -884,6 +885,28 @@ export function createApp(deps: AppDeps) {
       return overview ? c.json(overview) : apiError('not_found', 'no such company');
     },
   );
+
+  /**
+   * Analytics › Reports (SPEC Phase 6.9): the Monday reports of the last 12 weeks, when the next
+   * one goes, and the switch that turns them off.
+   */
+  app.get('/api/creator/:companyId/reports', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const view = await readWeeklyReports(db, c.get('userId'), c.get('companyId'), deps.now());
+    return view ? c.json(view) : apiError('not_found', 'no such company');
+  });
+
+  app.put('/api/creator/:companyId/reports', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const body = await c.req.json<unknown>().catch(() => null);
+    const enabled = (body as { enabled?: unknown } | null)?.enabled;
+    if (typeof enabled !== 'boolean') return apiError('invalid_request', 'expected { enabled }');
+    await saveWeeklyReportSetting(db, c.get('companyId'), enabled);
+    const view = await readWeeklyReports(db, c.get('userId'), c.get('companyId'), deps.now());
+    return view ? c.json(view) : apiError('not_found', 'no such company');
+  });
 
   /** How the risk score is computed for this company (SPEC Phase 3: weights, thresholds). */
   app.get(

@@ -11,6 +11,7 @@ import {
   QueueTab,
 } from './views/creator/ActionsTab';
 import { CohortsTab, LessonsTab, OverviewTab } from './views/creator/InsightsTab';
+import { ReportsTab } from './views/creator/ReportsTab';
 import { MembersTab, NeverContactTab } from './views/creator/MembersTab';
 import { Overview } from './views/creator/Overview';
 import { MemberSpaceOnly, SectionHome, SectionLayout } from './views/creator/SectionLayout';
@@ -60,6 +61,7 @@ function creatorSections(): RouteObject[] {
       { index: true, element: <OverviewTab /> },
       { path: 'cohorts', element: <CohortsTab /> },
       { path: 'lessons', element: <LessonsTab /> },
+      { path: 'reports', element: <ReportsTab /> },
     ]),
     section('sources', 'sources', [
       { index: true, element: <WhopTab /> },

@@ -1388,6 +1388,44 @@ export interface AccountsView {
   dismissed: DismissedAccount[];
 }
 
+/**
+ * A Monday report (SPEC Phase 6.9): the week before, in the community's calendar (Monday 00:00
+ * to Monday 00:00 there), then the week's priority. Kept as made: a later save or departure in
+ * that week does not change a report already sent.
+ */
+export interface WeeklyReport {
+  /** The Monday the week began, in the community's time zone: `YYYY-MM-DD`. */
+  weekStart: string;
+  /** The currency of the amounts, the community's main one; null without any payment. */
+  currency: string | null;
+  /** The members StayPut saved that week (direct saves, each member once), and the money. */
+  saved: { members: number; direct: number; influenced: number };
+  /** The members who left that week (their membership ended). */
+  lost: number;
+  /** The departure survey's answers that week, the most frequent first. */
+  reasons: { reason: ExitReason; count: number }[];
+  /** The one action of the week, as the dashboard chose it when the report was made. */
+  priority: PriorityAction | null;
+}
+
+/** A Monday report as kept: when Whop took it, or whether StayPut gave up sending it. */
+export interface SentWeeklyReport extends WeeklyReport {
+  /** When the notification reached Whop; null while it did not. */
+  sentAt: string | null;
+  /** Whop refused it 3 times: it stays here, unsent. */
+  failed: boolean;
+}
+
+/** GET /api/creator/:companyId/reports: the Monday reports, the newest first (12 weeks). */
+export interface WeeklyReportsView {
+  /** The report goes to the team every Monday; on until the creator turns it off. */
+  enabled: boolean;
+  /** When the next one goes: Monday 8:00 in the community's time zone. */
+  nextAt: string;
+  timezone: string;
+  reports: SentWeeklyReport[];
+}
+
 /** GET /health */
 export interface HealthReport {
   status: 'ok' | 'degraded';

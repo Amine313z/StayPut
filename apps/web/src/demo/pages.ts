@@ -111,6 +111,8 @@ export interface DemoPages {
    * the History shows, an offer for each, one per member (their latest).
    */
   exitReasons: () => { reason: ExitReason; count: number }[];
+  /** Every answer to the departure survey (an offer made for a reason), when it was given. */
+  exitAnswers: () => { at: number; reason: ExitReason }[];
   platformActivity: () => PlatformActivityView;
   people: () => PeopleView;
   /** Integrations › Discord and › Telegram (fix prompt v4.1, block 7): every message, counted. */
@@ -1051,6 +1053,10 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
         .map(([reason, count]) => ({ reason, count }))
         .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
     },
+    exitAnswers: () =>
+      actions.flatMap((row) =>
+        row.offer?.reason ? [{ at: Date.parse(row.createdAt), reason: row.offer.reason }] : [],
+      ),
     scoreTurnedHigh: (memberId) => {
       const times = actions
         .filter((row) => row.trigger === 'score_high' && row.member.id === memberId)
