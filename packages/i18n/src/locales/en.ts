@@ -1208,6 +1208,9 @@ export const en = {
   'welcome.hello.body':
     'StayPut spots the members about to leave, keeps them, and shows you the money it saved.',
   'welcome.hello.start': 'Get started',
+  'welcome.niche.title': 'Your community is about',
+  'welcome.niche.hint':
+    'StayPut weighs its risk score for it. You can change it anytime in Settings.',
   'welcome.connect.optional': 'Optional',
   'welcome.connect.body':
     'That’s where your members talk. Without it, StayPut only sees half of what’s going on.',
@@ -1224,6 +1227,11 @@ export const en = {
   'welcome.audit.reading': 'StayPut is reading your members. The figures fill in on their own.',
   'welcome.audit.tour': 'Take the tour',
   'welcome.audit.dashboard': 'Go to my dashboard',
+  'welcome.alumni.title': 'Former members',
+  'welcome.alumni.body':
+    'Keep in touch with members who leave: a free Alumni offer, hidden from your store, where StayPut sends them news and comeback offers.',
+  'welcome.alumni.permission':
+    'Whop needs the “{permission}” permission first: Automations › Alumni offer says how.',
 
   'connect.title': 'StayPut only sees what happens on Whop.',
   'connect.body':

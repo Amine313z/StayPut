@@ -3083,3 +3083,28 @@ prévu.
 - Whop pourrait refuser de poser une réduction sur un abonnement dont l'annulation est
   programmée. Dans ce cas, l'action échoue proprement (rien n'est changé) et il faudra inverser
   l'ordre en gardant la garantie du plein tarif.
+
+## 2026-10-04 — Phase 6.1 : la niche et les anciens membres dans l'accueil
+
+### Ce qui change
+
+- **Étape 1 (Bienvenue)** : « Votre communauté parle de » et les 7 niches. Le choix est
+  facultatif ; « Commencer » applique ses préréglages (poids du score et seuil d'inactivité,
+  `NICHE_PRESETS`), les seuils de risque restent ceux de la communauté. Rien n'est écrit si la
+  niche est déjà la bonne. Un échec est dit et l'étape reste, comme pour le mode.
+- **Étape 4 (Audit)** : sous les chiffres, « Anciens membres ». Sans offre Alumni : une phrase et
+  « Créer l'offre Alumni » (gratuite, cachée de la boutique, voir 5.9) ; une permission manquante
+  est nommée. Une fois l'offre prête (ou si elle l'était déjà) : le message automatique « User
+  left » de Whop, prêt à copier avec le lien Alumni, et où le coller.
+- Le brief v4 §10 fixe 4 étapes : la niche et l'Alumni entrent dans les étapes existantes au
+  lieu d'en ajouter deux. Tout reste refusable : Passer ferme l'accueil sans rien changer.
+
+### Pas dans l'accueil
+
+- « Activation des options » (jours gagnés, binômes, défis, annonces) : ce sont des fonctions de
+  l'espace membre, éteint en V1 (`MEMBER_SPACE_ENABLED`). Elles restent dans les Réglages.
+
+### Tests
+
+- `apps/web/test/app.test.tsx` : la niche choisie écrit ses préréglages en gardant les seuils ;
+  l'offre Alumni créée depuis l'audit donne le texte « User left » avec son lien.

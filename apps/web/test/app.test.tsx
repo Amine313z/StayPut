@@ -5000,8 +5000,34 @@ describe('the guide (brief v4 §10)', () => {
   });
 
   it('welcomes a new community in four steps, saves the mode, reveals the audit, then tours', async () => {
+    const risk: RiskSettingsView = {
+      niche: 'other',
+      weights: { recency: 0.3, frequency: 0.25, progress: 0.2, payment: 0.15, friction: 0.1 },
+      recencyThresholdDays: 14,
+      mediumFrom: 45,
+      highFrom: 75,
+    };
+    const alumni: AlumniView = {
+      offer: {
+        name: 'Alumni',
+        url: 'https://whop.com/checkout/plan_Alu1',
+        createdAt: '2026-10-01T10:00:00.000Z',
+        completedAt: '2026-10-01T10:00:05.000Z',
+      },
+      entered: 0,
+      left: 0,
+      returned: 0,
+      problem: null,
+    };
     const calls = mockApi({
       ...dashboard(MEMBERS, INTEGRATIONS, { ...HOME, welcomed: false }),
+      '/api/creator/biz_A1/alumni': [
+        { status: 200, body: NO_ALUMNI },
+        { status: 200, body: NO_ALUMNI },
+      ],
+      '/api/creator/biz_A1/settings/risk': [{ status: 200, body: risk }],
+      'PUT /api/creator/biz_A1/settings/risk': [{ status: 200, body: risk }],
+      'POST /api/creator/biz_A1/alumni': [{ status: 200, body: alumni }],
       'POST /api/creator/biz_A1/mode': [
         { status: 200, body: { ...ACTION_SETTINGS, mode: 'auto' } },
       ],
@@ -5010,11 +5036,25 @@ describe('the guide (brief v4 §10)', () => {
     renderAt('/dashboard/biz_A1');
     const welcome = await screen.findByRole('dialog', { name: 'Welcome to StayPut' });
     expect(welcome.textContent).toContain('Who is about to leave');
+    // What the community is about: its niche's weights and inactivity threshold, applied on
+    // « Get started », its risk thresholds kept.
+    const niches = within(welcome).getByRole('radiogroup', { name: 'Your community is about' });
+    fireEvent.click(within(niches).getByRole('radio', { name: 'Fitness' }));
+    expect(
+      within(niches).getByRole('radio', { name: 'Fitness' }).getAttribute('aria-checked'),
+    ).toBe('true');
     fireEvent.click(within(welcome).getByRole('button', { name: 'Get started' }));
     // Discord or Telegram, optional, each in one tap; what StayPut reads, said as everywhere.
     expect(
       await within(welcome).findByRole('heading', { name: 'Connect Discord or Telegram' }),
     ).toBeTruthy();
+    expect(bodies.get('PUT /api/creator/biz_A1/settings/risk')).toEqual({
+      niche: 'fitness',
+      weights: { recency: 0.25, frequency: 0.2, progress: 0.3, payment: 0.15, friction: 0.1 },
+      recencyThresholdDays: 10,
+      mediumFrom: 45,
+      highFrom: 75,
+    });
     expect(welcome.textContent).toContain('Optional');
     expect(
       within(welcome).getByRole('link', { name: 'Connect Discord' }).getAttribute('href'),
@@ -5040,6 +5080,14 @@ describe('the guide (brief v4 §10)', () => {
     expect(welcome.textContent).toContain('members at risk');
     expect(welcome.textContent).toContain('threatened');
     expect(welcome.textContent).toContain('The most urgent come first on your dashboard.');
+    // Former members: the Alumni offer in a click, then Whop's « User left » message to paste.
+    const former = await within(welcome).findByRole('region', { name: 'Former members' });
+    fireEvent.click(within(former).getByRole('button', { name: 'Create the Alumni offer' }));
+    expect(
+      (await within(former).findByRole<HTMLTextAreaElement>('textbox', { name: /User left/ }))
+        .value,
+    ).toContain('join the Alumni: https://whop.com/checkout/plan_Alu1');
+    expect(bodies.get('POST /api/creator/biz_A1/alumni')).toEqual({ name: 'Alumni' });
     fireEvent.click(within(welcome).getByRole('button', { name: 'Take the tour' }));
     expect(await screen.findByRole('dialog', { name: 'Tour of StayPut' })).toBeTruthy();
     // Seen: it never opens by itself again.

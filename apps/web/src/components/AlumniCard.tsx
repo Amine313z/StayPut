@@ -174,7 +174,7 @@ function Problem({ problem }: { problem: AlumniProblem }) {
  * Whop's automatic « User left » message, sent to everyone who leaves the community (a DM, and an
  * e-mail when ticked): the text to paste, with the Alumni link, and where.
  */
-function UserLeft({ url }: { url: string }) {
+export function UserLeft({ url }: { url: string }) {
   const { t } = useI18n();
   const id = useId();
   const text = t('alumni.userLeft.text', { url });

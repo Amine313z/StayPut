@@ -1244,6 +1244,9 @@ export const fr: Messages = {
   'welcome.hello.body':
     'StayPut repère les membres sur le point de partir, les garde, et vous montre l’argent sauvé.',
   'welcome.hello.start': 'Commencer',
+  'welcome.niche.title': 'Votre communauté parle de',
+  'welcome.niche.hint':
+    'StayPut ajuste son score de risque en fonction. Vous pouvez le changer à tout moment dans les Réglages.',
   'welcome.connect.optional': 'Facultatif',
   'welcome.connect.body':
     'C’est là que vos membres parlent. Sans ça, StayPut ne voit que la moitié de ce qui se passe.',
@@ -1261,6 +1264,11 @@ export const fr: Messages = {
   'welcome.audit.reading': 'StayPut lit vos membres. Les chiffres s’affichent d’eux-mêmes.',
   'welcome.audit.tour': 'Faire la visite',
   'welcome.audit.dashboard': 'Aller au tableau de bord',
+  'welcome.alumni.title': 'Anciens membres',
+  'welcome.alumni.body':
+    'Gardez le contact avec les membres qui partent : une offre Alumni gratuite, cachée de votre boutique, où StayPut leur envoie des nouvelles et des offres de retour.',
+  'welcome.alumni.permission':
+    'Whop demande d’abord la permission « {permission} » : Automatisations › Offre Alumni explique comment.',
 
   'connect.title': 'StayPut ne voit que ce qui se passe sur Whop.',
   'connect.body':

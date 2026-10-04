@@ -1,10 +1,20 @@
-import type { DashboardView, IntegrationsStatus } from '@stayput/core';
+import {
+  NICHES,
+  NICHE_PRESETS,
+  type AlumniView,
+  type DashboardView,
+  type IntegrationsStatus,
+  type Niche,
+  type RiskSettingsView,
+} from '@stayput/core';
 import {
   ArrowLeft,
   ArrowRight,
   Check,
+  GraduationCap,
   Hand,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
   Users,
   Zap,
@@ -12,7 +22,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { postJson } from '../../api';
+import { getJson, postJson, putJson, useApi } from '../../api';
 import { useI18n } from '../../i18n';
 import { SPRING, ease } from '../../motion';
 import { Badge } from '../../ui/Badge';
@@ -21,6 +31,7 @@ import { Button } from '../../ui/Button';
 import { AnimatedNumber } from '../../ui/Motion';
 import { Skeleton } from '../../ui/Skeleton';
 import { useToast } from '../../ui/Toast';
+import { UserLeft } from '../AlumniCard';
 import { ConnectButton } from '../ConnectInvite';
 import { failureText } from '../MemberActions';
 
@@ -39,9 +50,11 @@ const PROMISES: readonly {
 ];
 
 /**
- * The first-run welcome (brief v4 §10), four steps in a window over the dashboard: welcome;
- * Discord or Telegram (optional, each connects in a tap); automatic or manual (saved on Next);
- * the first audit, the members at risk and the revenue they threaten counting up. It ends on
+ * The first-run welcome (brief v4 §10), four steps in a window over the dashboard: welcome, and
+ * what the community is about (its niche's settings applied on Next, SPEC Phase 6.1); Discord or
+ * Telegram (optional, each connects in a tap); automatic or manual (saved on Next); the first
+ * audit, the members at risk and the revenue they threaten counting up, then former members:
+ * the Alumni offer in a click and Whop's « User left » message to paste (SPEC 5.9). It ends on
  * the tour or the dashboard; closing it (Skip, Escape) is final as well: it never opens by
  * itself again (`onClose`, the Worker keeps it per community).
  */
@@ -67,6 +80,7 @@ export function Welcome({
   const titleId = useId();
   const [step, setStep] = useState(0);
   const [mode, setMode] = useState<Mode | null>(null);
+  const [niche, setNiche] = useState<Niche | null>(null);
   const [saving, setSaving] = useState(false);
   const chosen: Mode = mode ?? view?.mode ?? 'manual';
   useEffect(() => {
@@ -81,17 +95,24 @@ export function Welcome({
     void postJson(`${api}/getting-started/welcomed`).catch(() => undefined);
     onClose(then);
   };
+  /** Saves what the step chose, then moves on; what fails is said, and the step stays. */
+  const save = async (work: () => Promise<unknown>) => {
+    setSaving(true);
+    try {
+      await work();
+      return true;
+    } catch (error) {
+      toast({ tone: 'error', title: failureText(error, t) });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
   const next = async () => {
-    if (STEPS[step] === 'mode' && view && chosen !== view.mode) {
-      setSaving(true);
-      try {
-        await postJson(`${api}/mode`, { mode: chosen });
-      } catch (error) {
-        toast({ tone: 'error', title: failureText(error, t) });
-        return;
-      } finally {
-        setSaving(false);
-      }
+    const at = STEPS[step];
+    if (at === 'hello' && niche && !(await save(() => applyNiche(api, niche)))) return;
+    if (at === 'mode' && view && chosen !== view.mode) {
+      if (!(await save(() => postJson(`${api}/mode`, { mode: chosen })))) return;
     }
     setStep((current) => Math.min(current + 1, STEPS.length - 1));
   };
@@ -102,9 +123,9 @@ export function Welcome({
   let secondary: ReactNode = null;
   switch (current) {
     case 'hello':
-      body = <Hello titleId={titleId} />;
+      body = <Hello titleId={titleId} niche={niche} onNiche={setNiche} />;
       primary = (
-        <Button variant="primary" data-autofocus="" onClick={() => void next()}>
+        <Button variant="primary" data-autofocus="" loading={saving} onClick={() => void next()}>
           {t('welcome.hello.start')}
           <ArrowRight aria-hidden="true" className="size-4" />
         </Button>
@@ -117,7 +138,12 @@ export function Welcome({
       body = <ModeChoice titleId={titleId} chosen={chosen} onChoose={setMode} />;
       break;
     case 'audit':
-      body = <Audit titleId={titleId} view={view} importing={importing} />;
+      body = (
+        <>
+          <Audit titleId={titleId} view={view} importing={importing} />
+          <FormerMembers api={api} />
+        </>
+      );
       secondary = (
         <Button variant="ghost" onClick={() => finish('dashboard')}>
           {t('welcome.audit.dashboard')}
@@ -221,8 +247,31 @@ function Progress({ step }: { step: number }) {
   );
 }
 
-function Hello({ titleId }: { titleId: string }) {
+/**
+ * The niche's settings (SPEC Phase 3, NICHE_PRESETS): its weights and inactivity threshold, the
+ * risk thresholds kept as they are; nothing to save when the community already has it.
+ */
+async function applyNiche(api: string, niche: Niche): Promise<void> {
+  const settings = await getJson<RiskSettingsView>(`${api}/settings/risk`);
+  if (settings.niche === niche) return;
+  await putJson<RiskSettingsView>(`${api}/settings/risk`, {
+    ...settings,
+    niche,
+    ...NICHE_PRESETS[niche],
+  });
+}
+
+function Hello({
+  titleId,
+  niche,
+  onNiche,
+}: {
+  titleId: string;
+  niche: Niche | null;
+  onNiche: (niche: Niche) => void;
+}) {
   const { t } = useI18n();
+  const id = useId();
   return (
     <>
       <span className="relative inline-flex">
@@ -247,7 +296,111 @@ function Hello({ titleId }: { titleId: string }) {
           </li>
         ))}
       </ul>
+      {/* What the community is about: its niche's risk settings, applied on « Get started ». */}
+      <div className="mt-6">
+        <p id={`${id}-niche`} className="text-sm font-medium text-fg">
+          {t('welcome.niche.title')}
+        </p>
+        <div
+          role="radiogroup"
+          aria-labelledby={`${id}-niche`}
+          aria-describedby={`${id}-niche-hint`}
+          className="mt-2 flex flex-wrap gap-2"
+        >
+          {NICHES.map((value) => {
+            const on = niche === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => onNiche(value)}
+                className={`rounded-full border px-3 py-1.5 text-[0.8125rem] font-medium transition-colors duration-150 ease-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                  on
+                    ? 'border-accent bg-turq-300/10 text-turq-300'
+                    : 'border-line text-muted hover:border-line-strong hover:text-fg'
+                }`}
+              >
+                {t(`niche.${value}`)}
+              </button>
+            );
+          })}
+        </div>
+        <p id={`${id}-niche-hint`} className="mt-2 text-[0.8125rem] text-subtle">
+          {t('welcome.niche.hint')}
+        </p>
+      </div>
     </>
+  );
+}
+
+/**
+ * Former members (SPEC 5.9, Phase 6.1): the free Alumni offer in a click, then Whop's automatic
+ * « User left » message to paste, its link in it. Already made: the message only. Whop refusing
+ * a step says which permission is missing; the full card stays in Automations › Alumni offer.
+ */
+function FormerMembers({ api }: { api: string }) {
+  const { t } = useI18n();
+  const { state } = useApi<AlumniView>(`${api}/alumni`);
+  const [answer, setAnswer] = useState<AlumniView | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const view = answer ?? (state.status === 'ready' ? state.data : null);
+  // Nothing to propose until StayPut knows where the offer stands (or if it cannot say).
+  if (!view) return null;
+  const url = view.offer?.completedAt ? view.offer.url : null;
+  const create = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      setAnswer(
+        await postJson<AlumniView>(`${api}/alumni`, {
+          name: view.offer?.name ?? t('alumni.defaultName'),
+        }),
+      );
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section
+      aria-labelledby="welcome-alumni"
+      data-welcome="alumni"
+      className="mt-6 space-y-3 rounded-xl border border-line p-4"
+    >
+      <p id="welcome-alumni" className="flex items-center gap-2 text-sm font-medium text-fg">
+        <GraduationCap aria-hidden="true" className="size-4 text-accent" />
+        {t('welcome.alumni.title')}
+      </p>
+      {url ? (
+        <UserLeft url={url} />
+      ) : (
+        <>
+          <p className="text-[0.8125rem]">{t('welcome.alumni.body')}</p>
+          {view.problem?.permission ? (
+            <p role="alert" className="text-[0.8125rem] text-fg">
+              {t('welcome.alumni.permission', { permission: view.problem.permission })}
+            </p>
+          ) : failed ? (
+            <p role="alert" className="text-[0.8125rem] text-fg">
+              {t('common.failed')}
+            </p>
+          ) : null}
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Sparkles aria-hidden="true" className="size-4" />}
+            loading={busy}
+            onClick={() => void create()}
+          >
+            {t(view.offer ? 'alumni.finish' : 'alumni.create')}
+          </Button>
+        </>
+      )}
+    </section>
   );
 }
 
