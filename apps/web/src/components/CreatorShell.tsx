@@ -165,16 +165,26 @@ export function CreatorShell({
 }
 
 /**
- * Back where the creator was: their page may still be reading its data, so the scroll is set
- * again each frame until it holds (1.5 s at most).
+ * Back where the creator was, to the pixel: their page may still be reading its data or ending
+ * a smooth scroll, so the scroll is set again each frame until it has held there for 300 ms
+ * (1.5 s at most). Near is not enough: a page left 1 px down shows it.
  */
 function restoreScroll(top: number) {
   const started = performance.now();
+  let heldSince: number | null = null;
   const tick = () => {
-    window.scrollTo({ top, behavior: 'instant' });
-    if (Math.abs(window.scrollY - top) <= 1 || performance.now() - started > 1_500) return;
+    const now = performance.now();
+    if (Math.abs(window.scrollY - top) < 0.5) {
+      heldSince ??= now;
+      if (now - heldSince >= 300) return;
+    } else {
+      heldSince = null;
+      window.scrollTo({ top, behavior: 'instant' });
+    }
+    if (now - started > 1_500) return;
     requestAnimationFrame(tick);
   };
+  window.scrollTo({ top, behavior: 'instant' });
   requestAnimationFrame(tick);
 }
 
