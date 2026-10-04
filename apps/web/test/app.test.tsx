@@ -788,7 +788,7 @@ describe('creator view', () => {
       name: 'Make Member without a name an offer?',
     });
     expect(
-      await within(second).findByText('20% off for 3 months, with a promo code of their own.'),
+      await within(second).findByText('20% off for 3 months, put on their membership.'),
     ).toBeTruthy();
     fireEvent.click(within(second).getByRole('button', { name: 'Make the offer' }));
     expect(

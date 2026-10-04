@@ -980,7 +980,7 @@ export const en = {
   'actions.type.payment_action_notice': 'Payment to confirm (3D Secure)',
   'actions.type.exit_survey': 'Departure survey',
   'actions.type.pause_offer': 'Offer: a pause',
-  'actions.type.promo_offer': 'Offer: a promo code',
+  'actions.type.promo_offer': 'Offer: a discount',
   'actions.type.coaching_offer': 'Offer: coaching',
   'actions.type.affiliate_invite': 'Affiliate invitation',
   'actions.type.extend_offer': 'Offer: free days',
@@ -1320,7 +1320,7 @@ export const en = {
   'dash.offer.pause.title': 'Offer {name} a pause?',
   'dash.offer.promo.title': 'Make {name} an offer?',
   'dash.offer.pause.terms': 'A {days}-day pause: their membership waits for them.',
-  'dash.offer.promo.terms': '{percent} off for {months} months, with a promo code of their own.',
+  'dash.offer.promo.terms': '{percent} off for {months} months, put on their membership.',
   'dash.offer.how':
     'The member hears of it in Whop and accepts it in their space within 7 days. Nothing changes unless they accept, and your guardrails apply.',
   'dash.offer.settings': 'You set these terms in Settings › Automations.',

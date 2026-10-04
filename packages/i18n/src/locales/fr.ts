@@ -1013,7 +1013,7 @@ export const fr: Messages = {
   'actions.type.payment_action_notice': 'Paiement à valider (3D Secure)',
   'actions.type.exit_survey': 'Questionnaire de départ',
   'actions.type.pause_offer': 'Offre : une pause',
-  'actions.type.promo_offer': 'Offre : un code promo',
+  'actions.type.promo_offer': 'Offre : une réduction',
   'actions.type.coaching_offer': 'Offre : un accompagnement',
   'actions.type.affiliate_invite': 'Invitation à l’affiliation',
   'actions.type.extend_offer': 'Offre : des jours offerts',
@@ -1362,7 +1362,7 @@ export const fr: Messages = {
   'dash.offer.promo.title': 'Faire une offre à {name} ?',
   'dash.offer.pause.terms': 'Une pause de {days} jours : son abonnement l’attend.',
   'dash.offer.promo.terms':
-    '{percent} de réduction pendant {months} mois, avec un code promo à son nom.',
+    '{percent} de réduction pendant {months} mois, posée sur son abonnement.',
   'dash.offer.how':
     'Le membre est prévenu dans Whop et l’accepte dans son espace sous 7 jours. Rien ne change sans son accord, et vos garde-fous s’appliquent.',
   'dash.offer.settings': 'Vous réglez ces conditions dans Réglages › Automatisations.',
