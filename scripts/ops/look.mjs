@@ -544,6 +544,47 @@ report.automations.queue = await desktop.page.evaluate(() => ({
 }));
 await desktop.page.screenshot({ path: `${out}/automations-queue-1440.png` });
 
+// Analytics (fix prompt v4.1, block 7; brief v4 §9.5): the 90-day forecast and its « and if »
+// slider, why members leave as a donut, 30 days of activity as bars; the cohorts' curves over
+// their table, the flagged month edged in turquoise; the lessons as bars.
+await desktop.page.goto(`${base}/demo/insights`, { waitUntil: 'domcontentloaded' });
+await desktop.page.locator('[data-chart="act"]').waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(1_800);
+const gain = () => desktop.page.locator('section:has([data-chart="act"]) dd').first().innerText();
+report.analytics = await desktop.page.evaluate(() => ({
+  tabs: [...document.querySelectorAll('nav[aria-label="Analytics tabs"] a')].map(
+    (a) => a.textContent,
+  ),
+  reasons: [...document.querySelectorAll('[data-reason]')].map((r) => r.textContent),
+  bars: document.querySelectorAll('[data-bar]').length,
+  gridlines: document.querySelectorAll('section:has([data-chart="act"]) svg line').length,
+}));
+report.analytics.gain = await gain();
+await desktop.page.screenshot({ path: `${out}/analytics-overview-1440.png`, fullPage: true });
+await desktop.page.locator('input[type="range"]').fill('50');
+await desktop.page.waitForTimeout(1_400);
+report.analytics.gainAtHalf = await gain();
+await desktop.page.goto(`${base}/demo/insights/cohorts`, { waitUntil: 'domcontentloaded' });
+await desktop.page.locator('[data-cohort]').first().waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(1_500);
+report.analytics.cohorts = await desktop.page.evaluate(() => {
+  const flagged = [...document.querySelectorAll('[data-cohort][data-flagged="true"]')];
+  return {
+    flagged: flagged.map((row) => row.querySelector('th')?.textContent),
+    edge: flagged.map((row) => getComputedStyle(row.querySelector('th')).borderLeftColor),
+    highlighted: document.querySelectorAll('[data-chart="highlighted"]').length,
+  };
+});
+await desktop.page.screenshot({ path: `${out}/analytics-cohorts-1440.png`, fullPage: true });
+await desktop.page.goto(`${base}/demo/insights/lessons`, { waitUntil: 'domcontentloaded' });
+await desktop.page.locator('[data-lesson]').first().waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(1_200);
+report.analytics.lessons = await desktop.page.evaluate(() => ({
+  bars: document.querySelectorAll('[data-lesson]').length,
+  flagged: document.querySelectorAll('[data-lesson][data-flagged="true"]').length,
+}));
+await desktop.page.screenshot({ path: `${out}/analytics-lessons-1440.png`, fullPage: true });
+
 // Automations › Queue › History: what came of each action, the proof of value (block 4).
 await desktop.page.goto(`${base}/demo/actions/queue/history`, { waitUntil: 'domcontentloaded' });
 await desktop.page.waitForSelector('[data-outcome]', { timeout: 30_000 });
@@ -579,6 +620,9 @@ report.words = {
   frenchQuotes: [],
 };
 for (const path of [
+  'insights',
+  'insights/cohorts',
+  'insights/lessons',
   'actions',
   'actions/queue',
   'actions/queue/scheduled',
@@ -771,12 +815,27 @@ const ok =
   report.automations.queue.primaries.length === 1 &&
   /^Approve all \(\d+\)$/.test(report.automations.queue.primaries[0]) &&
   report.automations.queue.rowButtons.length > 0 &&
-  report.automations.queue.rowButtons.every(Boolean);
+  report.automations.queue.rowButtons.every(Boolean) &&
+  // Analytics (fix prompt v4.1, block 7; brief v4 §9.5).
+  report.analytics.tabs.join() === 'Overview,Cohorts,Lessons' &&
+  /^\+\$[\d,]+\.\d{2}$/.test(report.analytics.gain) &&
+  Math.abs(
+    Number(report.analytics.gainAtHalf.replace(/[^\d.]/g, '')) * 2 -
+      Number(report.analytics.gain.replace(/[^\d.]/g, '')),
+  ) <= 0.02 &&
+  report.analytics.reasons.length > 0 &&
+  report.analytics.bars === 30 &&
+  report.analytics.gridlines >= 3 &&
+  report.analytics.cohorts.flagged.length > 0 &&
+  report.analytics.cohorts.edge.every((color) => color === 'rgb(94, 234, 212)') &&
+  report.analytics.cohorts.highlighted === 1 &&
+  report.analytics.lessons.bars > 0 &&
+  report.analytics.lessons.flagged > 0;
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest, or the demo does not tell one story (a pause, an end, an unpaid date, a member gone, an outcome, a count), or something in the demo leads outside StayPut (a link, a button not said disabled), or the words are not those of block 6 (« Skip », no « golden hour », “ ” quotes, English first), or Automations is not two tabs with a switch per rule, the mode, the limits, EN/FR previews, the three ready-made rules and one primary button (block 7): see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest, or the demo does not tell one story (a pause, an end, an unpaid date, a member gone, an outcome, a count), or something in the demo leads outside StayPut (a link, a button not said disabled), or the words are not those of block 6 (« Skip », no « golden hour », “ ” quotes, English first), or Automations is not two tabs with a switch per rule, the mode, the limits, EN/FR previews, the three ready-made rules and one primary button, or Analytics lacks its forecast, slider, donut, bars, curves or turquoise-edged flagged month (block 7): see the report above.',
   );
   process.exitCode = 1;
 }

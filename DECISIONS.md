@@ -2809,3 +2809,88 @@ Telegram (§9.6).
 - Inspect (`look.mjs`) vérifie tout cela sur le site en ligne et ajoute trois captures :
   `automations-rules-1440.png`, `automations-empty-1440.png`, `automations-queue-1440.png`.
 - La migration 0032 s'applique au déploiement.
+
+## 2026-10-04 — Correctifs v4.1, bloc 7b : les graphiques d'Analyses
+
+### Trois onglets
+
+- **Vue d'ensemble** (nouveau, `/insights`), **Cohortes** (`/insights/cohorts`, avant à
+  `/insights`) et **Leçons**.
+- La vue d'ensemble se lit à l'ouverture. Cohortes et Leçons restent les analyses de la semaine.
+
+### La prévision à 90 jours (SPEC 6.5 et 6.6)
+
+- Deux courbes : le revenu mensuel attendu chaque jour « si vous agissez » (turquoise) et « si
+  vous ne faites rien » (pointillés). L'écart entre les deux est légèrement rempli.
+- En grand : ce qu'agir garde sur 90 jours. À côté : le total de chaque courbe sur 90 jours.
+- **Le curseur « Et si vous contactez »** : la part des membres à risque contactés, de 0 à
+  100 %. Le gain suit, au centime près.
+- **Le calcul**, dans `@stayput/core` (`forecastRevenue`, testé) :
+  - chaque mois, un membre reste avec une probabilité selon son risque. Les valeurs de départ
+    sont celles de SPEC 6.5 : faible 95 %, moyen 80 %, élevé 50 % ;
+  - **un départ programmé compte comme un risque élevé (50 %)**, faute de valeur dans SPEC :
+    son score (100) est dans la zone élevée, et l'historique réel le corrige ;
+  - agir sauve une part des membres à risque contactés (30 % au départ). **Un membre sauvé reste
+    ensuite comme un membre à risque faible** : c'est la lecture la plus simple à expliquer.
+- **Les chiffres de la communauté remplacent ceux de StayPut** (SPEC : « dès 60 jours de
+  données ») :
+  - probabilités : les membres de chaque niveau il y a 30 et 60 jours (`risk_scores`), et ceux
+    encore là un mois plus tard. Il faut 60 jours d'historique et 10 membres à ce niveau ;
+  - taux de sauvetage : les membres à risque que StayPut a contactés entre 90 et 14 jours (le
+    temps qu'une action produise son effet), et ceux qu'il a sauvés (sauvetage direct). Il faut
+    10 membres contactés.
+- Sous le graphique, une phrase dit sur quoi reposent les chiffres : ceux de StayPut, ceux de
+  la communauté, ou un peu des deux.
+- Les revenus partent des mêmes chiffres que le tableau de bord : membres payants, devise
+  principale, équipe exclue.
+- **L'échelle ne part pas de zéro** : sinon les deux courbes se confondent. Des valeurs rondes
+  discrètes à gauche le disent.
+
+### Pourquoi les membres partent (SPEC 6.8)
+
+- Un donut des réponses au questionnaire de départ sur 90 jours.
+- **Une seule couleur d'accent** (cahier v4 §6) : la raison principale en turquoise, les autres
+  en blancs dégradés, séparées par un fin espace.
+- La légende donne chaque raison, son nombre et sa part : la couleur seule ne porte jamais
+  l'information.
+- Le regroupement « par semaine » de SPEC 6.8 ira dans le rapport du lundi (fin de Phase 6).
+
+### L'activité des membres sur 30 jours
+
+- Une barre par jour (messages, réactions, publications, leçons ; équipe exclue).
+- L'infobulle donne aussi le nombre de membres actifs ce jour-là.
+- Le total est celui du tableau de bord (« Member activity (30d) »).
+
+### Cohortes et leçons
+
+- **Courbes de rétention par mois d'arrivée**, au-dessus du tableau. Le mois signalé est en
+  turquoise ; celui que le pointeur survole (sur le graphique ou sur sa ligne du tableau) prend
+  sa place. La moyenne est en pointillés.
+- Dans le tableau, le mois signalé a un **liseré turquoise à gauche**, son taux en turquoise :
+  plus d'icône d'alerte ni de rouge.
+- **Leçons** : une barre par leçon (les 8 premières) avec un trait à la moyenne du cours ; les
+  leçons bloquantes en turquoise, les autres en gris ; le tableau dessous.
+
+### Démo
+
+- La démo répond à la vue d'ensemble avec ses propres chiffres :
+  - revenus par niveau, ceux du tableau de bord ;
+  - raisons de départ tirées des offres que montrent la file et l'Historique ;
+  - activité jour par jour, qui retombe sur le total de la page Membres ;
+  - chiffres de départ de StayPut, car la démo n'a que 8 semaines d'historique.
+- Correction de cohérence : l'activité d'un membre de la démo est proportionnée à son
+  ancienneté. Pauline, arrivée ce matin, avait 64 actions « sur 30 jours » ; elle en a
+  maintenant une.
+
+### Tests
+
+- `packages/core/test/forecast.test.ts` : la prévision, le curseur, les totaux, et les
+  chiffres de la communauté (60 jours, 10 membres).
+- `apps/worker/test/analytics-sql.test.ts` : revenus par niveau, probabilités mesurées, taux
+  de sauvetage, raisons, activité, nouvelle communauté, réservé à l'équipe. La route est testée
+  dans `app.test.ts`.
+- `apps/web/test/app.test.tsx` : prévision et curseur, donut, barres, états vides, onglets ;
+  cohortes avec liseré et courbe ; barres des leçons.
+- `apps/web/test/demo.test.ts` : la démo cohérente (activité, revenus, raisons).
+- Inspect (`look.mjs`) vérifie tout cela en ligne, avec trois captures :
+  `analytics-overview-1440.png`, `analytics-cohorts-1440.png`, `analytics-lessons-1440.png`.

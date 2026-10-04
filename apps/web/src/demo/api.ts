@@ -68,6 +68,8 @@ export async function answerDemo(method: string, path: string, body: unknown): P
         return answer(pages.integrations(demo.integrations));
       case 'settings/actions':
         return answer(demo.settings);
+      case 'insights/overview':
+        return answer(demo.overview());
       case 'settings/risk':
         return answer(pages.riskSettings());
       case 'alumni':

@@ -77,8 +77,10 @@ export const SECTIONS: readonly Section[] = [
     label: 'nav.insights',
     description: 'nav.insights.description',
     Icon: ChartColumn,
+    // The forecast first: the money to come, then why members leave (brief v4 §9.5).
     tabs: [
-      { path: '', label: 'tab.cohorts' },
+      { path: '', label: 'tab.overview' },
+      { path: 'cohorts', label: 'tab.cohorts' },
       { path: 'lessons', label: 'tab.lessons' },
     ],
   },

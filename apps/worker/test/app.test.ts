@@ -16,6 +16,7 @@ import type {
   ActionsPage,
   AccessLevel,
   DiscordChannelChoice,
+  InsightsOverview,
   InsightsReport,
   IntegrationsStatus,
   MemberTelegramStatus,
@@ -1713,6 +1714,27 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
     const customer = await asUser('user_sam');
     expect((await request(settingsPath, customer)).status).toBe(403);
     expect((await request('/api/creator/biz_Risk1/insights', customer)).status).toBe(403);
+    expect((await request('/api/creator/biz_Risk1/insights/overview', customer)).status).toBe(403);
+  });
+
+  it('reads Analytics › Overview at once, StayPut’s figures for a new community', async () => {
+    const { request } = setup({ 'user_rita:biz_Risk3': 'admin' });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Risk3/session', init);
+    await settle();
+    const response = await request('/api/creator/biz_Risk3/insights/overview', init);
+    expect(response.status).toBe(200);
+    const overview = (await response.json()) as InsightsOverview;
+    expect(overview).toMatchObject({
+      currency: null,
+      revenue: { low: 0, medium: 0, high: 0, scheduled_departure: 0 },
+      stay: { low: 0.95, medium: 0.8, high: 0.5, scheduled_departure: 0.5 },
+      calibrated: [],
+      saveRate: 0.3,
+      saveRateObserved: false,
+      reasons: [],
+    });
+    expect(overview.activity).toHaveLength(30);
   });
 
   it('reads the weekly analyses once they ran', async () => {

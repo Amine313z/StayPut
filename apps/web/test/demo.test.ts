@@ -685,3 +685,47 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
     expect(world.dashboard().memberActivity30d).toBe(world.members.summary.activity30d);
   });
 });
+
+describe('Analytics › Overview in the demo (fix prompt v4.1, block 7)', () => {
+  const world = createWorld(NOW);
+  const overview = world.overview();
+  const DAY = 86_400_000;
+
+  it('draws the Members page’s activity, day by day, up to today', () => {
+    expect(overview.activity).toHaveLength(30);
+    expect(overview.activity.at(-1)!.day).toBe(zonedDay(NOW, 'Europe/Paris'));
+    expect(sum(overview.activity.map((d) => d.actions))).toBe(world.members.summary.activity30d);
+    // A newcomer of this morning did a thing or two, not a month's worth.
+    const pauline = world.members.members.find((m) => m.name === 'Pauline Giraud')!;
+    const { messages, reactions, posts, lessons } = pauline.activity;
+    expect(messages + reactions + posts + lessons).toBeGreaterThan(0);
+    expect(messages + reactions + posts + lessons).toBeLessThan(5);
+  });
+
+  it('forecasts from the dashboard’s own revenue, at risk included', () => {
+    const revenue = world.members.summary.revenue!;
+    expect(overview.currency).toBe(revenue.currency);
+    expect(sum(Object.values(overview.revenue))).toBeCloseTo(revenue.monthly, 1);
+    expect(overview.revenue.high + overview.revenue.scheduled_departure).toBeCloseTo(
+      revenue.atRisk,
+      1,
+    );
+    // Eight weeks of history: StayPut's starting figures, said as such.
+    expect(overview.calibrated).toEqual([]);
+    expect(overview.saveRateObserved).toBe(false);
+  });
+
+  it('takes why members leave from the offers the queue and the History show', () => {
+    const offers = (['queue', 'scheduled', 'history'] as const)
+      .flatMap((view) => world.pages.actions(view).actions)
+      .filter((a) => a.offer?.reason && NOW - Date.parse(a.createdAt) <= 90 * DAY);
+    expect(overview.reasons).toEqual([
+      { reason: 'no_time', count: 3 },
+      { reason: 'other', count: 2 },
+      { reason: 'too_expensive', count: 1 },
+    ]);
+    expect(sum(overview.reasons.map((r) => r.count))).toBe(
+      new Set(offers.map((a) => a.member.id)).size,
+    );
+  });
+});

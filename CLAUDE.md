@@ -131,7 +131,17 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   « Your limits » panel (read-only, edited in Settings › Automations), a folded preview per
   message tagged EN/FR (the creator's template or StayPut's, « Alex », the community's name),
   and with every rule off the three ready-made rules with one primary button. The queue has one
-  primary button, « Approve all (N) »; each row's « Approve » is a ghost. Before
+  primary button, « Approve all (N) »; each row's « Approve » is a ghost. Block 7b (Analytics,
+  brief v4 §9.5) done: tabs Overview · Cohorts (`/insights/cohorts`) · Lessons. Overview reads
+  `GET /api/creator/:companyId/insights/overview` (`apps/worker/src/analytics.ts`, no migration:
+  revenue by risk level in the main currency, the community's own stay probabilities from 60
+  days of `risk_scores` and 10 members a level, its save rate from 10 members at risk reached
+  90–14 days ago, the departure survey's reasons of 90 days, 30 days of `member_stats_daily`);
+  `@stayput/core` `forecastRevenue` draws « if you act » vs « if you do nothing » with the
+  « and if » slider (a saved member then stays like a low-risk one). Charts in
+  `apps/web/src/ui/charts/` (ForecastChart, RetentionChart, Donut, DayBars, LessonBars): one
+  accent, the donut's main reason turquoise and the others white steps with a legend in words.
+  The demo's activity is now in proportion to each member's tenure. Before
   it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard

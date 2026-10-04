@@ -66,7 +66,7 @@ couleurs, polices et animations suivent [`docs/design-tokens.md`](./docs/design-
 | Dashboard · Tableau de bord   | une page                                                                       |
 | Members · Membres             | Tous les membres · Ne pas contacter                                            |
 | Automations · Automatisations | Règles · File d’attente (filtres : À valider, Programmées, Historique, Alumni) |
-| Analytics · Analyses          | Cohortes · Leçons                                                              |
+| Analytics · Analyses          | Vue d'ensemble · Cohortes · Leçons                                             |
 | Integrations · Intégrations   | Whop · Discord · Telegram · Activité                                           |
 | Settings · Réglages           | Général · Score de risque · Automatisations                                    |
 
@@ -99,6 +99,15 @@ pour chaque message, un aperçu dans la langue des membres (étiquette EN ou FR)
 ne prévoit plus rien ; si toutes le sont, la page propose les trois qui ramènent le plus
 d'argent. La **file d'attente** montre ce qui attend votre validation, avec un seul bouton
 principal (« Approve all »), et ses filtres : Programmées, Historique, Offre Alumni.
+
+Analyses s'ouvre sur la **prévision à 90 jours** : ce que vos membres devraient rapporter si
+vous agissez et si vous ne faites rien (deux courbes), l'écart en grand, et un curseur « Et si
+vous contactez… » qui dit ce que rapporte chaque part de membres à risque contactés. Les
+probabilités de départ de StayPut (95 %, 80 %, 50 % par mois selon le risque, 30 % de membres
+sauvés) sont remplacées par celles de votre communauté dès 60 jours d'historique. Dessous :
+pourquoi les membres partent (le questionnaire de départ, en donut) et leur activité jour par
+jour sur 30 jours. Les onglets Cohortes et Leçons montrent leurs courbes et barres au-dessus des
+tableaux ; le mois signalé a un liseré turquoise, jamais de rouge.
 
 Dans Automatisations › File d'attente › Historique, chaque action qui a atteint un membre dit ce qu'il en est sorti
 : « Recovered $49.00 » (l'argent sauvé grâce à elle), « Still failing », « Paused until Nov 2 »,

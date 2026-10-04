@@ -18,6 +18,7 @@ import type {
   ActionsPage,
   DashboardView,
   DiscordChannelChoice,
+  InsightsOverview,
   InsightsReport,
   IntegrationsStatus,
   MemberDetail,
@@ -32,6 +33,7 @@ import type {
   SyncRun,
   SyncStatus,
 } from '@stayput/core';
+import { forecastRevenue } from '@stayput/core';
 import type { Locale } from '@stayput/i18n';
 import { RouterProvider, createMemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -2384,7 +2386,7 @@ describe('analyses', () => {
         { status: 200, body: REPORT },
       ],
     });
-    renderAt('/dashboard/biz_A1/insights');
+    renderAt('/dashboard/biz_A1/insights/cohorts');
     expect(
       await screen.findByText(
         'Members who joined in July 2026 left 1.8 times more than your average within 30 days.',
@@ -2392,7 +2394,15 @@ describe('analyses', () => {
     ).toBeTruthy();
     expect(calls).toContain('/api/creator/biz_A1/insights');
     const july = screen.getByRole('rowheader', { name: 'July 2026' }).closest('tr')!;
-    expect(july.textContent).toContain('36%Above average');
+    expect(july.textContent).toContain('36% (Above average)');
+    // The flagged month: a turquoise edge, never red (brief v4 §9.5); its curve highlighted.
+    expect(july.getAttribute('data-flagged')).toBe('true');
+    expect(screen.getByRole('rowheader', { name: 'July 2026' }).className).toContain(
+      'border-turq-300',
+    );
+    expect(screen.getByRole('img', { name: 'Retention by month of arrival' })).toBeTruthy();
+    expect(document.querySelectorAll('[data-chart="highlighted"]')).toHaveLength(1);
+    expect(document.querySelector('.text-danger, .text-serious')).toBeNull();
     const september = screen.getByRole('rowheader', { name: 'September 2026' }).closest('tr')!;
     expect(september.textContent).toContain('Too early to tell');
     const average = screen.getByRole('rowheader', { name: 'Your average' }).closest('tr')!;
@@ -2404,6 +2414,11 @@ describe('analyses', () => {
       await screen.findByRole('rowheader', { name: /4\. Risk management/ })
     ).closest('tr')!;
     expect(blocking.textContent).toBe('4. Risk managementBlocking7 of 1258%21%');
+    // Above the table, a bar per lesson (the first 8), the blocking one in turquoise.
+    const bars = document.querySelectorAll('[data-lesson]');
+    expect(bars).toHaveLength(8);
+    expect(bars[0]!.getAttribute('data-flagged')).toBe('true');
+    expect(bars[0]!.textContent).toContain('7 of 12 members stalled after it');
     // The first 8 lessons, then all of them on demand.
     expect(screen.queryByRole('rowheader', { name: 'Lesson without a title' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show all (10)' }));
@@ -2420,12 +2435,137 @@ describe('analyses', () => {
         },
       ],
     });
-    renderAt('/dashboard/biz_A1/insights', 'fr');
+    renderAt('/dashboard/biz_A1/insights/cohorts', 'fr');
     expect(
       await screen.findByText(
         "Les premières analyses tournent dans l'heure qui suit la première synchronisation.",
       ),
     ).toBeTruthy();
+  });
+});
+
+describe('Analytics › Overview (brief v4 §9.5)', () => {
+  const OVERVIEW: InsightsOverview = {
+    currency: 'USD',
+    revenue: { low: 1000, medium: 200, high: 100, scheduled_departure: 50 },
+    stay: { low: 0.95, medium: 0.8, high: 0.5, scheduled_departure: 0.5 },
+    calibrated: [],
+    saveRate: 0.3,
+    saveRateObserved: false,
+    reasons: [
+      { reason: 'too_expensive', count: 3 },
+      { reason: 'no_time', count: 1 },
+    ],
+    activity: Array.from({ length: 30 }, (_, i) => ({
+      day: new Date(Date.UTC(2026, 8, 2 + i)).toISOString().slice(0, 10),
+      actions: i === 29 ? 12 : 4,
+      members: i === 29 ? 5 : 2,
+    })),
+  };
+  const usd = (value: number) =>
+    value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+  it('forecasts the 90 days if you act and if you do nothing, and moves with the slider', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/insights/overview': [{ status: 200, body: OVERVIEW }],
+    });
+    renderAt('/dashboard/biz_A1/insights');
+    const forecast = (
+      await screen.findByRole('heading', { name: 'Your revenue over the next 90 days' })
+    ).closest('section')!;
+    const full = forecastRevenue({ ...OVERVIEW, reached: 1 });
+    const figures = () =>
+      within(forecast)
+        .getAllByRole('definition')
+        .map((d) => d.textContent);
+    await vi.waitFor(() =>
+      expect(figures()).toEqual([
+        `+${usd(full.gain)}`,
+        usd(full.total.act),
+        usd(full.total.doNothing),
+      ]),
+    );
+    expect(calls).toContain('/api/creator/biz_A1/insights/overview');
+    expect(
+      within(forecast).getByRole('group', { name: 'Monthly revenue expected, day by day' }),
+    ).toBeTruthy();
+    // What the figures rest on, said plainly.
+    expect(forecast.textContent).toContain(
+      'Each month, a member at low risk stays with a 95% chance, at medium risk 80%, at high risk 50%. Acting saves 30% of the members at risk it reaches',
+    );
+    expect(forecast.textContent).toContain('StayPut’s starting figures');
+    // Half the members at risk reached: half the gain.
+    const slider = within(forecast).getByRole('slider');
+    expect(slider.getAttribute('aria-valuetext')).toBe('100% of your members at risk');
+    fireEvent.change(slider, { target: { value: '50' } });
+    const half = forecastRevenue({ ...OVERVIEW, reached: 0.5 });
+    await vi.waitFor(() => expect(figures()[0]).toBe(`+${usd(half.gain)}`));
+    expect(figures()[2]).toBe(usd(full.total.doNothing));
+    expect(forecast.textContent).toContain('50% of your members at risk');
+  });
+
+  it('shows why members leave as a donut, and what they did over 30 days', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/insights/overview': [{ status: 200, body: OVERVIEW }],
+    });
+    renderAt('/dashboard/biz_A1/insights');
+    const reasons = (await screen.findByRole('heading', { name: 'Why members leave' })).closest(
+      'section',
+    )!;
+    // The headings come at once; the figures with the answer.
+    expect(await within(reasons).findByRole('img', { name: 'Reasons for leaving' })).toBeTruthy();
+    expect([...reasons.querySelectorAll('[data-reason]')].map((row) => row.textContent)).toEqual([
+      'Too expensive3 answers75%',
+      'No time1 answer25%',
+    ]);
+    const activity = screen
+      .getByRole('heading', { name: 'Member activity (30d)' })
+      .closest('section')!;
+    expect(activity.textContent).toContain('128 actions over the last 30 days');
+    expect(activity.querySelectorAll('[data-bar]')).toHaveLength(30);
+    // Every figure in words for screen readers: the last day, its members.
+    expect(within(activity).getByRole('table').textContent).toContain(
+      '12 actions · 5 members active',
+    );
+  });
+
+  it('says what is missing rather than an empty chart', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/insights/overview': [
+        {
+          status: 200,
+          body: {
+            ...OVERVIEW,
+            currency: null,
+            revenue: { low: 0, medium: 0, high: 0, scheduled_departure: 0 },
+            reasons: [],
+          },
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/insights', 'fr');
+    expect(
+      await screen.findByText(
+        'Aucun membre payant pour l’instant : la prévision commence avec le premier.',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Aucun questionnaire de départ rempli ces 90 derniers jours.'),
+    ).toBeTruthy();
+    // Its tabs: the overview, then the weekly analyses.
+    const tabs = screen.getByRole('navigation', { name: 'Onglets : Analyses' });
+    expect(
+      within(tabs)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual([
+      '/dashboard/biz_A1/insights',
+      '/dashboard/biz_A1/insights/cohorts',
+      '/dashboard/biz_A1/insights/lessons',
+    ]);
   });
 });
 
@@ -4558,6 +4698,7 @@ const DEMO_PAGES = [
   'actions/queue/history',
   'actions/queue/alumni',
   'insights',
+  'insights/cohorts',
   'insights/lessons',
   'sources',
   'sources/discord',
@@ -4676,7 +4817,7 @@ describe('the demo (/demo)', () => {
     expect(await screen.findByText('Margaux Picard', undefined, { timeout: 3_000 })).toBeTruthy();
     expect(screen.getByText('Before you go')).toBeTruthy();
     cleanup();
-    renderAt('/demo/insights');
+    renderAt('/demo/insights/cohorts');
     expect(
       await screen.findByText(/left 1\.\d times more than your average within 30 days/, undefined, {
         timeout: 3_000,

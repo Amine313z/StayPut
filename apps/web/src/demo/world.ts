@@ -1,6 +1,8 @@
 import {
   DEFAULT_HIGH_FROM,
   DEFAULT_OFFERS,
+  DEFAULT_SAVE_RATE,
+  DEFAULT_STAY,
   MEMBER_PAYMENTS_LIMIT,
   addDays,
   choosePriority,
@@ -11,6 +13,7 @@ import {
   type DashboardView,
   type FeedItem,
   type GettingStarted,
+  type InsightsOverview,
   type IntegrationsStatus,
   type MemberDetail,
   type MemberDetailPayment,
@@ -420,6 +423,8 @@ export interface DemoWorld {
   syncNow: () => void;
   /** A member's drawer (Members): null for no member of the demo. */
   memberDetail: (memberId: string) => MemberDetail | null;
+  /** Analytics › Overview: the forecast's figures, the departure survey's reasons, 30 days. */
+  overview: () => InsightsOverview;
 }
 
 /**
@@ -436,14 +441,24 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
   const rows: MemberRow[] = PEOPLE.map((p, index) => {
     const plan = p.plan ? PLANS[p.plan] : null;
     const ranges = p.level ? ACTIVITY_RANGES[p.level] : null;
+    // A member here for less than 30 days did that much less: a newcomer of this morning has
+    // done a thing or two, not a month's worth (one story, fix prompt v4.1 block 7). The draws
+    // stay the same, so every other member keeps their figures.
+    const tenure = Math.min(1, p.joined / 30);
     const count = (kind: 0 | 1 | 2 | 3) =>
-      ranges && p.active !== null ? between(ranges[kind]) : 0;
+      ranges && p.active !== null ? Math.round(between(ranges[kind]) * tenure) : 0;
     const activity = {
       messages: count(0),
       reactions: count(1),
       posts: count(2),
       lessons: count(3),
     };
+    // Active within the 30 days: at least the one thing they did.
+    if (p.active !== null && p.active < 30 && ranges) {
+      if (activity.messages + activity.reactions + activity.posts + activity.lessons === 0) {
+        activity.messages = 1;
+      }
+    }
     const billing = plan ? billingOf(p, plan.days * DAY, now) : null;
     const leftAt = p.left === undefined ? null : now - p.left * DAY;
     const minutes = p.active === null ? 0 : between([1, 600]);
@@ -648,6 +663,50 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
   const DISCORD_GUILD = '1187420000000000001';
   const TELEGRAM_CHAT = '-1002187400001';
   const TELEGRAM_TITLE = 'Atlas · Signals';
+  // What members did, day by day over the community's last 30 days (Analytics › Overview): each
+  // member's 30-day total spread over the days since they joined, up to the day they were last
+  // active, which has at least one. The days add up to the Members page's totals. Its own seed:
+  // the rest of the community draws the same numbers as before.
+  const spread = seeded(20_261_004);
+  const today = zonedDay(now, zone);
+  const activityDays = Array.from({ length: 30 }, (_, i) => ({
+    day: addDays(today, i - 29),
+    actions: 0,
+    members: new Set<string>(),
+  }));
+  const dayIndex = (time: number) => {
+    const day = zonedDay(time, zone);
+    return activityDays.findIndex((d) => d.day === day);
+  };
+  for (const m of joined) {
+    const total =
+      m.activity.messages + m.activity.reactions + m.activity.posts + m.activity.lessons;
+    const last = m.lastActivityAt ? dayIndex(Date.parse(m.lastActivityAt)) : -1;
+    if (total === 0 || last < 0) continue;
+    const first = Math.min(last, Math.max(0, m.joinedAt ? dayIndex(Date.parse(m.joinedAt)) : 0));
+    const weights = Array.from({ length: last - first + 1 }, () => 0.3 + spread());
+    const sum = weights.reduce((a, b) => a + b, 0);
+    const shares = weights.map((w) => ((total - 1) * w) / sum);
+    const counts = shares.map(Math.floor);
+    // The units the rounding left, to the days that lost the most to it.
+    let left = total - 1 - counts.reduce((a, b) => a + b, 0);
+    for (const i of shares
+      .map((share, i) => ({ i, rest: share - Math.floor(share) }))
+      .sort((a, b) => b.rest - a.rest)
+      .map((d) => d.i)) {
+      if (left <= 0) break;
+      counts[i]! += 1;
+      left -= 1;
+    }
+    counts[counts.length - 1]! += 1;
+    counts.forEach((count, i) => {
+      if (count === 0) return;
+      const day = activityDays[first + i]!;
+      day.actions += count;
+      day.members.add(m.id);
+    });
+  }
+
   const pages = createDemoPages({
     now,
     community: COMMUNITY,
@@ -1186,6 +1245,32 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
       const moment = new Date().toISOString();
       sync.lastSyncAt = moment;
       for (const stream of sync.streams) stream.lastPassAt = moment;
+    },
+    overview: () => {
+      const revenue = { low: 0, medium: 0, high: 0, scheduled_departure: 0 };
+      for (const m of paying) revenue[m.risk?.level ?? 'low'] += price(m);
+      // What members did since the demo opened: today's.
+      const live = Math.max(0, members.summary.activity30d - activity30d);
+      return {
+        currency: CURRENCY,
+        revenue: {
+          low: round(revenue.low),
+          medium: round(revenue.medium),
+          high: round(revenue.high),
+          scheduled_departure: round(revenue.scheduled_departure),
+        },
+        // Eight weeks of history: StayPut's figures until the community has 60 days of its own.
+        stay: { ...DEFAULT_STAY },
+        calibrated: [],
+        saveRate: DEFAULT_SAVE_RATE,
+        saveRateObserved: false,
+        reasons: pages.exitReasons(),
+        activity: activityDays.map((d, i) => ({
+          day: d.day,
+          actions: d.actions + (i === activityDays.length - 1 ? live : 0),
+          members: d.members.size,
+        })),
+      };
     },
   };
 }

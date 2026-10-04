@@ -20,6 +20,7 @@ import {
   type CohortCounts,
   type CohortHorizon,
   type DiscordChannelChoice,
+  type ExitReason,
   type InsightsReport,
   type IntegrationsStatus,
   type LinkedAccount,
@@ -102,6 +103,11 @@ export interface DemoPages {
     pauses: number;
   };
   insights: InsightsReport;
+  /**
+   * The departure survey's answers of the last 90 days, by reason (the most frequent first): those
+   * the History shows, an offer for each, one per member (their latest).
+   */
+  exitReasons: () => { reason: ExitReason; count: number }[];
   platformActivity: () => PlatformActivityView;
   people: () => PeopleView;
   accounts: () => AccountsView;
@@ -956,6 +962,21 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
             }, 0) * 100,
           ) / 100,
       };
+    },
+    exitReasons: () => {
+      const latest = new Map<string, { at: number; reason: ExitReason }>();
+      for (const row of actions) {
+        const reason = row.offer?.reason;
+        const at = Date.parse(row.createdAt);
+        if (!reason || now - at > 90 * DAY) continue;
+        const known = latest.get(row.member.id);
+        if (!known || known.at < at) latest.set(row.member.id, { at, reason });
+      }
+      const counts = new Map<ExitReason, number>();
+      for (const { reason } of latest.values()) counts.set(reason, (counts.get(reason) ?? 0) + 1);
+      return [...counts.entries()]
+        .map(([reason, count]) => ({ reason, count }))
+        .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
     },
     scoreTurnedHigh: (memberId) => {
       const times = actions

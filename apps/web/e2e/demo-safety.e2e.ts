@@ -27,6 +27,7 @@ const PAGES = [
   'actions/queue/history',
   'actions/queue/alumni',
   'insights',
+  'insights/cohorts',
   'insights/lessons',
   'sources',
   'sources/discord',

@@ -772,7 +772,7 @@ export const en = {
   'nav.actions': 'Automations',
   'nav.actions.description': 'What StayPut does to keep your members, always within your limits.',
   'nav.insights': 'Analytics',
-  'nav.insights.description': 'What makes members leave, analyzed every week.',
+  'nav.insights.description': 'Your revenue to come, and what makes members leave.',
   'nav.sources': 'Integrations',
   'nav.sources.description':
     'Where StayPut reads your members’ activity: Whop, Discord and Telegram.',
@@ -1347,6 +1347,63 @@ export const en = {
   'queue.tab': 'Queue',
   'queue.filters': 'Show',
   'demo.disabled': 'Disabled in the demo',
+  'forecast.title': 'Your revenue over the next 90 days',
+  'forecast.gain': 'Kept by acting',
+  'forecast.gain.info':
+    'What acting on your members at risk is likely to keep over the next 90 days, compared with doing nothing. An estimate, never a promise.',
+  'forecast.act': 'If you act',
+  'forecast.act.info':
+    'The revenue expected over 90 days if StayPut reaches the members at risk you choose below.',
+  'forecast.doNothing': 'If you do nothing',
+  'forecast.doNothing.info': 'The revenue expected over 90 days if nobody acts.',
+  'forecast.chart': 'Monthly revenue expected, day by day',
+  'forecast.summary':
+    'Monthly revenue expected over the next 90 days: {act} in 90 days if you act, {alone} if you do nothing.',
+  'forecast.today': 'Today',
+  'forecast.gap': 'Difference',
+  'forecast.reach': 'And if you reach',
+  'forecast.reach.value': '{percent} of your members at risk',
+  'forecast.reach.count': '{count} of {total}',
+  'forecast.how':
+    'Each month, a member at low risk stays with a {low} chance, at medium risk {medium}, at high risk {high}. Acting saves {save} of the members at risk it reaches, who then stay like the others.',
+  'forecast.how.default':
+    'StayPut’s starting figures: your community’s own replace them once it has 60 days of history.',
+  'forecast.how.own': 'Measured on your community’s own history.',
+  'forecast.how.mixed':
+    'Partly measured on your community’s own history, StayPut’s starting figures for the rest.',
+  'forecast.empty': 'No paying member yet: the forecast starts with your first one.',
+  'reasons.title': 'Why members leave',
+  'reasons.description': 'The departure survey’s answers over the last 90 days.',
+  'reasons.chart': 'Reasons for leaving',
+  'reasons.center.one': 'answer',
+  'reasons.center.other': 'answers',
+  'reasons.count.one': '{count} answer',
+  'reasons.count.other': '{count} answers',
+  'reasons.empty': 'No departure survey answered in the last 90 days.',
+  'reasons.too_expensive': 'Too expensive',
+  'reasons.no_time': 'No time',
+  'reasons.no_results': 'Not the results expected',
+  'reasons.goal_reached': 'Goal reached',
+  'reasons.other': 'Another reason',
+  'activity30.title': 'Member activity (30d)',
+  'activity30.total.one': '{count} action over the last 30 days',
+  'activity30.total.other': '{count} actions over the last 30 days',
+  'activity30.day.one': '{count} action',
+  'activity30.day.other': '{count} actions',
+  'activity30.members.one': '{count} member active',
+  'activity30.members.other': '{count} members active',
+  'activity30.chart': 'Member activity, day by day',
+  'activity30.summary':
+    'Messages, reactions, posts and lessons completed each day, the team aside.',
+  'cohorts.chart': 'Retention by month of arrival',
+  'cohorts.chart.summary':
+    'The share of each month’s new members still there at 30, 60 and 90 days, against your average.',
+  'cohorts.mark.joined': 'Joined',
+  'cohorts.mark.days': '{days} days',
+  'cohorts.detail.one': '{count} member joined',
+  'cohorts.detail.other': '{count} members joined',
+  'lessons.chart': 'Where members stall',
+  'lessons.detail': '{stalled} of {reached} members stalled after it',
 } as const;
 
 export type MessageKey = keyof typeof en;

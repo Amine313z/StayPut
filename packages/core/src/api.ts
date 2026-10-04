@@ -503,6 +503,38 @@ export interface InsightsReport {
   lessons: LessonRow[];
 }
 
+/**
+ * GET /api/creator/:companyId/insights/overview: Analytics › Overview (brief v4 §9.5). What the
+ * 90-day forecast needs (SPEC 6.5–6.6, computed by `forecastRevenue`), why members leave (the
+ * departure survey, SPEC 6.8) and what they did, day by day.
+ */
+export interface InsightsOverview {
+  /** The currency most of the community pays in; null without a paying member. */
+  currency: string | null;
+  /** What the paying members bring in a month, in `currency`, by risk level. */
+  revenue: Record<RiskLevel, number>;
+  /** Each level's probability of staying a month. */
+  stay: Record<RiskLevel, number>;
+  /** The levels whose probability is the community's own (60 days of history, 10 members). */
+  calibrated: RiskLevel[];
+  /** The share of the members at risk reached that acting saves. */
+  saveRate: number;
+  /** The community's own rate (10 members at risk reached), not StayPut's 30 %. */
+  saveRateObserved: boolean;
+  /** The departure survey's answers of the last 90 days, by reason, the most frequent first. */
+  reasons: { reason: ExitReason; count: number }[];
+  /** The last 30 days in the community's calendar, the oldest first. */
+  activity: ActivityDay[];
+}
+
+/** A day of the members' activity: what they did (messages, reactions, posts, lessons). */
+export interface ActivityDay {
+  day: string;
+  actions: number;
+  /** The members who did something that day. */
+  members: number;
+}
+
 export interface CohortRow {
   /** First day of the month of arrival. */
   month: string;

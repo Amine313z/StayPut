@@ -10,7 +10,7 @@ import {
   QueueFilterAddress,
   QueueTab,
 } from './views/creator/ActionsTab';
-import { CohortsTab, LessonsTab } from './views/creator/InsightsTab';
+import { CohortsTab, LessonsTab, OverviewTab } from './views/creator/InsightsTab';
 import { MembersTab, NeverContactTab } from './views/creator/MembersTab';
 import { Overview } from './views/creator/Overview';
 import { MemberSpaceOnly, SectionHome, SectionLayout } from './views/creator/SectionLayout';
@@ -57,7 +57,8 @@ function creatorSections(): RouteObject[] {
       { path: 'alumni', element: <QueueFilterAddress filter="alumni" /> },
     ]),
     section('insights', 'insights', [
-      { index: true, element: <CohortsTab /> },
+      { index: true, element: <OverviewTab /> },
+      { path: 'cohorts', element: <CohortsTab /> },
       { path: 'lessons', element: <LessonsTab /> },
     ]),
     section('sources', 'sources', [

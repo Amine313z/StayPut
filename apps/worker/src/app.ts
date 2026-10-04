@@ -58,6 +58,7 @@ import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
 import { alumniOfMember, createAlumniOffer, readAlumni } from './alumni';
+import { readInsightsOverview } from './analytics';
 import {
   accountOf,
   accountsView,
@@ -852,6 +853,28 @@ export function createApp(deps: AppDeps) {
     if (!db) return apiError('not_configured', 'the database is not configured');
     return c.json(await readInsights(db, c.get('userId'), c.get('companyId')));
   });
+
+  /**
+   * Analytics › Overview (brief v4 §9.5): the 90-day forecast's figures, why members leave, what
+   * they did over 30 days. Read at once, not by the weekly analyses.
+   */
+  app.get(
+    '/api/creator/:companyId/insights/overview',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const overview = await readInsightsOverview(
+        db,
+        c.get('userId'),
+        c.get('companyId'),
+        deps.now(),
+      );
+      return overview ? c.json(overview) : apiError('not_found', 'no such company');
+    },
+  );
 
   /** How the risk score is computed for this company (SPEC Phase 3: weights, thresholds). */
   app.get(
