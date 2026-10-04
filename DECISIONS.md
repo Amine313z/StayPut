@@ -2714,3 +2714,29 @@ une capture. Le bloc 1 refait la lumière de la visite et de « Show me ».
   - si le plan gratuit, le plan Performance et l'offre Founder de `SPEC.md` restent.
 - Si les trois prix ne donnent pas les mêmes fonctions, StayPut lit sur Whop celui que le
   créateur a payé, pour ouvrir les bonnes. Il ne fait que le lire.
+
+## 2026-10-04 — Correctifs v4.1, bloc 6 : les mots
+
+- Le fondateur a validé le bloc 5 et demandé d'enchaîner toutes les étapes, les prix (Phase 7)
+  en dernier : un court rapport après chaque étape, sans attendre, sauf décision à prendre.
+- **Quand un message part** : « Sends at the hour they’re usually online » (« Part à l’heure
+  où le membre est habituellement en ligne ») et « Sends in 2 hours » (« Envoyé dans 2
+  heures », les mots du fondateur). « Leaves as soon as you approve it » devient « Sends as soon
+  as you approve it » ; le français garde « Part dès votre validation ».
+- **« Skip » à côté de « Approve »** (« Ignorer »), confirmé par « Yes, skip it ». Dans
+  l'historique, la note devient « Skipped by you » (« Ignorée par vous ») ; le statut reste
+  « Cancelled », qui couvre aussi les annulations de StayPut (abonnement terminé…).
+- **Plus de « golden hour » à l'écran** : « Golden-hour message » devient « Check-in message »
+  (« Message de suivi », le nom de la règle), et l'aide de l'heure par défaut dit « When
+  StayPut does not know yet when a member is usually online ». Le code garde le nom interne.
+- **L'anglais cite avec “ ”**, jamais « » (10 phrases corrigées, dont “It’s me / my team” et
+  “User left”). Le français garde ses guillemets.
+- **Langue des messages** : English d'abord, puis French.
+- **Le Guide** s'intitule « How StayPut works » (« Comment marche StayPut ») ; le bouton du haut
+  reste « Guide ».
+- Le français reste partout où il s'applique, visite guidée comprise (inchangé).
+- **Tests** : `packages/i18n/test/i18n.test.ts` refuse « » en anglais et « golden » / « heure
+  d’or » à l'écran, et vérifie les nouveaux mots ; `apps/web/test/app.test.tsx` vérifie
+  « Skip », « Sends at… », « Sends in 2 hours », l'ordre des langues et le titre du Guide en
+  anglais et en français ; Inspect (`look.mjs`) vérifie « Skip » à côté de chaque « Approve »,
+  aucune page de la démo avec « golden » ou « », et English d'abord.

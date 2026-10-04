@@ -117,7 +117,12 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   `https://whop.com/your-community/alumni` (« Example »). The founder chose to grey out only
   what leaves StayPut: the simulated actions (message, pause, offer, retry, approve) stay.
   Checked by `apps/web/e2e/demo-safety.e2e.ts` (no request to another host nor to `/api/`, no
-  link out) and `look.mjs`. Before
+  link out) and `look.mjs`. Block 6 (the words) done: « Sends at the hour they’re usually online »,
+  « Sends in 2 hours », « Skip » (« Ignorer ») beside « Approve », no « golden hour » on screen
+  (« Check-in message »), English quotes “ ”, English first among the messages' languages, the
+  Guide titled « How StayPut works »; guarded by `packages/i18n/test/i18n.test.ts`. The founder
+  asked (2026-10-04) to chain every remaining step with a short report after each, the prices
+  (Phase 7) last. Before
   it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard

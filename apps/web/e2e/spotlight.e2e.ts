@@ -10,8 +10,18 @@ import { contains, cutOut, intersects, type Box } from '../src/guide';
  */
 
 const WORDS = {
-  en: { replay: 'Replay the tour', showMe: 'Show me', dashboard: 'Dashboard' },
-  fr: { replay: 'Revoir la visite', showMe: 'Montrez-moi', dashboard: 'Tableau de bord' },
+  en: {
+    replay: 'Replay the tour',
+    showMe: 'Show me',
+    dashboard: 'Dashboard',
+    guide: 'How StayPut works',
+  },
+  fr: {
+    replay: 'Revoir la visite',
+    showMe: 'Montrez-moi',
+    dashboard: 'Tableau de bord',
+    guide: 'Comment marche StayPut',
+  },
 } as const;
 
 /** The tour's places, in its order. */
@@ -153,7 +163,7 @@ for (const locale of ['en', 'fr'] as const) {
     for (const [index, place] of CARDS.entries()) {
       await page.getByRole('button', { name: 'Guide', exact: true }).click();
       await page
-        .getByRole('dialog', { name: 'Guide' })
+        .getByRole('dialog', { name: words.guide })
         .getByRole('button', { name: words.showMe })
         .nth(index)
         .click();

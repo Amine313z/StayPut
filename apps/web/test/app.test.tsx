@@ -4245,7 +4245,7 @@ describe('the guide (brief v4 §10)', () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1');
     fireEvent.click(await screen.findByRole('button', { name: 'Guide' }));
-    const guide = await screen.findByRole('dialog', { name: 'Guide' });
+    const guide = await screen.findByRole('dialog', { name: 'How StayPut works' });
     expect(
       within(guide)
         .getAllByRole('heading', { level: 3 })
@@ -4406,7 +4406,7 @@ describe('the guide (brief v4 §10)', () => {
     });
     renderAt('/dashboard/biz_A1');
     fireEvent.click(await screen.findByRole('button', { name: 'Guide' }));
-    const guide = await screen.findByRole('dialog', { name: 'Guide' });
+    const guide = await screen.findByRole('dialog', { name: 'How StayPut works' });
     fireEvent.click(within(guide).getAllByRole('button', { name: 'Show me' })[1]!);
     // « Keep them, automatically »: Automations › Rules, at the payment retries, in the tour's
     // words — never a title alone.
@@ -4426,9 +4426,12 @@ describe('the guide (brief v4 §10)', () => {
     // « You stay in control »: no tour step shows its place, so its caption goes in the light.
     fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
     fireEvent.click(
-      within(await screen.findByRole('dialog', { name: 'Guide' })).getAllByRole('button', {
-        name: 'Show me',
-      })[3]!,
+      within(await screen.findByRole('dialog', { name: 'How StayPut works' })).getAllByRole(
+        'button',
+        {
+          name: 'Show me',
+        },
+      )[3]!,
     );
     const control = await screen.findByRole('dialog', { name: 'You stay in control' });
     expect(await screen.findByRole('heading', { name: 'Settings', level: 1 })).toBeTruthy();
@@ -4939,7 +4942,7 @@ describe('the demo leads nowhere outside StayPut (fix prompt v4.1, block 5)', ()
     }
     renderAt('/demo');
     fireEvent.click(await screen.findByRole('button', { name: 'Guide' }, { timeout: 3_000 }));
-    await screen.findByRole('dialog', { name: 'Guide' });
+    await screen.findByRole('dialog', { name: 'How StayPut works' });
     expectNoWayOut('guide');
     cleanup();
     renderAt('/demo/members');
@@ -4992,6 +4995,37 @@ describe('the demo leads nowhere outside StayPut (fix prompt v4.1, block 5)', ()
     expect(open.getAttribute('target')).toBe('_blank');
     expect(screen.queryByText('Example')).toBeNull();
     expect(document.querySelector('[data-demo-disabled]')).toBeNull();
+  });
+});
+
+describe('the words (fix prompt v4.1, block 6)', () => {
+  it('lists English first among the messages’ languages', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo/settings/actions');
+    const languages = await screen.findByRole<HTMLSelectElement>(
+      'combobox',
+      { name: 'Language of the messages' },
+      { timeout: 3_000 },
+    );
+    expect([...languages.options].map((option) => option.textContent)).toEqual([
+      'English',
+      'French',
+    ]);
+  });
+
+  it('calls the guide « How StayPut works », in English and in French', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo');
+    fireEvent.click(await screen.findByRole('button', { name: 'Guide' }, { timeout: 3_000 }));
+    expect(await screen.findByRole('dialog', { name: 'How StayPut works' })).toBeTruthy();
+    cleanup();
+    // French chosen in the demo's Settings, for the visit.
+    renderAt('/demo/settings');
+    const languages = await screen.findByRole('radiogroup', { name: 'Language' });
+    fireEvent.click(within(languages).getByRole('radio', { name: 'Français' }));
+    await screen.findByRole('heading', { name: 'Réglages', level: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Guide' }));
+    expect(await screen.findByRole('dialog', { name: 'Comment marche StayPut' })).toBeTruthy();
   });
 });
 
@@ -5085,7 +5119,7 @@ describe('the actions (SPEC Phase 4)', () => {
     renderAt('/dashboard/biz_A1/actions/queue');
     expect(await screen.findByText('Welcome, Ana')).toBeTruthy();
     expect(screen.getByText('Glad to have you in Le Club.')).toBeTruthy();
-    expect(screen.getByText('Leaves as soon as you approve it')).toBeTruthy();
+    expect(screen.getByText('Sends as soon as you approve it')).toBeTruthy();
     expect(screen.getByText('Manual mode: nothing leaves without your approval.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Approve all (1)' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
@@ -5096,6 +5130,26 @@ describe('the actions (SPEC Phase 4)', () => {
         'Nothing to approve. StayPut proposes an action as soon as a member needs one.',
       ),
     ).toBeTruthy();
+  });
+
+  it('says when each message leaves, in plain words, with « Skip » beside « Approve »', async () => {
+    // Fix prompt v4.1, block 6: never « golden hour », never « Cancel » for an action to approve.
+    const inTwoHours = new Date(Date.now() + 2 * 3_600_000 + 60_000).toISOString();
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/actions?view=queue': [
+        page('queue', [
+          row({ id: '22222222-2222-4222-8222-222222222222', sendAt: null }),
+          row({ status: 'scheduled', sendAt: inTwoHours }),
+        ]),
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions/queue');
+    expect(await screen.findByText('Sends at the hour they’re usually online')).toBeTruthy();
+    expect(screen.getByText('Sends in 2 hours')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Skip' }).length).toBe(2);
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/golden/i);
   });
 
   it('tells what happened: simulated in test mode, blocked with the reason, failed, cancelled', async () => {
@@ -5150,13 +5204,13 @@ describe('the actions (SPEC Phase 4)', () => {
     expect(screen.getByText('Simulated')).toBeTruthy();
     expect(screen.getByText('Error: 403 forbidden: missing permission')).toBeTruthy();
     expect(screen.getByText('The payment went through in the meantime')).toBeTruthy();
-    expect(screen.getByText('Golden-hour message')).toBeTruthy();
+    expect(screen.getByText('Check-in message')).toBeTruthy();
     // An Alumni follow-up: its step, and why it no longer goes.
     expect(screen.getByText('· 30 days after leaving, in the Alumni')).toBeTruthy();
     expect(screen.getByText('The member came back to a paid offer')).toBeTruthy();
     // Done: nothing to approve or cancel any more.
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Skip' })).toBeNull();
   });
 
   it('shows an offer a member accepted: their reason, the offer, the code and consent', async () => {
@@ -5242,11 +5296,11 @@ describe('the actions (SPEC Phase 4)', () => {
     fireEvent.change(name, { target: { value: 'Alumni du Club' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create the Alumni offer' }));
     expect(
-      await screen.findByText(/StayPut does not have the « experience:create » permission/),
+      await screen.findByText(/StayPut does not have the “experience:create” permission/),
     ).toBeTruthy();
     expect(bodies.get('POST /api/creator/biz_A1/alumni')).toEqual({ name: 'Alumni du Club' });
     fireEvent.click(screen.getByRole('button', { name: 'Finish creating it' }));
-    expect(await screen.findByText('Your Alumni offer « Alumni du Club » is ready.')).toBeTruthy();
+    expect(await screen.findByText('Your Alumni offer “Alumni du Club” is ready.')).toBeTruthy();
     expect(screen.getByText('https://whop.com/checkout/plan_Alu1')).toBeTruthy();
     expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: /User left/ }).value).toContain(
       'join the Alumni: https://whop.com/checkout/plan_Alu1',

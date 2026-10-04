@@ -91,7 +91,7 @@ test('no page of the demo leads or calls outside StayPut', async ({ page, baseUR
   // The guide's panel too.
   await page.goto('/demo');
   await page.getByRole('button', { name: 'Guide' }).click();
-  await page.getByRole('dialog', { name: 'Guide' }).waitFor();
+  await page.getByRole('dialog', { name: 'How StayPut works' }).waitFor();
   await expectLinksInside(page, origin, 'guide');
 
   // Alumni's « Open », Discord's and Telegram's buttons at least.

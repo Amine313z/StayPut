@@ -352,8 +352,9 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
             }
             className={`${FIELD} w-full sm:w-56`}
           >
-            <option value="fr">{t('actionSettings.locale.fr')}</option>
+            {/* English first, then French (fix prompt v4.1, block 6). */}
             <option value="en">{t('actionSettings.locale.en')}</option>
+            <option value="fr">{t('actionSettings.locale.fr')}</option>
           </select>
         </Row>
 

@@ -290,7 +290,7 @@ await desktop.page.goto(`${base}/demo`, { waitUntil: 'domcontentloaded' });
 await desktop.page.getByText('Revenue saved · This month').first().waitFor({ timeout: 30_000 });
 await desktop.page.waitForTimeout(2_500);
 await desktop.page.getByRole('button', { name: 'Guide' }).click();
-const guide = desktop.page.getByRole('dialog', { name: 'Guide' });
+const guide = desktop.page.getByRole('dialog', { name: 'How StayPut works' });
 await guide.waitFor();
 await desktop.page.waitForTimeout(1_800);
 report.guide = await guide.evaluate((panel) => ({
@@ -327,7 +327,7 @@ report.showMe = [];
 for (const [index, place] of CARD_PLACES.entries()) {
   await desktop.page.getByRole('button', { name: 'Guide', exact: true }).click();
   await desktop.page
-    .getByRole('dialog', { name: 'Guide' })
+    .getByRole('dialog', { name: 'How StayPut works' })
     .getByRole('button', { name: 'Show me' })
     .nth(index)
     .click();
@@ -503,6 +503,26 @@ await desktop.page.getByRole('button', { name: 'Approve all (5)' }).waitFor({ ti
 report.queue.after = [await countIn(queueTab), await countIn(approveAll)];
 await desktop.page.screenshot({ path: `${out}/actions-queue-approved.png` });
 
+// The words (fix prompt v4.1, block 6): « Skip » beside each « Approve », and on no page the
+// internal « golden hour » nor French quotes in the English demo.
+report.words = {
+  skip: await desktop.page.getByRole('button', { name: 'Skip', exact: true }).count(),
+  approve: await desktop.page.getByRole('button', { name: 'Approve', exact: true }).count(),
+  golden: [],
+  frenchQuotes: [],
+};
+for (const path of ['actions/queue', 'actions/scheduled', 'actions/history', 'settings/actions']) {
+  await desktop.page.goto(`${base}/demo/${path}`, { waitUntil: 'domcontentloaded' });
+  await desktop.page.getByRole('heading', { level: 1 }).first().waitFor({ timeout: 30_000 });
+  await desktop.page.waitForTimeout(800);
+  const text = await desktop.page.evaluate(() => document.body.innerText);
+  if (/golden/i.test(text)) report.words.golden.push(path);
+  if (/[«»]/.test(text)) report.words.frenchQuotes.push(path);
+}
+report.words.languages = await desktop.page
+  .getByRole('combobox', { name: 'Language of the messages' })
+  .evaluate((select) => [...select.options].map((option) => option.textContent));
+
 // Demo safety (fix prompt v4.1, block 5): the Alumni link an example, « Open » and the bots'
 // buttons said disabled, their tip over them when hovered; no link anywhere leads outside.
 report.demoSafety = { links: [], buttons: [] };
@@ -650,12 +670,18 @@ const ok =
       button.tip === 'Disabled in the demo' &&
       button.tipShown === '1',
   ) &&
-  report.demoSafety.links.length === 0;
+  report.demoSafety.links.length === 0 &&
+  // The words (fix prompt v4.1, block 6).
+  report.words.skip > 0 &&
+  report.words.skip === report.words.approve &&
+  report.words.golden.length === 0 &&
+  report.words.frenchQuotes.length === 0 &&
+  report.words.languages.join() === 'English,French';
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest, or the demo does not tell one story (a pause, an end, an unpaid date, a member gone, an outcome, a count), or something in the demo leads outside StayPut (a link, a button not said disabled): see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest, or the demo does not tell one story (a pause, an end, an unpaid date, a member gone, an outcome, a count), or something in the demo leads outside StayPut (a link, a button not said disabled), or the words are not those of block 6 (« Skip », no « golden hour », “ ” quotes, English first): see the report above.',
   );
   process.exitCode = 1;
 }

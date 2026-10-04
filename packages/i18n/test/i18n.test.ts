@@ -28,6 +28,39 @@ describe('dictionaries', () => {
       if (key.endsWith('.one')) expect(MESSAGES.en).toHaveProperty(`${key.slice(0, -4)}.other`);
     }
   });
+
+  it('quotes English with “ ”, never « » (fix prompt v4.1, block 6)', () => {
+    for (const [key, text] of Object.entries(MESSAGES.en)) {
+      expect(text, key).not.toMatch(/[«»]/);
+    }
+  });
+
+  it('never says the internal « golden hour » to the creator (block 6)', () => {
+    for (const [key, text] of Object.entries(MESSAGES.en)) {
+      expect(text, key).not.toMatch(/golden/i);
+    }
+    for (const [key, text] of Object.entries(MESSAGES.fr)) {
+      expect(text, key).not.toMatch(/heure d’or|heure d'or/i);
+    }
+  });
+
+  it('says « Skip » beside « Approve », and when a message leaves (block 6)', () => {
+    expect(MESSAGES.en['actions.cancel']).toBe('Skip');
+    expect(MESSAGES.fr['actions.cancel']).toBe('Ignorer');
+    expect(MESSAGES.en['actions.when.goldenHour']).toBe('Sends at the hour they’re usually online');
+    expect(MESSAGES.fr['actions.when.goldenHour']).toBe(
+      'Part à l’heure où le membre est habituellement en ligne',
+    );
+    expect(createTranslator('en').t('actions.when.at', { when: 'in 2 hours' })).toBe(
+      'Sends in 2 hours',
+    );
+    expect(createTranslator('fr').t('actions.when.at', { when: 'dans 2 heures' })).toBe(
+      'Envoyé dans 2 heures',
+    );
+    expect(MESSAGES.en['actions.type.high_risk_message']).toBe('Check-in message');
+    expect(MESSAGES.en['guide.title']).toBe('How StayPut works');
+    expect(MESSAGES.fr['guide.title']).toBe('Comment marche StayPut');
+  });
 });
 
 describe('matchLocale', () => {
