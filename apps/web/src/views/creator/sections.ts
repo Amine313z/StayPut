@@ -65,12 +65,10 @@ export const SECTIONS: readonly Section[] = [
     label: 'nav.actions',
     description: 'nav.actions.description',
     Icon: Zap,
+    // The queue's filters (to approve, scheduled, history, Alumni) live inside its tab.
     tabs: [
       { path: '', label: 'rules.tab' },
-      { path: 'queue', label: 'actions.view.queue' },
-      { path: 'scheduled', label: 'actions.view.scheduled' },
-      { path: 'history', label: 'actions.view.history' },
-      { path: 'alumni', label: 'alumni.title' },
+      { path: 'queue', label: 'queue.tab' },
     ],
   },
   {

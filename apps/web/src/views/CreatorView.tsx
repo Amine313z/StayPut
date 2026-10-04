@@ -24,6 +24,8 @@ export interface CreatorData {
   api: string;
   /** The imaginary community of /demo: nothing it shows is real, nothing it does is sent. */
   demo: boolean;
+  /** The community's name as Whop gives it (null until read): the message previews sign with it. */
+  companyName: string | null;
   members: { state: Loadable<MembersPage>; retry: () => void; reload: () => void };
   sync: SyncState;
   integrations: { state: Loadable<IntegrationsStatus>; retry: () => void; reload: () => void };
@@ -102,6 +104,7 @@ function Dashboard({ session, demo }: { session: CreatorSession; demo: boolean }
     root,
     api,
     demo,
+    companyName: session.companyName,
     members,
     sync,
     integrations,

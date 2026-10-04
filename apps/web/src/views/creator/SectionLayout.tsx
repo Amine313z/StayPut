@@ -28,9 +28,14 @@ export function SectionLayout({ id }: { id: SectionId }) {
     [],
   );
   const context: CreatorData = { ...data, tabCounts };
-  // A new tab comes in like a page; the section's first one comes in with the section itself.
+  // A new tab comes in like a page; the section's first one comes in with the section itself. A
+  // tab's own pages (Automations › Queue's filters) move within it: the tab stays.
   const location = useLocation();
   const [arrival] = useState(location.key);
+  const home = sectionHref(data.root, section);
+  const tab = location.pathname.startsWith(home)
+    ? (location.pathname.slice(home.length).split('/').find(Boolean) ?? '')
+    : location.pathname;
   const tabs = visibleTabs(section);
   // The member space's section, while the member space is off: the dashboard instead.
   if (section.memberSpace && !memberSpaceEnabled()) return <Navigate to={data.root} replace />;
@@ -56,7 +61,7 @@ export function SectionLayout({ id }: { id: SectionId }) {
         </div>
       )}
       <motion.div
-        key={location.pathname}
+        key={tab}
         variants={pageVariants}
         initial={location.key === arrival ? false : 'initial'}
         animate="enter"

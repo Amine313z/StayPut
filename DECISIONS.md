@@ -2740,3 +2740,72 @@ une capture. Le bloc 1 refait la lumière de la visite et de « Show me ».
   « Skip », « Sends at… », « Sends in 2 hours », l'ordre des langues et le titre du Guide en
   anglais et en français ; Inspect (`look.mjs`) vérifie « Skip » à côté de chaque « Approve »,
   aucune page de la démo avec « golden » ou « », et English d'abord.
+
+## 2026-10-04 — Correctifs v4.1, bloc 7a : les Automatisations
+
+Le bloc 7 reprend ce qui manque du design v4. Il se fait en trois étapes : 7a les
+Automatisations (§9.4), 7b les graphiques d'Analyses (§9.5), 7c les tableaux de bord Discord et
+Telegram (§9.6).
+
+### Deux onglets : Règles et File d'attente
+
+- La rubrique a deux onglets : **Règles** et **File d'attente** (« Queue »).
+- À valider, Programmées, Historique et l'offre Alumni deviennent des **filtres** de la file,
+  dans une rangée de pastilles (comme les filtres de Membres), plus des onglets.
+- Les adresses : `/actions/queue`, `/actions/queue/scheduled`, `/actions/queue/history`,
+  `/actions/queue/alumni`. Les anciennes (`/actions/history`, `?view=history`…) ouvrent leur
+  filtre. Le lien « Review » du tableau de bord mène toujours à `/actions/queue`.
+- L'onglet File d'attente compte ce qui attend votre validation ; chaque filtre compte ce qu'il
+  contient.
+- Passer d'un filtre à l'autre ne rejoue pas l'entrée de la page : seule la liste change
+  (fondu). La rubrique anime donc par onglet, plus par adresse.
+
+### Une règle s'allume ou s'éteint (migration 0032)
+
+- Chaque carte a son interrupteur. Le choix est enregistré côté serveur :
+  `company_settings.rules_off` (les règles éteintes) et `stayput.set_rule`.
+- Une règle éteinte ne prévoit plus rien : `plan_actions` la saute. Ce qu'elle a prévu avant
+  reste dans la file, où vous le validez ou l'ignorez.
+- Les cinq règles : relance des paiements, demande de mise à jour de la carte (et la
+  confirmation 3D Secure), questionnaire de départ, message de suivi, message de bienvenue.
+- Route : `PUT /api/creator/:companyId/rules/:rule` avec `{ on }`, réservée à l'équipe. La démo
+  répond de la même façon, dans le navigateur.
+- L'enregistrement des réglages (Réglages › Automatisations) ne touche jamais aux règles.
+- Si vos limites n'autorisent aucune relance, la règle reste allumée et sa ligne « Alors » le
+  dit : « Rien pour l'instant : vos limites n'autorisent aucune relance ».
+
+### Le reste de la page Règles
+
+- **Le mode** se choisit sur la page (Manuel / Automatique), par la même route que l'accueil.
+  Un message confirme le changement.
+- **« Vos limites »** (le mot « garde-fous » disparaît de l'écran) : messages par membre tous
+  les 5 jours et par mois, heures de silence, réductions par mois, membres à ne jamais contacter
+  (lien vers Membres › Ne pas contacter). Le panneau se lit ici ; on le modifie dans Réglages ›
+  Automatisations, où StayPut garde ses propres plafonds.
+- **L'aperçu du message**, replié par défaut, sur chaque règle qui écrit au membre : le texte
+  du créateur s'il l'a modifié, celui de StayPut sinon, dans la langue des membres, avec
+  l'étiquette EN ou FR. Il s'adresse à « Alex » et signe du nom de la communauté. La relance
+  des paiements n'écrit rien : pas d'aperçu.
+- **Toutes les règles éteintes** : la page dit « Aucune règle n'est active » et propose les
+  trois qui ramènent le plus d'argent (relances, carte, questionnaire), avec un seul bouton
+  principal « Activer ces 3 règles », et « Voir les 5 règles ».
+
+### La file d'attente
+
+- Chaque ligne : le membre, l'action, l'aperçu du message, l'heure d'envoi.
+- Un seul bouton principal pour la page : « Approve all (6) ». Sur chaque ligne, « Approve »
+  et « Skip » sont des boutons fantômes, jamais pleins.
+- La carte qui entourait la liste disparaît : la liste est séparée par de fins traits.
+
+### Tests
+
+- Worker : une règle éteinte ne prévoit rien (`actions.test.ts`) ; la route, réservée à
+  l'équipe, refuse une règle inconnue ou un corps sans `on` (`app.test.ts`).
+- Web (`app.test.tsx`) : les cinq cartes et leurs interrupteurs, l'aperçu EN, le mode, les
+  limites, deux onglets ; un interrupteur qui change tout de suite et revient si le serveur
+  échoue ; le mode ; l'état vide et ses trois règles ; les filtres, le bouton principal unique,
+  « Approve » fantôme ; les anciennes adresses ; un interrupteur de la démo, sans appel réseau.
+- Navigateur : `demo-safety.e2e.ts` parcourt les nouvelles adresses.
+- Inspect (`look.mjs`) vérifie tout cela sur le site en ligne et ajoute trois captures :
+  `automations-rules-1440.png`, `automations-empty-1440.png`, `automations-queue-1440.png`.
+- La migration 0032 s'applique au déploiement.

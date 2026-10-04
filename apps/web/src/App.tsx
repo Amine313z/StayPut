@@ -3,7 +3,13 @@ import { AppShell } from './components/AppShell';
 import { Connected } from './views/Connected';
 import { CreatorView } from './views/CreatorView';
 import { ActionSettings } from './views/creator/ActionSettings';
-import { ActionsHome, ActionsTab, AlumniTab } from './views/creator/ActionsTab';
+import {
+  ActionsHome,
+  ActionsTab,
+  AlumniTab,
+  QueueFilterAddress,
+  QueueTab,
+} from './views/creator/ActionsTab';
 import { CohortsTab, LessonsTab } from './views/creator/InsightsTab';
 import { MembersTab, NeverContactTab } from './views/creator/MembersTab';
 import { Overview } from './views/creator/Overview';
@@ -33,12 +39,22 @@ function creatorSections(): RouteObject[] {
       { index: true, element: <MembersTab /> },
       { path: 'never-contact', element: <NeverContactTab /> },
     ]),
+    // Two tabs (brief v4 §9.4): the rules, and the queue with its filters.
     section('actions', 'actions', [
       { index: true, element: <ActionsHome /> },
-      { path: 'queue', element: <ActionsTab view="queue" /> },
-      { path: 'scheduled', element: <ActionsTab view="scheduled" /> },
-      { path: 'history', element: <ActionsTab view="history" /> },
-      { path: 'alumni', element: <AlumniTab /> },
+      {
+        path: 'queue',
+        element: <QueueTab />,
+        children: [
+          { index: true, element: <ActionsTab view="queue" /> },
+          { path: 'scheduled', element: <ActionsTab view="scheduled" /> },
+          { path: 'history', element: <ActionsTab view="history" /> },
+          { path: 'alumni', element: <AlumniTab /> },
+        ],
+      },
+      { path: 'scheduled', element: <QueueFilterAddress filter="scheduled" /> },
+      { path: 'history', element: <QueueFilterAddress filter="history" /> },
+      { path: 'alumni', element: <QueueFilterAddress filter="alumni" /> },
     ]),
     section('insights', 'insights', [
       { index: true, element: <CohortsTab /> },

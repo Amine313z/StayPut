@@ -33,14 +33,14 @@ import {
   Percent,
   RefreshCw,
   ShieldCheck,
-  SlidersHorizontal,
   Sparkles,
   UserRoundPlus,
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, Navigate, useSearchParams } from 'react-router';
+import { motion } from 'motion/react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { NavLink, Navigate, Outlet, useLocation, useSearchParams } from 'react-router';
 import { postJson, useApi } from '../../api';
 import { AlumniCard } from '../../components/AlumniCard';
 import { ConfirmButton } from '../../components/ConfirmButton';
@@ -49,10 +49,10 @@ import { REASON_LABELS } from '../../exit-reasons';
 import { useI18n } from '../../i18n';
 import { Avatar } from '../../ui/Avatar';
 import { Badge, Notice, type Tone } from '../../ui/Badge';
+import { ease } from '../../motion';
 import { Button } from '../../ui/Button';
-import { Card } from '../../ui/Card';
 import { EmptyState } from '../../ui/EmptyState';
-import { useCreatorData } from '../CreatorView';
+import { useCreatorData, type CreatorData, type TabCounts } from '../CreatorView';
 import { RulesTab } from './RulesTab';
 
 /** The Worker passes approved actions through the guardrails after answering: read again then. */
@@ -177,17 +177,17 @@ export function withMoves(page: ActionsPage, moves: ReadonlyMap<string, Move>): 
  */
 export function ActionsTab({ view }: { view: ActionView }) {
   const { t } = useI18n();
-  const { api, root, tabCounts } = useCreatorData();
+  const { api, tabCounts } = useCreatorData();
   const { state: read, retry, reload } = useApi<ActionsPage>(`${api}/actions?view=${view}`);
-  // An approval or a cancellation shows at once: the list, its button and the tabs together.
+  // An approval or a cancellation shows at once: the list, its button and the counts together.
   const [moves, setMoves] = useState<ReadonlyMap<string, Move>>(new Map());
   const page = read.status === 'ready' ? read.data : null;
   const shown = useMemo(() => (page ? withMoves(page, moves) : null), [page, moves]);
   const state = shown && read.status === 'ready' ? { ...read, data: shown } : read;
   const moved = (ids: readonly string[], move: Move) =>
     setMoves((current) => new Map([...current, ...ids.map((id) => [id, move] as const)]));
-  // The section's tabs say how many actions each view holds: set before the screen is painted,
-  // so a tab never shows another count than the list's button.
+  // The queue's filters say how many actions each view holds: set before the screen is painted,
+  // so a filter never shows another count than the list's button.
   const counts = shown?.counts ?? null;
   useLayoutEffect(() => {
     if (counts) {
@@ -208,104 +208,182 @@ export function ActionsTab({ view }: { view: ActionView }) {
     later.current = setTimeout(reload, RELOAD_AFTER_MS);
   };
 
-  const settingsLink = (
-    <Link
-      to={`${root}/settings/actions`}
-      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-accent hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-    >
-      <SlidersHorizontal aria-hidden="true" className="size-4" />
-      {t('actions.settings')}
-    </Link>
-  );
-
+  if (state.status === 'loading') return <Loading />;
+  if (state.status === 'error') {
+    return (
+      <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
+    );
+  }
+  const proposed = state.data.actions.filter((a) => a.status === 'proposed');
+  const Icon = VIEWS[view].Icon;
   return (
-    <div className="space-y-6">
-      <Card
-        icon={(() => {
-          const Icon = VIEWS[view].Icon;
-          return <Icon aria-hidden="true" className="size-4" />;
-        })()}
-        title={t(VIEWS[view].label)}
-        actions={settingsLink}
+    <div className="space-y-4">
+      {state.data.killSwitch || state.data.dryRun ? (
+        <div className="space-y-2">
+          {state.data.killSwitch ? (
+            <Notice tone="danger" icon={<OctagonPause aria-hidden="true" className="size-4" />}>
+              {t('actions.killSwitch')}
+            </Notice>
+          ) : null}
+          {state.data.dryRun ? (
+            <Notice tone="info" icon={<FlaskConical aria-hidden="true" className="size-4" />}>
+              {t('actions.dryRun')}
+            </Notice>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted">
+          {t(state.data.mode === 'auto' ? 'actions.mode.auto' : 'actions.mode.manual')}
+        </p>
+        {/* The page's one primary button (brief v4 §9.4): every row's own are ghosts. */}
+        {view === 'queue' && proposed.length > 0 ? (
+          <ApproveAll
+            api={api}
+            count={proposed.length}
+            onDone={() => {
+              moved(
+                proposed.map((a) => a.id),
+                'approved',
+              );
+              changed();
+            }}
+          />
+        ) : null}
+      </div>
+      {state.data.actions.length === 0 ? (
+        <EmptyState
+          icon={<Icon aria-hidden="true" className="size-5" />}
+          body={t(VIEWS[view].empty)}
+        />
+      ) : (
+        <ul className="divide-y divide-line border-y border-line">
+          {state.data.actions.map((action) => (
+            <ActionItem
+              key={action.id}
+              action={action}
+              api={api}
+              onChange={(move) => {
+                moved([action.id], move);
+                changed();
+              }}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** The queue's filters (brief v4 §9.4): what waits, what is scheduled, what happened, Alumni. */
+const QUEUE_FILTERS: readonly { path: string; label: MessageKey; count?: ActionView }[] = [
+  { path: '', label: 'actions.view.queue', count: 'queue' },
+  { path: 'scheduled', label: 'actions.view.scheduled', count: 'scheduled' },
+  { path: 'history', label: 'actions.view.history', count: 'history' },
+  { path: 'alumni', label: 'alumni.title' },
+];
+
+/**
+ * Automations › Queue (brief v4 §9.4): the actions to approve, then — as filters of the same tab,
+ * not tabs of their own — the scheduled ones, the history and the Alumni offer. The section's tab
+ * counts what waits for approval; each filter, what it holds.
+ */
+export function QueueTab() {
+  const data = useCreatorData();
+  const { t, number } = useI18n();
+  const location = useLocation();
+  const [arrival] = useState(location.key);
+  const [counts, setCounts] = useState<TabCounts>({});
+  const section = data.tabCounts;
+  const tabCounts = useCallback(
+    (next: TabCounts) => {
+      setCounts((current) =>
+        Object.entries(next).every(([key, n]) => current[key] === n)
+          ? current
+          : { ...current, ...next },
+      );
+      if (next.queue !== undefined) section?.({ queue: next.queue });
+    },
+    [section],
+  );
+  const context: CreatorData = { ...data, tabCounts };
+  const base = `${data.root}/actions/queue`;
+  const pill = useId();
+  return (
+    <div className="space-y-5">
+      <nav
+        aria-label={t('queue.filters')}
+        className="-mx-1 -my-1 flex gap-1 overflow-x-auto px-1 py-1 [scrollbar-width:none]"
       >
-        {state.status === 'loading' ? (
-          <Loading />
-        ) : state.status === 'error' ? (
-          <ErrorPanel error={state.error} forbiddenKey="error.forbidden.creator" onRetry={retry} />
-        ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              {state.data.killSwitch ? (
-                <Notice tone="danger" icon={<OctagonPause aria-hidden="true" className="size-4" />}>
-                  {t('actions.killSwitch')}
-                </Notice>
-              ) : null}
-              {state.data.dryRun ? (
-                <Notice tone="info" icon={<FlaskConical aria-hidden="true" className="size-4" />}>
-                  {t('actions.dryRun')}
-                </Notice>
-              ) : null}
-              <p className="text-sm text-muted">
-                {t(state.data.mode === 'auto' ? 'actions.mode.auto' : 'actions.mode.manual')}
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-              {view === 'queue' && state.data.actions.some((a) => a.status === 'proposed') ? (
-                <ApproveAll
-                  api={api}
-                  count={state.data.actions.filter((a) => a.status === 'proposed').length}
-                  onDone={() => {
-                    moved(
-                      state.data.actions.filter((a) => a.status === 'proposed').map((a) => a.id),
-                      'approved',
-                    );
-                    changed();
-                  }}
-                />
-              ) : null}
-            </div>
-            {state.data.actions.length === 0 ? (
-              <EmptyState
-                icon={(() => {
-                  const Icon = VIEWS[view].Icon;
-                  return <Icon aria-hidden="true" className="size-5" />;
-                })()}
-                body={t(VIEWS[view].empty)}
-              />
-            ) : (
-              <ul className="divide-y divide-line">
-                {state.data.actions.map((action) => (
-                  <ActionItem
-                    key={action.id}
-                    action={action}
-                    api={api}
-                    onChange={(move) => {
-                      moved([action.id], move);
-                      changed();
-                    }}
+        {QUEUE_FILTERS.map((filter) => (
+          <NavLink
+            key={filter.path}
+            to={filter.path ? `${base}/${filter.path}` : base}
+            end
+            className={({ isActive }) =>
+              `relative shrink-0 rounded-full px-3 py-1.5 text-[0.8125rem] font-medium whitespace-nowrap transition-colors duration-200 ease-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+                isActive ? 'text-turq-300' : 'text-subtle hover:text-fg'
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                {isActive ? (
+                  <motion.span
+                    layoutId={pill}
+                    transition={ease('standard')}
+                    aria-hidden="true"
+                    className="absolute inset-0 rounded-full bg-surface-3"
                   />
-                ))}
-              </ul>
+                ) : null}
+                <span className="relative">
+                  {t(filter.label)}
+                  {filter.count && counts[filter.count] !== undefined ? (
+                    <span className="tabular ms-1.5 text-xs text-subtle">
+                      {number(counts[filter.count]!)}
+                    </span>
+                  ) : null}
+                </span>
+              </>
             )}
-          </div>
-        )}
-      </Card>
+          </NavLink>
+        ))}
+      </nav>
+      {/* A filter's list fades in; the filters above stay put. */}
+      <motion.div
+        key={location.pathname}
+        initial={location.key === arrival ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={ease('standard')}
+      >
+        <Outlet context={context} />
+      </motion.div>
     </div>
   );
 }
 
 /**
+ * The addresses the queue's filters had as tabs, before (fix prompt v4.1, block 7): each opens its
+ * filter, with what the address carried.
+ */
+export function QueueFilterAddress({ filter }: { filter: 'scheduled' | 'history' | 'alumni' }) {
+  const { root } = useCreatorData();
+  const { search } = useLocation();
+  return <Navigate to={`${root}/actions/queue/${filter}${search}`} replace />;
+}
+
+/**
  * Automations' first page: its rules (brief v4 §9.4). An older link that named a view
- * (`?view=history`, `?view=queue`) opens that view's tab.
+ * (`?view=history`, `?view=queue`) opens that view in the queue.
  */
 export function ActionsHome() {
   const [params] = useSearchParams();
   const view = ACTION_VIEWS.find((v) => v === params.get('view'));
-  if (view) return <Navigate to={view} replace />;
+  if (view) return <Navigate to={view === 'queue' ? 'queue' : `queue/${view}`} replace />;
   return <RulesTab />;
 }
 
-/** Automations › Alumni offer: former members keep in touch, and come back (SPEC 5.9). */
+/** Automations › Queue › Alumni offer: former members keep in touch, and come back (SPEC 5.9). */
 export function AlumniTab() {
   const { api, integrations } = useCreatorData();
   const whopAppId =
@@ -404,7 +482,7 @@ function ActionItem({
     : null;
 
   return (
-    <li className="py-4 first:pt-0 last:pb-0">
+    <li className="py-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
         <div className="flex min-w-0 flex-1 items-start gap-3">
           <Avatar name={action.member.name} />
@@ -451,6 +529,7 @@ function ActionItem({
           <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
             {action.status === 'proposed' ? (
               <Button
+                variant="secondary"
                 size="sm"
                 icon={<Check aria-hidden="true" className="size-4" />}
                 loading={step === 'running'}

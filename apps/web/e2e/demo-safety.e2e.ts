@@ -14,7 +14,7 @@ test.beforeEach(({}, info) => {
 });
 
 /** The pages with a button to a page outside StayPut: Alumni's « Open », the bots' « Add ». */
-const WITH_WAY_OUT = new Set(['actions/alumni', 'sources/discord', 'sources/telegram']);
+const WITH_WAY_OUT = new Set(['actions/queue/alumni', 'sources/discord', 'sources/telegram']);
 
 /** Every page of the demo's menu, each tab included. */
 const PAGES = [
@@ -23,9 +23,9 @@ const PAGES = [
   'members/never-contact',
   'actions',
   'actions/queue',
-  'actions/scheduled',
-  'actions/history',
-  'actions/alumni',
+  'actions/queue/scheduled',
+  'actions/queue/history',
+  'actions/queue/alumni',
   'insights',
   'insights/lessons',
   'sources',

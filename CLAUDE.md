@@ -122,7 +122,16 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   (« Check-in message »), English quotes “ ”, English first among the messages' languages, the
   Guide titled « How StayPut works »; guarded by `packages/i18n/test/i18n.test.ts`. The founder
   asked (2026-10-04) to chain every remaining step with a short report after each, the prices
-  (Phase 7) last. Before
+  (Phase 7) last. Block 7a (Automations, brief v4 §9.4) done: two tabs, Rules and Queue; the
+  queue's filters To approve · Scheduled · History · Alumni offer live at
+  `/actions/queue[/scheduled|/history|/alumni]` (the old `/actions/<filter>` redirect;
+  `QueueTab`, SectionLayout keys its motion by tab). Rules: a switch per rule (migration
+  **0032** `company_settings.rules_off` + `set_rule`, `plan_actions` skips a rule off; route `PUT
+/api/creator/:companyId/rules/:rule {on}`, demo too), the mode on the page (`POST /mode`), the
+  « Your limits » panel (read-only, edited in Settings › Automations), a folded preview per
+  message tagged EN/FR (the creator's template or StayPut's, « Alex », the community's name),
+  and with every rule off the three ready-made rules with one primary button. The queue has one
+  primary button, « Approve all (N) »; each row's « Approve » is a ghost. Before
   it, **design v3** (brief « black · turquoise · white », 2026-10-02): tokens, logo, components, shell and Dashboard done, with migration 0029 (the
   action of the day retries failed payments and offers pauses, never « nothing urgent » while a
   payment failed or a member leaves). Waiting for the founder's validation of the Dashboard

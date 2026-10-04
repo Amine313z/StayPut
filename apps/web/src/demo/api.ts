@@ -6,7 +6,7 @@ import type {
   RiskSettingsView,
   SyncRun,
 } from '@stayput/core';
-import { ACTION_VIEWS, isCreatorOfferKind, timeZoneName } from '@stayput/core';
+import { ACTION_VIEWS, isCreatorOfferKind, isRuleId, timeZoneName } from '@stayput/core';
 import { ApiError, DEMO_API } from '../api';
 import { createWorld, type DemoWorld } from './world';
 
@@ -172,6 +172,14 @@ export async function answerDemo(method: string, path: string, body: unknown): P
   }
   if (method === 'PUT' && route === 'settings/actions') {
     return answer(demo.saveSettings(body as ActionSettingsView));
+  }
+  const rule = /^rules\/([^/]+)$/.exec(route);
+  if (method === 'PUT' && rule) {
+    const id = decodeURIComponent(rule[1]!);
+    if (!isRuleId(id)) throw new ApiError('invalid_request', 'unknown rule');
+    const on = (body as { on?: unknown } | null)?.on;
+    if (typeof on !== 'boolean') throw new ApiError('invalid_request', 'expected { on: boolean }');
+    return answer(demo.setRule(id, on));
   }
   const offer = /^members\/([^/]+)\/offer$/.exec(route);
   if (method === 'POST' && offer) {

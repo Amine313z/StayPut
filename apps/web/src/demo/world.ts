@@ -21,6 +21,7 @@ import {
   type RiskDay,
   type RiskLevel,
   type RiskReason,
+  type RuleId,
   type SyncStatus,
   monthStart,
   zonedDay,
@@ -409,6 +410,8 @@ export interface DemoWorld {
   testModeOff: () => ActionSettingsView;
   /** « Automatic or manual? » in the welcome: the mode only. */
   setMode: (mode: ActionSettingsView['mode']) => ActionSettingsView;
+  /** A rule of Automations › Rules turned on or off, as the Worker's `set_rule` (0032). */
+  setRule: (rule: RuleId, on: boolean) => ActionSettingsView;
   /** « Pause » or « Offer »: refused when one is open, when the member cannot be contacted. */
   offer: (memberId: string, kind: CreatorOfferKind) => CreatorOfferMade | { error: string };
   setContact: (memberId: string, doNotContact: boolean) => boolean | null;
@@ -789,6 +792,7 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
     maxFreeDaysPerQuarter: 14,
     templates: {},
     offers: DEFAULT_OFFERS,
+    rulesOff: [],
   };
 
   const sync: SyncStatus = {
@@ -1142,7 +1146,9 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
       gettingStarted[step] = true;
     },
     saveSettings: (next) => {
-      Object.assign(settings, next);
+      // As the Worker: the rules change on Automations › Rules only.
+      const { rulesOff: _rules, ...rest } = next;
+      Object.assign(settings, rest);
       gettingStarted.guardrails = true;
       return settings;
     },
@@ -1153,6 +1159,13 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
     setMode: (mode) => {
       settings.mode = mode;
       if (mode === 'auto') gettingStarted.automation = true;
+      return settings;
+    },
+    setRule: (rule, on) => {
+      const off = new Set(settings.rulesOff);
+      if (on) off.delete(rule);
+      else off.add(rule);
+      settings.rulesOff = [...off].sort();
       return settings;
     },
     setContact: (id, doNotContact) => {

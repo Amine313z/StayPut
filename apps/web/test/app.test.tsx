@@ -302,6 +302,7 @@ const ACTION_SETTINGS: ActionSettingsView = {
   maxFreeDaysPerQuarter: 14,
   templates: {},
   offers: { pauseDays: 30, promoPercent: 20, promoMonths: 3, extendDays: 7, coachingMessage: null },
+  rulesOff: [],
 };
 
 const NO_ALUMNI: AlumniView = { offer: null, entered: 0, left: 0, returned: 0 };
@@ -1352,10 +1353,12 @@ describe('creator view', () => {
     // A link opens the drawer at once.
     renderAt('/dashboard/biz_A1/members?filter=high&member=mber_3');
     const drawer = await screen.findByRole('dialog', { name: 'Bruno Petit' });
+    // The drawer opens before Bruno's detail is read: his activity comes with it.
+    const activity = within(drawer).getByRole('region', { name: 'Activity over 30 days' });
     expect(
-      within(within(drawer).getByRole('region', { name: 'Activity over 30 days' }))
-        .getAllByRole('listitem')
-        .map((platform) => platform.textContent),
+      (await within(activity).findAllByRole('listitem', undefined, { timeout: 3_000 })).map(
+        (platform) => platform.textContent,
+      ),
     ).toEqual(['Whop4 interactionsLast active 3 weeks ago']);
     const never = within(drawer).getByRole('switch', { name: 'Do not contact' });
     expect(never.getAttribute('aria-checked')).toBe('false');
@@ -4551,9 +4554,9 @@ const DEMO_PAGES = [
   'members/never-contact',
   'actions',
   'actions/queue',
-  'actions/scheduled',
-  'actions/history',
-  'actions/alumni',
+  'actions/queue/scheduled',
+  'actions/queue/history',
+  'actions/queue/alumni',
   'insights',
   'insights/lessons',
   'sources',
@@ -4681,6 +4684,33 @@ describe('the demo (/demo)', () => {
     ).toBeTruthy();
   }, 40_000);
 
+  it('turns a rule off in the demo, answered in the browser', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    renderAt('/demo/actions');
+    const toggle = await screen.findByRole(
+      'switch',
+      { name: 'Welcome message' },
+      { timeout: 3_000 },
+    );
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(toggle);
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-busy')).toBeNull(), {
+      timeout: 3_000,
+    });
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    // Read again, the community remembers it.
+    cleanup();
+    renderAt('/demo/actions');
+    const again = await screen.findByRole(
+      'switch',
+      { name: 'Welcome message' },
+      { timeout: 3_000 },
+    );
+    expect(again.getAttribute('aria-checked')).toBe('false');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('ties a Discord account from its own tab, and the source’s count follows', async () => {
     vi.stubGlobal('fetch', vi.fn());
     renderAt('/demo/sources/discord');
@@ -4755,7 +4785,7 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
 
   it('says what came of each action in the History, the proof of value', async () => {
     vi.stubGlobal('fetch', vi.fn());
-    renderAt('/demo/actions/history');
+    renderAt('/demo/actions/queue/history');
     await screen.findByText('Clara Faure', undefined, { timeout: 3_000 });
     const badge = (name: string) =>
       [...document.querySelectorAll<HTMLElement>('[data-outcome]')]
@@ -4861,7 +4891,7 @@ describe('the demo leads nowhere outside StayPut (fix prompt v4.1, block 5)', ()
 
   it('shows the Alumni link as an example, « Open » said disabled', async () => {
     vi.stubGlobal('fetch', vi.fn());
-    renderAt('/demo/actions/alumni');
+    renderAt('/demo/actions/queue/alumni');
     expect(
       await screen.findByText('https://whop.com/your-community/alumni', undefined, {
         timeout: 3_000,
@@ -4880,7 +4910,7 @@ describe('the demo leads nowhere outside StayPut (fix prompt v4.1, block 5)', ()
     expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: /User left/ }).value).toContain(
       'join the Alumni: https://whop.com/your-community/alumni',
     );
-    expectNoWayOut('actions/alumni');
+    expectNoWayOut('actions/queue/alumni');
   });
 
   it('says it in French too', async () => {
@@ -4989,7 +5019,7 @@ describe('the demo leads nowhere outside StayPut (fix prompt v4.1, block 5)', ()
         },
       ],
     });
-    renderAt('/dashboard/biz_A1/actions/alumni');
+    renderAt('/dashboard/biz_A1/actions/queue/alumni');
     const open = await screen.findByRole('link', { name: /^Open/ });
     expect(open.getAttribute('href')).toBe('https://whop.com/le-club/alumni-du-club/');
     expect(open.getAttribute('target')).toBe('_blank');
@@ -5063,41 +5093,254 @@ describe('the actions (SPEC Phase 4)', () => {
     },
   });
 
-  it('opens on its rules: when, if, then, each on or off as the limits say', async () => {
+  it('opens on its rules: a switch each, the mode, the limits, the messages (brief v4 §9.4)', async () => {
+    const never = MEMBERS.members.map((m, i) => (i === 0 ? { ...m, doNotContact: true } : m));
     mockApi({
-      ...dashboard(),
+      ...dashboard({ ...MEMBERS, members: never }),
       '/api/creator/biz_A1/settings/actions': [
-        { status: 200, body: { ...ACTION_SETTINGS, maxPaymentRetries: 0 } },
+        {
+          status: 200,
+          body: { ...ACTION_SETTINGS, maxPaymentRetries: 0, rulesOff: ['welcome'] },
+        },
       ],
     });
     renderAt('/dashboard/biz_A1/actions');
     const rules = await screen.findAllByRole('article');
-    expect(rules).toHaveLength(5);
-    // The payment retries first, off while the limits allow no retry.
+    expect(
+      rules.map((rule) => within(rule).getByRole('heading', { level: 3 }).textContent),
+    ).toEqual([
+      'Payment retries',
+      'Card update request',
+      'Departure survey',
+      'Check-in message',
+      'Welcome message',
+    ]);
+    // Each rule: when → if → then, and its own switch, named after it.
     const retries = rules[0]!;
-    expect(within(retries).getByRole('heading').textContent).toBe('Payment retries');
-    expect(retries.textContent).toContain('Off');
     expect(retries.textContent).toContain('A payment fails');
-    expect(retries.textContent).toContain('Off: retries are set to 0 in your limits');
-    expect(rules[1]!.textContent).toContain('On');
-    expect(screen.getByText('Manual')).toBeTruthy();
-    expect(screen.getByText(/StayPut asks you first: you approve each action\./)).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Mode and limits' }).getAttribute('href')).toBe(
+    // On, but the limits allow no retry: it says so.
+    expect(retries.textContent).toContain('Nothing for now: your limits allow no retry');
+    const switchOf = (rule: HTMLElement) =>
+      within(rule).getByRole('switch', {
+        name: within(rule).getByRole('heading', { level: 3 }).textContent,
+      });
+    expect(rules.map((rule) => switchOf(rule).getAttribute('aria-checked'))).toEqual([
+      'true',
+      'true',
+      'true',
+      'true',
+      'false',
+    ]);
+    // A retry writes nothing: no preview; every message has one, in the members' language.
+    expect(within(retries).queryByRole('button', { name: /Preview message/ })).toBeNull();
+    const welcome = rules[4]!;
+    const preview = within(welcome).getByRole('button', { name: /^Preview message/ });
+    expect(preview.textContent).toContain('EN');
+    expect(within(welcome).getByText('Sent in English')).toBeTruthy();
+    expect(preview.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(preview);
+    expect(preview.getAttribute('aria-expanded')).toBe('true');
+    expect(await within(welcome).findByText('Welcome, Alex')).toBeTruthy();
+    expect(
+      within(welcome).getByText(
+        'Glad to have you in Le Club. The best first step: say hello to the community, then start the first lesson.',
+      ),
+    ).toBeTruthy();
+    expect(within(welcome).getByText('Example for a member named Alex')).toBeTruthy();
+    expect(within(welcome).getByRole('link', { name: 'Edit the text' }).getAttribute('href')).toBe(
       '/dashboard/biz_A1/settings/actions',
     );
-    // Its tabs: the rules, then what waits for approval.
+    // Who decides, on the page itself.
+    const mode = screen.getByRole('radiogroup', { name: 'Mode' });
+    expect(within(mode).getByRole('radio', { name: 'Manual' }).getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    expect(screen.getByText('StayPut asks you first: you approve each action.')).toBeTruthy();
+    // The limits every rule stays within.
+    const limits = screen.getByRole('region', { name: 'Your limits' });
+    expect(within(limits).getByText('1 per member every 5 days, 4 a month at most')).toBeTruthy();
+    expect(within(limits).getByText('22:00 to 08:00')).toBeTruthy();
+    expect(within(limits).getByText('10 a month at most')).toBeTruthy();
+    expect(within(limits).getByRole('link', { name: '1 member' }).getAttribute('href')).toBe(
+      '/dashboard/biz_A1/members/never-contact',
+    );
+    expect(
+      within(limits)
+        .getByRole('link', { name: /Change my limits/ })
+        .getAttribute('href'),
+    ).toBe('/dashboard/biz_A1/settings/actions');
+    expect(document.body.textContent).not.toMatch(/guardrail/i);
+    // Two tabs: the rules, and the queue (history and the Alumni offer are its filters).
     const tabs = screen.getByRole('navigation', { name: 'Automations tabs' });
     expect(
       within(tabs)
         .getAllByRole('link')
-        .map((link) => link.getAttribute('href')),
+        .map((link) => [link.textContent, link.getAttribute('href')]),
     ).toEqual([
-      '/dashboard/biz_A1/actions',
-      '/dashboard/biz_A1/actions/queue',
-      '/dashboard/biz_A1/actions/scheduled',
-      '/dashboard/biz_A1/actions/history',
-      '/dashboard/biz_A1/actions/alumni',
+      ['Rules', '/dashboard/biz_A1/actions'],
+      ['Queue', '/dashboard/biz_A1/actions/queue'],
     ]);
+  });
+
+  it('turns a rule off and on from its switch, and says when it could not', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
+      'PUT /api/creator/biz_A1/rules/check_in': [
+        { status: 200, body: { ...ACTION_SETTINGS, rulesOff: ['check_in'] } },
+        { status: 500, body: { error: { code: 'internal', message: 'boom' } } },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions');
+    const toggle = await screen.findByRole('switch', { name: 'Check-in message' });
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(toggle);
+    // At once, before the Worker answers.
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    await vi.waitFor(() => expect(calls).toContain('PUT /api/creator/biz_A1/rules/check_in'));
+    expect(bodies.get('PUT /api/creator/biz_A1/rules/check_in')).toEqual({ on: false });
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-busy')).toBeNull());
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    // The Worker fails: the switch goes back, and the page says it.
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+    expect(await screen.findByText('This rule did not change. Try again.')).toBeTruthy();
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('changes the mode on the page, as the welcome does', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
+      'POST /api/creator/biz_A1/mode': [
+        { status: 200, body: { ...ACTION_SETTINGS, mode: 'auto' } },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions');
+    const mode = await screen.findByRole('radiogroup', { name: 'Mode' });
+    fireEvent.click(within(mode).getByRole('radio', { name: 'Automatic' }));
+    expect(
+      within(mode).getByRole('radio', { name: 'Automatic' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(screen.getByText('StayPut acts on its own, within your limits.')).toBeTruthy();
+    expect(
+      await screen.findByText('Automatic mode: actions leave on their own, within your limits.'),
+    ).toBeTruthy();
+    expect(calls).toContain('POST /api/creator/biz_A1/mode');
+    expect(bodies.get('POST /api/creator/biz_A1/mode')).toEqual({ mode: 'auto' });
+  });
+
+  it('offers three ready-made rules when every rule is off (brief v4 §9.4)', async () => {
+    const allOff = {
+      ...ACTION_SETTINGS,
+      rulesOff: ['check_in', 'exit_survey', 'payment_notice', 'payment_retry', 'welcome'],
+    } satisfies ActionSettingsView;
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/settings/actions': [{ status: 200, body: allOff }],
+      'PUT /api/creator/biz_A1/rules/payment_retry': [
+        {
+          status: 200,
+          body: { ...allOff, rulesOff: ['check_in', 'exit_survey', 'payment_notice', 'welcome'] },
+        },
+      ],
+      'PUT /api/creator/biz_A1/rules/payment_notice': [
+        { status: 200, body: { ...allOff, rulesOff: ['check_in', 'exit_survey', 'welcome'] } },
+      ],
+      'PUT /api/creator/biz_A1/rules/exit_survey': [
+        { status: 200, body: { ...allOff, rulesOff: ['check_in', 'welcome'] } },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions');
+    expect(await screen.findByText('No rule is on')).toBeTruthy();
+    expect(screen.queryByRole('article')).toBeNull();
+    const ready = screen.getByText('Payment retries').closest('ul')!;
+    const items = within(ready).getAllByRole('listitem');
+    expect(items.map((li) => li.getAttribute('data-ready'))).toEqual([
+      'payment_retry',
+      'payment_notice',
+      'exit_survey',
+    ]);
+    expect(items.map((li) => li.querySelector('.font-medium')?.textContent)).toEqual([
+      'Payment retries',
+      'Card update request',
+      'Departure survey',
+    ]);
+    // The page's one primary button.
+    expect(document.querySelectorAll('.button-primary')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Turn on these 3 rules' }));
+    const rules = await screen.findAllByRole('article');
+    expect(
+      rules.map((rule) => within(rule).getByRole('switch').getAttribute('aria-checked')),
+    ).toEqual(['true', 'true', 'true', 'false', 'false']);
+    for (const rule of ['payment_retry', 'payment_notice', 'exit_survey']) {
+      expect(calls).toContain(`PUT /api/creator/biz_A1/rules/${rule}`);
+      expect(bodies.get(`PUT /api/creator/biz_A1/rules/${rule}`)).toEqual({ on: true });
+    }
+  });
+
+  it('keeps the scheduled, the history and the Alumni offer as filters of the queue', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/actions?view=queue': [page('queue', [row()])],
+      '/api/creator/biz_A1/actions?view=history': [page('history', [])],
+    });
+    renderAt('/dashboard/biz_A1/actions/queue');
+    expect(await screen.findByText('Welcome, Ana')).toBeTruthy();
+    const filters = screen.getByRole('navigation', { name: 'Show' });
+    const links = () =>
+      within(filters)
+        .getAllByRole('link')
+        .map((link) => [
+          link.textContent,
+          link.getAttribute('href'),
+          link.getAttribute('aria-current'),
+        ]);
+    expect(links()).toEqual([
+      ['To approve1', '/dashboard/biz_A1/actions/queue', 'page'],
+      ['Scheduled0', '/dashboard/biz_A1/actions/queue/scheduled', null],
+      ['History4', '/dashboard/biz_A1/actions/queue/history', null],
+      ['Alumni offer', '/dashboard/biz_A1/actions/queue/alumni', null],
+    ]);
+    // The section's Queue tab counts what waits for approval.
+    const tabs = screen.getByRole('navigation', { name: 'Automations tabs' });
+    expect(within(tabs).getByRole('link', { name: /^Queue/ }).textContent).toBe('Queue1');
+    // One primary button for the page; each row's « Approve » and « Skip » are ghosts.
+    expect([...document.querySelectorAll('.button-primary')].map((b) => b.textContent)).toEqual([
+      'Approve all (1)',
+    ]);
+    expect(screen.getByRole('button', { name: 'Approve' }).className).toContain('button-ghost');
+    expect(screen.getByRole('button', { name: 'Skip' }).className).not.toContain('button-primary');
+    // A filter keeps the Queue tab open.
+    fireEvent.click(within(filters).getByRole('link', { name: /^History/ }));
+    expect(await screen.findByText('No action yet.')).toBeTruthy();
+    expect(
+      within(tabs)
+        .getByRole('link', { name: /^Queue/ })
+        .getAttribute('aria-current'),
+    ).toBe('page');
+    expect(
+      within(filters)
+        .getByRole('link', { name: /^History/ })
+        .getAttribute('aria-current'),
+    ).toBe('page');
+  });
+
+  it('opens the filters’ former addresses on their filter', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/actions?view=history': [
+        page('history', [row({ status: 'sent', sentAt: '2026-10-01T11:00:00.000Z' })]),
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions/history');
+    expect(await screen.findByText('Welcome, Ana')).toBeTruthy();
+    const filters = screen.getByRole('navigation', { name: 'Show' });
+    expect(
+      within(filters)
+        .getByRole('link', { name: /^History/ })
+        .getAttribute('aria-current'),
+    ).toBe('page');
   });
 
   it('opens an older link to the queue on its tab', async () => {

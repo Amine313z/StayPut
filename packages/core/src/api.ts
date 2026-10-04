@@ -616,9 +616,30 @@ export interface ActionsPage {
   killSwitch: boolean;
 }
 
+/**
+ * The rules of Automations › Rules (brief v4 §9.4), as the engine plans them (plan_actions,
+ * migration 0032): Whop charges a failed payment again; the member is asked to update their card
+ * (or to confirm a 3D Secure check); the departure survey; a check-in message when a score turns
+ * high; the welcome of a newcomer who has not started.
+ */
+export const RULE_IDS = [
+  'payment_retry',
+  'payment_notice',
+  'exit_survey',
+  'check_in',
+  'welcome',
+] as const;
+export type RuleId = (typeof RULE_IDS)[number];
+
+export function isRuleId(value: unknown): value is RuleId {
+  return typeof value === 'string' && (RULE_IDS as readonly string[]).includes(value);
+}
+
 /** GET and PUT /api/creator/:companyId/settings/actions. */
 export interface ActionSettingsView {
   mode: 'auto' | 'manual';
+  /** The rules the creator turned off (PUT /rules/:rule changes them, never this PUT). */
+  rulesOff: RuleId[];
   /** The language of the messages members receive. */
   locale: TemplateLocale;
   dryRun: boolean;
@@ -643,7 +664,7 @@ export interface ActionSettingsView {
  * The PUT body: the settings, with the time zone only when the creator changed it (the zone
  * their browser reported may have arrived since the form was read), and the offers when sent.
  */
-export type ActionSettingsUpdate = Omit<ActionSettingsView, 'timezone' | 'offers'> & {
+export type ActionSettingsUpdate = Omit<ActionSettingsView, 'timezone' | 'offers' | 'rulesOff'> & {
   timezone?: string;
   offers?: OfferSettings;
 };

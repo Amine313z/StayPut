@@ -1787,6 +1787,7 @@ describe('the actions (SPEC Phase 4)', () => {
   });
   const DEFAULTS = {
     mode: 'manual',
+    rulesOff: [],
     locale: 'en',
     dryRun: false,
     killSwitch: false,
@@ -2006,6 +2007,31 @@ describe('the actions (SPEC Phase 4)', () => {
         400,
       );
     }
+  });
+
+  it('turns a rule off and on, for the team only (fix prompt v4.1, block 7)', async () => {
+    const { request, init } = await withProposal('biz_ActQ8', 'user_hal');
+    const rule = async (id: string, body: unknown, as = init) =>
+      request(`/api/creator/biz_ActQ8/rules/${id}`, json(as, 'PUT', body));
+    expect(await (await rule('check_in', { on: false })).json()).toMatchObject({
+      rulesOff: ['check_in'],
+    });
+    expect(await (await rule('welcome', { on: false })).json()).toMatchObject({
+      rulesOff: ['check_in', 'welcome'],
+    });
+    expect(await (await rule('check_in', { on: true })).json()).toMatchObject({
+      rulesOff: ['welcome'],
+    });
+    // The settings say it, and saving them leaves the rules as they are.
+    const path = '/api/creator/biz_ActQ8/settings/actions';
+    expect(await (await request(path, init)).json()).toMatchObject({ rulesOff: ['welcome'] });
+    expect(
+      await (await request(path, json(init, 'PUT', { ...DEFAULTS, rulesOff: [] }))).json(),
+    ).toMatchObject({ rulesOff: ['welcome'] });
+    expect((await rule('everything', { on: false })).status).toBe(400);
+    expect((await rule('welcome', { on: 'yes' })).status).toBe(400);
+    // A member of the community is not the team.
+    expect((await rule('welcome', { on: true }, await asUser('user_eve'))).status).toBe(403);
   });
 
   it('ticks « Set guardrails » and « Review your at-risk members » once, for the team only', async () => {

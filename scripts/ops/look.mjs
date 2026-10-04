@@ -477,8 +477,75 @@ report.story.julietteDrawer = await paused.evaluate((dialog) =>
 await desktop.page.screenshot({ path: `${out}/members-drawer-paused-1440.png` });
 await paused.getByRole('button', { name: 'Close' }).click();
 
-// Automations › History: what came of each action, the proof of value (block 4).
-await desktop.page.goto(`${base}/demo/actions/history`, { waitUntil: 'domcontentloaded' });
+// Automations (fix prompt v4.1, block 7; brief v4 §9.4): two tabs, the rules with a switch each,
+// the mode, the limits, a preview tagged EN or FR; every rule off, three ready-made ones.
+await desktop.page.goto(`${base}/demo/actions`, { waitUntil: 'domcontentloaded' });
+await desktop.page.locator('[data-rule]').nth(4).waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(800);
+const checkIn = desktop.page.locator('[data-rule="check_in"]');
+await checkIn.getByRole('button', { name: /^Preview message/ }).click();
+await desktop.page.waitForTimeout(500);
+report.automations = await desktop.page.evaluate(() => ({
+  tabs: [...document.querySelectorAll('nav[aria-label="Automations tabs"] a')].map(
+    (a) => a.textContent,
+  ),
+  rules: document.querySelectorAll('[data-rule]').length,
+  switches: document.querySelectorAll('[data-rule] [role="switch"]').length,
+  on: document.querySelectorAll('[data-rule] [role="switch"][aria-checked="true"]').length,
+  mode: document.querySelector('[role="radiogroup"] [aria-checked="true"]')?.textContent ?? null,
+  limits: [...document.querySelectorAll('[data-limits] dd')].map((dd) => dd.textContent),
+  tags: [...document.querySelectorAll('[data-lang-tag] [aria-hidden="true"]')].map(
+    (tag) => tag.textContent,
+  ),
+  preview: document.querySelector('[data-rule="check_in"] [lang] p')?.textContent ?? null,
+  primaries: document.querySelectorAll('.button-primary').length,
+}));
+await desktop.page.screenshot({ path: `${out}/automations-rules-1440.png` });
+// Every rule off: the empty state, then its one button turns the three on. The last switch
+// leaves with its card: the empty state takes the rules' place.
+for (const rule of ['payment_retry', 'payment_notice', 'exit_survey', 'check_in']) {
+  await desktop.page.locator(`[data-rule="${rule}"] [role="switch"]`).click();
+  await desktop.page.waitForSelector(`[data-rule="${rule}"] [role="switch"]:not([aria-busy])`, {
+    timeout: 10_000,
+  });
+}
+await desktop.page.locator('[data-rule="welcome"] [role="switch"]').click();
+const turnOn = desktop.page.getByRole('button', { name: 'Turn on these 3 rules' });
+await turnOn.waitFor({ timeout: 10_000 });
+await desktop.page.waitForTimeout(500);
+report.automations.empty = await desktop.page.evaluate(() => ({
+  ready: [...document.querySelectorAll('[data-ready]')].map((li) => li.getAttribute('data-ready')),
+  primaries: document.querySelectorAll('.button-primary').length,
+}));
+report.automations.empty.title = await desktop.page.getByText('No rule is on').count();
+await desktop.page.screenshot({ path: `${out}/automations-empty-1440.png` });
+await turnOn.click();
+await desktop.page.locator('[data-rule]').nth(4).waitFor({ timeout: 10_000 });
+await desktop.page.waitForSelector('[data-rule="exit_survey"] [aria-checked="true"]', {
+  timeout: 10_000,
+});
+report.automations.turnedOn = await desktop.page.evaluate(() =>
+  [...document.querySelectorAll('[data-rule]')]
+    .filter(
+      (rule) => rule.querySelector('[role="switch"]')?.getAttribute('aria-checked') === 'true',
+    )
+    .map((rule) => rule.getAttribute('data-rule')),
+);
+// The queue: its filters, one primary button, each row's « Approve » a ghost.
+await desktop.page.goto(`${base}/demo/actions/queue`, { waitUntil: 'domcontentloaded' });
+await desktop.page.getByRole('button', { name: /^Approve all/ }).waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(800);
+report.automations.queue = await desktop.page.evaluate(() => ({
+  filters: [...document.querySelectorAll('nav[aria-label="Show"] a')].map((a) => a.textContent),
+  primaries: [...document.querySelectorAll('.button-primary')].map((b) => b.textContent),
+  rowButtons: [...document.querySelectorAll('li button')]
+    .filter((b) => b.textContent === 'Approve')
+    .map((b) => b.classList.contains('button-ghost')),
+}));
+await desktop.page.screenshot({ path: `${out}/automations-queue-1440.png` });
+
+// Automations › Queue › History: what came of each action, the proof of value (block 4).
+await desktop.page.goto(`${base}/demo/actions/queue/history`, { waitUntil: 'domcontentloaded' });
 await desktop.page.waitForSelector('[data-outcome]', { timeout: 30_000 });
 await desktop.page.waitForTimeout(800);
 report.history = await desktop.page.evaluate(() =>
@@ -511,7 +578,13 @@ report.words = {
   golden: [],
   frenchQuotes: [],
 };
-for (const path of ['actions/queue', 'actions/scheduled', 'actions/history', 'settings/actions']) {
+for (const path of [
+  'actions',
+  'actions/queue',
+  'actions/queue/scheduled',
+  'actions/queue/history',
+  'settings/actions',
+]) {
   await desktop.page.goto(`${base}/demo/${path}`, { waitUntil: 'domcontentloaded' });
   await desktop.page.getByRole('heading', { level: 1 }).first().waitFor({ timeout: 30_000 });
   await desktop.page.waitForTimeout(800);
@@ -533,7 +606,7 @@ const outsideLinks = () =>
       .map((a) => a.href),
   );
 for (const [path, shot] of [
-  ['actions/alumni', 'demo-alumni-1440.png'],
+  ['actions/queue/alumni', 'demo-alumni-1440.png'],
   ['sources/discord', 'demo-discord-1440.png'],
   ['sources/telegram', 'demo-telegram-1440.png'],
 ]) {
@@ -552,7 +625,7 @@ for (const [path, shot] of [
     tipShown: await tip.evaluate((element) => getComputedStyle(element).opacity),
   });
   report.demoSafety.links.push(...(await outsideLinks()));
-  if (path === 'actions/alumni') {
+  if (path === 'actions/queue/alumni') {
     report.demoSafety.alumniUrl = await desktop.page.locator('code').first().innerText();
   }
   await desktop.page.screenshot({ path: `${out}/${shot}` });
@@ -676,12 +749,34 @@ const ok =
   report.words.skip === report.words.approve &&
   report.words.golden.length === 0 &&
   report.words.frenchQuotes.length === 0 &&
-  report.words.languages.join() === 'English,French';
+  report.words.languages.join() === 'English,French' &&
+  // Automations (fix prompt v4.1, block 7; brief v4 §9.4).
+  report.automations.tabs.length === 2 &&
+  report.automations.tabs[0] === 'Rules' &&
+  report.automations.tabs[1].startsWith('Queue') &&
+  report.automations.rules === 5 &&
+  report.automations.switches === 5 &&
+  report.automations.on === 5 &&
+  report.automations.mode === 'Manual' &&
+  report.automations.limits.length === 4 &&
+  report.automations.tags.length === 4 &&
+  report.automations.tags.every((tag) => tag === 'EN') &&
+  /^We miss you, Alex$/.test(report.automations.preview ?? '') &&
+  report.automations.primaries === 0 &&
+  report.automations.empty.title === 1 &&
+  report.automations.empty.ready.join() === 'payment_retry,payment_notice,exit_survey' &&
+  report.automations.empty.primaries === 1 &&
+  report.automations.turnedOn.join() === 'payment_retry,payment_notice,exit_survey' &&
+  report.automations.queue.filters.length === 4 &&
+  report.automations.queue.primaries.length === 1 &&
+  /^Approve all \(\d+\)$/.test(report.automations.queue.primaries[0]) &&
+  report.automations.queue.rowButtons.length > 0 &&
+  report.automations.queue.rowButtons.every(Boolean);
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
 console.info(JSON.stringify(report, null, 2));
 if (!ok) {
   console.error(
-    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest, or the demo does not tell one story (a pause, an end, an unpaid date, a member gone, an outcome, a count), or something in the demo leads outside StayPut (a link, a button not said disabled), or the words are not those of block 6 (« Skip », no « golden hour », “ ” quotes, English first): see the report above.',
+    'A font did not load or a figure is not in Satoshi, an amount lacks its cents, the demo is not in English, the chart drew nothing, does not end on the balance, goes down or does not mark where the month starts, « Needs attention » is out of order, a block of Integrations › Activity still says « Loading… » after 5 seconds, the guide or the welcome is not whole, the tour or a « Show me » misses its place or covers it, or Members, its search or its drawer is not as the brief says (fix prompt v4.1), or a « Needs attention » row shows its actions at rest, or the demo does not tell one story (a pause, an end, an unpaid date, a member gone, an outcome, a count), or something in the demo leads outside StayPut (a link, a button not said disabled), or the words are not those of block 6 (« Skip », no « golden hour », “ ” quotes, English first), or Automations is not two tabs with a switch per rule, the mode, the limits, EN/FR previews, the three ready-made rules and one primary button (block 7): see the report above.',
   );
   process.exitCode = 1;
 }

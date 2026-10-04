@@ -8,6 +8,7 @@ import {
   isMemberId,
   isExperienceId,
   isCreatorOfferKind,
+  isRuleId,
   isExitReason,
   isNiche,
   PRIORITY_MESSAGE_LIMIT,
@@ -1233,6 +1234,30 @@ export function createApp(deps: AppDeps) {
       // In automatic mode, what waits for the guardrails goes through them now.
       if (settings.mode === 'auto') runActionsInBackground(c, companyId, deps.now());
       return c.json((await readActionSettings(db, c.get('userId'), companyId)) ?? settings);
+    },
+  );
+
+  /**
+   * A rule of Automations › Rules turned on or off (fix prompt v4.1, block 7; migration 0032): it
+   * plans nothing more while off, what it planned before stays in the queue. Answers the settings.
+   */
+  app.put(
+    '/api/creator/:companyId/rules/:rule',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const rule = c.req.param('rule');
+      if (!isRuleId(rule)) return apiError('invalid_request', 'unknown rule');
+      const on = (await c.req.json<unknown>().catch(() => null)) as { on?: unknown } | null;
+      if (typeof on?.on !== 'boolean')
+        return apiError('invalid_request', 'expected { on: boolean }');
+      const companyId = c.get('companyId');
+      await db.query('select stayput.set_rule($1, $2, $3)', [companyId, rule, on.on]);
+      const settings = await readActionSettings(db, c.get('userId'), companyId);
+      return settings ? c.json(settings) : apiError('not_found', 'no settings for this company');
     },
   );
 

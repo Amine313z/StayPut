@@ -211,6 +211,64 @@ describe('the triggers', () => {
     // A demonstration community is never acted on.
     expect(await plan(await company({ demo: true }))).toBe(0);
   });
+
+  it('plans nothing for a rule the creator turned off (fix prompt v4.1, block 7)', async () => {
+    const setRule = async (companyId: string, rule: string, on: boolean) =>
+      (
+        await t.db.query<{ off: string[] }>(
+          'select to_jsonb(stayput.set_rule($1, $2, $3)) as off',
+          [companyId, rule, on],
+        )
+      )[0]?.off;
+    const c = await company();
+    // Every rule off, then the check-in turned back on: only it plans.
+    for (const rule of ['welcome', 'payment_retry', 'payment_notice', 'exit_survey', 'check_in']) {
+      await setRule(c, rule, false);
+    }
+    expect(await setRule(c, 'check_in', true)).toEqual([
+      'exit_survey',
+      'payment_notice',
+      'payment_retry',
+      'welcome',
+    ]);
+    // Twice off is once off.
+    expect(await setRule(c, 'welcome', false)).toEqual([
+      'exit_survey',
+      'payment_notice',
+      'payment_retry',
+      'welcome',
+    ]);
+    const failed = await member(c);
+    const leaving = await member(c);
+    const high = await member(c);
+    const newcomer = await member(c);
+    await payment(c, failed, { status: 'failed', at: hoursAgo(30) });
+    await t.db.query(
+      `insert into stayput.memberships (id, company_id, member_id, product_id, plan_id, status,
+                                        cancel_at_period_end, current_period_end)
+       values ('mem_ActOff', $1, $2, 'prod_Act1', 'plan_Act1', 'active', true,
+               '2026-10-20T00:00:00Z')`,
+      [c, leaving],
+    );
+    await risk(c, high, { level: 'high', previous: 'medium', since: hoursAgo(3) });
+    await risk(c, newcomer, { level: 'low', since: hoursAgo(1), newcomer: true });
+    expect(await plan(c)).toBe(1);
+    expect((await rows(c)).map((r) => r.type)).toEqual(['high_risk_message']);
+    // Turned back on, each rule plans what it missed (still recent).
+    for (const rule of ['welcome', 'payment_retry', 'payment_notice', 'exit_survey']) {
+      await setRule(c, rule, true);
+    }
+    expect(await plan(c)).toBe(4);
+    expect((await rows(c)).map((r) => r.type).sort()).toEqual([
+      'exit_survey',
+      'high_risk_message',
+      'payment_failed_notice',
+      'payment_retry',
+      'welcome_message',
+    ]);
+    // An unknown rule is refused.
+    await expect(setRule(c, 'everything', false)).rejects.toThrow(/unknown rule/);
+  });
 });
 
 describe('scheduling through the guardrails', () => {

@@ -8,6 +8,7 @@ import {
   isActionType,
   isFailedPayment,
   isExitReason,
+  isRuleId,
   templateProblems,
   timeZoneName,
   type ActionOffer,
@@ -275,12 +276,14 @@ export async function readActionSettings(
       promo_months: number;
       extend_days: number;
       coaching_message: string | null;
+      rules_off: string[];
     }>(
       `select c.mode, c.locale, s.dry_run, s.kill_switch, c.timezone, s.quiet_hours_start,
               s.quiet_hours_end, s.default_send_hour, s.max_messages_per_5_days,
               s.max_messages_per_month, s.max_payment_retries, s.monthly_promo_cap,
               s.max_free_days_per_quarter, s.active_templates as templates, s.pause_days,
-              s.promo_percent, s.promo_months, s.extend_days, s.coaching_message
+              s.promo_percent, s.promo_months, s.extend_days, s.coaching_message,
+              to_jsonb(s.rules_off) as rules_off
          from stayput.companies c
          join stayput.company_settings s on s.company_id = c.id
         where c.id = $1`,
@@ -290,6 +293,7 @@ export async function readActionSettings(
   if (!row) return null;
   return {
     mode: row.mode === 'auto' ? 'auto' : 'manual',
+    rulesOff: (row.rules_off ?? []).filter(isRuleId),
     locale: row.locale === 'fr' ? 'fr' : 'en',
     dryRun: row.dry_run,
     killSwitch: row.kill_switch,

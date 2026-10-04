@@ -61,14 +61,14 @@ Réglages › Général › « Développeur ». Sur un téléphone, les rubrique
 couleurs, polices et animations suivent [`docs/design-tokens.md`](./docs/design-tokens.md) et
 [`MOTION.md`](./MOTION.md).
 
-| Rubrique (EN · FR)            | Onglets                                                      |
-| ----------------------------- | ------------------------------------------------------------ |
-| Dashboard · Tableau de bord   | une page                                                     |
-| Members · Membres             | Tous les membres · Ne pas contacter                          |
-| Automations · Automatisations | Règles · À valider · Programmées · Historique · Offre Alumni |
-| Analytics · Analyses          | Cohortes · Leçons                                            |
-| Integrations · Intégrations   | Whop · Discord · Telegram · Activité                         |
-| Settings · Réglages           | Général · Score de risque · Automatisations                  |
+| Rubrique (EN · FR)            | Onglets                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------ |
+| Dashboard · Tableau de bord   | une page                                                                       |
+| Members · Membres             | Tous les membres · Ne pas contacter                                            |
+| Automations · Automatisations | Règles · File d’attente (filtres : À valider, Programmées, Historique, Alumni) |
+| Analytics · Analyses          | Cohortes · Leçons                                                              |
+| Integrations · Intégrations   | Whop · Discord · Telegram · Activité                                           |
+| Settings · Réglages           | Général · Score de risque · Automatisations                                    |
 
 La page d'accueil répond à une seule question, « Est-ce que je perds de l'argent, et que faire
 aujourd'hui ? » : un bloc pour l'argent (sauvé ce mois-ci, à risque, membres à risque, et la
@@ -92,7 +92,15 @@ restent en haut pendant le défilement. Une ligne ouvre le tiroir du membre : po
 il est à risque, les actions rapides, son score sur 30 jours, son abonnement et ses paiements,
 son activité par plateforme, et l'interrupteur « Ne pas contacter ».
 
-Dans Automatisations › Historique, chaque action qui a atteint un membre dit ce qu'il en est sorti
+Automatisations s'ouvre sur ses **règles** : une carte par règle (quand, si, alors) avec son
+interrupteur, le mode (manuel ou automatique) choisi sur la page, le panneau « Vos limites »
+(messages par membre, heures de silence, réductions par mois, membres à ne jamais contacter) et,
+pour chaque message, un aperçu dans la langue des membres (étiquette EN ou FR). Une règle éteinte
+ne prévoit plus rien ; si toutes le sont, la page propose les trois qui ramènent le plus
+d'argent. La **file d'attente** montre ce qui attend votre validation, avec un seul bouton
+principal (« Approve all »), et ses filtres : Programmées, Historique, Offre Alumni.
+
+Dans Automatisations › File d'attente › Historique, chaque action qui a atteint un membre dit ce qu'il en est sorti
 : « Recovered $49.00 » (l'argent sauvé grâce à elle), « Still failing », « Paused until Nov 2 »,
 « Came back », « No reply yet » ou « Left ». C'est la preuve de ce que StayPut rapporte.
 
@@ -294,7 +302,7 @@ est programmé et ce qui s'est passé ; tout passe par les garde-fous, et le mod
 sans rien envoyer. Dans la **vue membre**, un membre qui a programmé son annulation dit pourquoi
 en un clic et reçoit l'offre qui répond à sa raison (pause, code promo, aide, jours offerts) ;
 un membre dont le paiement attend voit le bouton pour le régler. L'équipe y voit un aperçu, où
-rien n'est enregistré. L'**offre Alumni** (Automatisations → Offre Alumni) se crée en un clic sur Whop : une
+rien n'est enregistré. L'**offre Alumni** (Automatisations → File d'attente → Offre Alumni) se crée en un clic sur Whop : une
 offre gratuite et cachée où les anciens membres gardent le contact. 7, 30 et 60 jours après leur
 départ, ils y reçoivent des nouvelles de la communauté avec un code de retour à usage unique, et
 le retrouvent dans leur vue de l'espace Alumni avec le bouton pour revenir. Détails :
