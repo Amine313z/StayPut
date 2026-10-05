@@ -26,6 +26,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } fr
 import { DEMO_WHOP_ID, putJson, useApi } from '../../api';
 import { BadgeCard } from '../../components/BadgeCard';
 import { DataCard, TeamCard } from '../../components/DataCards';
+import { LegalCard } from '../../components/Legal';
 import { LEVELS } from '../../components/Risk';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { useDemo } from '../../demoMode';
@@ -83,8 +84,8 @@ function WithRiskSettings({ children }: { children: (settings: RiskSettingsView)
 
 /**
  * Settings › General: the language (the only place it changes, English by default), the « Verified
- * retention » badge (SPEC 6.11), the team and the community's data (6.12), and what a developer
- * or Whop's support asks for, the community's id. There is no theme to choose: dark is StayPut's
+ * retention » badge (SPEC 6.11), the team and the community's data (6.12), the legal pages (8.1),
+ * and what a developer or Whop's support asks for, the community's id. There is no theme to choose: dark is StayPut's
  * only one.
  */
 export function GeneralSettingsTab() {
@@ -110,6 +111,7 @@ export function GeneralSettingsTab() {
       />
       <TeamCard api={api} />
       <DataCard api={api} companyId={companyId} companyName={companyName} />
+      <LegalCard />
       <Card
         icon={<Code aria-hidden="true" className="size-4" />}
         title={t('settings.developer')}

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { useParams } from 'react-router';
 import { deleteJson, useApi, useReloadOnReturn } from '../api';
 import { ConfirmButton } from '../components/ConfirmButton';
+import { PrivacyLink } from '../components/Legal';
 import { MemberRetention, useRetention } from '../components/MemberRetention';
 import { MemberSpace } from '../components/MemberSpace';
 import { SignOut } from '../components/SignOut';
@@ -93,6 +94,10 @@ function MemberPage({
       ) : null}
       {space ? <MemberSpace api={api} /> : null}
       <TelegramLink api={api} />
+      {/* What StayPut does with their data, within reach of every member (SPEC Phase 8.1). */}
+      <footer className="flex justify-center pt-2">
+        <PrivacyLink />
+      </footer>
     </div>
   );
 }

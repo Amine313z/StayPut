@@ -683,6 +683,20 @@ report.team = await desktop.page.evaluate(() => ({
     /Delete all data/.test(button.textContent ?? ''),
   ).length,
 }));
+// Settings › General › Legal (SPEC 8.1): the privacy policy read inside StayPut, the Worker's
+// own page in a window that closes.
+await desktop.page.getByRole('button', { name: 'Read · Privacy policy' }).click();
+const legalFrame = desktop.page.frameLocator('iframe[data-legal-frame="privacy"]');
+await legalFrame.locator('h1').waitFor({ timeout: 30_000 });
+report.legal = {
+  title: await legalFrame.locator('h1').textContent(),
+  draft: await legalFrame.locator('p.draft').count(),
+  sections: await legalFrame.locator('h2').count(),
+  toComplete: await legalFrame.getByText('to be completed', { exact: false }).count(),
+};
+await desktop.page.waitForTimeout(800);
+await desktop.page.screenshot({ path: `${out}/legal-privacy-dialog.png` });
+await desktop.page.keyboard.press('Escape');
 // Automations › Queue › Alumni (SPEC 6.13): who is in it, the share who came back, the money.
 await desktop.page.goto(`${base}/demo/actions/queue/alumni`, { waitUntil: 'domcontentloaded' });
 await desktop.page.locator('[data-alumni-figures]').waitFor({ timeout: 30_000 });
@@ -845,6 +859,12 @@ report.platformPhoneOverflow = await phone.page.evaluate(
   () => document.scrollingElement.scrollWidth - window.innerWidth,
 );
 await phone.page.screenshot({ path: `${out}/integrations-discord-390.png`, fullPage: true });
+// The privacy policy itself, in French, as a member reads it on a phone (SPEC 8.1).
+await phone.page.goto(`${base}/privacy?lang=fr`, { waitUntil: 'domcontentloaded' });
+report.legal.phoneOverflow = await phone.page.evaluate(
+  () => document.documentElement.scrollWidth - window.innerWidth,
+);
+await phone.page.screenshot({ path: `${out}/legal-privacy-fr-390.png` });
 await phone.context.close();
 await browser.close();
 
@@ -928,6 +948,7 @@ const ok =
   report.members.drawer.scoreDrawn &&
   report.members.drawer.doNotContact === 'false' &&
   report.members.phoneOverflow <= 0 &&
+  report.legal.phoneOverflow <= 0 &&
   // One story (fix prompt v4.1, block 4).
   report.story.juliette.some((cell) => /^Paused · resumes \w{3} \d{1,2}$/.test(cell)) &&
   report.story.julietteDrawer.some((line) => /· resumes on /.test(line)) &&
@@ -1002,6 +1023,9 @@ const ok =
   report.team.rows === 3 &&
   report.team.greyed === 1 &&
   JSON.stringify(report.alumni) === JSON.stringify(['9', '17%', '$147.00']) &&
+  report.legal.title === 'Privacy policy' &&
+  report.legal.draft === 1 &&
+  report.legal.sections >= 8 &&
   Object.values(report.pages).every(Boolean) &&
   report.analytics.reports.sent &&
   report.analytics.reports.switchOn;

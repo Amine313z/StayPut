@@ -79,6 +79,14 @@ jobs:
           # run_worker_first): for no community, each says so.
           expect /verify/biz_NoSuchCommunity 404 text/html
           expect /badge/biz_NoSuchCommunity.svg 404 json
+          # The legal pages too (SPEC 8.1): the page itself, never the app's index.html.
+          for page in privacy terms dpa; do
+            expect "/$page?lang=fr" 200 text/html
+            if ! grep -q '<p class="draft">' "$body"; then
+              echo "  not the legal page (FAILED)" | tee -a "$GITHUB_STEP_SUMMARY"
+              failed=1
+            fi
+          done
           exit $failed
 
   # The browser tests (apps/web/e2e) on the deployed demo, its fonts loaded as creators get

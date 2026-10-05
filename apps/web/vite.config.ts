@@ -62,7 +62,10 @@ export default defineConfig({
       '/webhooks': worker,
       '/health': worker,
       '^/badge/': worker,
+      '^/verify/': worker,
       '^/v/': worker,
+      // The legal pages, with or without `?lang=` (Vite matches the path and its query).
+      '^/(privacy|terms|dpa)(\\?|$)': worker,
     },
   },
   build: {

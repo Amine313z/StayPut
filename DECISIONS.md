@@ -3458,3 +3458,33 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
   effacé les comptes des jours aux événements supprimés. Testé : purge puis recalcul, les comptes
   anciens ne bougent pas.
 - Conséquence : les leçons bloquantes ne regardent plus que les 12 derniers mois de leçons.
+
+## 2026-10-05 — Phase 8.1 : politique de confidentialité, conditions d'utilisation, accord de traitement
+
+- **Trois pages publiques servies par le Worker** : `/privacy`, `/terms`, `/dpa`, en anglais et en
+  français (`?lang=fr`, sinon la langue du navigateur, sinon l'anglais), en HTML simple sans
+  script, comme la page de vérification du badge (une politique de sécurité qui n'autorise que
+  leur propre style). Ajoutées à `run_worker_first` (le test de routage l'impose).
+- **Dans l'app** : Réglages › Général › « Documents légaux » ouvre chaque page dans une fenêtre
+  qui se ferme, comme la page d'une carte : on les lit sans quitter Whop. Côté membre, un lien
+  discret « Confidentialité » en bas de sa page, dans la langue de la communauté. Dans la démo,
+  rien n'est grisé : ce ne sont pas des liens externes.
+- **Ce que disent les textes** : StayPut est sous-traitant pour les données des membres (le
+  créateur est responsable du traitement) et responsable pour les comptes des équipes ; ce qui
+  est traité, d'où, pourquoi ; jamais d'e-mail, de téléphone ni de texte de message ; les durées
+  telles que la base les applique (12 mois d'activité détaillée, 7 jours puis 30 jours au plus
+  pour les envois de Whop, suppression 30 jours après la désinstallation ; un test vérifie que
+  les pages disent ces durées) ; les droits et comment les exercer ; les sous-traitants (Whop,
+  Cloudflare, Supabase, Discord et Telegram s'ils sont connectés) ; notification d'une violation
+  sous 48 heures (DPA).
+- **Brouillons** : chaque page le dit en tête. **À compléter par le fondateur** avant le
+  lancement, dans `apps/worker/src/legal.ts` (`OPERATOR`) : la raison sociale de l'éditeur, son
+  adresse, l'e-mail de contact, le droit applicable et les tribunaux. Tant qu'ils manquent, les
+  pages les montrent entre crochets (« [raison sociale de l'éditeur : à compléter] »). Les
+  textes sont à faire relire (SPEC 8.1) ; ils ne valent pas avis juridique.
+- **Permissions** : l'app du sandbox demande `member:email:read` et `member:phone:read` depuis
+  la Phase 2, mais StayPut ne lit ni ne garde aucun e-mail ni téléphone. L'app de production ne
+  les demandera pas (checklist de la Phase 9) ; le rapport des permissions d'Inspect les range
+  désormais à part, « Not needed (SPEC 8.2) ».
+- Pour la fiche de l'App Store (Phase 9) : les adresses publiques à donner à Whop sont
+  `https://<domaine de StayPut>/privacy` et `/terms`.

@@ -17,8 +17,6 @@ import { secretValue } from '../deploy/prepare';
 export const PHASE_2_PERMISSIONS = [
   'company:basic:read',
   'member:basic:read',
-  'member:email:read',
-  'member:phone:read',
   'access_pass:basic:read',
   'plan:basic:read',
   'payment:basic:read',
@@ -52,10 +50,17 @@ export const ALUMNI_PERMISSIONS = [
   'experience:attach',
 ] as const;
 
-const GROUPS: readonly { title: string; actions: readonly string[] }[] = [
-  { title: 'Phase 2, reading', actions: PHASE_2_PERMISSIONS },
-  { title: 'Phase 4, actions', actions: PHASE_4_PERMISSIONS },
-  { title: 'Alumni offer (optional)', actions: ALUMNI_PERMISSIONS },
+/**
+ * Asked of the sandbox app since Phase 2 and never read (SPEC 8.2): StayPut keeps no e-mail and
+ * no phone number. The production app leaves them out (Phase 9, the production checklist).
+ */
+export const UNNEEDED_PERMISSIONS = ['member:email:read', 'member:phone:read'] as const;
+
+const GROUPS: readonly { title: string; actions: readonly string[]; wanted: boolean }[] = [
+  { title: 'Phase 2, reading', actions: PHASE_2_PERMISSIONS, wanted: true },
+  { title: 'Phase 4, actions', actions: PHASE_4_PERMISSIONS, wanted: true },
+  { title: 'Alumni offer (optional)', actions: ALUMNI_PERMISSIONS, wanted: true },
+  { title: 'Not needed (SPEC 8.2)', actions: UNNEEDED_PERMISSIONS, wanted: false },
 ];
 
 /** « StayPut Test », the founder's sandbox account. */
@@ -87,11 +92,16 @@ async function main() {
     const granted = new Map(body.data.map((p) => [p.action, p.granted]));
     for (const group of GROUPS) {
       const missing = group.actions.filter((action) => granted.get(action) !== true);
+      const extra = group.actions.filter((action) => granted.get(action) === true);
       lines.push(
         `**${group.title}**: ` +
-          (missing.length === 0
-            ? `all ${group.actions.length} granted.`
-            : `not granted (${missing.length} of ${group.actions.length}): ${missing.join(', ')}.`),
+          (!group.wanted
+            ? extra.length === 0
+              ? 'none granted, as it should be.'
+              : `still granted (${extra.join(', ')}): leave them out of the production app.`
+            : missing.length === 0
+              ? `all ${group.actions.length} granted.`
+              : `not granted (${missing.length} of ${group.actions.length}): ${missing.join(', ')}.`),
         '',
         '| permission | granted |',
         '| --- | --- |',

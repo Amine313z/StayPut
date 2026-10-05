@@ -126,6 +126,7 @@ import {
 } from './platforms';
 import { LATEST_MIGRATION } from './schema-version';
 import { goneVerifyPage, verifyPage } from './public-badge';
+import { LEGAL_DOCUMENTS, legalLocale, legalPage } from './legal';
 import { goneProofPage, proofPage } from './public-proof';
 import {
   joinRescue,
@@ -2855,6 +2856,16 @@ export function createApp(deps: AppDeps) {
     }
     return proofPage(proof);
   });
+
+  /**
+   * The privacy policy, the terms of service and the data processing agreement (SPEC Phase 8.1),
+   * public: in the language asked (`?lang=fr`), else the browser's, else English.
+   */
+  for (const document of LEGAL_DOCUMENTS) {
+    app.get(`/${document}`, (c) =>
+      legalPage(document, legalLocale(c.req.query('lang'), c.req.header('accept-language') ?? '')),
+    );
+  }
 
   app.notFound(() => apiError('not_found', 'no such route'));
   app.onError((error) => {

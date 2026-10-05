@@ -3832,6 +3832,20 @@ describe('member view', () => {
     expect(screen.queryByText('Your Telegram account')).toBeNull();
   });
 
+  it('gives every member the privacy policy, in their community’s language', async () => {
+    mockApi({
+      '/api/member/exp_E1/session': [memberSession],
+      '/api/member/exp_E1/retention': [retention({ locale: 'fr' })],
+      '/api/member/exp_E1/telegram?lang=fr': [telegram({ available: false, link: null })],
+    });
+    renderAt('/experiences/exp_E1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Confidentialité' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Politique de confidentialité' });
+    expect(
+      within(dialog).getByTitle('Politique de confidentialité, la page').getAttribute('src'),
+    ).toBe('/privacy?lang=fr');
+  });
+
   it('offers to link Telegram when the community counts a group, then to unlink it', async () => {
     const calls = mockApi({
       '/api/member/exp_E1/session': [memberSession],
@@ -5023,6 +5037,42 @@ describe('the creator’s frame', () => {
     const developer = screen.getByRole('heading', { name: 'Developer' }).closest('section')!;
     expect(within(developer).getByText('biz_A1')).toBeTruthy();
     expect(within(developer).getByRole('button', { name: 'Copy' })).toBeTruthy();
+  });
+
+  it('reads the privacy policy, the terms and the DPA inside StayPut, in its language', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/settings');
+    const legal = (await screen.findByRole('heading', { name: 'Legal' })).closest('section')!;
+    expect(
+      within(legal)
+        .getAllByRole('button')
+        .map((button) => button.getAttribute('aria-label')),
+    ).toEqual([
+      'Read · Privacy policy',
+      'Read · Terms of service',
+      'Read · Data processing agreement',
+    ]);
+    fireEvent.click(within(legal).getByRole('button', { name: 'Read · Terms of service' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Terms of service' });
+    // The Worker's page, never a page outside StayPut, with no script and no way out.
+    const frame = within(dialog).getByTitle<HTMLIFrameElement>('Terms of service, the page');
+    expect(frame.getAttribute('src')).toBe('/terms?lang=en');
+    expect(frame.getAttribute('sandbox')).toBe('');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    // In French, the French page.
+    const languages = screen.getByRole('radiogroup', { name: 'Language' });
+    fireEvent.click(within(languages).getByRole('radio', { name: 'Français' }));
+    const juridique = (await screen.findByRole('heading', { name: 'Documents légaux' })).closest(
+      'section',
+    )!;
+    fireEvent.click(
+      within(juridique).getByRole('button', { name: 'Lire · Accord de traitement des données' }),
+    );
+    const accord = await screen.findByRole('dialog', { name: 'Accord de traitement des données' });
+    expect(
+      within(accord).getByTitle('Accord de traitement des données, la page').getAttribute('src'),
+    ).toBe('/dpa?lang=fr');
   });
 
   it('turns the verified retention badge on, shows it, and gives the code to paste', async () => {

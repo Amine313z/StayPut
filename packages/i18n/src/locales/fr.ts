@@ -1406,6 +1406,21 @@ export const fr: Messages = {
   'settings.developer.companyId': 'Identifiant de la communauté',
   'settings.developer.copy': 'Copier',
   'settings.developer.copied': 'Copié',
+  'legal.title': 'Documents légaux',
+  'legal.hint':
+    'Ce qui s’applique à StayPut et aux données qu’il traite pour vous. Brouillons en relecture avant le lancement.',
+  'legal.privacy': 'Politique de confidentialité',
+  'legal.privacy.hint':
+    'Ce que StayPut traite, pourquoi, combien de temps, et les droits de chacun.',
+  'legal.terms': 'Conditions d’utilisation',
+  'legal.terms.hint': 'Les règles entre vous et StayPut.',
+  'legal.dpa': 'Accord de traitement des données',
+  'legal.dpa.hint':
+    'Comment StayPut traite les données de vos membres pour votre compte (RGPD, article 28).',
+  'legal.read': 'Lire',
+  'legal.frame': '{document}, la page',
+  'legal.draft': 'Brouillon en cours de relecture : il peut encore changer avant le lancement.',
+  'member.privacy': 'Confidentialité',
   'member.subscription.title': 'Votre abonnement',
   'member.subscription.welcome': 'Ce qui concerne votre abonnement, au même endroit.',
   'member.allSet': 'Votre abonnement est en ordre : rien ne vous attend ici.',
