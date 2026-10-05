@@ -75,6 +75,9 @@ const context = await browser.newContext({
   reducedMotion: 'reduce',
   colorScheme: 'dark',
   locale: 'en-US',
+  // The site's CSP (`style-src 'self'`) refuses the style that hides the demo's scaffolding: the
+  // screenshots' browser alone ignores it; the site keeps its policy.
+  bypassCSP: true,
 });
 const problems = [];
 const report = [];

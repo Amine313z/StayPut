@@ -3622,6 +3622,10 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
   arrondissent maintenant chaque étape, comme ceux du tableau de bord.
 - Whop ne publie pas les dimensions attendues des captures : 1920 × 1080 (16:9) par défaut ; la
   fenêtre et l'échelle se changent en tête du script.
+- La politique de sécurité du site (`style-src 'self'`) refuse le style qui masque le bandeau de
+  la démo : le premier Inspect n'a fait aucune capture. Le navigateur des captures, lui seul,
+  l'ignore (`bypassCSP`) ; le site garde sa politique. Vérifié en local avec la même politique
+  (refusé sans, cinq captures avec).
 
 ## 2026-10-05 — Phase 9.4 : la documentation technique finale
 
