@@ -3357,3 +3357,52 @@ prévu.
   est dans `run_worker_first` (il échouait sur `/verify` avant le correctif). Inspect demande
   aussi `/verify/…` et `/badge/….svg` d'une communauté qui n'existe pas : 404 du Worker, pas la
   page de l'application.
+
+## 2026-10-05 — Arrêt de la Phase 6 : le tableau de bord, point par point
+
+### Les 13 points de la SPEC, où ils sont
+
+| #   | Point                         | Où dans l'app                                                                                                                                                                                             |
+| --- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Onboarding en 3 minutes       | L'accueil en 4 étapes à la première ouverture (niche, Alumni, « User left »)                                                                                                                              |
+| 2   | Écran d'accueil               | Tableau de bord : l'argent sauvé, à risque, membres à risque, l'action du jour                                                                                                                            |
+| 3   | Liste des membres             | Membres : tri par risque, filtres, raisons, historique, actions, fiche                                                                                                                                    |
+| 4   | Argent sauvé (attribution)    | Tableau de bord ; File d'attente › Historique : chaque action et ce qu'elle a donné (« Récupéré 49,00 $ »). Les identifiants Whop de la preuve sont gardés (`saves.proof`) et dans l'export, pas affichés |
+| 5   | Prédiction à 90 jours         | Analyses › Vue d'ensemble : deux courbes                                                                                                                                                                  |
+| 6   | Simulateur « et si »          | Analyses › Vue d'ensemble : le curseur                                                                                                                                                                    |
+| 7   | Cohortes et leçons bloquantes | Analyses › Cohortes, Leçons                                                                                                                                                                               |
+| 8   | Raisons de départ             | Analyses › Vue d'ensemble (90 jours) et chaque rapport du lundi (la semaine)                                                                                                                              |
+| 9   | Rapport du lundi              | Notification à l'équipe, lundi 8 h ; Analyses › Rapports                                                                                                                                                  |
+| 10  | Benchmarks anonymes           | Analyses › Vue d'ensemble, en bas (sur accord, 5 communautés au moins)                                                                                                                                    |
+| 11  | Badge « Rétention vérifiée »  | Réglages › Général ; `/badge/<id>.svg` et `/verify/<id>`                                                                                                                                                  |
+| 12  | Paramètres                    | Réglages (Général, Score de risque, Automatisations) ; Membres › Ne pas contacter                                                                                                                         |
+| 13  | Alumni                        | Automatisations › File d'attente › Alumni : les trois chiffres                                                                                                                                            |
+
+Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
+
+### Le sandbox, lu par Inspect le 5 octobre à 01 h 27 UTC
+
+- « StayPut Test » : 26 membres (25 notés : 3 départs programmés, 10 risque élevé, 9 moyen,
+  3 faible), 157 paiements, 1 646 événements d'activité, Discord et Telegram connectés ; mode
+  test et mode manuel, heure de Paris ; 8 cohortes et 12 leçons analysées.
+- **Badge** : 22 membres comptés, assez pour un chiffre dès que le badge est activé (éteint).
+- **Benchmarks** : non partagés, et une seule communauté : rien à montrer, comme prévu.
+- **Rapport du lundi** : le premier est dû ce lundi à 8 h (Paris). L'envoi demande la permission
+  `notification:create`, pas encore accordée : Whop devrait le refuser (403), et le rapport reste
+  lisible dans Analyses › Rapports. Vérifié à 8 h 25 (voir plus bas, s'il y a lieu).
+- **Sauvetages** : aucun. Les membres fictifs n'existent que dans StayPut : ils ne paient pas, et
+  rien ne peut être « sauvé » pour eux. Un vrai sauvetage demandera un vrai membre de test (un
+  second compte Whop), comme à l'arrêt de la Phase 4.
+- **Alumni** : pas d'offre, les 4 permissions de création ne sont pas accordées.
+- **Accueil** : jamais terminé sur le sandbox (`welcomed_at` vide) ; il s'ouvrira à la prochaine
+  ouverture de StayPut.
+
+### Ce qui reste au fondateur pour la démonstration complète
+
+1. Ouvrir StayPut dans le sandbox de Whop (la communauté « StayPut Test ») : l'accueil s'ouvre,
+   puis parcourir les six rubriques.
+2. Accorder les 8 permissions d'écriture dans le tableau de bord développeur de Whop (actions :
+   `member:manage`, `payment:manage`, `promo_code:create`, `notification:create` ; Alumni :
+   `access_pass:create`, `plan:create`, `experience:create`, `experience:attach`), puis approuver
+   à nouveau l'app (Whop → Paramètres → Applications autorisées).
+3. Au choix : activer le badge et le partage des benchmarks dans Réglages.
