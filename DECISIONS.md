@@ -3159,3 +3159,41 @@ prévu.
   sandbox : le premier lundi le dira (la page affichera « Envoyé » ou « Non envoyé »).
 - Pas de `rest_path` : le chemin de la vue tableau de bord de l'app n'a pas `[restPath]`, donc
   toucher la notification ouvre l'accueil de StayPut.
+
+## 2026-10-05 — Phase 6.10 : les benchmarks anonymes
+
+### Ce qui est comparé
+
+- La rétention à 30, 60 et 90 jours des membres arrivés ces 6 derniers mois (les analyses de la
+  semaine, `cohort_stats`), regroupés : une communauté compte pour un chiffre, quelle que soit sa
+  taille. Il lui faut au moins 10 membres assez anciens à chaque horizon pour compter.
+- La valeur d'une niche est la moyenne des communautés qui partagent. Elle n'apparaît qu'à partir
+  de **5 communautés** : la règle RLS de `stayput.benchmarks` (0002) la cache en dessous, et la
+  table ne garde ni nom ni identifiant, seulement niche, mois, chiffre et nombre de contributeurs.
+
+### Qui voit quoi
+
+- **Opt-in** (`company_settings.options.benchmarks_opt_in`, désactivé par défaut) : on voit le
+  chiffre de sa niche seulement si l'on partage le sien. Sa propre rétention s'affiche toujours.
+- Recalcul chaque lundi à 07 h 30 UTC (le cron hebdomadaire, jusque-là vide) pour le mois en
+  cours ; une communauté qui arrête de partager sort des chiffres au calcul suivant. Les mois
+  passés restent comme ils ont été calculés.
+
+### Dans l'app
+
+- Analytique › Vue d'ensemble, en bas : « Les communautés comme la vôtre », l'interrupteur
+  « Partager mes chiffres anonymement », les trois horizons en deux barres (vous, la niche) avec
+  l'écart en points, et un tableau pour les lecteurs d'écran.
+- Démo : elle partage ; les chiffres de sa niche sont fictifs comme le reste, les siens viennent de
+  ses cohortes. Les départs à 90 jours de la démo passent de 19 % à 22 % pour que la rétention
+  baisse bien de 60 à 90 jours.
+
+### Tests
+
+- `apps/worker/test/benchmarks-sql.test.ts` : 4 communautés ne suffisent pas, la 5e fait
+  apparaître la moyenne (chaque communauté pèse pareil) ; ni celle qui ne partage pas, ni la démo,
+  ni une petite (8 membres), ni des arrivées de plus de 6 mois ; une communauté qui ne partage pas
+  ne voit rien de sa niche ; arrêter de partager la retire au calcul suivant ; rien ne nomme une
+  communauté.
+- `apps/web/test/app.test.tsx` et `demo.test.ts` : l'interrupteur, les écarts, « pas encore
+  assez » en français, la démo cohérente.

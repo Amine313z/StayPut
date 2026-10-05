@@ -6,6 +6,13 @@
 
 /** Days after joining at which a cohort's departures are counted. */
 export const COHORT_HORIZONS = [30, 60, 90] as const;
+
+/** A niche's benchmark shows once this many communities share their figures (SPEC 6.10). */
+export const BENCHMARK_MINIMUM = 5;
+
+/** The months of arrival a benchmark counts, and the members each community needs at least. */
+export const BENCHMARK_MONTHS = 6;
+export const BENCHMARK_MIN_MEMBERS = 10;
 export type CohortHorizon = (typeof COHORT_HORIZONS)[number];
 
 /** A cohort leaving at least this many times more than the creator's average is flagged… */

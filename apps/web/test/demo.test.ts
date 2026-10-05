@@ -737,6 +737,25 @@ describe('Analytics › Overview in the demo (fix prompt v4.1, block 7)', () => 
   });
 });
 
+describe('« Communities like yours » in the demo (SPEC Phase 6.10)', () => {
+  const world = createWorld(NOW);
+
+  it('compares its own arrivals of 6 months with an imaginary niche, and stops sharing', () => {
+    const view = world.pages.benchmarks();
+    expect(view).toMatchObject({ optedIn: true, niche: 'trading', minimum: 5 });
+    // Its departures by horizon (Analytics › Cohorts): retention falls from 30 to 90 days.
+    const mine = view.horizons.map((h) => h.mine!);
+    expect(mine.every((rate) => rate > 0.5 && rate < 1)).toBe(true);
+    expect(mine[0]).toBeGreaterThan(mine[1]!);
+    expect(mine[1]).toBeGreaterThan(mine[2]!);
+    expect(view.horizons.every((h) => h.niche !== null)).toBe(true);
+    const off = world.pages.setBenchmarks(false);
+    expect(off.optedIn).toBe(false);
+    expect(off.horizons.map((h) => h.niche)).toEqual([null, null, null]);
+    expect(off.horizons.map((h) => h.mine)).toEqual(mine);
+  });
+});
+
 describe('Analytics › Reports in the demo (SPEC Phase 6.9)', () => {
   const world = createWorld(NOW);
   const view = world.reports();

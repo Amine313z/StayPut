@@ -58,6 +58,7 @@ import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
+import { readBenchmarks, saveBenchmarksSetting } from './benchmarks';
 import { readWeeklyReports, saveWeeklyReportSetting } from './reports';
 import { alumniOfMember, createAlumniOffer, readAlumni } from './alumni';
 import { readInsightsOverview } from './analytics';
@@ -885,6 +886,28 @@ export function createApp(deps: AppDeps) {
       return overview ? c.json(overview) : apiError('not_found', 'no such company');
     },
   );
+
+  /**
+   * Analytics › Overview, « Communities like yours » (SPEC Phase 6.10): the community's retention
+   * next to its niche's, once it shares its own; and the switch.
+   */
+  app.get('/api/creator/:companyId/benchmarks', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const view = await readBenchmarks(db, c.get('userId'), c.get('companyId'), deps.now());
+    return view ? c.json(view) : apiError('not_found', 'no such company');
+  });
+
+  app.put('/api/creator/:companyId/benchmarks', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const body = await c.req.json<unknown>().catch(() => null);
+    const optedIn = (body as { optedIn?: unknown } | null)?.optedIn;
+    if (typeof optedIn !== 'boolean') return apiError('invalid_request', 'expected { optedIn }');
+    await saveBenchmarksSetting(db, c.get('companyId'), optedIn);
+    const view = await readBenchmarks(db, c.get('userId'), c.get('companyId'), deps.now());
+    return view ? c.json(view) : apiError('not_found', 'no such company');
+  });
 
   /**
    * Analytics › Reports (SPEC Phase 6.9): the Monday reports of the last 12 weeks, when the next

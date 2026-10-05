@@ -620,6 +620,8 @@ report.analytics = await desktop.page.evaluate(() => ({
   reasons: [...document.querySelectorAll('[data-reason]')].map((r) => r.textContent),
   bars: document.querySelectorAll('[data-bar]').length,
   gridlines: document.querySelectorAll('section:has([data-chart="act"]) svg line').length,
+  // « Communities like yours » (SPEC 6.10): the demo shares, its three horizons compared.
+  benchmarks: document.querySelectorAll('[data-benchmarks] [data-horizon]').length,
 }));
 report.analytics.gain = await gain();
 await desktop.page.screenshot({ path: `${out}/analytics-overview-1440.png`, fullPage: true });
@@ -929,6 +931,7 @@ const ok =
   ) <= 0.02 &&
   report.analytics.reasons.length > 0 &&
   report.analytics.bars === 30 &&
+  report.analytics.benchmarks === 3 &&
   report.analytics.gridlines >= 3 &&
   report.analytics.cohorts.flagged.length > 0 &&
   report.analytics.cohorts.edge.every((color) => color === 'rgb(94, 234, 212)') &&

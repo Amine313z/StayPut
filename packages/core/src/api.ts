@@ -1426,6 +1426,26 @@ export interface WeeklyReportsView {
   reports: SentWeeklyReport[];
 }
 
+/**
+ * GET and PUT /api/creator/:companyId/benchmarks (SPEC Phase 6.10): the community's retention next
+ * to its niche's, for a community that shares its own, anonymously.
+ */
+export interface BenchmarksView {
+  /** The community shares its figures (anonymously) and sees its niche's. */
+  optedIn: boolean;
+  niche: Niche;
+  /** The communities a niche's figure needs before it shows. */
+  minimum: number;
+  /**
+   * Members who joined in the last 6 months still there after 30, 60 and 90 days: the
+   * community's share (null while too few are old enough) and its niche's (null while fewer than
+   * `minimum` communities share theirs, or while this one does not).
+   */
+  horizons: { days: CohortHorizon; mine: number | null; niche: number | null }[];
+  /** When the niche's figures were last made; null before. */
+  computedAt: string | null;
+}
+
 /** GET /health */
 export interface HealthReport {
   status: 'ok' | 'degraded';

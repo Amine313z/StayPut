@@ -1,4 +1,7 @@
 import {
+  BENCHMARK_MINIMUM,
+  BENCHMARK_MIN_MEMBERS,
+  BENCHMARK_MONTHS,
   COHORT_HORIZONS,
   DEFAULT_HIGH_FROM,
   DEFAULT_MEDIUM_FROM,
@@ -17,6 +20,7 @@ import {
   type ActionView,
   type ActionsPage,
   type AlumniView,
+  type BenchmarksView,
   type CohortCounts,
   type CohortHorizon,
   type DiscordChannelChoice,
@@ -148,6 +152,9 @@ export interface DemoPages {
   ) => Record<AccountPlatform, { linked: boolean; messages: number; lastAt: number | null }>;
   riskSettings: () => RiskSettingsView;
   saveRiskSettings: (next: RiskSettingsView) => RiskSettingsView;
+  /** Analytics › Overview, « Communities like yours » (SPEC 6.10): shared, and the switch. */
+  benchmarks: () => BenchmarksView;
+  setBenchmarks: (optedIn: boolean) => BenchmarksView;
   alumni: () => AlumniView;
   discordChannels: () => DiscordChannelChoice[];
   saveDiscordChannels: (ids: readonly string[]) => DiscordChannelChoice[];
@@ -487,7 +494,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
   // ---- Analytics: the months of arrival, and the lessons members stall after ----
   // Members arrive through each month; a month counts at a horizon once its members are old
   // enough. July's arrivals left faster (a summer cohort): the analysis flags it.
-  const RATES: Record<CohortHorizon, number> = { 30: 0.09, 60: 0.14, 90: 0.19 };
+  const RATES: Record<CohortHorizon, number> = { 30: 0.09, 60: 0.14, 90: 0.22 };
   const cohortCounts: CohortCounts[] = [];
   const today = new Date(now);
   for (let back = 7; back >= 0; back--) {
@@ -977,6 +984,36 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     highFrom: DEFAULT_HIGH_FROM,
   };
 
+  /**
+   * « Communities like yours » (SPEC 6.10): the demo's own retention, its arrivals of the last 6
+   * months pooled as the Worker counts them; its niche's, imaginary like the rest, shown while it
+   * shares (the demo opens sharing, to show what a creator gets).
+   */
+  const NICHE_RETENTION: Record<CohortHorizon, number> = { 30: 0.86, 60: 0.8, 90: 0.74 };
+  let sharing = true;
+  const benchmarksView = (): BenchmarksView => {
+    const since = localDay(new Date(today.getFullYear(), today.getMonth() - BENCHMARK_MONTHS, 1));
+    const recent = cohortCounts.filter((cohort) => cohort.month >= since);
+    return {
+      optedIn: sharing,
+      niche: riskSettings.niche,
+      minimum: BENCHMARK_MINIMUM,
+      horizons: COHORT_HORIZONS.map((days) => {
+        const eligible = recent.reduce((total, cohort) => total + cohort.eligible[days], 0);
+        const left = recent.reduce((total, cohort) => total + cohort.left[days], 0);
+        return {
+          days,
+          mine:
+            eligible >= BENCHMARK_MIN_MEMBERS
+              ? Math.round((1 - left / eligible) * 10_000) / 10_000
+              : null,
+          niche: sharing ? NICHE_RETENTION[days] : null,
+        };
+      }),
+      computedAt: sharing ? lastMonday.toISOString() : null,
+    };
+  };
+
   const memberPlatforms = (memberId: string) => {
     const of = (platform: AccountPlatform) => {
       const mine = on(platform).filter((a) => a.status === 'member' && a.member?.id === memberId);
@@ -1161,6 +1198,11 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       return accountsView();
     },
     riskSettings: () => riskSettings,
+    benchmarks: () => benchmarksView(),
+    setBenchmarks: (optedIn) => {
+      sharing = optedIn;
+      return benchmarksView();
+    },
     saveRiskSettings: (next) => {
       riskSettings = { ...next, weights: normalizeWeights(next.weights) };
       return riskSettings;

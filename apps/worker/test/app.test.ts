@@ -26,6 +26,7 @@ import type {
   SyncRun,
   SyncStatus,
   WeeklyReportsView,
+  BenchmarksView,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS } from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
@@ -1785,6 +1786,36 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
       reasons: [],
     });
     expect(overview.activity).toHaveLength(30);
+  });
+
+  it('reads the benchmarks and shares the community’s figures on demand', async () => {
+    const { request } = setup({
+      'user_rita:biz_Bench1': 'admin',
+      'user_sam:biz_Bench1': 'customer',
+    });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Bench1/session', init);
+    await settle();
+    const path = '/api/creator/biz_Bench1/benchmarks';
+    const response = await request(path, init);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      optedIn: false,
+      minimum: 5,
+      horizons: [
+        { days: 30, mine: null, niche: null },
+        { days: 60, mine: null, niche: null },
+        { days: 90, mine: null, niche: null },
+      ],
+      computedAt: null,
+    });
+    const on = await request(path, put(init, { optedIn: true }));
+    expect(((await on.json()) as BenchmarksView).optedIn).toBe(true);
+    expect((await request(path, put(init, { optedIn: 1 }))).status).toBe(400);
+    await settle();
+    const customer = await asUser('user_sam');
+    expect((await request(path, customer)).status).toBe(403);
+    expect((await request(path, put(customer, { optedIn: false }))).status).toBe(403);
   });
 
   it('reads the Monday reports and turns them off and on (Analytics › Reports)', async () => {

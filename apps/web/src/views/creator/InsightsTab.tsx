@@ -24,6 +24,7 @@ import { DashKey, ForecastChart } from '../../ui/charts/ForecastChart';
 import { LessonBars } from '../../ui/charts/LessonBars';
 import { RetentionChart } from '../../ui/charts/RetentionChart';
 import { useCreatorData } from '../CreatorView';
+import { Benchmarks } from './Benchmarks';
 
 /** Lessons shown before « Show all »; bars drawn above the table. */
 const LESSON_PREVIEW = 8;
@@ -64,6 +65,7 @@ export function OverviewTab() {
         <Reasons view={view} />
         <Activity view={view} />
       </div>
+      <Benchmarks api={api} />
     </div>
   );
 }

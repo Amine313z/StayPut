@@ -2,6 +2,7 @@ import { EXECUTE_BATCH, executeDueActions, prepareActions } from './actions';
 import { planRescues } from './space';
 import type { CronJob } from './cron';
 import { scoreDueCompanies } from './risk';
+import { refreshBenchmarks } from './benchmarks';
 import { sendWeeklyReports } from './reports';
 import { recordSaves } from './saves';
 import { SYNC_REQUEST_BUDGET, summarize, syncDueCompanies } from './sync';
@@ -138,5 +139,18 @@ export const weeklyReports: CronJob = {
     if (sent.length + failed.length > 0) {
       console.info(`Monday reports: ${sent.length} sent, ${failed.length} refused.`);
     }
+  },
+};
+
+/**
+ * SPEC Phase 6.10, every Monday: the niches' anonymous retention, from the communities that share
+ * theirs (after the week's analyses, which the hourly scoring runs).
+ */
+export const benchmarks: CronJob = {
+  name: 'benchmarks',
+  async run({ db, now }) {
+    if (!db) return;
+    const rows = await refreshBenchmarks(db, now);
+    console.info(`Benchmarks: ${rows} figure(s) made.`);
   },
 };

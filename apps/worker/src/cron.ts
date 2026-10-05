@@ -4,6 +4,7 @@ import type { DiscordClient } from './discord';
 import type { TelegramClient } from './telegram';
 import type { Config } from './env';
 import {
+  benchmarks,
   countSaves,
   refreshStats,
   replayWebhooks,
@@ -42,12 +43,12 @@ export interface CronJob {
  * each run reads the companies that waited longest, so that the free plan's 50 subrequests per
  * run still cover every company each hour (DECISIONS.md). Every hour, scores (3), due actions
  * (4), the money they saved (6) and, on Mondays from 8:00 where each community is, its Monday
- * report (6.9); every week, cohorts and blocking lessons (3).
+ * report (6.9); every Monday, the niches' anonymous benchmarks (6.10).
  */
 export const SCHEDULE: Readonly<Record<string, readonly CronJob[]>> = {
   [SYNC_CRON]: [replayWebhooks, syncWithWhop, refreshStats],
   [HOURLY_CRON]: [scoreMembers, runActions, countSaves, weeklyReports],
-  [WEEKLY_CRON]: [],
+  [WEEKLY_CRON]: [benchmarks],
 };
 
 /**

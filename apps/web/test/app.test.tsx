@@ -37,6 +37,7 @@ import type {
   SyncStatus,
   SentWeeklyReport,
   WeeklyReportsView,
+  BenchmarksView,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS, forecastRevenue } from '@stayput/core';
 import type { Locale } from '@stayput/i18n';
@@ -2897,6 +2898,94 @@ describe('Analytics › Overview (brief v4 §9.5)', () => {
     await vi.waitFor(() => expect(figures()[0]).toBe(`+${usd(half.gain)}`));
     expect(figures()[2]).toBe(usd(full.total.doNothing));
     expect(forecast.textContent).toContain('50% of your members at risk');
+  });
+
+  it('compares retention with the niche once the community shares its own', async () => {
+    const shy: BenchmarksView = {
+      optedIn: false,
+      niche: 'trading',
+      minimum: 5,
+      horizons: [
+        { days: 30, mine: 0.9, niche: null },
+        { days: 60, mine: 0.8, niche: null },
+        { days: 90, mine: null, niche: null },
+      ],
+      computedAt: null,
+    };
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/insights/overview': [{ status: 200, body: OVERVIEW }],
+      '/api/creator/biz_A1/benchmarks': [{ status: 200, body: shy }],
+      'PUT /api/creator/biz_A1/benchmarks': [
+        {
+          status: 200,
+          body: {
+            ...shy,
+            optedIn: true,
+            horizons: [
+              { days: 30, mine: 0.9, niche: 0.85 },
+              { days: 60, mine: 0.8, niche: 0.8 },
+              { days: 90, mine: null, niche: 0.7 },
+            ],
+            computedAt: '2026-10-05T07:30:00.000Z',
+          },
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/insights');
+    const section = (
+      await screen.findByRole('heading', { name: 'Communities like yours' })
+    ).closest('section')!;
+    await vi.waitFor(() =>
+      expect(section.textContent).toContain(
+        'Share your figures to compare them with your niche’s.',
+      ),
+    );
+    expect(section.textContent).toContain('never a name nor a community’s own figures');
+    expect(within(section).queryByRole('table')).toBeNull();
+    const toggle = within(section).getByRole('switch', { name: 'Share my figures anonymously' });
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(toggle);
+    await vi.waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+    expect(bodies.get('PUT /api/creator/biz_A1/benchmarks')).toEqual({ optedIn: true });
+    // The figures as a table for screen readers; the bars say how far apart they are.
+    const rows = within(within(section).getByRole('table')).getAllByRole('row').slice(1);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'After 30 days90%85%',
+      'After 60 days80%80%',
+      'After 90 daysToo few members old enough yet70%',
+    ]);
+    expect(section.textContent).toContain('5 pts above');
+    expect(section.textContent).toContain('Same as them');
+  });
+
+  it('says when too few communities of the niche share yet', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/insights/overview': [{ status: 200, body: OVERVIEW }],
+      '/api/creator/biz_A1/benchmarks': [
+        {
+          status: 200,
+          body: {
+            optedIn: true,
+            niche: 'fitness',
+            minimum: 5,
+            horizons: [
+              { days: 30, mine: 0.9, niche: null },
+              { days: 60, mine: 0.8, niche: null },
+              { days: 90, mine: 0.7, niche: null },
+            ],
+            computedAt: null,
+          } satisfies BenchmarksView,
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/insights', 'fr');
+    expect(
+      await screen.findByText(
+        'Pas encore assez de communautés « Fitness » ne partagent leurs chiffres : il en faut au moins 5. Les vôtres comptent dès lundi prochain.',
+      ),
+    ).toBeTruthy();
   });
 
   it('shows why members leave as a donut, and what they did over 30 days', async () => {
