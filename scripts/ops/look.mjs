@@ -660,6 +660,20 @@ report.analytics.reports = await desktop.page.evaluate(() => ({
   switchOn: document.querySelector('[role="switch"]')?.getAttribute('aria-checked') === 'true',
 }));
 await desktop.page.screenshot({ path: `${out}/analytics-reports-1440.png`, fullPage: true });
+// Settings › General, the « Verified retention » badge (SPEC 6.11): drawn, its code, its page
+// greyed in the demo.
+await desktop.page.goto(`${base}/demo/settings`, { waitUntil: 'domcontentloaded' });
+await desktop.page.locator('[data-badge] img').waitFor({ timeout: 30_000 });
+report.badge = await desktop.page.evaluate(() => ({
+  alt: document.querySelector('[data-badge] img')?.getAttribute('alt') ?? null,
+  code: /<img src="[^"]+\/badge\/biz_[A-Za-z]+\.svg"/.test(
+    document.querySelector('[data-badge] textarea')?.value ?? '',
+  ),
+  greyed: document.querySelectorAll('[data-badge] [data-demo-disabled]').length,
+}));
+await desktop.page
+  .locator('section:has([data-badge])')
+  .screenshot({ path: `${out}/settings-badge.png` });
 
 // Automations › Queue › History: what came of each action, the proof of value (block 4).
 await desktop.page.goto(`${base}/demo/actions/queue/history`, { waitUntil: 'domcontentloaded' });
@@ -939,6 +953,9 @@ const ok =
   report.analytics.lessons.bars > 0 &&
   report.analytics.lessons.flagged > 0 &&
   report.analytics.reports.weeks === 6 &&
+  /^Verified retention: \d+% at 90 days$/.test(report.badge.alt ?? '') &&
+  report.badge.code &&
+  report.badge.greyed === 1 &&
   report.analytics.reports.sent &&
   report.analytics.reports.switchOn;
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);

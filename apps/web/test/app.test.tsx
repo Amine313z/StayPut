@@ -38,6 +38,7 @@ import type {
   SentWeeklyReport,
   WeeklyReportsView,
   BenchmarksView,
+  BadgeView,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS, forecastRevenue } from '@stayput/core';
 import type { Locale } from '@stayput/i18n';
@@ -4947,6 +4948,68 @@ describe('the creator’s frame', () => {
     const developer = screen.getByRole('heading', { name: 'Developer' }).closest('section')!;
     expect(within(developer).getByText('biz_A1')).toBeTruthy();
     expect(within(developer).getByRole('button', { name: 'Copy' })).toBeTruthy();
+  });
+
+  it('turns the verified retention badge on, shows it, and gives the code to paste', async () => {
+    const OFF: BadgeView = {
+      enabled: false,
+      retention: 0.85,
+      members: 40,
+      locale: 'en',
+      badgeUrl: 'https://stayput.example/badge/biz_A1.svg',
+      verifyUrl: 'https://stayput.example/verify/biz_A1',
+    };
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/badge': [{ status: 200, body: OFF }],
+      'PUT /api/creator/biz_A1/badge': [{ status: 200, body: { ...OFF, enabled: true } }],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    const card = (await screen.findByRole('heading', { name: 'Verified retention badge' })).closest(
+      'section',
+    )!;
+    expect(await within(card).findByText('Off: the badge and its page show nothing.')).toBeTruthy();
+    fireEvent.click(within(card).getByRole('switch', { name: 'Show my badge' }));
+    // The badge as it shows on a sales page: drawn here, the same as the Worker serves.
+    const image = await within(card).findByRole<HTMLImageElement>('img', {
+      name: 'Verified retention: 85% at 90 days',
+    });
+    expect(image.src).toMatch(/^data:image\/svg\+xml/);
+    expect(bodies.get('PUT /api/creator/biz_A1/badge')).toEqual({ enabled: true });
+    expect(
+      within(card).getByRole<HTMLTextAreaElement>('textbox', {
+        name: 'Code to paste on your sales page',
+      }).value,
+    ).toBe(
+      '<a href="https://stayput.example/verify/biz_A1" target="_blank" rel="noopener"><img src="https://stayput.example/badge/biz_A1.svg" alt="Verified retention: 85% at 90 days" height="20"></a>',
+    );
+    expect(within(card).getByRole('button', { name: 'Copy the code' })).toBeTruthy();
+    expect(card.textContent).toContain('40 of them more than 90 days ago');
+  });
+
+  it('says when the badge will appear, with too few members yet', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/badge': [
+        {
+          status: 200,
+          body: {
+            enabled: true,
+            retention: null,
+            members: 4,
+            locale: 'fr',
+            badgeUrl: 'https://stayput.example/badge/biz_A1.svg',
+            verifyUrl: 'https://stayput.example/verify/biz_A1',
+          } satisfies BadgeView,
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/settings', 'fr');
+    expect(
+      await screen.findByText(
+        'Votre badge apparaît dès qu’au moins 10 membres sont arrivés il y a plus de 90 jours (4 pour l’instant).',
+      ),
+    ).toBeTruthy();
   });
 
   it('lists the other sections under « More » on a phone', async () => {

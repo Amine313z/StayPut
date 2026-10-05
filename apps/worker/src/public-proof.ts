@@ -90,7 +90,7 @@ const STYLE = [
   BAR_STYLE,
 ].join('');
 
-function escape(text: string): string {
+export function escape(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -117,7 +117,7 @@ async function sha256Base64(text: string): Promise<string> {
 }
 
 /** The page's headers: HTML, and a policy that allows its own style and nothing else. */
-async function headers(): Promise<Record<string, string>> {
+export async function headers(): Promise<Record<string, string>> {
   return {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Security-Policy':
@@ -126,7 +126,12 @@ async function headers(): Promise<Record<string, string>> {
   };
 }
 
-function page(locale: TemplateLocale, title: string, body: string, description: string): string {
+export function page(
+  locale: TemplateLocale,
+  title: string,
+  body: string,
+  description: string,
+): string {
   return [
     '<!doctype html>',
     `<html lang="${locale}">`,

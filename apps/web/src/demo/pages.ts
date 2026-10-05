@@ -1,4 +1,6 @@
 import {
+  BADGE_MIN_MEMBERS,
+  BADGE_MONTHS,
   BENCHMARK_MINIMUM,
   BENCHMARK_MIN_MEMBERS,
   BENCHMARK_MONTHS,
@@ -20,6 +22,7 @@ import {
   type ActionView,
   type ActionsPage,
   type AlumniView,
+  type BadgeView,
   type BenchmarksView,
   type CohortCounts,
   type CohortHorizon,
@@ -56,6 +59,9 @@ const DAY = 24 * HOUR;
  * community's page. « Open » is disabled in the demo (ui/ExternalLink.tsx).
  */
 export const DEMO_ALUMNI_URL = 'https://whop.com/your-community/alumni';
+
+/** The demo's company id in its badge's addresses: an example, never served. */
+export const DEMO_BADGE_ID = 'biz_AtlasTradingClub';
 
 /** An offer applied to a membership, as the home counts them (the Worker's list). */
 const OFFER_TYPES: readonly ActionType[] = [
@@ -155,6 +161,9 @@ export interface DemoPages {
   /** Analytics › Overview, « Communities like yours » (SPEC 6.10): shared, and the switch. */
   benchmarks: () => BenchmarksView;
   setBenchmarks: (optedIn: boolean) => BenchmarksView;
+  /** Settings › General, the « Verified retention » badge (SPEC 6.11), at `origin`. */
+  badge: (origin: string) => BadgeView;
+  setBadge: (enabled: boolean, origin: string) => BadgeView;
   alumni: () => AlumniView;
   discordChannels: () => DiscordChannelChoice[];
   saveDiscordChannels: (ids: readonly string[]) => DiscordChannelChoice[];
@@ -989,6 +998,26 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
    * months pooled as the Worker counts them; its niche's, imaginary like the rest, shown while it
    * shares (the demo opens sharing, to show what a creator gets).
    */
+  /**
+   * The « Verified retention » badge: on, its figure from the demo's own arrivals of 12 months,
+   * as the Worker counts it; its addresses on the demo's own origin, never served.
+   */
+  let badgeOn = true;
+  const badgeView = (origin: string): BadgeView => {
+    const since = localDay(new Date(today.getFullYear(), today.getMonth() - BADGE_MONTHS, 1));
+    const recent = cohortCounts.filter((cohort) => cohort.month >= since);
+    const members = recent.reduce((total, cohort) => total + cohort.eligible[90], 0);
+    const left = recent.reduce((total, cohort) => total + cohort.left[90], 0);
+    return {
+      enabled: badgeOn,
+      retention:
+        members >= BADGE_MIN_MEMBERS ? Math.round((1 - left / members) * 10_000) / 10_000 : null,
+      members,
+      locale: 'en',
+      badgeUrl: `${origin}/badge/${DEMO_BADGE_ID}.svg`,
+      verifyUrl: `${origin}/verify/${DEMO_BADGE_ID}`,
+    };
+  };
   const NICHE_RETENTION: Record<CohortHorizon, number> = { 30: 0.86, 60: 0.8, 90: 0.74 };
   let sharing = true;
   const benchmarksView = (): BenchmarksView => {
@@ -1198,6 +1227,11 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       return accountsView();
     },
     riskSettings: () => riskSettings,
+    badge: (origin) => badgeView(origin),
+    setBadge: (enabled, origin) => {
+      badgeOn = enabled;
+      return badgeView(origin);
+    },
     benchmarks: () => benchmarksView(),
     setBenchmarks: (optedIn) => {
       sharing = optedIn;

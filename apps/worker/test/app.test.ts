@@ -27,6 +27,7 @@ import type {
   SyncStatus,
   WeeklyReportsView,
   BenchmarksView,
+  BadgeView,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS } from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
@@ -633,7 +634,7 @@ describe('POST /webhooks/whop', () => {
 });
 
 describe('reserved and unknown routes', () => {
-  it('answers the public badge and proof routes with 404 until their phase', async () => {
+  it('answers the public badge and proof routes with 404 when there is nothing to show', async () => {
     const { request } = setup();
     expect((await request('/badge/biz_A1.svg')).status).toBe(404);
     expect((await request('/badge/whatever.png')).status).toBe(400);
@@ -1786,6 +1787,49 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
       reasons: [],
     });
     expect(overview.activity).toHaveLength(30);
+  });
+
+  it('serves the verified retention badge and its page once the team turns it on', async () => {
+    const { request } = setup({ 'user_rita:biz_Badge1': 'admin' });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Badge1/session', init);
+    await settle();
+    // 40 members old enough over the last 12 months, 6 of them gone within 90 days.
+    const month = new Date(Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth() - 5, 1));
+    await t.db.query(
+      `insert into stayput.cohort_stats (company_id, cohort_month, members, left_by_90,
+                                         eligible_90, computed_at)
+       values ('biz_Badge1', $1::date, 40, 6, 40, $2::timestamptz)`,
+      [month.toISOString().slice(0, 10), NOW.toISOString()],
+    );
+    const path = '/api/creator/biz_Badge1/badge';
+    const off = (await (await request(path, init)).json()) as BadgeView;
+    expect(off).toMatchObject({ enabled: false, retention: 0.85, members: 40, locale: 'en' });
+    expect(off.badgeUrl).toBe('http://localhost/badge/biz_Badge1.svg');
+    expect(off.verifyUrl).toBe('http://localhost/verify/biz_Badge1');
+    // Off: nothing public.
+    expect((await request('/badge/biz_Badge1.svg')).status).toBe(404);
+    expect((await request('/verify/biz_Badge1')).status).toBe(404);
+
+    const on = await request(path, put(init, { enabled: true }));
+    expect(((await on.json()) as BadgeView).enabled).toBe(true);
+    const svg = await request('/badge/biz_Badge1.svg');
+    expect(svg.status).toBe(200);
+    expect(svg.headers.get('content-type')).toBe('image/svg+xml; charset=utf-8');
+    expect(svg.headers.get('cache-control')).toBe('public, max-age=3600');
+    const drawing = await svg.text();
+    expect(drawing).toContain('<title>Verified retention: 85% at 90 days</title>');
+    const verify = await request('/verify/biz_Badge1');
+    expect(verify.status).toBe(200);
+    const html = await verify.text();
+    expect(html).toContain('Retention verified by StayPut');
+    expect(html).toContain(
+      'of the members who joined in the last 12 months stayed 90 days or more.',
+    );
+    expect(html).toContain('40 members counted');
+    expect((await request(path, put(init, { enabled: 'yes' }))).status).toBe(400);
+    await request(path, put(init, { enabled: false }));
+    expect((await request('/badge/biz_Badge1.svg')).status).toBe(404);
   });
 
   it('reads the benchmarks and shares the community’s figures on demand', async () => {

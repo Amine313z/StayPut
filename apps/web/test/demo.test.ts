@@ -756,6 +756,19 @@ describe('« Communities like yours » in the demo (SPEC Phase 6.10)', () => {
   });
 });
 
+describe('the « Verified retention » badge in the demo (SPEC Phase 6.11)', () => {
+  it('shows the demo’s own retention at 90 days, from its arrivals of 12 months', () => {
+    const world = createWorld(NOW);
+    const view = world.pages.badge('https://demo.example');
+    expect(view).toMatchObject({ enabled: true, locale: 'en' });
+    expect(view.retention).toBeGreaterThan(0.5);
+    expect(view.retention).toBeLessThan(1);
+    expect(view.members).toBeGreaterThanOrEqual(10);
+    expect(view.badgeUrl).toBe('https://demo.example/badge/biz_AtlasTradingClub.svg');
+    expect(world.pages.setBadge(false, 'https://demo.example').enabled).toBe(false);
+  });
+});
+
 describe('Analytics › Reports in the demo (SPEC Phase 6.9)', () => {
   const world = createWorld(NOW);
   const view = world.reports();

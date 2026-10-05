@@ -2,6 +2,7 @@ import type { AccessLevel } from './access';
 import type { ActionType, BlockReason } from './actions';
 import type { CohortHorizon } from './analyses';
 import type { AnnounceTarget } from './announcements';
+import type { BadgeLocale } from './badge';
 import type { ProofLevel, TestimonialDisplay } from './testimonials';
 import type { BadgeCode, GoalCategory, GoalEntry, GoalProposal, Milestone } from './goals';
 import type {
@@ -1444,6 +1445,26 @@ export interface BenchmarksView {
   horizons: { days: CohortHorizon; mine: number | null; niche: number | null }[];
   /** When the niche's figures were last made; null before. */
   computedAt: string | null;
+}
+
+/**
+ * GET and PUT /api/creator/:companyId/badge (SPEC Phase 6.11): the « Verified retention » badge,
+ * on or off, its figure, and where it lives once on.
+ */
+export interface BadgeView {
+  enabled: boolean;
+  /**
+   * Members who joined in the last 12 months still there after 90 days (BADGE_MONTHS); null
+   * while fewer than BADGE_MIN_MEMBERS are old enough, and the badge then shows nowhere.
+   */
+  retention: number | null;
+  /** The members the figure counts: those who joined at least 90 days ago. */
+  members: number;
+  /** The badge's language: the community's. */
+  locale: BadgeLocale;
+  /** Absolute addresses, to paste on a sales page: the image and its verification page. */
+  badgeUrl: string;
+  verifyUrl: string;
 }
 
 /** GET /health */

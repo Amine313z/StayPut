@@ -1610,6 +1610,19 @@ export const fr: Messages = {
   'bench.diff.up': '{points} pts au-dessus',
   'bench.diff.down': '{points} pts en dessous',
   'bench.diff.same': 'Comme elles',
+  'badge.title': 'Badge « Rétention vérifiée »',
+  'badge.description':
+    'Votre vraie rétention à 90 jours, comptée par StayPut depuis Whop, à montrer sur votre page de vente. Il renvoie vers une page qui explique comment elle est comptée.',
+  'badge.switch': 'Afficher mon badge',
+  'badge.off': 'Désactivé : le badge et sa page n’affichent rien.',
+  'badge.waiting':
+    'Votre badge apparaît dès qu’au moins {minimum} membres sont arrivés il y a plus de 90 jours ({members} pour l’instant).',
+  'badge.counted':
+    'Les membres arrivés ces 12 derniers mois, dont {members} il y a plus de 90 jours. Mis à jour chaque lundi.',
+  'badge.code': 'Code à coller sur votre page de vente',
+  'badge.copy': 'Copier le code',
+  'badge.copied': 'Copié',
+  'badge.verify': 'Ouvrir la page de vérification',
   'activity30.title': 'Activité des membres (30 j)',
   'activity30.total.one': '{count} action sur les 30 derniers jours',
   'activity30.total.other': '{count} actions sur les 30 derniers jours',

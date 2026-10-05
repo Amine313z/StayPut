@@ -1,5 +1,5 @@
 -- StayPut: the whole database schema, for a new Supabase project or to update one.
--- Generated from supabase/migrations (0001_foundation.sql to 0036_benchmarks.sql) by `npm run db:bundle`:
+-- Generated from supabase/migrations (0001_foundation.sql to 0037_badge.sql) by `npm run db:bundle`:
 -- do not edit.
 --
 -- Supabase -> SQL Editor -> New query -> paste this whole file -> Run. Only the migrations not
@@ -9627,6 +9627,39 @@ revoke all on function stayput.refresh_benchmarks(timestamptz) from public;
 revoke all on function stayput.save_benchmarks_setting(text, boolean) from public;
 $migration$;
   insert into stayput.schema_migrations (name) values ('0036_benchmarks.sql');
+end $install$;
+
+-- ==========================================================================================
+-- 0037_badge.sql
+-- ==========================================================================================
+
+do $install$
+begin
+  if exists (select 1 from stayput.schema_migrations where name = '0037_badge.sql') then
+    raise notice 'already applied: 0037_badge.sql';
+    return;
+  end if;
+  execute $migration$
+-- The « Verified retention » badge (SPEC Phase 6.11): on or off for each community
+-- (company_settings.options.public_badge, off by default since 0001). Once on, /badge/:id.svg
+-- shows the share of its members who joined in the last 12 months still there after 90 days (the
+-- weekly analyses, cohort_stats), and /verify/:id says how it was counted.
+
+create function stayput.save_badge_setting(p_company text, p_enabled boolean)
+returns void
+language plpgsql set search_path = ''
+as $$
+begin
+  insert into stayput.company_settings (company_id) values (p_company) on conflict do nothing;
+  update stayput.company_settings
+     set options = options || jsonb_build_object('public_badge', p_enabled)
+   where company_id = p_company;
+end
+$$;
+
+revoke all on function stayput.save_badge_setting(text, boolean) from public;
+$migration$;
+  insert into stayput.schema_migrations (name) values ('0037_badge.sql');
 end $install$;
 
 commit;

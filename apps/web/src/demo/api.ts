@@ -94,6 +94,8 @@ export async function answerDemo(method: string, path: string, body: unknown): P
         return answer(demo.reports());
       case 'benchmarks':
         return answer(pages.benchmarks());
+      case 'badge':
+        return answer(pages.badge(window.location.origin));
     }
     if (/^discord\/[^/]+\/channels$/.test(route)) return answer(pages.discordChannels());
     // Integrations › Discord and › Telegram (fix prompt v4.1, block 7).
@@ -164,6 +166,11 @@ export async function answerDemo(method: string, path: string, body: unknown): P
     return answer(pages.saveRiskSettings(body as RiskSettingsView));
   }
   if (method === 'POST' && route === 'alumni') return answer(pages.alumni());
+  if (method === 'PUT' && route === 'badge') {
+    const enabled = (body as { enabled?: unknown } | null)?.enabled;
+    if (typeof enabled !== 'boolean') throw new ApiError('invalid_request', 'expected { enabled }');
+    return answer(pages.setBadge(enabled, window.location.origin));
+  }
   if (method === 'PUT' && route === 'benchmarks') {
     const optedIn = (body as { optedIn?: unknown } | null)?.optedIn;
     if (typeof optedIn !== 'boolean') throw new ApiError('invalid_request', 'expected { optedIn }');

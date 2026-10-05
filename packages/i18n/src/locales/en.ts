@@ -1565,6 +1565,19 @@ export const en = {
   'bench.diff.up': '{points} pts above',
   'bench.diff.down': '{points} pts below',
   'bench.diff.same': 'Same as them',
+  'badge.title': 'Verified retention badge',
+  'badge.description':
+    'Your real retention at 90 days, counted by StayPut from Whop, to show on your sales page. It links to a page that says how it was counted.',
+  'badge.switch': 'Show my badge',
+  'badge.off': 'Off: the badge and its page show nothing.',
+  'badge.waiting':
+    'Your badge appears once at least {minimum} members joined more than 90 days ago ({members} so far).',
+  'badge.counted':
+    'Members who joined in the last 12 months, {members} of them more than 90 days ago. Updated every Monday.',
+  'badge.code': 'Code to paste on your sales page',
+  'badge.copy': 'Copy the code',
+  'badge.copied': 'Copied',
+  'badge.verify': 'Open the verification page',
   'activity30.title': 'Member activity (30d)',
   'activity30.total.one': '{count} action over the last 30 days',
   'activity30.total.other': '{count} actions over the last 30 days',

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { putJson, useApi } from '../../api';
+import { BadgeCard } from '../../components/BadgeCard';
 import { LEVELS } from '../../components/Risk';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { useI18n } from '../../i18n';
@@ -79,13 +80,13 @@ function WithRiskSettings({ children }: { children: (settings: RiskSettingsView)
 }
 
 /**
- * Settings › General: the language (the only place it changes, English by default) and what a
- * developer or Whop's support asks for, the community's id. There is no theme to choose: dark is
- * StayPut's only one.
+ * Settings › General: the language (the only place it changes, English by default), the « Verified
+ * retention » badge (SPEC 6.11) and what a developer or Whop's support asks for, the community's
+ * id. There is no theme to choose: dark is StayPut's only one.
  */
 export function GeneralSettingsTab() {
   const { t } = useI18n();
-  const { companyId } = useCreatorData();
+  const { companyId, api, integrations } = useCreatorData();
   const languageId = useId();
   const [copied, setCopied] = useState(false);
   return (
@@ -98,6 +99,10 @@ export function GeneralSettingsTab() {
         <LanguageSelect labelledBy={languageId} />
         <p className="mt-3 text-sm">{t('settings.language.members')}</p>
       </Card>
+      <BadgeCard
+        api={api}
+        integrations={integrations.state.status === 'ready' ? integrations.state.data : null}
+      />
       <Card
         icon={<Code aria-hidden="true" className="size-4" />}
         title={t('settings.developer')}

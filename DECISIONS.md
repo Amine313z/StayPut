@@ -3197,3 +3197,43 @@ prévu.
   communauté.
 - `apps/web/test/app.test.tsx` et `demo.test.ts` : l'interrupteur, les écarts, « pas encore
   assez » en français, la démo cohérente.
+
+## 2026-10-05 — Phase 6.11 : le badge « Rétention vérifiée »
+
+### Le chiffre
+
+- La part des membres arrivés ces **12 derniers mois** encore là **90 jours** après leur arrivée,
+  tirée des analyses de la semaine (`cohort_stats`, `left_by_90` / `eligible_90`), donc mise à
+  jour chaque lundi. Il faut au moins **10 membres** arrivés depuis plus de 90 jours ; en dessous,
+  le badge n'apparaît nulle part et Réglages dit combien il en manque.
+- Le créateur ne peut pas le modifier : StayPut le lit des abonnements Whop.
+
+### Public, sur demande
+
+- Désactivé par défaut (`company_settings.options.public_badge`, présent depuis 0001 ; 0037
+  ajoute `save_badge_setting`). Une fois activé :
+  - `/badge/<id>.svg` : l'image (« Verified retention | 92% at 90 days », ou en français selon la
+    langue de la communauté), en cache une heure ;
+  - `/verify/<id>` : la page de vérification, en HTML simple sans script (le style de la page de
+    preuve publique), qui dit le chiffre, ce qu'il compte, combien de membres et la date.
+- Désactivé, communauté de démo, désinstallée ou sans chiffre : les deux adresses répondent 404,
+  sans dire pourquoi.
+
+### Dans l'app
+
+- Réglages › Général : « Badge « Rétention vérifiée » », l'interrupteur, le badge tel qu'il
+  s'affiche (le même dessin que le Worker, `retentionBadgeSvg` dans packages/core), le code HTML
+  à coller sur la page de vente avec « Copier le code », et « Ouvrir la page de vérification »
+  (grisé dans la démo, comme tout lien sortant).
+- La version « marque blanche » du badge (SPEC Phase 7, plan Scale) viendra avec les plans.
+
+### Tests
+
+- `packages/core/test/badge.test.ts` : les mots EN/FR, le dessin (titre pour les lecteurs
+  d'écran, aucun script ni lien).
+- `apps/worker/test/badge-sql.test.ts` : 12 mois, 10 membres au moins, public seulement activé,
+  jamais la démo ni une communauté désinstallée, lu sous RLS par l'équipe.
+- `apps/worker/test/app.test.ts` : l'image et la page de vérification apparaissent quand on
+  l'active, disparaissent quand on le désactive.
+- `apps/web/test/app.test.tsx` et `demo.test.ts` : la carte, le code à coller, le message
+  d'attente en français, la démo.

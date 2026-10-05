@@ -7,6 +7,7 @@ import {
   isCompanyId,
   isMemberId,
   isExperienceId,
+  retentionBadgeSvg,
   isCreatorOfferKind,
   isRuleId,
   isExitReason,
@@ -58,6 +59,7 @@ import { Hono, type Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
+import { readBadge, readPublicBadge, saveBadgeSetting } from './badge';
 import { readBenchmarks, saveBenchmarksSetting } from './benchmarks';
 import { readWeeklyReports, saveWeeklyReportSetting } from './reports';
 import { alumniOfMember, createAlumniOffer, readAlumni } from './alumni';
@@ -116,6 +118,7 @@ import {
   savePlatformSignals,
 } from './platforms';
 import { LATEST_MIGRATION } from './schema-version';
+import { goneVerifyPage, verifyPage } from './public-badge';
 import { goneProofPage, proofPage } from './public-proof';
 import {
   joinRescue,
@@ -886,6 +889,30 @@ export function createApp(deps: AppDeps) {
       return overview ? c.json(overview) : apiError('not_found', 'no such company');
     },
   );
+
+  /**
+   * Settings › General, the « Verified retention » badge (SPEC Phase 6.11): on or off, its figure,
+   * and the addresses to paste, on this Worker.
+   */
+  app.get('/api/creator/:companyId/badge', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const origin = new URL(c.req.url).origin;
+    const view = await readBadge(db, c.get('userId'), c.get('companyId'), deps.now(), origin);
+    return view ? c.json(view) : apiError('not_found', 'no such company');
+  });
+
+  app.put('/api/creator/:companyId/badge', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const body = await c.req.json<unknown>().catch(() => null);
+    const enabled = (body as { enabled?: unknown } | null)?.enabled;
+    if (typeof enabled !== 'boolean') return apiError('invalid_request', 'expected { enabled }');
+    await saveBadgeSetting(db, c.get('companyId'), enabled);
+    const origin = new URL(c.req.url).origin;
+    const view = await readBadge(db, c.get('userId'), c.get('companyId'), deps.now(), origin);
+    return view ? c.json(view) : apiError('not_found', 'no such company');
+  });
 
   /**
    * Analytics › Overview, « Communities like yours » (SPEC Phase 6.10): the community's retention
@@ -2668,13 +2695,39 @@ export function createApp(deps: AppDeps) {
     },
   );
 
-  // The public "Verified retention" badge (SPEC Phase 6): route reserved, answered once a
-  // creator can turn the badge on.
-  app.get('/badge/:file', (c) => {
-    if (!/^biz_[A-Za-z0-9]+\.svg$/.test(c.req.param('file'))) {
-      return apiError('invalid_request', 'expected /badge/<company id>.svg');
+  /**
+   * The public « Verified retention » badge (SPEC Phase 6.11): the community's retention at 90
+   * days as an SVG, once its team turned it on and the figure exists; 404 otherwise, never why.
+   * Cached an hour: the figure changes once a week.
+   */
+  app.get('/badge/:file', withDb, async (c) => {
+    const file = /^(biz_[A-Za-z0-9]+)\.svg$/.exec(c.req.param('file'));
+    if (!file) return apiError('invalid_request', 'expected /badge/<company id>.svg');
+    const db = c.get('db');
+    const badge = db ? await readPublicBadge(db, file[1]!, deps.now()) : null;
+    if (!badge) return apiError('not_found', 'no public badge for this company');
+    return new Response(retentionBadgeSvg(badge.locale, badge.retention), {
+      headers: {
+        'Content-Type': 'image/svg+xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+      },
+    });
+  });
+
+  /** The badge's verification page: the figure, what it counts and when. */
+  app.get('/verify/:companyId', withDb, async (c) => {
+    const companyId = c.req.param('companyId');
+    if (!/^biz_[A-Za-z0-9]+$/.test(companyId)) {
+      return apiError('invalid_request', 'not a company id');
     }
-    return apiError('not_found', 'no public badge for this company');
+    const db = c.get('db');
+    const badge = db ? await readPublicBadge(db, companyId, deps.now()) : null;
+    if (!badge) {
+      const language = c.req.header('accept-language') ?? '';
+      return goneVerifyPage(/^fr\b/i.test(language) ? 'fr' : 'en');
+    }
+    return verifyPage(badge);
   });
 
   /**
