@@ -3599,3 +3599,26 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
 
 - Le déploiement de production n'a pas encore tourné : il attend la base, l'app Whop et les
   réglages (`docs/production.md`, étapes 1 à 3).
+
+## 2026-10-05 — Phase 9.3 : la fiche App Store
+
+- `docs/app-store.md` : le nom, un sous-titre, la description courte (`description` chez Whop,
+  dans les listes et la recherche) et la longue (`app_store_description`, sur la page de l'app),
+  en anglais avec les mots-clés churn, retention, member risk, failed payments, win-back ; la
+  liste des fonctionnalités ; l'icône (`docs/brand-logo-1024.png`) ; les liens légaux. Les textes
+  ne promettent que ce que StayPut fait aujourd'hui (rien sur l'espace membre, éteint en V1). Le
+  prix attend la phase 7.
+- **Les 5 captures** (1920 × 1080) sont faites par `scripts/ops/store.mjs` à chaque Inspect, sur
+  la démo déployée, donc avec les polices de StayPut (Satoshi ne vit que sur le site déployé) :
+  le tableau de bord, les membres classés par risque, la file d'approbation, les paiements
+  refusés relancés et récupérés, l'offre Alumni. Moins d'animation demandé : chaque chiffre est à
+  sa valeur finale. Le bandeau de la démo, son badge et la pastille « Getting started » sont
+  masqués (`data-demo-notice`, `data-demo-badge`, `data-getting-started`) : ils ne font pas partie
+  du produit acheté. Les données restent celles, inventées, de la démo. Copie gardée dans
+  `docs/app-store/`.
+- **Correctif** : une capture montrait « In the Alumni 8.996 ». Un nombre de personnes qui compte
+  jusqu'à sa valeur passait par des décimales (le format des nombres en garde trois) ; arrêté au
+  vol, il les montrait. Les compteurs animés de l'Alumni et des tableaux Discord et Telegram
+  arrondissent maintenant chaque étape, comme ceux du tableau de bord.
+- Whop ne publie pas les dimensions attendues des captures : 1920 × 1080 (16:9) par défaut ; la
+  fenêtre et l'échelle se changent en tête du script.

@@ -127,7 +127,8 @@ jobs:
           STAYPUT_URL: ${{ vars[inputs.target == 'production' && 'PRODUCTION_STAYPUT_URL' || 'STAYPUT_URL'] || env.DEFAULT_URL }}
         run: npm run e2e
 
-  # The deployed demo in a real browser (scripts/ops/look.mjs): whether StayPut's fonts loaded
+  # The deployed demo in a real browser (scripts/ops/look.mjs, and the App Store screenshots of
+  # scripts/ops/store.mjs): whether StayPut's fonts loaded
   # (Satoshi, Geist) and the chart drew its data, and screenshots of the Dashboard. No secret
   # here; its only write is the `screenshots` branch, replaced at each run, where the latest
   # screenshots can be opened on GitHub.
@@ -148,17 +149,24 @@ jobs:
         run: |
           work="$RUNNER_TEMP/look"
           mkdir -p "$work/out"
-          cp scripts/ops/look.mjs "$work/"
+          cp scripts/ops/look.mjs scripts/ops/store.mjs "$work/"
           cd "$work"
           npm init -y > /dev/null
           npm install --no-audit --no-fund playwright-core@1.63.0 > /dev/null
           status=0
           node look.mjs "$STAYPUT_URL" out || status=$?
+          # The App Store listing's five screenshots (docs/app-store.md), in StayPut's own fonts.
+          node store.mjs "$STAYPUT_URL" out/store || status=$?
           {
             echo "### The deployed demo in Chrome"
             echo ""
             echo '```json'
             cat out/report.json 2>/dev/null || echo '{ "error": "no report: see the log" }'
+            echo '```'
+            echo "### The App Store screenshots"
+            echo ""
+            echo '```json'
+            cat out/store/store.json 2>/dev/null || echo '{ "error": "no report: see the log" }'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"

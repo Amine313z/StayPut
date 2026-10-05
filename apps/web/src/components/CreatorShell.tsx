@@ -261,7 +261,10 @@ function TopBar({
             {name ?? t('shell.communityFallback')}
           </span>
           {demo ? (
-            <span className="shrink-0 rounded-full border border-line-strong px-2 py-px text-[0.6875rem] font-medium text-accent">
+            <span
+              data-demo-badge=""
+              className="shrink-0 rounded-full border border-line-strong px-2 py-px text-[0.6875rem] font-medium text-accent"
+            >
               {t('demo.badge')}
             </span>
           ) : null}
@@ -575,6 +578,7 @@ function DemoNotice() {
   return (
     <div
       role="note"
+      data-demo-notice=""
       className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-line px-4 py-1.5 text-[0.8125rem] text-subtle"
     >
       <p className="min-w-0 flex-1 basis-64">{t('demo.notice')}</p>

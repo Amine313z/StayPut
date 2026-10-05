@@ -144,14 +144,14 @@ export function PlatformHero({
                 label={t('platform.hero.active')}
                 tip={t('platform.hero.active.tip', { platform: name })}
                 value={hero.activeMembers7d}
-                format={(n) => number(n)}
+                format={(n) => number(Math.round(n))}
                 better="up"
               />
               <SecondaryMetric
                 label={t('platform.hero.silent')}
                 tip={t('platform.hero.silent.tip', { platform: name })}
                 value={hero.silentMembers7d}
-                format={(n) => number(n)}
+                format={(n) => number(Math.round(n))}
                 better="down"
                 className="sm:self-end"
               />
@@ -161,7 +161,7 @@ export function PlatformHero({
                   members: number(hero.memberMessages30d),
                 })}
                 value={hero.messages30d}
-                format={(n) => number(n)}
+                format={(n) => number(Math.round(n))}
                 better="up"
                 className="sm:self-end"
               />

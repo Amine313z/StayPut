@@ -166,7 +166,7 @@ function AlumniFigures({ view }: { view: AlumniView }) {
           label={t('alumni.figures.in')}
           tip={t('alumni.figures.in.info')}
           value={view.entered}
-          format={number}
+          format={(value) => number(Math.round(value))}
         />
         <SecondaryMetric
           better="up"

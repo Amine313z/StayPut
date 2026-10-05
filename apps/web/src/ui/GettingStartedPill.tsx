@@ -36,7 +36,7 @@ export function GettingStartedPill({
   const [open, setOpen] = useState(done < 2);
   const share = steps.length > 0 ? done / steps.length : 0;
   return (
-    <div className="flex flex-col items-start gap-3">
+    <div data-getting-started="" className="flex flex-col items-start gap-3">
       <button
         type="button"
         aria-expanded={open}
