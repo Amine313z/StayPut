@@ -4938,6 +4938,22 @@ describe('the creator’s frame', () => {
     expect(detectLocale('/demo')).toBe('en');
   });
 
+  it('opens another page at its top, not where the page left was scrolled', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/settings');
+    await screen.findByRole('radiogroup', { name: 'Language' });
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    try {
+      const menu = screen.getByRole('navigation', { name: 'Dashboard sections' });
+      fireEvent.click(within(menu).getByRole('link', { name: 'Dashboard' }));
+      await vi.waitFor(() =>
+        expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'instant' }),
+      );
+    } finally {
+      scrollTo.mockRestore();
+    }
+  });
+
   it('has no theme to choose in Settings › General, and gives the company ID to copy', async () => {
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1/settings');

@@ -85,6 +85,15 @@ export function CreatorShell({
   const [spot, setSpot] = useState<Spot | null>(null);
   // Where the creator was when the tour began: its end (Skip, Escape, Done) brings them back.
   const tourOrigin = useRef<{ path: string; scroll: number } | null>(null);
+  // Another page starts at its top, as on any site: the browser would keep the offset of the
+  // page left (Settings scrolled down, the Dashboard opened halfway). Not while the guide shows
+  // a place: it brings it into view itself.
+  const shownPath = useRef(pathname);
+  useEffect(() => {
+    if (shownPath.current === pathname) return;
+    shownPath.current = pathname;
+    if (spot === null) window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [pathname, spot]);
   const tourTo = (index: number) => {
     const page = pageHref(root, TOUR[index]?.page ?? '');
     if (pathname !== page) void navigate(page);
