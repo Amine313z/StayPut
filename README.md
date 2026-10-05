@@ -9,19 +9,27 @@ il a sauvé.
 - **Phase 0, vérification de l'API Whop** :
   [`docs/whop-api-verification.md`](./docs/whop-api-verification.md).
 - **Décisions techniques** (et leurs raisons) : [`DECISIONS.md`](./DECISIONS.md).
+- **Documentation technique** : [architecture](./docs/architecture.md),
+  [schéma de données](./docs/data-schema.md), [tâches planifiées](./docs/jobs.md),
+  [variables d'environnement](./docs/environment.md), [exploitation](./docs/operations.md)
+  (rotation des clés, rejeu des webhooks, sauvegardes, arrêt d'urgence).
+- **Mise en production** : [`docs/production.md`](./docs/production.md) ; fiche App Store :
+  [`docs/app-store.md`](./docs/app-store.md).
 
 ## État
 
-| Phase                          | Statut                                                    |
-| ------------------------------ | --------------------------------------------------------- |
-| 0. Vérification de l'API Whop  | Validée le 30/09/2026                                     |
-| 1. Fondations                  | Validée le 01/10/2026                                     |
-| 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation |
-| 3. Détection (score de risque) | Faite, en attente de validation                           |
-| 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les droits |
-| 5. Espace membre               | Faite, mise de côté pour la V1 (`MEMBER_SPACE_ENABLED`)   |
-| 6. Preuve de valeur            | En cours : l'argent sauvé (6.4) et l'accueil (6.2) faits  |
-| Refonte du design (v4)         | Étape 1 sur 10 faite (jetons, montants, langue)           |
+| Phase                          | Statut                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| 0. Vérification de l'API Whop  | Validée le 30/09/2026                                                                 |
+| 1. Fondations                  | Validée le 01/10/2026                                                                 |
+| 2. Collecte des données        | Faite (Whop, Discord, Telegram), en attente de validation                             |
+| 3. Détection (score de risque) | Faite, en attente de validation                                                       |
+| 4. Actions                     | Arrêt : démontrée en mode test, le réel attend les permissions de Whop                |
+| 5. Espace membre               | Faite, mise de côté pour la V1 (`MEMBER_SPACE_ENABLED`)                               |
+| 6. Preuve de valeur            | Faite (arrêt du 05/10/2026)                                                           |
+| 7. Formules et prix            | À faire, en dernier                                                                   |
+| 8. Conformité et robustesse    | Faite                                                                                 |
+| 9. Mise en production          | Prête : checklist, fiche App Store, documentation ; la production attend ses réglages |
 
 ## Architecture
 
@@ -36,10 +44,13 @@ de l'iframe n'est envoyé qu'à cette origine) :
 | `/api/*`                               | le Worker (`apps/worker`), jeton Whop vérifié        |
 | `/webhooks/whop`                       | le Worker : signature vérifiée, événement enregistré |
 | `/health`                              | le Worker : état de la base et de la configuration   |
-| `/badge/:companyId.svg`, `/v/:proofId` | le Worker (réservés, remplis en Phases 5 et 6)       |
+| `/privacy`, `/terms`, `/dpa`           | le Worker : les textes légaux, anglais et français   |
+| `/badge/:companyId.svg`, `/verify/…`   | le Worker : le badge de rétention vérifiée           |
+| `/webhooks/telegram`, `/auth/*`        | le Worker : le bot Telegram, Discord et l'OAuth      |
 
 Base : Supabase (Postgres), schéma `stayput`, jamais exposé par l'API publique de Supabase, RLS
-sur chaque table. Le Worker s'y connecte par Hyperdrive. Budget : 0 €.
+sur chaque table. Le Worker s'y connecte par Hyperdrive. Budget : 0 €. Le détail :
+[`docs/architecture.md`](./docs/architecture.md).
 
 ### Le tableau de bord du créateur
 

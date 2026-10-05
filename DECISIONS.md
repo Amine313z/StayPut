@@ -3622,3 +3622,20 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
   arrondissent maintenant chaque étape, comme ceux du tableau de bord.
 - Whop ne publie pas les dimensions attendues des captures : 1920 × 1080 (16:9) par défaut ; la
   fenêtre et l'échelle se changent en tête du script.
+
+## 2026-10-05 — Phase 9.4 : la documentation technique finale
+
+- Dans `/docs`, en français : `architecture.md` (le Worker, la base, une requête, les webhooks, les
+  actions, Discord et Telegram, la démo, la sécurité), `data-schema.md` (chaque table, ce qu'elle
+  garde, qui la lit, combien de temps ; les règles communes ; les fonctions SQL principales),
+  `jobs.md` (les trois déclencheurs et leurs tâches), `environment.md` (chaque variable du
+  Worker, de GitHub et des scripts), `operations.md` (surveiller, rejouer les envois de Whop,
+  changer chaque clé, sauvegarder, arrêter tout en urgence). Le README y renvoie et son état des
+  phases est à jour.
+- **Correctif trouvé en écrivant la rotation des clés** : après un changement du mot de passe de
+  la base, le déploiement ne redonnait pas la connexion à Hyperdrive. Il ne la mettait à jour que
+  si l'hôte, le port, l'utilisateur ou la base changeaient, et Cloudflare ne montre jamais le mot
+  de passe gardé : le Worker serait resté sur l'ancien, sans accès à la base. Chaque déploiement
+  redonne maintenant la connexion à Hyperdrive, qui la vérifie avant de l'accepter.
+- Incertain : les sauvegardes que Supabase garde sur le plan gratuit (le site de Supabase n'est
+  pas joignable d'ici) ; `docs/operations.md` dit où le voir et comment faire une copie à la main.

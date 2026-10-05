@@ -1,8 +1,9 @@
 /**
  * Deployment step (.github/workflows/deploy.yml): makes sure the Hyperdrive configuration
  * "stayput-db" ("stayput-db-production" for production, STAYPUT_TARGET) exists and points at
- * Supabase's direct connection (caching disabled, see DECISIONS.md), then writes its binding into
- * wrangler.toml for this deployment only; the committed file has none.
+ * Supabase's direct connection with the current password (caching disabled, see DECISIONS.md),
+ * then writes its binding into wrangler.toml for this deployment only; the committed file has
+ * none.
  *
  *   tsx scripts/deploy/hyperdrive.ts apps/worker/wrangler.toml
  *
@@ -120,13 +121,20 @@ async function main() {
     config = await findConfig(account, token, name);
     if (!config) throw new Error('the Hyperdrive configuration was not created');
     console.info(`Created Hyperdrive configuration ${name}.`);
-  } else if (!sameOrigin(config.origin, origin)) {
-    // Cloudflare connects to the new origin before accepting it: a wrong one fails here.
+  } else {
+    // Every deployment hands Hyperdrive the connection again: Cloudflare never shows the stored
+    // password, so a new one (a rotation, docs/operations.md) can only be noticed by sending it.
+    // Cloudflare connects to the origin before accepting it: a wrong one fails here.
+    const moved = !sameOrigin(config.origin, origin);
     wranglerHyperdrive(
       ['update', config.id, `--connection-string=${origin}`, '--caching-disabled'],
       cwd,
     );
-    console.info(`Hyperdrive ${name} now goes to ${new URL(origin).hostname}.`);
+    console.info(
+      moved
+        ? `Hyperdrive ${name} now goes to ${new URL(origin).hostname}.`
+        : `Hyperdrive ${name}: connection checked and refreshed.`,
+    );
   }
   writeFileSync(tomlPath, withHyperdriveBinding(readFileSync(tomlPath, 'utf8'), config.id));
   console.info(`Hyperdrive ${name}: ${config.id}`);
