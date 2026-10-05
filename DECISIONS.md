@@ -3520,3 +3520,27 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
 - **Pages légales dans l'app** : la capture d'Inspect montrait la page claire dans la fenêtre
   sombre, avec un double cadre. Ouverte depuis StayPut (`?view=app`), elle prend ses couleurs
   sombres et perd son cadre ; la page publique suit toujours la préférence du navigateur.
+
+## 2026-10-05 — Phase 8.6 : les parcours clés, de bout en bout
+
+- **Dans un vrai navigateur** (`apps/web/e2e/journeys.e2e.ts`, Playwright, Chrome), à chaque
+  envoi sur GitHub (CI, sur la version construite) et à chaque Inspect (sur le site déployé) :
+  1. **Installation** : l'accueil en 4 étapes (le sujet de la communauté, Discord/Telegram, le
+     mode automatique, le premier audit), puis le tableau de bord ; Automatisations affiche bien le
+     mode choisi.
+  2. **Audit** : le filtre « High » de Membres montre autant de lignes qu'il en compte, chacune
+     notée 70 ou plus, et la fiche du premier dit pourquoi.
+  3. **Une action** : proposée dans la file, approuvée, elle passe dans « Scheduled ».
+  4. **La page du membre** : la raison de son départ, l'offre qui y répond (20 % pendant 3 mois),
+     son accord pour garder l'abonnement, puis ce qui en résulte ; jamais de score de risque.
+     Les réponses du serveur y sont données par le test, à la forme de celles du Worker.
+  5. **Un sauvetage attribué** : « Recovered $49.00 » dans l'historique, et le montant du mois sur
+     le tableau de bord.
+     Les parcours du créateur tournent sur la démo (répondue dans le navigateur) : c'est la seule
+     partie du site déployé ouverte sans compte Whop.
+- **Côté Worker** (`apps/worker/test/journey.test.ts`, sur une vraie base Postgres en mémoire,
+  dans `npm run check`) : le même parcours avec le code de production, de bout en bout. Les
+  envois de Whop classés (un membre, son abonnement, un paiement refusé) → le calcul du risque
+  (Bo à risque, à cause du paiement) → en mode automatique, l'avis et la nouvelle tentative
+  planifiés sans approbation puis envoyés par Whop → Whop envoie le paiement réussi → le
+  sauvetage de 49 $ attribué à l'action, une seule fois, et affiché sur le tableau de bord.
