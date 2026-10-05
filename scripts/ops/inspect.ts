@@ -301,6 +301,76 @@ async function main() {
             left join stayput.alumni_offers o on o.company_id = c.company_id`,
       );
     }
+    // The dashboard's proof (SPEC Phase 6): the welcome, the money saved by kind, the departure
+    // answers, the Monday reports (0035), the benchmarks shared (0036), the badge (0037), the
+    // team (0038) and what the Alumni got back (0039). Counts and sums only.
+    const [phase6] = await sql`
+      select to_regclass('stayput.weekly_reports') is not null as present`;
+    if (phase6?.present) {
+      out();
+      table(
+        await sql`
+          select c.niche, s.welcomed_at,
+                 coalesce((s.options ->> 'weekly_report')::boolean, true) as monday_report,
+                 coalesce((s.options ->> 'benchmarks_opt_in')::boolean, false) as shares_figures,
+                 coalesce((s.options ->> 'public_badge')::boolean, false) as public_badge,
+                 (select count(*) from stayput.company_admins a
+                   where a.company_id = c.id) as team_opened
+            from stayput.companies c
+            left join stayput.company_settings s on s.company_id = c.id
+           where c.id = ${id as string}`,
+      );
+      out();
+      table(
+        await sql`
+          select category, save_type, currency, count(*) as saves, sum(amount) as amount,
+                 max(saved_at) as last_saved_at
+            from stayput.saves where company_id = ${id as string}
+           group by 1, 2, 3 order by 1, 2, 3`,
+      );
+      out();
+      table(
+        await sql`
+          select coalesce(reason, 'none') as departure_reason, count(*) as answers,
+                 count(*) filter (where outcome = 'accepted') as offers_accepted
+            from stayput.exit_surveys where company_id = ${id as string}
+           group by 1 order by 2 desc, 1`,
+      );
+      out();
+      table(
+        await sql`
+          select week_start, sent_at, attempts, left(error, 80) as error,
+                 report -> 'saved' ->> 'direct' as saved_direct,
+                 report ->> 'lost' as lost
+            from stayput.weekly_reports where company_id = ${id as string}
+           order by week_start desc limit 4`,
+      );
+      out();
+      table(
+        await sql`
+          select b.metric, b.period_month, b.contributors, b.value
+            from stayput.benchmarks b
+            join stayput.companies c on c.niche = b.niche and c.id = ${id as string}
+           where b.period_month = (select max(period_month) from stayput.benchmarks)
+           order by b.metric`,
+      );
+      out();
+      table(
+        await sql`
+          select (select coalesce(sum(cs.eligible_90), 0) from stayput.cohort_stats cs
+                   where cs.company_id = ${id as string}
+                     and cs.cohort_month >= date_trunc('month', now()) - interval '12 months')
+                   as badge_members,
+                 (select count(*) from stayput.alumni_members a
+                   where a.company_id = ${id as string}) as alumni_ever,
+                 (select coalesce(sum(p.amount), 0) from stayput.alumni_members a
+                   join stayput.payments p
+                     on p.company_id = a.company_id and p.member_id = a.member_id
+                  where a.company_id = ${id as string} and a.status = 'returned'
+                    and p.status in ('succeeded', 'paid') and p.amount > 0
+                    and p.paid_at >= coalesce(a.entered_at, a.departed_at)) as alumni_recovered`,
+      );
+    }
     // The actions (migration 0009): how many of each type are at each step of their cycle,
     // with the reasons the guardrails gave. Counts only.
     const [actions] = await sql`

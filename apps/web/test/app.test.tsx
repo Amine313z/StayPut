@@ -5129,6 +5129,21 @@ describe('the creator’s frame', () => {
         .map((link) => link.textContent),
     ).toEqual(['Integrations', 'Settings']);
   });
+
+  it('shows the demo’s one Whop-shaped id in Settings › Developer, as its badge does', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    renderAt('/demo/settings');
+    const developer = (
+      await screen.findByText('Company ID', undefined, { timeout: 3_000 })
+    ).closest('dl')!;
+    expect(developer.querySelector('code')?.textContent).toBe('biz_AtlasTradingClub');
+    const code = await screen.findByRole<HTMLTextAreaElement>(
+      'textbox',
+      { name: 'Code to paste on your sales page' },
+      { timeout: 3_000 },
+    );
+    expect(code.value).toContain('/badge/biz_AtlasTradingClub.svg');
+  });
 });
 
 describe('the guide (brief v4 §10)', () => {

@@ -10,6 +10,7 @@ import {
   type RevenueDay,
 } from '@stayput/core';
 import { createTranslator } from '@stayput/i18n';
+import { DEMO_WHOP_ID } from '../src/api';
 import { membershipLine } from '../src/components/MemberRows';
 import { renewalText, stateText } from '../src/components/MemberTable';
 import { createWorld } from '../src/demo/world';
@@ -777,6 +778,14 @@ describe('the « Verified retention » badge in the demo (SPEC Phase 6.11)', () 
     expect(view.members).toBeGreaterThanOrEqual(10);
     expect(view.badgeUrl).toBe('https://demo.example/badge/biz_AtlasTradingClub.svg');
     expect(world.pages.setBadge(false, 'https://demo.example').enabled).toBe(false);
+  });
+
+  it('is the same community as Settings › Developer and the export (one id)', () => {
+    const world = createWorld(NOW);
+    expect(world.exportData().company.id).toBe(DEMO_WHOP_ID);
+    expect(world.pages.badge('https://demo.example').verifyUrl).toBe(
+      `https://demo.example/verify/${DEMO_WHOP_ID}`,
+    );
   });
 });
 

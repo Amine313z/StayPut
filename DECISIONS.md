@@ -3329,3 +3329,21 @@ prévu.
   pas de l'équipe.
 - `apps/web/test/app.test.tsx` : les trois chiffres, leurs info-bulles, « Pas encore » en
   français avant toute entrée.
+
+### Démo : un seul identifiant
+
+- La démo appelle son API sous `demo`, mais montre partout ailleurs le même identifiant de forme
+  Whop, `biz_AtlasTradingClub` : Réglages › Développeur, le fichier exporté et les adresses du
+  badge (avant, Développeur disait « demo » et le badge `biz_AtlasTradingClub`). `DEMO_WHOP_ID`
+  dans apps/web/src/api.ts ; `demo.test.ts` et `app.test.tsx` le vérifient.
+
+### Inspect : la preuve du tableau de bord sur le sandbox
+
+- `scripts/ops/inspect.ts` lit aussi, pour chaque communauté, ce que la Phase 6 a produit : la
+  niche, l'accueil terminé, le rapport du lundi, le partage des benchmarks, le badge, l'équipe,
+  les sauvetages par type (nombre et somme), les réponses au questionnaire par raison, les 4
+  derniers rapports du lundi (envoi, essais, erreur), les benchmarks de sa niche (nombre de
+  communautés) et l'argent de l'Alumni. Des comptes et des sommes seulement, rien de personnel ;
+  essayé sur un PostgreSQL 16 local avant de tourner en production.
+- `scripts/ops/look.mjs` photographie aussi chaque page de Réglages, la liste « Ne pas
+  contacter » et les chiffres de l'Alumni.

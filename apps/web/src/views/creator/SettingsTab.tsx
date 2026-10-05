@@ -23,11 +23,12 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { putJson, useApi } from '../../api';
+import { DEMO_WHOP_ID, putJson, useApi } from '../../api';
 import { BadgeCard } from '../../components/BadgeCard';
 import { DataCard, TeamCard } from '../../components/DataCards';
 import { LEVELS } from '../../components/Risk';
 import { ErrorPanel, Loading } from '../../components/Status';
+import { useDemo } from '../../demoMode';
 import { useI18n } from '../../i18n';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
@@ -88,7 +89,9 @@ function WithRiskSettings({ children }: { children: (settings: RiskSettingsView)
  */
 export function GeneralSettingsTab() {
   const { t } = useI18n();
-  const { companyId, companyName, api, integrations } = useCreatorData();
+  const { companyId: id, companyName, api, integrations } = useCreatorData();
+  // The demo shows a Whop-shaped id, the one in its badge's addresses and its export.
+  const companyId = useDemo() ? DEMO_WHOP_ID : id;
   const languageId = useId();
   const [copied, setCopied] = useState(false);
   return (

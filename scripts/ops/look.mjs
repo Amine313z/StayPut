@@ -693,6 +693,30 @@ report.alumni = await desktop.page.evaluate(() =>
 await desktop.page
   .locator('section:has([data-alumni-figures])')
   .screenshot({ path: `${out}/alumni-figures.png` });
+// Settings, page by page (SPEC 6.12), and Members › Never contact: the Phase 6 stop report shows
+// every page of the dashboard, each once nothing on it is still loading.
+report.pages = {};
+for (const [path, file] of [
+  ['settings', 'settings-general-1440.png'],
+  ['settings/risk', 'settings-risk-1440.png'],
+  ['settings/actions', 'settings-actions-1440.png'],
+  ['members/never-contact', 'members-never-contact-1440.png'],
+]) {
+  await desktop.page.goto(`${base}/demo/${path}`, { waitUntil: 'domcontentloaded' });
+  const loaded = await desktop.page
+    .waitForFunction(
+      () => document.querySelector('main') && !document.querySelector('main .skeleton'),
+      undefined,
+      { timeout: 15_000 },
+    )
+    .then(
+      () => true,
+      () => false,
+    );
+  await desktop.page.waitForTimeout(800);
+  report.pages[path] = loaded;
+  await desktop.page.screenshot({ path: `${out}/${file}`, fullPage: true });
+}
 
 // Automations › Queue › History: what came of each action, the proof of value (block 4).
 await desktop.page.goto(`${base}/demo/actions/queue/history`, { waitUntil: 'domcontentloaded' });
@@ -978,6 +1002,7 @@ const ok =
   report.team.rows === 3 &&
   report.team.greyed === 1 &&
   JSON.stringify(report.alumni) === JSON.stringify(['9', '17%', '$147.00']) &&
+  Object.values(report.pages).every(Boolean) &&
   report.analytics.reports.sent &&
   report.analytics.reports.switchOn;
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);

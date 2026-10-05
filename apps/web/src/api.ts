@@ -47,6 +47,11 @@ export function deleteJson<T>(path: string): Promise<T> {
 
 /** The demo community's id (/demo): no Whop company has it (theirs start with `biz_`). */
 export const DEMO_COMPANY_ID = 'demo';
+/**
+ * The id the demo community shows wherever a real one shows its Whop id (`biz_…`): Settings ›
+ * Developer, the data export, the badge's addresses. Its API path keeps `demo`.
+ */
+export const DEMO_WHOP_ID = 'biz_AtlasTradingClub';
 
 /** Where the demo community's calls go: answered in the browser (demo/api.ts), never sent. */
 export const DEMO_API = `/api/creator/${DEMO_COMPANY_ID}/`;

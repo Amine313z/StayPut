@@ -42,7 +42,7 @@ import {
   zonedDay,
   zonedMoment,
 } from '@stayput/core';
-import { DEMO_COMPANY_ID } from '../api';
+import { DEMO_COMPANY_ID, DEMO_WHOP_ID } from '../api';
 import { fold } from '../text';
 import { createDemoPages, type DemoPages } from './pages';
 import { seeded } from './random';
@@ -1467,7 +1467,7 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
     team: () => team,
     exportData: () => ({
       exportedAt: new Date(now).toISOString(),
-      company: { id: DEMO_COMPANY_ID, name: COMMUNITY, is_demo: true },
+      company: { id: DEMO_WHOP_ID, name: COMMUNITY, is_demo: true },
       team: team.members,
       tables: {
         members: { rows: members.members.map((m) => ({ ...m })), truncated: false },

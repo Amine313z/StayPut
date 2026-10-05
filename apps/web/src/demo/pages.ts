@@ -41,6 +41,7 @@ import {
   type TemplateValues,
   type UnlinkedAccount,
 } from '@stayput/core';
+import { DEMO_WHOP_ID } from '../api';
 import { createPlatformLog, type LogPlace, type PlatformLog } from './platforms';
 
 /**
@@ -60,9 +61,6 @@ const DAY = 24 * HOUR;
  * community's page. « Open » is disabled in the demo (ui/ExternalLink.tsx).
  */
 export const DEMO_ALUMNI_URL = 'https://whop.com/your-community/alumni';
-
-/** The demo's company id in its badge's addresses: an example, never served. */
-export const DEMO_BADGE_ID = 'biz_AtlasTradingClub';
 
 /** An offer applied to a membership, as the home counts them (the Worker's list). */
 const OFFER_TYPES: readonly ActionType[] = [
@@ -1015,8 +1013,8 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
         members >= BADGE_MIN_MEMBERS ? Math.round((1 - left / members) * 10_000) / 10_000 : null,
       members,
       locale: 'en',
-      badgeUrl: `${origin}/badge/${DEMO_BADGE_ID}.svg`,
-      verifyUrl: `${origin}/verify/${DEMO_BADGE_ID}`,
+      badgeUrl: `${origin}/badge/${DEMO_WHOP_ID}.svg`,
+      verifyUrl: `${origin}/verify/${DEMO_WHOP_ID}`,
     };
   };
   const NICHE_RETENTION: Record<CohortHorizon, number> = { 30: 0.86, 60: 0.8, 90: 0.74 };
