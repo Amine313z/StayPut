@@ -1,4 +1,4 @@
-import { isAccessLevel, isUserId, type AccessLevel } from '@stayput/core';
+import { isAccessLevel, isCompanyId, isUserId, type AccessLevel } from '@stayput/core';
 import { parseWhopEnv, type WhopEnv } from '@stayput/whop';
 
 /**
@@ -33,6 +33,11 @@ export interface Env {
    * The departure survey is not part of it: it always runs.
    */
   MEMBER_SPACE_ENABLED?: string;
+  /**
+   * The operator's own community (`biz_…`): its team sees StayPut's internal status page
+   * (SPEC Phase 8.5). Not a secret: a community's id.
+   */
+  OPERATOR_COMPANY_ID?: string;
 }
 
 export interface Config {
@@ -57,6 +62,8 @@ export interface Config {
   dev: { userId: string; accessLevel: AccessLevel | null } | null;
   /** The member space is on (MEMBER_SPACE_ENABLED=true); off, its routes and its work stop. */
   memberSpace: boolean;
+  /** The community whose team sees the internal status page; null: nobody's. */
+  operatorCompanyId: string | null;
 }
 
 export function readConfig(env: Env): Config {
@@ -78,5 +85,6 @@ export function readConfig(env: Env): Config {
     telegram: env.TELEGRAM_BOT_TOKEN ? { botToken: env.TELEGRAM_BOT_TOKEN } : null,
     dev: devUser ? { userId: devUser, accessLevel: devLevel } : null,
     memberSpace: env.MEMBER_SPACE_ENABLED === 'true',
+    operatorCompanyId: isCompanyId(env.OPERATOR_COMPANY_ID) ? env.OPERATOR_COMPANY_ID : null,
   };
 }

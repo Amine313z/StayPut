@@ -452,6 +452,27 @@ async function main() {
              max(attempts) as max_attempts
         from stayput.webhook_events group by type, status order by type, status`,
   );
+
+  // SPEC Phase 8.5: each scheduled job's last runs, and the error log (its messages are
+  // scrubbed when recorded: no person, no secret). Absent before 0042.
+  const operations = await sql`select to_regclass('stayput.job_runs') is not null as ready`;
+  if (operations[0]?.ready) {
+    out();
+    out('### Scheduled jobs');
+    table(
+      await sql`
+        select job, runs, failures, last_finished_at, last_ok_at, last_failed_at,
+               last_duration_ms, left(last_error, 120) as last_error
+          from stayput.job_runs order by job`,
+    );
+    out();
+    out('### Error log (30 days)');
+    table(
+      await sql`
+        select source, company_id, count, first_at, last_at, left(message, 160) as message
+          from stayput.error_log order by last_at desc limit 20`,
+    );
+  }
 }
 
 main()

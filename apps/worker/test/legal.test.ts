@@ -82,6 +82,19 @@ describe('the legal pages', () => {
     ]);
   });
 
+  it('takes StayPut’s dark colors inside its window, and keeps them from page to page', async () => {
+    const html = await (await get('/terms?lang=fr&view=app')).text();
+    expect(html).toContain('<html lang="fr" class="app">');
+    expect([...html.matchAll(/<a href="([^"]+)"/g)].map((m) => m[1])).toEqual([
+      '/privacy?lang=fr&amp;view=app',
+      '/terms?lang=fr&amp;view=app',
+      '/dpa?lang=fr&amp;view=app',
+      '/terms?lang=en&amp;view=app',
+    ]);
+    // Anything else is the public page.
+    expect(await (await get('/terms?view=dark')).text()).toContain('<html lang="en">');
+  });
+
   it('states the periods the database keeps to', async () => {
     for (const lang of ['en', 'fr'] as const) {
       const html = await (await get(`/privacy?lang=${lang}`)).text();

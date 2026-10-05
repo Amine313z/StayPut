@@ -3488,3 +3488,35 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
   désormais à part, « Not needed (SPEC 8.2) ».
 - Pour la fiche de l'App Store (Phase 9) : les adresses publiques à donner à Whop sont
   `https://<domaine de StayPut>/privacy` et `/terms`.
+
+## 2026-10-05 — Phase 8.5 : journal des erreurs, page d'état interne, rejeu des webhooks
+
+- **Journal des erreurs** (0042, `error_log`) : chaque erreur une seule fois par endroit,
+  communauté et message, avec son nombre et ses dates. Sources : chaque tâche planifiée en échec
+  (`job:<nom>`), toute requête qui échoue sans réponse prévue (`request`), le travail en
+  arrière-plan (`background:<quoi>`). Le message est **nettoyé avant d'être gardé**
+  (`scrubErrorMessage`, packages/core) : e-mails, identifiants Whop d'une personne (`user_`,
+  `mber_`, `mem_`), numéros longs (téléphones, comptes Discord et Telegram), clés (`apik_`, `ws_`…),
+  jetons, et la partie « ? » des adresses. Gardé 30 jours après sa dernière occurrence, supprimé
+  avec la communauté. Pas dans l'export des données : ce sont les erreurs de StayPut, pas les
+  données de la communauté (`NOT_EXPORTED`, avec sa raison).
+- **Suivi des tâches** (`job_runs`) : chaque passage de chaque tâche planifiée (durée, dernier
+  succès, dernier échec et son message). Une tâche est « en retard » après deux de ses périodes
+  sans passage (Cloudflare l'a sautée, ou le Worker s'est arrêté).
+- **Page d'état** : Réglages › État, visible seulement pour l'équipe de la communauté de
+  l'opérateur (`OPERATOR_COMPANY_ID` : « StayPut Test » dans le sandbox, dans wrangler.toml ; en
+  production, la variable de dépôt du même nom, comme `WHOP_APP_ID`). Pour toute autre
+  communauté, ses routes n'existent pas (404), et un membre qui n'est pas de l'équipe est refusé
+  (403). Elle montre : Whop (sandbox ou production), la base (à jour ou non) et son schéma ; les
+  tâches ; les envois de Whop des dernières 24 heures et ceux en échec (type, communauté, essais,
+  erreur ; jamais leur contenu) ; les communautés (actives, accès refusé, désinstallées) ; les
+  lectures refusées ; les actions en échec de la semaine ; le journal des erreurs.
+- **Rejeu** : « Rejouer » (un envoi) et « Rejouer tous les échecs » retraitent aussitôt un envoi
+  en échec, même un de ceux que le rejeu automatique (toutes les 10 minutes, 5 essais) a
+  abandonnés. Qui l'a fait est gardé (`audit_log`, action `webhooks.replay`). La procédure :
+  corriger la cause (le plus souvent, déployer un correctif), puis rejouer. Un envoi en échec est
+  gardé 30 jours au plus (0040) ; au-delà il est perdu, mais la synchronisation relit de toute
+  façon les membres, abonnements et paiements chaque heure.
+- **Pages légales dans l'app** : la capture d'Inspect montrait la page claire dans la fenêtre
+  sombre, avec un double cadre. Ouverte depuis StayPut (`?view=app`), elle prend ses couleurs
+  sombres et perd son cadre ; la page publique suit toujours la préférence du navigateur.

@@ -55,7 +55,10 @@ export async function checkAccess(
   return { checked, uninstalled };
 }
 
-/** One hour's upkeep: the deliveries purged, access checked, the uninstalled deleted. */
+/**
+ * One hour's upkeep: the deliveries and the old errors purged, access checked, the uninstalled
+ * deleted.
+ */
 export async function upkeep(
   db: Db,
   whop: WhopClient | null,
@@ -66,6 +69,8 @@ export async function upkeep(
     'select stayput.purge_webhook_events($1::timestamptz) as count',
     [at],
   );
+  // The errors that have not happened for 30 days (SPEC Phase 8.5).
+  await db.query('select stayput.purge_error_log($1::timestamptz)', [at]);
   const access = whop ? await checkAccess(db, whop, now) : { checked: 0, uninstalled: [] };
   const deleted = await db.query<{ id: string }>(
     'select id from stayput.delete_uninstalled_companies($1::timestamptz) as id',

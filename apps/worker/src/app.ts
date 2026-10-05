@@ -31,6 +31,7 @@ import {
   type CreatorSession,
   type DiscordChannelsUpdate,
   type HealthReport,
+  type WebhookReplay,
   type AlumniView,
   type MemberRetentionView,
   type MemberSession,
@@ -127,6 +128,8 @@ import {
 import { LATEST_MIGRATION } from './schema-version';
 import { goneVerifyPage, verifyPage } from './public-badge';
 import { LEGAL_DOCUMENTS, legalLocale, legalPage } from './legal';
+import { scheduledJobs } from './cron';
+import { logError, readOperatorStatus, replayFailedWebhooks, replayWebhook } from './operations';
 import { goneProofPage, proofPage } from './public-proof';
 import {
   joinRescue,
@@ -456,11 +459,13 @@ export function createApp(deps: AppDeps) {
   ): void {
     const db = deps.openDb(c.env);
     if (!db) return;
+    const companyId = c.get('companyId') ?? null;
     defer(
       c,
       work(db)
-        .catch((error: unknown) => {
+        .catch(async (error: unknown) => {
           console.error(`${label} failed:`, describe(error));
+          await logError(db, `background:${label}`, companyId, error, deps.now());
         })
         .finally(() => db.close()),
     );
@@ -731,6 +736,7 @@ export function createApp(deps: AppDeps) {
       companyName: company.name,
       companyLogo: company.logo,
       testMode: company.testMode,
+      operator: companyId === c.get('config').operatorCompanyId,
     };
     return c.json(session);
   });
@@ -2806,6 +2812,76 @@ export function createApp(deps: AppDeps) {
   );
 
   /**
+   * StayPut's internal status page (SPEC Phase 8.5), for the team of the operator's own
+   * community only (OPERATOR_COMPANY_ID): for any other, these routes do not exist.
+   */
+  const requireOperator = createMiddleware<AppEnv>(async (c, next) => {
+    if (c.get('companyId') !== c.get('config').operatorCompanyId) {
+      return apiError('not_found', 'no such route');
+    }
+    await next();
+    return undefined;
+  });
+
+  /** The jobs, Whop's deliveries, the communities, the refused readings, the errors. */
+  app.get(
+    '/api/creator/:companyId/operator/status',
+    authenticate,
+    withDb,
+    requireCreator,
+    requireOperator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const config = c.get('config');
+      const status = await readOperatorStatus(db, deps.now(), {
+        whopEnv: config.whopEnv,
+        database: await databaseState(db),
+        jobs: scheduledJobs(),
+      });
+      return c.json(status);
+    },
+  );
+
+  /**
+   * Whop's failed deliveries processed again now (all of them, REPLAY_LIMIT at most, or the one
+   * named), even those the replays of every ten minutes gave up on; who did it is kept.
+   */
+  app.post(
+    '/api/creator/:companyId/operator/webhooks/replay',
+    authenticate,
+    withDb,
+    requireCreator,
+    requireOperator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = (await c.req.json().catch(() => ({}))) as { id?: unknown };
+      const id = body.id;
+      if (id !== undefined && (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(id))) {
+        return apiError('invalid_request', 'expected { id } of a delivery, or nothing');
+      }
+      const now = deps.now();
+      const replay: WebhookReplay =
+        id === undefined
+          ? await replayFailedWebhooks(db, now)
+          : { counts: { [await replayWebhook(db, id, now)]: 1 } };
+      await db.query(
+        `insert into stayput.audit_log (company_id, actor, action, target, created_at)
+         values ($1, $2, 'webhooks.replay', $3::text::jsonb, $4::timestamptz)`,
+        [
+          c.get('companyId'),
+          c.get('userId'),
+          JSON.stringify({ delivery: id ?? 'all failed', counts: replay.counts }),
+          now.toISOString(),
+        ],
+      );
+      console.info(`Webhooks replayed by the operator: ${JSON.stringify(replay.counts)}.`);
+      return c.json(replay);
+    },
+  );
+
+  /**
    * The public « Verified retention » badge (SPEC Phase 6.11): the community's retention at 90
    * days as an SVG, once its team turned it on and the figure exists; 404 otherwise, never why.
    * Cached an hour: the figure changes once a week.
@@ -2859,17 +2935,35 @@ export function createApp(deps: AppDeps) {
 
   /**
    * The privacy policy, the terms of service and the data processing agreement (SPEC Phase 8.1),
-   * public: in the language asked (`?lang=fr`), else the browser's, else English.
+   * public: in the language asked (`?lang=fr`), else the browser's, else English; in StayPut's
+   * colors inside its window (`?view=app`).
    */
   for (const document of LEGAL_DOCUMENTS) {
     app.get(`/${document}`, (c) =>
-      legalPage(document, legalLocale(c.req.query('lang'), c.req.header('accept-language') ?? '')),
+      legalPage(document, legalLocale(c.req.query('lang'), c.req.header('accept-language') ?? ''), {
+        app: c.req.query('view') === 'app',
+      }),
     );
   }
 
   app.notFound(() => apiError('not_found', 'no such route'));
-  app.onError((error) => {
+  app.onError((error, c) => {
     console.error('Unhandled error:', describe(error));
+    // In the error log (SPEC Phase 8.5), on a client of its own: the request's may be closed.
+    const db = deps.openDb(c.env);
+    if (db) {
+      const companyId = c.req.param('companyId');
+      defer(
+        c,
+        logError(
+          db,
+          'request',
+          isCompanyId(companyId) ? companyId : null,
+          error,
+          deps.now(),
+        ).finally(() => db.close()),
+      );
+    }
     return apiError('internal', 'unexpected error');
   });
 

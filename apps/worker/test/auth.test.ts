@@ -137,6 +137,7 @@ describe('signing in with Whop outside the iframe (sandbox)', () => {
       companyName: null,
       companyLogo: false,
       testMode: false,
+      operator: false,
     });
   });
 

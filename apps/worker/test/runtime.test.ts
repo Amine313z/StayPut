@@ -25,6 +25,7 @@ describe('readConfig', () => {
       dev: null,
       // V1: the member space is off unless MEMBER_SPACE_ENABLED says "true".
       memberSpace: false,
+      operatorCompanyId: null,
     });
     expect(readConfig({ MEMBER_SPACE_ENABLED: 'true' }).memberSpace).toBe(true);
     expect(readConfig({ MEMBER_SPACE_ENABLED: 'yes' }).memberSpace).toBe(false);
@@ -47,6 +48,15 @@ describe('readConfig', () => {
     ).toEqual({ botToken: 'bot', clientSecret: 'secret' });
     expect(readConfig({ DISCORD_CLIENT_SECRET: 'secret' }).discord).toBeNull();
     expect(readConfig({ TELEGRAM_BOT_TOKEN: '1:abc' }).telegram).toEqual({ botToken: '1:abc' });
+  });
+
+  it('reads the operator’s community only when it is a community id', () => {
+    expect(readConfig({ OPERATOR_COMPANY_ID: 'biz_Op1' }).operatorCompanyId).toBe('biz_Op1');
+    expect(readConfig({ OPERATOR_COMPANY_ID: 'user_Op1' }).operatorCompanyId).toBeNull();
+    // The sandbox's, in wrangler.toml: StayPut Test.
+    const toml = readFileSync(path.resolve(import.meta.dirname, '../wrangler.toml'), 'utf8');
+    const id = /^OPERATOR_COMPANY_ID\s*=\s*"([^"]*)"$/m.exec(toml)?.[1];
+    expect(readConfig({ OPERATOR_COMPANY_ID: id }).operatorCompanyId).toBe('biz_2whAzkbCRpcGqQ');
   });
 
   it('refuses an unknown WHOP_ENV', () => {
@@ -114,7 +124,7 @@ describe('cron', () => {
     const result = await runScheduled(
       HOURLY_CRON,
       { [HOURLY_CRON]: [job('sync'), job('scores', true), job('actions')] },
-      {} as JobContext,
+      { db: null, now: new Date('2026-10-05T09:00:00Z') } as JobContext,
     );
     expect(order).toEqual(['sync', 'scores', 'actions']);
     expect(result).toEqual({ ran: ['sync', 'actions'], failed: ['scores'] });

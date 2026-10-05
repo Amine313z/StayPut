@@ -35,6 +35,8 @@ export interface Tab {
   label: MessageKey;
   /** Part of the member space: hidden while it is off. */
   memberSpace?: boolean;
+  /** StayPut's internal status page: shown to the operator's own community only. */
+  operator?: boolean;
 }
 
 export type SectionId =
@@ -108,6 +110,7 @@ export const SECTIONS: readonly Section[] = [
       { path: 'risk', label: 'tab.riskScore' },
       { path: 'actions', label: 'nav.actions' },
       { path: 'space', label: 'nav.space', memberSpace: true },
+      { path: 'status', label: 'tab.status', operator: true },
     ],
   },
   {
@@ -130,9 +133,14 @@ export function visibleSections(): readonly Section[] {
   return SECTIONS.filter((section) => !section.memberSpace || memberSpaceEnabled());
 }
 
-/** A section's tabs as shown: the member space's only while it is on. */
-export function visibleTabs(section: Section): readonly Tab[] {
-  return section.tabs.filter((tab) => !tab.memberSpace || memberSpaceEnabled());
+/**
+ * A section's tabs as shown: the member space's only while it is on, the status page only to
+ * the operator's own community.
+ */
+export function visibleTabs(section: Section, { operator = false } = {}): readonly Tab[] {
+  return section.tabs.filter(
+    (tab) => (!tab.memberSpace || memberSpaceEnabled()) && (!tab.operator || operator),
+  );
 }
 
 /** The section a path of the dashboard is in: by its first part, the dashboard's by default. */

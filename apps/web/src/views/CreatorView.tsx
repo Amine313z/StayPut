@@ -31,6 +31,8 @@ export interface CreatorData {
   integrations: { state: Loadable<IntegrationsStatus>; retry: () => void; reload: () => void };
   /** The test mode as the banner on top shows it; the action settings say when it changes. */
   testMode: { on: boolean; set: (on: boolean) => void };
+  /** The operator's own community: Settings › Status, StayPut's internal status page. */
+  operator: boolean;
   /** Inside a section: says how many things its tabs hold (SectionLayout). */
   tabCounts?: (counts: TabCounts) => void;
 }
@@ -109,6 +111,7 @@ function Dashboard({ session, demo }: { session: CreatorSession; demo: boolean }
     sync,
     integrations,
     testMode: { on: testMode, set: setTestMode },
+    operator: !demo && session.operator === true,
   };
   // A company StayPut does not know the zone of yet: the creator's browser tells it.
   const timezoneSet = session.timezoneSet;

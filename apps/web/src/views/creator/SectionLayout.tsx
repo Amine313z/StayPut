@@ -36,7 +36,7 @@ export function SectionLayout({ id }: { id: SectionId }) {
   const tab = location.pathname.startsWith(home)
     ? (location.pathname.slice(home.length).split('/').find(Boolean) ?? '')
     : location.pathname;
-  const tabs = visibleTabs(section);
+  const tabs = visibleTabs(section, { operator: data.operator });
   // The member space's section, while the member space is off: the dashboard instead.
   if (section.memberSpace && !memberSpaceEnabled()) return <Navigate to={data.root} replace />;
   return (

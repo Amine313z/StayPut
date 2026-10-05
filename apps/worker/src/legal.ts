@@ -576,6 +576,13 @@ const STYLE = [
   'h2{margin:28px 0 8px;font-size:18px}',
   'p,li{margin:0 0 10px}ul{padding-left:22px;margin:0 0 10px}',
   '@media (max-width:480px){body{padding:12px}main{padding:20px}h1{font-size:23px}}',
+  // Inside StayPut's window (`?view=app`): its dark colors, whatever the browser's, and no card
+  // of its own, the window being one.
+  'html.app{color-scheme:dark;--bg:#050607;--card:#050607;--fg:#d9dee3;--muted:#8a94a0;',
+  '--accent:#5eead4;--line:#1a2129}',
+  'html.app h1,html.app h2{color:#fff}',
+  'html.app body{padding:20px}',
+  'html.app main{max-width:none;border:0;border-radius:0;padding:0;background:transparent}',
 ].join('');
 
 async function sha256Base64(text: string): Promise<string> {
@@ -585,11 +592,17 @@ async function sha256Base64(text: string): Promise<string> {
   return btoa(binary);
 }
 
-/** A legal page, in its language: the draft notice, the three documents, the other language. */
+/**
+ * A legal page, in its language: the draft notice, the three documents, the other language.
+ * `app`: shown inside StayPut's window, in its dark colors; its links keep it so.
+ */
 export async function legalPage(
   document: LegalDocument,
   locale: TemplateLocale,
+  options: { app?: boolean } = {},
 ): Promise<Response> {
+  const app = options.app === true;
+  const view = app ? '&amp;view=app' : '';
   const text = texts(locale)[document];
   const ui = UI[locale];
   const other: TemplateLocale = locale === 'fr' ? 'en' : 'fr';
@@ -600,9 +613,9 @@ export async function legalPage(
   const nav = [
     ...LEGAL_DOCUMENTS.map(
       (d) =>
-        `<a href="/${d}?lang=${locale}"${d === document ? ' aria-current="page"' : ''}>${escape(ui.names[d])}</a>`,
+        `<a href="/${d}?lang=${locale}${view}"${d === document ? ' aria-current="page"' : ''}>${escape(ui.names[d])}</a>`,
     ),
-    `<a href="/${document}?lang=${other}" hreflang="${other}" lang="${other}">${escape(ui.other)}</a>`,
+    `<a href="/${document}?lang=${other}${view}" hreflang="${other}" lang="${other}">${escape(ui.other)}</a>`,
   ].join('');
   const sections = text.sections
     .map((section) => {
@@ -618,7 +631,7 @@ export async function legalPage(
     .join('');
   const html = [
     '<!doctype html>',
-    `<html lang="${locale}">`,
+    `<html lang="${locale}"${app ? ' class="app"' : ''}>`,
     '<head>',
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',

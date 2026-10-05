@@ -33,8 +33,9 @@ export function LegalDialog({
   return (
     <Dialog title={name} description={t('legal.draft')} onClose={onClose}>
       <iframe
-        // From the address StayPut is shown at: inside Whop, Whop's frame of StayPut.
-        src={`/${document}?lang=${locale}`}
+        // From the address StayPut is shown at (inside Whop, Whop's frame of StayPut), in its
+        // dark colors.
+        src={`/${document}?lang=${locale}&view=app`}
         title={t('legal.frame', { document: name })}
         // The page has no script; its links stay inside the window.
         sandbox=""

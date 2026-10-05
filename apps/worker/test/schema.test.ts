@@ -11,12 +11,15 @@ const SERVER_ONLY = [
   'app_settings',
   'company_admins',
   'company_sync',
+  'error_log',
+  'job_runs',
   'pending_activity',
   'webhook_events',
 ];
 
 // Tables with a company_id that is not a foreign key to companies, and why.
 const COMPANY_ID_WITHOUT_FK: Record<string, string> = {
+  error_log: 'an error can name a company that never opened StayPut, or is gone',
   webhook_events: 'a delivery can name a company that has not opened StayPut yet',
 };
 

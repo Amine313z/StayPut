@@ -31,6 +31,7 @@ import type {
   TeamView,
   DataExport,
   MemberDataExport,
+  OperatorStatus,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS } from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
@@ -363,6 +364,8 @@ describe('GET /api/creator/:companyId/session', () => {
       companyName: null,
       companyLogo: false,
       testMode: false,
+      // Not the operator's own community: no status page.
+      operator: false,
     });
     const companies = await withUser(t.db, 'user_alice', (tx) =>
       tx.query<{ id: string; status: string }>('select id, status from stayput.companies'),
@@ -633,6 +636,81 @@ describe('POST /webhooks/whop', () => {
     expect(companyIdOf({ data: { account: { id: 'biz_2' } } })).toBe('biz_2');
     expect(companyIdOf({ data: { company_id: 'not-a-company' } })).toBeNull();
     expect(companyIdOf('x')).toBeNull();
+  });
+});
+
+describe('the internal status page (SPEC Phase 8.5)', () => {
+  const OPERATOR_ENV: Env = { ...ENV, OPERATOR_COMPANY_ID: 'biz_Op1' };
+
+  it('is for the team of the operator’s own community only', async () => {
+    const { request } = setup({ 'user_olga:biz_Op1': 'admin', 'user_olga:biz_A1': 'admin' });
+    const as = await asUser('user_olga');
+    const session = await request('/api/creator/biz_Op1/session', as, OPERATOR_ENV);
+    expect(await session.json()).toMatchObject({ companyId: 'biz_Op1', operator: true });
+    const other = await request('/api/creator/biz_A1/session', as, OPERATOR_ENV);
+    expect(await other.json()).toMatchObject({ companyId: 'biz_A1', operator: false });
+    // Any other community: the routes do not exist.
+    expect((await request('/api/creator/biz_A1/operator/status', as, OPERATOR_ENV)).status).toBe(
+      404,
+    );
+    // No operator set: nobody's.
+    expect((await request('/api/creator/biz_Op1/operator/status', as)).status).toBe(404);
+    // A member of the operator's community who is not on its team: refused.
+    const { request: asMember } = setup({ 'user_max:biz_Op1': 'customer' });
+    const refused = await asMember(
+      '/api/creator/biz_Op1/operator/status',
+      await asUser('user_max'),
+      OPERATOR_ENV,
+    );
+    expect(refused.status).toBe(403);
+  });
+
+  it('shows every scheduled job, Whop’s deliveries and the errors', async () => {
+    const { request } = setup({ 'user_olga:biz_Op1': 'admin' });
+    const res = await request(
+      '/api/creator/biz_Op1/operator/status',
+      await asUser('user_olga'),
+      OPERATOR_ENV,
+    );
+    expect(res.status).toBe(200);
+    const status = (await res.json()) as OperatorStatus;
+    expect(status).toMatchObject({
+      whopEnv: 'sandbox',
+      database: 'ok',
+      webhooks: { failedCount: expect.any(Number) as number },
+    });
+    expect(status.jobs.map((job) => job.job)).toEqual(
+      expect.arrayContaining(['replay-webhooks', 'sync', 'risk', 'actions', 'data-upkeep']),
+    );
+  });
+
+  it('replays the failed deliveries, all or one, and keeps who did it', async () => {
+    const { request } = setup({ 'user_olga:biz_Op1': 'admin' });
+    const as = await asUser('user_olga');
+    const post = (body: unknown) =>
+      request(
+        '/api/creator/biz_Op1/operator/webhooks/replay',
+        { ...as, method: 'POST', body: JSON.stringify(body) },
+        OPERATOR_ENV,
+      );
+    const all = await post({});
+    expect(all.status).toBe(200);
+    expect(await all.json()).toEqual({ counts: expect.any(Object) as object });
+    expect(await (await post({ id: 'msg_NoSuchDelivery' })).json()).toEqual({
+      counts: { missing: 1 },
+    });
+    expect((await post({ id: 'not one; drop' })).status).toBe(400);
+    const audit = await t.db.query<{ actor: string; target: unknown }>(
+      `select actor, target from stayput.audit_log
+        where company_id = 'biz_Op1' and action = 'webhooks.replay' order by id`,
+    );
+    expect(audit).toEqual([
+      {
+        actor: 'user_olga',
+        target: { delivery: 'all failed', counts: expect.any(Object) as object },
+      },
+      { actor: 'user_olga', target: { delivery: 'msg_NoSuchDelivery', counts: { missing: 1 } } },
+    ]);
   });
 });
 

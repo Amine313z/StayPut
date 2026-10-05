@@ -64,17 +64,21 @@ jobs:
 
       - run: npm run build
 
-      # WHOP_ENV and WHOP_APP_ID come from wrangler.toml (the sandbox app) unless the repository
-      # variables of the same name are set (production).
+      # WHOP_ENV, WHOP_APP_ID and OPERATOR_COMPANY_ID come from wrangler.toml (the sandbox) unless
+      # the repository variables of the same name are set (production).
       - name: Publish the Worker
         working-directory: apps/worker
         env:
           WHOP_APP_ID: ${{ vars.WHOP_APP_ID }}
           WHOP_ENV: ${{ vars.WHOP_ENV }}
+          OPERATOR_COMPANY_ID: ${{ vars.OPERATOR_COMPANY_ID }}
         run: |
           overrides=()
           if [ -n "$WHOP_ENV" ]; then overrides+=(--var "WHOP_ENV:$WHOP_ENV"); fi
           if [ -n "$WHOP_APP_ID" ]; then overrides+=(--var "WHOP_APP_ID:$WHOP_APP_ID"); fi
+          if [ -n "$OPERATOR_COMPANY_ID" ]; then
+            overrides+=(--var "OPERATOR_COMPANY_ID:$OPERATOR_COMPANY_ID")
+          fi
           npx wrangler deploy --secrets-file "$RUNNER_TEMP/secrets.json" "${overrides[@]}" |
             tee "$RUNNER_TEMP/deploy.log"
           rm -f "$RUNNER_TEMP/secrets.json"

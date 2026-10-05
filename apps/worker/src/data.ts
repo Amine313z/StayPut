@@ -54,6 +54,8 @@ export const NOT_EXPORTED: Readonly<Record<string, string>> = {
   company_admins: 'who on the team opened StayPut: in the export as `team`',
   company_sync: 'the Worker’s own bookkeeping of its passes',
   erased_people: 'fingerprints of the people deleted at the community’s request: nothing readable',
+  error_log:
+    'StayPut’s own errors (no person, no secret), kept 30 days for its operator: deleted with the community',
   pending_activity: 'messages waiting a few minutes for their member, never kept',
   webhook_events: 'Whop’s deliveries without their personal fields, kept 7 days for replays',
 };

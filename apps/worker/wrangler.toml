@@ -20,6 +20,10 @@ WHOP_APP_ID = "app_rjFkp2xKgjfPxY"
 # The member space (goals, results, testimonial cards, buddies, rescue challenges) is off in V1
 # (decision of 2026-10-02): "true" turns it back on. The departure survey always runs.
 MEMBER_SPACE_ENABLED = "false"
+# The operator's own community, whose team sees StayPut's internal status page (SPEC Phase 8.5):
+# « StayPut Test » in the sandbox. At the switch to production, the repository variable
+# OPERATOR_COMPANY_ID replaces it (a community's id, not a secret).
+OPERATOR_COMPANY_ID = "biz_2whAzkbCRpcGqQ"
 
 # Secrets, never in this file: `npx wrangler secret put WHOP_API_KEY` and
 # `npx wrangler secret put WHOP_WEBHOOK_SECRET` (README.md, Deployment). Optional modules:

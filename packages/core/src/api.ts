@@ -75,6 +75,11 @@ export interface CreatorSession {
   companyLogo: boolean;
   /** StayPut computes everything and sends nothing: the banner on top of every screen. */
   testMode: boolean;
+  /**
+   * The operator's own community (OPERATOR_COMPANY_ID): its team sees StayPut's internal status
+   * page (SPEC Phase 8.5).
+   */
+  operator: boolean;
 }
 
 /** GET /api/member/:experienceId/session */
@@ -1510,6 +1515,89 @@ export interface MemberDataExport {
   exportedAt: string;
   member: Record<string, unknown>;
   tables: Record<string, Record<string, unknown>[]>;
+}
+
+/**
+ * GET /api/creator/:companyId/operator/status (SPEC Phase 8.5): StayPut's internal status page,
+ * for the team of the operator's own community only (OPERATOR_COMPANY_ID). Every message is
+ * scrubbed (scrubErrorMessage): no secret, no person.
+ */
+export interface OperatorStatus {
+  checkedAt: string;
+  whopEnv: 'sandbox' | 'production';
+  database: HealthReport['database'];
+  /** The schema the Worker expects; `database: 'outdated'` when the database is behind it. */
+  migration: string;
+  jobs: OperatorJob[];
+  webhooks: {
+    /** Whop's deliveries of the last 24 hours, by status. */
+    lastDay: Partial<Record<'received' | 'processed' | 'failed' | 'ignored', number>>;
+    lastReceivedAt: string | null;
+    failedCount: number;
+    /** The 50 latest failed deliveries: what they were, never what they contained. */
+    failed: OperatorDelivery[];
+  };
+  companies: { active: number; accessLost: number; uninstalled: number };
+  /** Readings Whop (or Discord, Telegram) refused, the latest first. */
+  syncErrors: {
+    companyId: string;
+    companyName: string | null;
+    stream: string;
+    error: string;
+    at: string | null;
+  }[];
+  /** Actions that failed in the last 7 days, by community and type. */
+  failedActions: {
+    companyId: string;
+    companyName: string | null;
+    type: string;
+    count: number;
+    lastAt: string;
+    lastError: string | null;
+  }[];
+  /** The error log: each error once, the latest first (100 at most). */
+  errors: OperatorError[];
+}
+
+export interface OperatorJob {
+  job: string;
+  /** How often its trigger runs it. */
+  everyMinutes: number;
+  state: 'ok' | 'failing' | 'late' | 'never';
+  lastFinishedAt: string | null;
+  lastOkAt: string | null;
+  lastFailedAt: string | null;
+  lastError: string | null;
+  lastDurationMs: number | null;
+  runs: number;
+  failures: number;
+}
+
+export interface OperatorDelivery {
+  id: string;
+  type: string;
+  companyId: string | null;
+  companyName: string | null;
+  attempts: number;
+  /** Whether the replays of every ten minutes still try it (fewer than 5 attempts). */
+  retrying: boolean;
+  lastError: string | null;
+  receivedAt: string;
+}
+
+export interface OperatorError {
+  source: string;
+  companyId: string | null;
+  message: string;
+  count: number;
+  firstAt: string;
+  lastAt: string;
+}
+
+/** POST /api/creator/:companyId/operator/webhooks/replay: the failed deliveries, again. */
+export interface WebhookReplay {
+  /** How many ended in each status. */
+  counts: Partial<Record<'processed' | 'failed' | 'ignored' | 'missing', number>>;
 }
 
 /** GET /health */

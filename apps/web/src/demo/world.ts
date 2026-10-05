@@ -1266,6 +1266,7 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
       companyName: COMMUNITY,
       companyLogo: false,
       testMode: false,
+      operator: false,
     },
     members,
     saves: savesMade.map((save) => ({

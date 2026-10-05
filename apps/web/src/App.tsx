@@ -14,6 +14,7 @@ import { CohortsTab, LessonsTab, OverviewTab } from './views/creator/InsightsTab
 import { ReportsTab } from './views/creator/ReportsTab';
 import { MembersTab, NeverContactTab } from './views/creator/MembersTab';
 import { Overview } from './views/creator/Overview';
+import { OperatorTab } from './views/creator/OperatorTab';
 import { MemberSpaceOnly, SectionHome, SectionLayout } from './views/creator/SectionLayout';
 import { GeneralSettingsTab, RiskSettingsTab, SpaceSettingsTab } from './views/creator/SettingsTab';
 import { SpaceCardsTab, SpaceOverviewTab, SpacePreviewTab } from './views/creator/SpaceTab';
@@ -82,6 +83,8 @@ function creatorSections(): RouteObject[] {
           </MemberSpaceOnly>
         ),
       },
+      // StayPut's internal status page (SPEC Phase 8.5): the operator's own community only.
+      { path: 'status', element: <OperatorTab /> },
     ]),
     // The member space: kept, shown only while it is on (features.ts).
     section('space', 'space', [

@@ -23,6 +23,8 @@ import type {
   IntegrationsStatus,
   MemberDetail,
   MemberRetentionView,
+  OperatorStatus,
+  WebhookReplay,
   MemberRisk,
   MemberRow,
   MemberTelegramStatus,
@@ -3843,7 +3845,7 @@ describe('member view', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Politique de confidentialité' });
     expect(
       within(dialog).getByTitle('Politique de confidentialité, la page').getAttribute('src'),
-    ).toBe('/privacy?lang=fr');
+    ).toBe('/privacy?lang=fr&view=app');
   });
 
   it('offers to link Telegram when the community counts a group, then to unlink it', async () => {
@@ -5056,7 +5058,7 @@ describe('the creator’s frame', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Terms of service' });
     // The Worker's page, never a page outside StayPut, with no script and no way out.
     const frame = within(dialog).getByTitle<HTMLIFrameElement>('Terms of service, the page');
-    expect(frame.getAttribute('src')).toBe('/terms?lang=en');
+    expect(frame.getAttribute('src')).toBe('/terms?lang=en&view=app');
     expect(frame.getAttribute('sandbox')).toBe('');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -5072,7 +5074,7 @@ describe('the creator’s frame', () => {
     const accord = await screen.findByRole('dialog', { name: 'Accord de traitement des données' });
     expect(
       within(accord).getByTitle('Accord de traitement des données, la page').getAttribute('src'),
-    ).toBe('/dpa?lang=fr');
+    ).toBe('/dpa?lang=fr&view=app');
   });
 
   it('turns the verified retention badge on, shows it, and gives the code to paste', async () => {
@@ -5243,6 +5245,136 @@ describe('the creator’s frame', () => {
       { timeout: 3_000 },
     );
     expect(code.value).toContain('/badge/biz_AtlasTradingClub.svg');
+  });
+});
+
+describe('the internal status page (SPEC Phase 8.5)', () => {
+  const STATUS: OperatorStatus = {
+    checkedAt: '2026-10-05T09:00:00.000Z',
+    whopEnv: 'sandbox',
+    database: 'ok',
+    migration: '0042_operations.sql',
+    jobs: [
+      {
+        job: 'sync',
+        everyMinutes: 10,
+        state: 'ok',
+        lastFinishedAt: '2026-10-05T08:50:01.000Z',
+        lastOkAt: '2026-10-05T08:50:01.000Z',
+        lastFailedAt: null,
+        lastError: null,
+        lastDurationMs: 820,
+        runs: 120,
+        failures: 0,
+      },
+      {
+        job: 'actions',
+        everyMinutes: 60,
+        state: 'failing',
+        lastFinishedAt: '2026-10-05T08:00:03.000Z',
+        lastOkAt: '2026-10-05T07:00:02.000Z',
+        lastFailedAt: '2026-10-05T08:00:03.000Z',
+        lastError: 'Whop 500 for user_…',
+        lastDurationMs: 3100,
+        runs: 20,
+        failures: 1,
+      },
+      {
+        job: 'benchmarks',
+        everyMinutes: 10080,
+        state: 'never',
+        lastFinishedAt: null,
+        lastOkAt: null,
+        lastFailedAt: null,
+        lastError: null,
+        lastDurationMs: null,
+        runs: 0,
+        failures: 0,
+      },
+    ],
+    webhooks: {
+      lastDay: { processed: 12, ignored: 3, failed: 1 },
+      lastReceivedAt: '2026-10-05T08:58:00.000Z',
+      failedCount: 1,
+      failed: [
+        {
+          id: 'msg_Bad1',
+          type: 'payment.failed',
+          companyId: 'biz_A1',
+          companyName: 'Le Club',
+          attempts: 5,
+          retrying: false,
+          lastError: 'invalid input syntax for type timestamp',
+          receivedAt: '2026-10-05T07:00:00.000Z',
+        },
+      ],
+    },
+    companies: { active: 3, accessLost: 0, uninstalled: 1 },
+    syncErrors: [],
+    failedActions: [],
+    errors: [
+      {
+        source: 'job:actions',
+        companyId: null,
+        message: 'Whop 500 for user_…',
+        count: 2,
+        firstAt: '2026-10-05T07:00:03.000Z',
+        lastAt: '2026-10-05T08:00:03.000Z',
+      },
+    ],
+  };
+  const operatorSession = { ...creatorSession, body: { ...creatorSession.body, operator: true } };
+
+  it('shows the operator the jobs, the deliveries and the errors, and replays a delivery', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/session': [operatorSession],
+      '/api/creator/biz_A1/operator/status': [
+        { status: 200, body: STATUS },
+        {
+          status: 200,
+          body: { ...STATUS, webhooks: { ...STATUS.webhooks, failedCount: 0, failed: [] } },
+        },
+      ],
+      'POST /api/creator/biz_A1/operator/webhooks/replay': [
+        { status: 200, body: { counts: { processed: 1 } } satisfies WebhookReplay },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/settings/status');
+    const tabs = await screen.findByRole('navigation', { name: /Settings/ });
+    expect(within(tabs).getByRole('link', { name: 'Status' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Something needs a look' })).toBeTruthy();
+    const jobs = screen.getByRole('list', { name: 'Scheduled jobs' });
+    expect(
+      within(jobs)
+        .getAllByRole('listitem')
+        .map((row) => [
+          row.querySelector('.font-mono')?.textContent,
+          row.querySelector('span.rounded-full')?.textContent,
+        ]),
+    ).toEqual([
+      ['sync', 'OK'],
+      ['actions', 'Failing'],
+      ['benchmarks', 'Never ran'],
+    ]);
+    expect(within(jobs).getByText(/Last error, .*: Whop 500 for user_…/)).toBeTruthy();
+    expect(screen.getByText('Given up after 5 attempts', { exact: false })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Replay payment.failed' }));
+    expect(await screen.findByText('1 processed')).toBeTruthy();
+    expect(bodies.get('POST /api/creator/biz_A1/operator/webhooks/replay')).toEqual({
+      id: 'msg_Bad1',
+    });
+    expect(await screen.findByText('No failed delivery.')).toBeTruthy();
+    expect(screen.getByText('Whop 500 for user_…', { selector: 'p.font-mono' })).toBeTruthy();
+  });
+
+  it('is not there for any other community', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/settings/status');
+    // The address leads back to Settings › General, and no tab says Status.
+    expect(await screen.findByRole('radiogroup', { name: 'Language' })).toBeTruthy();
+    const tabs = screen.getByRole('navigation', { name: /Settings/ });
+    expect(within(tabs).queryByRole('link', { name: 'Status' })).toBeNull();
   });
 });
 
