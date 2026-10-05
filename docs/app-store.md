@@ -84,6 +84,12 @@ le bandeau de la démo ; les dernières sont aussi sur la branche `screenshots`,
 Si Whop demande un autre format, il suffit de changer la fenêtre (1280 × 720) et le facteur
 d'échelle (1,5) en tête de `scripts/ops/store.mjs`.
 
+![Dashboard](./app-store/1-dashboard.png)
+![Members](./app-store/2-members.png)
+![Queue](./app-store/3-queue.png)
+![Failed payments](./app-store/4-failed-payments.png)
+![Win-back](./app-store/5-win-back.png)
+
 ## Icône
 
 `docs/brand-logo-1024.png` (1024 × 1024, PNG) : le S de StayPut sur fond noir.
