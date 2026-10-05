@@ -16,6 +16,7 @@ import {
   type CreatorOfferMade,
   type CreatorSession,
   type DashboardView,
+  type DataExport,
   type ExitReason,
   type FeedItem,
   type GettingStarted,
@@ -35,6 +36,7 @@ import {
   type RuleId,
   type SentWeeklyReport,
   type SyncStatus,
+  type TeamView,
   type WeeklyReportsView,
   monthStart,
   zonedDay,
@@ -438,6 +440,10 @@ export interface DemoWorld {
   ) => Record<'discord' | 'telegram', PlatformSignals>;
   /** Analytics › Reports: the Monday reports of the last 6 weeks, from the demo's own story. */
   reports: () => WeeklyReportsView;
+  /** Settings › General: the Whop team, and who opened StayPut. */
+  team: () => TeamView;
+  /** « Export my data »: the demo's own, as the Worker would give it (its members, its team). */
+  exportData: () => DataExport;
   /** The Monday report turned on or off. */
   setReports: (enabled: boolean) => WeeklyReportsView;
 }
@@ -1155,6 +1161,24 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
    * survey's answers. The week's priority is what StayPut did next (the following week's saves);
    * the last report's, the dashboard's. Each one sent on its Monday at 8:00.
    */
+  // The community's Whop team: its owner, a moderator, and an assistant who never opened StayPut.
+  const team: TeamView = {
+    members: [
+      {
+        userId: 'user_demo',
+        name: 'Alexandre Roy',
+        username: 'alex.roy',
+        openedAt: at(4 * MINUTE),
+      },
+      {
+        userId: 'user_demoMod',
+        name: 'Mélanie Dupuis',
+        username: 'melanie.mod',
+        openedAt: at(2 * DAY + 3 * HOUR),
+      },
+      { userId: 'user_demoHelp', name: 'Yusuf Kaya', username: 'yusuf.k', openedAt: null },
+    ],
+  };
   let reportsOn = true;
   const weeklyReports = (current: PriorityAction | null): WeeklyReportsView => {
     const zone = settings.timezone;
@@ -1440,6 +1464,15 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
         })),
       };
     },
+    team: () => team,
+    exportData: () => ({
+      exportedAt: new Date(now).toISOString(),
+      company: { id: DEMO_COMPANY_ID, name: COMMUNITY, is_demo: true },
+      team: team.members,
+      tables: {
+        members: { rows: members.members.map((m) => ({ ...m })), truncated: false },
+      },
+    }),
     reports: () => weeklyReports(world.dashboard().priority),
     setReports: (enabled) => {
       reportsOn = enabled;

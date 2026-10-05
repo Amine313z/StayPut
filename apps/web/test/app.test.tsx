@@ -39,6 +39,8 @@ import type {
   WeeklyReportsView,
   BenchmarksView,
   BadgeView,
+  TeamView,
+  DataExport,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS, forecastRevenue } from '@stayput/core';
 import type { Locale } from '@stayput/i18n';
@@ -5026,6 +5028,86 @@ describe('the creator’s frame', () => {
         'Votre badge apparaît dès qu’au moins 10 membres sont arrivés il y a plus de 90 jours (4 pour l’instant).',
       ),
     ).toBeTruthy();
+  });
+
+  it('lists the Whop team, and who opened StayPut', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/team': [
+        {
+          status: 200,
+          body: {
+            members: [
+              {
+                userId: 'user_alice',
+                name: 'Alice Martin',
+                username: 'alice',
+                openedAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+              },
+              { userId: 'user_bob', name: null, username: null, openedAt: null },
+            ],
+          } satisfies TeamView,
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/settings');
+    const team = within(await screen.findByRole('list', { name: 'Team' }));
+    // The lines each row shows (the avatar's initials are decoration).
+    const rows = team
+      .getAllByRole('listitem')
+      .map((row) => [...row.querySelectorAll('p')].map((line) => line.textContent));
+    expect(rows).toEqual([
+      ['Alice Martin', '@alice', 'Opened StayPut 2 days ago'],
+      ['A team member', 'Has not opened StayPut yet'],
+    ]);
+  });
+
+  it('exports the community’s data as a file, and deletes it once its name is typed again', async () => {
+    const exported: DataExport = {
+      exportedAt: '2026-10-05T09:00:00.000Z',
+      company: { id: 'biz_A1', name: 'Le Club' },
+      team: [],
+      tables: { members: { rows: [], truncated: false } },
+    };
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/export': [{ status: 200, body: exported }],
+      'POST /api/creator/biz_A1/data/delete': [{ status: 200, body: { deleted: true } }],
+    });
+    const createObjectURL = vi.fn(() => 'blob:stayput-export');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL, revokeObjectURL }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    try {
+      renderAt('/dashboard/biz_A1/settings');
+      const card = (await screen.findByRole('heading', { name: 'Your data' })).closest('section')!;
+      fireEvent.click(within(card).getByRole('button', { name: 'Export my data (JSON)' }));
+      await vi.waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+      const link = click.mock.contexts[0] as HTMLAnchorElement;
+      expect(link.download).toBe('stayput-biz_A1-2026-10-05.json');
+      const blob = (createObjectURL.mock.calls[0] as unknown as [Blob])[0];
+      expect(JSON.parse(await blob.text())).toEqual(exported);
+
+      fireEvent.click(within(card).getByRole('button', { name: 'Delete all data' }));
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Delete all of your community’s data?',
+      });
+      const confirm = within(dialog).getByRole('button', { name: 'Delete everything' });
+      const field = within(dialog).getByRole('textbox', { name: 'Type “Le Club” to confirm' });
+      fireEvent.change(field, { target: { value: 'Le Clu' } });
+      expect(confirm.hasAttribute('disabled')).toBe(true);
+      fireEvent.change(field, { target: { value: 'Le Club' } });
+      expect(confirm.hasAttribute('disabled')).toBe(false);
+      fireEvent.click(confirm);
+      expect(
+        await screen.findByText(
+          'Everything is deleted. Reopen StayPut to start again from Whop’s data.',
+        ),
+      ).toBeTruthy();
+      expect(bodies.get('POST /api/creator/biz_A1/data/delete')).toEqual({ confirm: 'biz_A1' });
+    } finally {
+      click.mockRestore();
+    }
   });
 
   it('lists the other sections under « More » on a phone', async () => {

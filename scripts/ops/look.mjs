@@ -674,6 +674,15 @@ report.badge = await desktop.page.evaluate(() => ({
 await desktop.page
   .locator('section:has([data-badge])')
   .screenshot({ path: `${out}/settings-badge.png` });
+// Settings › General, the team and the data (SPEC 6.12): who opened StayPut, the export, and
+// deleting greyed in the demo.
+await desktop.page.locator('ul[aria-label="Team"] li').first().waitFor({ timeout: 30_000 });
+report.team = await desktop.page.evaluate(() => ({
+  rows: document.querySelectorAll('ul[aria-label="Team"] li').length,
+  greyed: [...document.querySelectorAll('[data-demo-disabled]')].filter((button) =>
+    /Delete all data/.test(button.textContent ?? ''),
+  ).length,
+}));
 
 // Automations › Queue › History: what came of each action, the proof of value (block 4).
 await desktop.page.goto(`${base}/demo/actions/queue/history`, { waitUntil: 'domcontentloaded' });
@@ -956,6 +965,8 @@ const ok =
   /^Verified retention: \d+% at 90 days$/.test(report.badge.alt ?? '') &&
   report.badge.code &&
   report.badge.greyed === 1 &&
+  report.team.rows === 3 &&
+  report.team.greyed === 1 &&
   report.analytics.reports.sent &&
   report.analytics.reports.switchOn;
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);

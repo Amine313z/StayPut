@@ -57,7 +57,9 @@ avec « Désactiver ». La langue (English par défaut, Français) se change **u
 Réglages › Général, et n'est retenue que pour l'app de cette communauté : la démo s'ouvre
 toujours en anglais. Les montants s'écrivent comme sur Whop, symbole et centimes compris
 (« $247.00 », « 247,00 $ »). L'identifiant brut de la communauté (`biz_…`) n'apparaît que dans
-Réglages › Général › « Développeur ». Sur un téléphone, les rubriques passent dans une barre en bas de l'écran. Les
+Réglages › Général › « Développeur ». Réglages › Général montre aussi l'équipe Whop (qui a ouvert
+StayPut, et quand), exporte toutes les données de la communauté en un fichier JSON et les supprime
+une fois son nom retapé. Sur un téléphone, les rubriques passent dans une barre en bas de l'écran. Les
 couleurs, polices et animations suivent [`docs/design-tokens.md`](./docs/design-tokens.md) et
 [`MOTION.md`](./MOTION.md).
 

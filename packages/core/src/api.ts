@@ -1467,6 +1467,31 @@ export interface BadgeView {
   verifyUrl: string;
 }
 
+/** GET /api/creator/:companyId/team (SPEC Phase 6.12): the Whop team, and who opened StayPut. */
+export interface TeamView {
+  members: TeamMember[];
+}
+
+export interface TeamMember {
+  userId: string;
+  /** As Whop lists the team among the members; null for one StayPut knows only by id. */
+  name: string | null;
+  username: string | null;
+  /** When they last opened StayPut; null: never yet. */
+  openedAt: string | null;
+}
+
+/**
+ * GET /api/creator/:companyId/export (SPEC Phase 6.12): everything StayPut keeps about the
+ * community, table by table, as stored.
+ */
+export interface DataExport {
+  exportedAt: string;
+  company: Record<string, unknown>;
+  team: TeamMember[];
+  tables: Record<string, { rows: Record<string, unknown>[]; truncated: boolean }>;
+}
+
 /** GET /health */
 export interface HealthReport {
   status: 'ok' | 'degraded';

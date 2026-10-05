@@ -61,6 +61,7 @@ import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
 import { readBadge, readPublicBadge, saveBadgeSetting } from './badge';
 import { readBenchmarks, saveBenchmarksSetting } from './benchmarks';
+import { deleteCompanyData, exportCompanyData, readTeam } from './data';
 import { readWeeklyReports, saveWeeklyReportSetting } from './reports';
 import { alumniOfMember, createAlumniOffer, readAlumni } from './alumni';
 import { readInsightsOverview } from './analytics';
@@ -887,6 +888,52 @@ export function createApp(deps: AppDeps) {
         deps.now(),
       );
       return overview ? c.json(overview) : apiError('not_found', 'no such company');
+    },
+  );
+
+  /** Settings › General, the team (SPEC Phase 6.12): Whop's, and who opened StayPut. */
+  app.get('/api/creator/:companyId/team', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    return c.json(await readTeam(db, c.get('userId'), c.get('companyId')));
+  });
+
+  /**
+   * Settings › General, « Export my data » (SPEC Phase 6.12): everything StayPut keeps about the
+   * community, as a JSON file.
+   */
+  app.get('/api/creator/:companyId/export', authenticate, withDb, requireCreator, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const companyId = c.get('companyId');
+    const data = await exportCompanyData(db, c.get('userId'), companyId, deps.now());
+    if (!data) return apiError('not_found', 'no such company');
+    const day = data.exportedAt.slice(0, 10);
+    return c.json(data, 200, {
+      'Content-Disposition': `attachment; filename="stayput-${companyId}-${day}.json"`,
+    });
+  });
+
+  /**
+   * Settings › General, « Delete all data » (SPEC Phase 6.12): everything StayPut keeps about the
+   * community, at once. The request names the community again, so that no stray call deletes.
+   */
+  app.post(
+    '/api/creator/:companyId/data/delete',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const companyId = c.get('companyId');
+      const body = await c.req.json<unknown>().catch(() => null);
+      if ((body as { confirm?: unknown } | null)?.confirm !== companyId) {
+        return apiError('invalid_request', 'expected { confirm: <the company id> }');
+      }
+      const deleted = await deleteCompanyData(db, companyId);
+      console.info(`Data of ${companyId} deleted at the request of ${c.get('userId')}.`);
+      return c.json({ deleted });
     },
   );
 

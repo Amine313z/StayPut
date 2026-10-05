@@ -25,6 +25,7 @@ import {
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { putJson, useApi } from '../../api';
 import { BadgeCard } from '../../components/BadgeCard';
+import { DataCard, TeamCard } from '../../components/DataCards';
 import { LEVELS } from '../../components/Risk';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { useI18n } from '../../i18n';
@@ -81,12 +82,13 @@ function WithRiskSettings({ children }: { children: (settings: RiskSettingsView)
 
 /**
  * Settings › General: the language (the only place it changes, English by default), the « Verified
- * retention » badge (SPEC 6.11) and what a developer or Whop's support asks for, the community's
- * id. There is no theme to choose: dark is StayPut's only one.
+ * retention » badge (SPEC 6.11), the team and the community's data (6.12), and what a developer
+ * or Whop's support asks for, the community's id. There is no theme to choose: dark is StayPut's
+ * only one.
  */
 export function GeneralSettingsTab() {
   const { t } = useI18n();
-  const { companyId, api, integrations } = useCreatorData();
+  const { companyId, companyName, api, integrations } = useCreatorData();
   const languageId = useId();
   const [copied, setCopied] = useState(false);
   return (
@@ -103,6 +105,8 @@ export function GeneralSettingsTab() {
         api={api}
         integrations={integrations.state.status === 'ready' ? integrations.state.data : null}
       />
+      <TeamCard api={api} />
+      <DataCard api={api} companyId={companyId} companyName={companyName} />
       <Card
         icon={<Code aria-hidden="true" className="size-4" />}
         title={t('settings.developer')}

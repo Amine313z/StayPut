@@ -92,6 +92,10 @@ export async function answerDemo(method: string, path: string, body: unknown): P
         return answer(pages.accounts());
       case 'reports':
         return answer(demo.reports());
+      case 'team':
+        return answer(demo.team());
+      case 'export':
+        return answer(demo.exportData());
       case 'benchmarks':
         return answer(pages.benchmarks());
       case 'badge':

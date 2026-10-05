@@ -28,6 +28,8 @@ import type {
   WeeklyReportsView,
   BenchmarksView,
   BadgeView,
+  TeamView,
+  DataExport,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS } from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
@@ -1701,6 +1703,7 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
     headers: { ...init.headers, 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
+  const post = (init: RequestInit, body: unknown) => ({ ...put(init, body), method: 'POST' });
 
   it('reads the settings, saves new ones brought back to a sum of 1, refuses nonsense', async () => {
     const { request } = setup({ 'user_rita:biz_Risk1': 'admin', 'user_sam:biz_Risk1': 'customer' });
@@ -1787,6 +1790,38 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
       reasons: [],
     });
     expect(overview.activity).toHaveLength(30);
+  });
+
+  it('lists the team, exports the data and deletes it on demand', async () => {
+    const { request } = setup({ 'user_rita:biz_Data1': 'admin', 'user_sam:biz_Data1': 'customer' });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Data1/session', init);
+    await settle();
+    const team = (await (await request('/api/creator/biz_Data1/team', init)).json()) as TeamView;
+    expect(team.members.map((m) => m.userId)).toEqual(['user_rita']);
+    const exported = await request('/api/creator/biz_Data1/export', init);
+    expect(exported.status).toBe(200);
+    expect(exported.headers.get('content-disposition')).toMatch(
+      /^attachment; filename="stayput-biz_Data1-\d{4}-\d{2}-\d{2}\.json"$/,
+    );
+    const data = (await exported.json()) as DataExport;
+    expect(data.company).toMatchObject({ id: 'biz_Data1' });
+    expect(data.tables.members).toEqual({ rows: [], truncated: false });
+    // Deleting needs the community named again.
+    const path = '/api/creator/biz_Data1/data/delete';
+    expect((await request(path, post(init, {}))).status).toBe(400);
+    expect((await request(path, post(init, { confirm: 'biz_Other' }))).status).toBe(400);
+    const customer = await asUser('user_sam');
+    expect((await request(path, post(customer, { confirm: 'biz_Data1' }))).status).toBe(403);
+    expect((await request('/api/creator/biz_Data1/export', customer)).status).toBe(403);
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const deleted = await request(path, post(init, { confirm: 'biz_Data1' }));
+    expect(await deleted.json()).toEqual({ deleted: true });
+    info.mockRestore();
+    const [left] = await t.db.query<{ n: number }>(
+      `select count(*)::int as n from stayput.companies where id = 'biz_Data1'`,
+    );
+    expect(left!.n).toBe(0);
   });
 
   it('serves the verified retention badge and its page once the team turns it on', async () => {

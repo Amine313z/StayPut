@@ -3237,3 +3237,59 @@ prévu.
   l'active, disparaissent quand on le désactive.
 - `apps/web/test/app.test.tsx` et `demo.test.ts` : la carte, le code à coller, le message
   d'attente en français, la démo.
+
+## 2026-10-05 — Phase 6.12 : l'équipe, l'export et la suppression des données
+
+### L'équipe
+
+- Réglages › Général › « Équipe » : les administrateurs que Whop liste parmi les membres de la
+  communauté, et pour chacun s'il a ouvert StayPut et quand pour la dernière fois
+  (`company_admins.verified_at`). 0038 ajoute `team_access(company)`, qui ne répond qu'à un
+  membre de l'équipe.
+- On n'ajoute ni ne retire personne dans StayPut : c'est Whop qui décide qui fait partie de
+  l'équipe (chaque ouverture est vérifiée auprès de Whop). La carte le dit.
+- Sur téléphone, « A ouvert StayPut il y a… » passe sous le nom pour que le nom reste entier.
+
+### L'export
+
+- « Exporter mes données (JSON) » : un fichier `stayput-<id>-<jour>.json` avec la communauté,
+  l'équipe et **toutes les tables qui ont un `company_id`**, lues sous RLS comme le membre de
+  l'équipe (donc seulement les lignes de sa communauté). 100 000 lignes au plus par table ; au-delà,
+  la table le dit (`truncated`).
+- Quatre tables restent dehors, chacune avec sa raison dans `apps/worker/src/data.ts`
+  (`NOT_EXPORTED`) : `company_admins` (déjà dans `team`), `company_sync` (la tenue de compte du
+  Worker), `pending_activity` (messages qui attendent quelques minutes leur membre) et
+  `webhook_events` (les envois bruts de Whop, gardés quelques jours). Une nouvelle table avec un
+  `company_id` doit aller dans l'une des deux listes : `data-sql.test.ts` échoue sinon.
+- Aucune table ne garde de secret (vérifié dans les migrations) : rien à masquer dans l'export.
+- La démo exporte aussi (un fichier de ses données fictives) : ce n'est ni un lien sortant ni une
+  action qui détruit.
+
+### La suppression
+
+- « Supprimer toutes les données » ouvre une fenêtre qui dit ce qui part et demande de retaper le
+  nom de la communauté. La requête répète l'identifiant de la communauté
+  (`{ confirm: <id> }`) : un appel égaré ne supprime rien.
+- `delete_company_data(company)` (0038, réservée au Worker, jamais à `stayput_user`) supprime la
+  communauté — tout le reste suit par `on delete cascade` — et ses `webhook_events`. Le Worker
+  écrit dans ses journaux qui l'a demandé.
+- Si StayPut reste installé, il repart des données de Whop à la prochaine ouverture ou
+  synchronisation ; pour arrêter pour de bon, il faut le désinstaller depuis Whop. La fenêtre le
+  dit. La suppression automatique 30 jours après la désinstallation vient avec la Phase 8.
+- Grisé dans la démo, avec « Désactivé dans la démo ».
+
+### Tests
+
+- `apps/worker/test/data-sql.test.ts` : chaque table avec un `company_id` est exportée ou a sa
+  raison ; l'export ne contient que les lignes de la communauté et rien pour l'équipe d'une autre ;
+  l'équipe et qui a ouvert StayPut ; la suppression vide toutes les tables d'une communauté et ne
+  touche pas à l'autre.
+- `apps/worker/test/app.test.ts` : l'équipe, l'export en pièce jointe, la suppression refusée
+  sans le bon identifiant ou à qui n'est pas de l'équipe, acceptée sinon.
+- `apps/web/test/app.test.tsx` : la liste de l'équipe, le fichier téléchargé, le bouton
+  « Tout supprimer » actif seulement une fois le nom retapé.
+
+### Incertain
+
+- Dans le cadre (iframe) de Whop, le téléchargement d'un fichier peut être bloqué par le bac à
+  sable du cadre. À essayer sur le sandbox ; sinon, ouvrir l'export dans un nouvel onglet.
