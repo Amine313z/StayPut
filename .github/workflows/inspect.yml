@@ -75,6 +75,10 @@ jobs:
           expect /demo 200 text/html
           expect /whop-frame.mjs 200 javascript
           expect /api/creator/biz_2whAzkbCRpcGqQ/session 401 json
+          # The badge and its verification page are the Worker's, never the app's (wrangler.toml,
+          # run_worker_first): for no community, each says so.
+          expect /verify/biz_NoSuchCommunity 404 text/html
+          expect /badge/biz_NoSuchCommunity.svg 404 json
           exit $failed
 
   # The browser tests (apps/web/e2e) on the deployed demo, its fonts loaded as creators get

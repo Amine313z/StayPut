@@ -9,7 +9,7 @@ compatibility_flags = ["nodejs_compat"]
 directory = "../web/dist"
 not_found_handling = "single-page-application"
 # These paths run the Worker; every other path is a file of the React build (or index.html).
-run_worker_first = ["/api/*", "/auth/*", "/webhooks/*", "/health", "/badge/*", "/v/*"]
+run_worker_first = ["/api/*", "/auth/*", "/webhooks/*", "/health", "/badge/*", "/verify/*", "/v/*"]
 
 [vars]
 # "sandbox" until the switch to production (SPEC, rule 4).

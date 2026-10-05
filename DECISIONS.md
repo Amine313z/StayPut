@@ -3347,3 +3347,13 @@ prévu.
   essayé sur un PostgreSQL 16 local avant de tourner en production.
 - `scripts/ops/look.mjs` photographie aussi chaque page de Réglages, la liste « Ne pas
   contacter » et les chiffres de l'Alumni.
+
+## 2026-10-05 — Correctif : la page de vérification du badge
+
+- `/verify/<id>` n'était pas dans `run_worker_first` (wrangler.toml) : en production, Cloudflare y
+  servait l'application React (sa page « introuvable ») au lieu de la page de vérification du
+  Worker. Les tests appelaient le Worker directement et ne pouvaient pas le voir.
+- Corrigé, et `apps/worker/test/routing.test.ts` vérifie désormais que **chaque route du Worker**
+  est dans `run_worker_first` (il échouait sur `/verify` avant le correctif). Inspect demande
+  aussi `/verify/…` et `/badge/….svg` d'une communauté qui n'existe pas : 404 du Worker, pas la
+  page de l'application.
