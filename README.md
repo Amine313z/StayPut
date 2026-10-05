@@ -173,18 +173,23 @@ une nouvelle adresse ne répond pas encore, relancer le workflow quelques minute
 
 Tout se range dans **Settings → Secrets and variables → Actions** du dépôt, jamais dans le code :
 
-| Nom                     | Type     | Contenu                                                                       | Requis            |
-| ----------------------- | -------- | ----------------------------------------------------------------------------- | ----------------- |
-| `CLOUDFLARE_API_TOKEN`  | secret   | jeton « Edit Cloudflare Workers » + permission Hyperdrive : Edit              | oui               |
-| `CLOUDFLARE_ACCOUNT_ID` | secret   | identifiant du compte Cloudflare                                              | oui               |
-| `SUPABASE_DB_URL`       | secret   | URI « Session pooler » de Supabase, mot de passe compris                      | oui               |
-| `WHOP_API_KEY`          | secret   | clé API **de l'app** Whop (pas celle du compte)                               | pour l'API Whop   |
-| `WHOP_WEBHOOK_SECRET`   | secret   | secret `ws_…` du webhook de l'app                                             | pour les webhooks |
-| `DISCORD_BOT_TOKEN`     | secret   | jeton du bot de l'application Discord de StayPut                              | pour Discord      |
-| `DISCORD_CLIENT_SECRET` | secret   | « Client Secret » de la même application (onglet OAuth2)                      | pour Discord      |
-| `TELEGRAM_BOT_TOKEN`    | secret   | jeton du bot Telegram donné par @BotFather                                    | pour Telegram     |
-| `WHOP_ENV`              | variable | `production` au passage en production (sinon `sandbox`, dans `wrangler.toml`) | non               |
-| `WHOP_APP_ID`           | variable | l'app de production (`app_…`) ; celle du sandbox est dans `wrangler.toml`     | en production     |
+| Nom                     | Type     | Contenu                                                                     | Requis            |
+| ----------------------- | -------- | --------------------------------------------------------------------------- | ----------------- |
+| `CLOUDFLARE_API_TOKEN`  | secret   | jeton « Edit Cloudflare Workers » + permission Hyperdrive : Edit            | oui               |
+| `CLOUDFLARE_ACCOUNT_ID` | secret   | identifiant du compte Cloudflare                                            | oui               |
+| `SUPABASE_DB_URL`       | secret   | URI « Session pooler » de Supabase, mot de passe compris                    | oui               |
+| `WHOP_API_KEY`          | secret   | clé API **de l'app** Whop (pas celle du compte)                             | pour l'API Whop   |
+| `WHOP_WEBHOOK_SECRET`   | secret   | secret `ws_…` du webhook de l'app                                           | pour les webhooks |
+| `DISCORD_BOT_TOKEN`     | secret   | jeton du bot de l'application Discord de StayPut                            | pour Discord      |
+| `DISCORD_CLIENT_SECRET` | secret   | « Client Secret » de la même application (onglet OAuth2)                    | pour Discord      |
+| `TELEGRAM_BOT_TOKEN`    | secret   | jeton du bot Telegram donné par @BotFather                                  | pour Telegram     |
+| `WHOP_ENV`              | variable | `sandbox` par défaut (`wrangler.toml`) ; la cible `production` fixe le sien | non               |
+| `WHOP_APP_ID`           | variable | l'app du sandbox est dans `wrangler.toml`                                   | non               |
+
+**La production** est un second Worker, `stayput-app`, avec sa propre base, sa propre app Whop
+et ses propres réglages, les mêmes noms préfixés `PRODUCTION_` (un manquant arrête le
+déploiement, jamais remplacé par celui du sandbox) : **Actions → Deploy → Run workflow → target :
+production**. La checklist complète est dans [`docs/production.md`](./docs/production.md).
 
 Sans GitHub Actions : `supabase/install.sql` dans le SQL Editor de Supabase, puis depuis
 `apps/worker` `npx wrangler hyperdrive create stayput-db --connection-string="…" --caching-disabled`

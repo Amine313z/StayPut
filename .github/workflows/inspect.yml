@@ -4,17 +4,30 @@ name: Inspect
 # what the database holds, as counts only (scripts/ops/inspect.ts), which permissions Whop
 # grants the app's key (scripts/ops/whop-permissions.ts), how Telegram sees the connected
 # groups (scripts/ops/telegram-groups.ts), and what a browser gets from the deployed Worker.
-# It changes nothing.
+# It changes nothing. On production (`target`), only what the browser gets: this repository is
+# public, and so are its runs' logs, where no creator's community may show.
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Which deployment to look at
+        type: choice
+        options: [sandbox, production]
+        default: sandbox
 
 permissions:
   contents: read
+
+env:
+  # The deployed Worker: STAYPUT_URL (PRODUCTION_STAYPUT_URL for production) when it has an
+  # address of its own, else the one wrangler gave it.
+  DEFAULT_URL: ${{ inputs.target == 'production' && 'https://stayput-app.chezbenz18.workers.dev' || 'https://stayput.chezbenz18.workers.dev' }}
 
 jobs:
   inspect:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: ${{ inputs.target || 'sandbox' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -23,15 +36,18 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Read the database (counts only, nothing personal)
+        if: ${{ (inputs.target || 'sandbox') == 'sandbox' }}
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: npx tsx scripts/ops/inspect.ts
       - name: Ask Whop which permissions the app key has (never prints the key)
+        if: ${{ (inputs.target || 'sandbox') == 'sandbox' }}
         env:
           WHOP_API_KEY: ${{ secrets.WHOP_API_KEY }}
           WHOP_ENV: ${{ vars.WHOP_ENV }}
         run: npx tsx scripts/ops/whop-permissions.ts
       - name: Ask Telegram about the connected groups (never prints the token, a name or an id)
+        if: ${{ (inputs.target || 'sandbox') == 'sandbox' }}
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -48,7 +64,7 @@ jobs:
       - name: Ask the deployed Worker for the site
         if: always()
         env:
-          STAYPUT_URL: ${{ vars.STAYPUT_URL || 'https://stayput.chezbenz18.workers.dev' }}
+          STAYPUT_URL: ${{ vars[inputs.target == 'production' && 'PRODUCTION_STAYPUT_URL' || 'STAYPUT_URL'] || env.DEFAULT_URL }}
         run: |
           body="$RUNNER_TEMP/body"
           failed=0
@@ -98,6 +114,7 @@ jobs:
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: ${{ inputs.target || 'sandbox' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -107,7 +124,7 @@ jobs:
       - run: npm ci
       - name: Run the browser tests on the deployed demo in Chrome
         env:
-          STAYPUT_URL: ${{ vars.STAYPUT_URL || 'https://stayput.chezbenz18.workers.dev' }}
+          STAYPUT_URL: ${{ vars[inputs.target == 'production' && 'PRODUCTION_STAYPUT_URL' || 'STAYPUT_URL'] || env.DEFAULT_URL }}
         run: npm run e2e
 
   # The deployed demo in a real browser (scripts/ops/look.mjs): whether StayPut's fonts loaded
@@ -117,6 +134,7 @@ jobs:
   look:
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    environment: ${{ inputs.target || 'sandbox' }}
     permissions:
       contents: write
     steps:
@@ -126,7 +144,7 @@ jobs:
           node-version-file: .nvmrc
       - name: Look at the deployed demo in Chrome
         env:
-          STAYPUT_URL: ${{ vars.STAYPUT_URL || 'https://stayput.chezbenz18.workers.dev' }}
+          STAYPUT_URL: ${{ vars[inputs.target == 'production' && 'PRODUCTION_STAYPUT_URL' || 'STAYPUT_URL'] || env.DEFAULT_URL }}
         run: |
           work="$RUNNER_TEMP/look"
           mkdir -p "$work/out"
@@ -144,19 +162,21 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
+      # Production's on their own branch, « screenshots-production ».
       - name: Keep the screenshots on the screenshots branch
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ inputs.target == 'production' && 'screenshots-production' || 'screenshots' }}
         run: |
           cd "$RUNNER_TEMP/look/out" || exit 0
           printf '%s\n' "# Screenshots of the deployed demo" "" \
             "Taken by the Inspect workflow (scripts/ops/look.mjs) from commit $GITHUB_SHA." \
             "Replaced at each run." > README.md
           git init -q
-          git checkout -q -b screenshots
+          git checkout -q -b "$BRANCH"
           git add .
           git -c user.name='StayPut Inspect' -c user.email='inspect@users.noreply.github.com' \
             commit -q -m "Screenshots of the deployed demo ($GITHUB_SHA)"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            screenshots
+            "$BRANCH"

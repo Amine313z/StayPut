@@ -1,20 +1,31 @@
 name: Deploy
 
 # Started by hand: GitHub -> Actions -> Deploy -> Run workflow (or by Claude through the API).
-# Every value comes from the repository's secrets and variables (README.md, Deployment).
+# Two targets (docs/production.md): the sandbox Worker « stayput », with the repository's secrets
+# and variables (README.md, Deployment), and the production Worker « stayput-app ». Production
+# reads its own values under PRODUCTION_<name> (scripts/deploy/prepare.ts, PRODUCTION_OWN): one
+# missing stops the deployment, never replaced by the sandbox's. Cloudflare and Discord are shared.
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Where to deploy
+        type: choice
+        options: [sandbox, production]
+        default: sandbox
 
 concurrency:
-  group: deploy
+  group: deploy-${{ inputs.target || 'sandbox' }}
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    environment: ${{ inputs.target || 'sandbox' }}
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      STAYPUT_TARGET: ${{ inputs.target || 'sandbox' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -29,32 +40,35 @@ jobs:
       - name: Check the configuration and prepare the Worker secrets
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          WHOP_API_KEY: ${{ secrets.WHOP_API_KEY }}
-          WHOP_WEBHOOK_SECRET: ${{ secrets.WHOP_WEBHOOK_SECRET }}
+          SUPABASE_DB_URL: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_SUPABASE_DB_URL' || 'SUPABASE_DB_URL'] }}
+          WHOP_API_KEY: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_WHOP_API_KEY' || 'WHOP_API_KEY'] }}
+          WHOP_WEBHOOK_SECRET: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_WHOP_WEBHOOK_SECRET' || 'WHOP_WEBHOOK_SECRET'] }}
           # Optional modules: Discord (both) and Telegram, each off until its secrets exist.
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          WHOP_ENV: ${{ vars.WHOP_ENV }}
-          WHOP_APP_ID: ${{ vars.WHOP_APP_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_TELEGRAM_BOT_TOKEN' || 'TELEGRAM_BOT_TOKEN'] }}
+          WHOP_ENV: ${{ inputs.target == 'production' && 'production' || vars.WHOP_ENV }}
+          WHOP_APP_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_APP_ID' || 'WHOP_APP_ID'] }}
+          OPERATOR_COMPANY_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_OPERATOR_COMPANY_ID' || 'OPERATOR_COMPANY_ID'] }}
         run: npx tsx scripts/deploy/prepare.ts "$RUNNER_TEMP/secrets.json"
 
       # A key copied wrong stops here, before anything changes (Whop answers 401 to it).
       - name: Ask Whop whether it accepts the app key
         env:
-          WHOP_API_KEY: ${{ secrets.WHOP_API_KEY }}
-          WHOP_ENV: ${{ vars.WHOP_ENV }}
+          WHOP_API_KEY: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_WHOP_API_KEY' || 'WHOP_API_KEY'] }}
+          WHOP_ENV: ${{ inputs.target == 'production' && 'production' || vars.WHOP_ENV }}
         run: npx tsx scripts/deploy/check-whop.ts apps/worker/wrangler.toml
 
+      # Also claims the database for this deployment, or stops when the other one claimed it
+      # (scripts/deploy/claim.ts): one database, one deployment.
       - name: Apply the database migrations
         env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DATABASE_URL: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_SUPABASE_DB_URL' || 'SUPABASE_DB_URL'] }}
         run: npm run db:migrate
 
       - name: Connect the Worker to the database (Hyperdrive)
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_DB_URL: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_SUPABASE_DB_URL' || 'SUPABASE_DB_URL'] }}
         run: npx tsx scripts/deploy/hyperdrive.ts apps/worker/wrangler.toml
 
       # Satoshi's license forbids passing its files on and this repository is public: the font is
@@ -65,13 +79,14 @@ jobs:
       - run: npm run build
 
       # WHOP_ENV, WHOP_APP_ID and OPERATOR_COMPANY_ID come from wrangler.toml (the sandbox) unless
-      # the repository variables of the same name are set (production).
+      # the variables are set (always for production, checked above). Production is its own
+      # Worker, « stayput-app », beside the sandbox's « stayput ».
       - name: Publish the Worker
         working-directory: apps/worker
         env:
-          WHOP_APP_ID: ${{ vars.WHOP_APP_ID }}
-          WHOP_ENV: ${{ vars.WHOP_ENV }}
-          OPERATOR_COMPANY_ID: ${{ vars.OPERATOR_COMPANY_ID }}
+          WHOP_APP_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_APP_ID' || 'WHOP_APP_ID'] }}
+          WHOP_ENV: ${{ inputs.target == 'production' && 'production' || vars.WHOP_ENV }}
+          OPERATOR_COMPANY_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_OPERATOR_COMPANY_ID' || 'OPERATOR_COMPANY_ID'] }}
         run: |
           overrides=()
           if [ -n "$WHOP_ENV" ]; then overrides+=(--var "WHOP_ENV:$WHOP_ENV"); fi
@@ -79,6 +94,7 @@ jobs:
           if [ -n "$OPERATOR_COMPANY_ID" ]; then
             overrides+=(--var "OPERATOR_COMPANY_ID:$OPERATOR_COMPANY_ID")
           fi
+          if [ "$STAYPUT_TARGET" = production ]; then overrides+=(--name stayput-app); fi
           npx wrangler deploy --secrets-file "$RUNNER_TEMP/secrets.json" "${overrides[@]}" |
             tee "$RUNNER_TEMP/deploy.log"
           rm -f "$RUNNER_TEMP/secrets.json"
@@ -123,5 +139,5 @@ jobs:
         env:
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_CLIENT_SECRET: ${{ secrets.DISCORD_CLIENT_SECRET }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_TELEGRAM_BOT_TOKEN' || 'TELEGRAM_BOT_TOKEN'] }}
         run: npx tsx scripts/deploy/check-bots.ts "$WORKER_URL"

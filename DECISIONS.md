@@ -3544,3 +3544,58 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
   (Bo à risque, à cause du paiement) → en mode automatique, l'avis et la nouvelle tentative
   planifiés sans approbation puis envoyés par Whop → Whop envoie le paiement réussi → le
   sauvetage de 49 $ attribué à l'action, une seule fois, et affiché sur le tableau de bord.
+
+## 2026-10-05 — Le premier rapport du lundi, dans le sandbox
+
+- Fait à 8 h 00 (Paris) pour la semaine du 28/09 et **accepté par Whop** (`POST /notifications`,
+  `account_id` = la communauté) : envoyé à 06:00:18 UTC, aucun essai raté, aucune erreur. Pourtant
+  `GET /permissions` dit toujours `notification:create` non accordée : le 403 attendu à l'arrêt de
+  la Phase 6 n'est pas venu.
+- Incertain : qu'elle soit vraiment arrivée. Whop a répondu sans erreur, rien de plus : à voir
+  dans la cloche de Whop (sandbox) de « StayPut Test ». Si elle n'y est pas, Whop accepte sans
+  livrer, et « Envoyé » dans Analyses › Rapports dirait plus que ce qui est sûr.
+
+## 2026-10-05 — Phase 9.1 et 9.2 : la production, un second déploiement
+
+- La production est un **second Worker**, `stayput-app`
+  (`https://stayput-app.chezbenz18.workers.dev`), à côté du sandbox `stayput` qui reste pour les
+  essais : sa propre base Supabase, sa propre connexion Hyperdrive (`stayput-db-production`), sa
+  propre app Whop. Le workflow Deploy a un choix `target` (`sandbox` par défaut, ou
+  `production`) ; Inspect aussi, mais sur la production il ne regarde que ce que voit un
+  navigateur : le dépôt est public, ses journaux aussi, et aucune communauté cliente ne doit y
+  apparaître. L'état de la production se lit dans StayPut, Réglages › État.
+- **Les réglages de la production portent le préfixe `PRODUCTION_`**
+  (`PRODUCTION_SUPABASE_DB_URL`, `PRODUCTION_WHOP_API_KEY`, `PRODUCTION_WHOP_WEBHOOK_SECRET`,
+  `PRODUCTION_TELEGRAM_BOT_TOKEN`, `PRODUCTION_WHOP_APP_ID`, `PRODUCTION_OPERATOR_COMPANY_ID`)
+  plutôt que les mêmes noms dans un environnement GitHub. Un secret d'environnement remplace
+  celui du dépôt, mais un secret oublié laisse passer celui du dépôt, donc celui du sandbox, sans
+  rien dire : la production aurait écrit dans la base du sandbox. Avec un nom à elle, un réglage
+  manquant arrête le déploiement, qui le nomme. L'environnement GitHub « production » sert à les
+  ranger et à exiger ton accord avant chaque déploiement de production. `WHOP_ENV` n'est plus à
+  régler : la cible le fixe. Pour l'opérateur, ceci remplace « la variable de dépôt du même nom »
+  de la Phase 8.5.
+- En production, la clé et le secret du webhook de Whop, l'app et la communauté de l'opérateur
+  sont obligatoires (le sandbox peut tourner sans) ; un identifiant collé sous une autre forme
+  (une adresse à la place du `biz_…`) est refusé.
+- **Une base, un déploiement** (migration 0043, `scripts/deploy/claim.ts`) : le premier
+  déploiement qui migre une base l'inscrit dans `stayput.app_settings.deployment_target` ;
+  l'autre est ensuite refusé avant toute migration, sans rien modifier.
+- **Telegram** : un bot n'a qu'une adresse de webhook, que le Worker règle lui-même ; partagé, il
+  passerait d'un Worker à l'autre. Sans `PRODUCTION_TELEGRAM_BOT_TOKEN`, Telegram reste donc
+  éteint en production : il faut un second bot. Discord, sans webhook, sert les deux (une
+  redirection OAuth de plus).
+- La checklist complète : `docs/production.md`.
+
+### Testé
+
+- `apps/worker/test/deploy.test.ts` : les réglages `PRODUCTION_…` exigés et nommés tels qu'ils
+  sont rangés, les identifiants mal collés refusés, la cible et l'environnement de Whop qui
+  doivent s'accorder, une connexion Hyperdrive par déploiement.
+- `apps/worker/test/claim.test.ts` (Postgres en mémoire) : la base réservée par le premier
+  déploiement, refusée à l'autre et restée au premier ; rien à réserver avant 0043 ; seuls
+  `sandbox` et `production` existent.
+
+### Incertain
+
+- Le déploiement de production n'a pas encore tourné : il attend la base, l'app Whop et les
+  réglages (`docs/production.md`, étapes 1 à 3).

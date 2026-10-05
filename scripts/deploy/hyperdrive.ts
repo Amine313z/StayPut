@@ -1,8 +1,8 @@
 /**
  * Deployment step (.github/workflows/deploy.yml): makes sure the Hyperdrive configuration
- * "stayput-db" exists and points at Supabase's direct connection (caching disabled, see
- * DECISIONS.md), then writes its binding into wrangler.toml for this deployment only; the
- * committed file has none.
+ * "stayput-db" ("stayput-db-production" for production, STAYPUT_TARGET) exists and points at
+ * Supabase's direct connection (caching disabled, see DECISIONS.md), then writes its binding into
+ * wrangler.toml for this deployment only; the committed file has none.
  *
  *   tsx scripts/deploy/hyperdrive.ts apps/worker/wrangler.toml
  *
@@ -14,6 +14,11 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 export const HYPERDRIVE_NAME = 'stayput-db';
+
+/** Each deployment its own database, so its own Hyperdrive configuration (STAYPUT_TARGET). */
+export function hyperdriveName(target: string | undefined): string {
+  return target?.trim() === 'production' ? `${HYPERDRIVE_NAME}-production` : HYPERDRIVE_NAME;
+}
 
 /**
  * The connection Hyperdrive should use. Hyperdrive pools connections itself: behind Supabase's
@@ -47,7 +52,11 @@ interface HyperdriveConfig {
   origin?: { host?: string; port?: number; user?: string; database?: string };
 }
 
-async function findConfig(account: string, token: string): Promise<HyperdriveConfig | null> {
+async function findConfig(
+  account: string,
+  token: string,
+  name: string,
+): Promise<HyperdriveConfig | null> {
   const response = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${account}/hyperdrive/configs`,
     { headers: { Authorization: `Bearer ${token}` } },
@@ -62,7 +71,7 @@ async function findConfig(account: string, token: string): Promise<HyperdriveCon
       `listing Hyperdrive configurations failed (${response.status}): ${JSON.stringify(body.errors)}`,
     );
   }
-  return body.result.find((config) => config.name === HYPERDRIVE_NAME) ?? null;
+  return body.result.find((config) => config.name === name) ?? null;
 }
 
 /** Whether the configuration already points at `origin` (host, port, user, database). */
@@ -100,26 +109,27 @@ async function main() {
   if (process.env.GITHUB_ACTIONS && password) console.info(`::add-mask::${password}`);
   if (process.env.GITHUB_ACTIONS) console.info(`::add-mask::${origin}`);
   const cwd = path.dirname(tomlPath);
+  const name = hyperdriveName(process.env.STAYPUT_TARGET);
 
-  let config = await findConfig(account, token);
+  let config = await findConfig(account, token, name);
   if (!config) {
     wranglerHyperdrive(
-      ['create', HYPERDRIVE_NAME, `--connection-string=${origin}`, '--caching-disabled'],
+      ['create', name, `--connection-string=${origin}`, '--caching-disabled'],
       cwd,
     );
-    config = await findConfig(account, token);
+    config = await findConfig(account, token, name);
     if (!config) throw new Error('the Hyperdrive configuration was not created');
-    console.info(`Created Hyperdrive configuration ${HYPERDRIVE_NAME}.`);
+    console.info(`Created Hyperdrive configuration ${name}.`);
   } else if (!sameOrigin(config.origin, origin)) {
     // Cloudflare connects to the new origin before accepting it: a wrong one fails here.
     wranglerHyperdrive(
       ['update', config.id, `--connection-string=${origin}`, '--caching-disabled'],
       cwd,
     );
-    console.info(`Hyperdrive ${HYPERDRIVE_NAME} now goes to ${new URL(origin).hostname}.`);
+    console.info(`Hyperdrive ${name} now goes to ${new URL(origin).hostname}.`);
   }
   writeFileSync(tomlPath, withHyperdriveBinding(readFileSync(tomlPath, 'utf8'), config.id));
-  console.info(`Hyperdrive ${HYPERDRIVE_NAME}: ${config.id}`);
+  console.info(`Hyperdrive ${name}: ${config.id}`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

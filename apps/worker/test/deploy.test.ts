@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { checkDiscord, checkTelegram, type Finding } from '../../../scripts/deploy/check-bots';
 import { checkWhopKey, deployedVar } from '../../../scripts/deploy/check-whop';
 import {
+  hyperdriveName,
   hyperdriveOrigin,
   sameOrigin,
   withHyperdriveBinding,
@@ -12,6 +13,8 @@ import {
   describeValue,
   prepare,
   secretValue,
+  settingName,
+  targetProblem,
 } from '../../../scripts/deploy/prepare';
 import {
   SATOSHI_FILE,
@@ -22,6 +25,14 @@ import {
 } from '../../../scripts/deploy/satoshi';
 
 const ID = '0123456789abcdef0123456789abcdef';
+
+describe('hyperdriveName', () => {
+  it('gives each deployment its own configuration, the sandbox keeping its first one', () => {
+    expect(hyperdriveName(undefined)).toBe('stayput-db');
+    expect(hyperdriveName('sandbox')).toBe('stayput-db');
+    expect(hyperdriveName('production')).toBe('stayput-db-production');
+  });
+});
 
 describe('withHyperdriveBinding', () => {
   it('adds the binding to the committed wrangler.toml, where it is only a comment', () => {
@@ -161,6 +172,8 @@ describe('describeValue', () => {
 describe('prepare', () => {
   it('requires Cloudflare and the database, and only warns about Whop', () => {
     expect(prepare({})).toEqual({
+      target: 'sandbox',
+      targetProblem: null,
       accountId: null,
       missingRequired: ['CLOUDFLARE_API_TOKEN', 'CLOUDFLARE_ACCOUNT_ID', 'SUPABASE_DB_URL'],
       missingOptional: ['WHOP_API_KEY', 'WHOP_WEBHOOK_SECRET'],
@@ -201,6 +214,61 @@ describe('prepare', () => {
       prepare({ ...base, WHOP_ENV: 'production', WHOP_APP_ID: 'app_prod' }).missingRequired,
     ).toEqual([]);
     expect(prepare({ ...base, WHOP_ENV: 'sandbox' }).missingRequired).toEqual([]);
+  });
+
+  it('deploys production only with Whop’s production, and the sandbox only without', () => {
+    expect(targetProblem('production', 'production')).toBeNull();
+    expect(targetProblem(undefined, undefined)).toBeNull();
+    expect(targetProblem('sandbox', 'sandbox')).toBeNull();
+    expect(targetProblem('production', undefined)).toMatch(/needs WHOP_ENV=production/);
+    expect(targetProblem('sandbox', 'production')).toMatch(/deploy to production instead/);
+    expect(targetProblem('staging', 'sandbox')).toMatch(/unknown deployment target/);
+    expect(prepare({ STAYPUT_TARGET: 'production', WHOP_ENV: 'production' })).toMatchObject({
+      target: 'production',
+      targetProblem: null,
+    });
+  });
+
+  it('reads production’s own settings as PRODUCTION_…, never the sandbox’s', () => {
+    const shared = { CLOUDFLARE_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: ID };
+    const production = { ...shared, STAYPUT_TARGET: 'production', WHOP_ENV: 'production' };
+    // Whop's key, webhook secret and app, the database and the operator: all required, each
+    // named as the founder stores it.
+    expect(prepare(production).missingRequired).toEqual([
+      'PRODUCTION_SUPABASE_DB_URL',
+      'PRODUCTION_WHOP_APP_ID',
+      'PRODUCTION_WHOP_API_KEY',
+      'PRODUCTION_WHOP_WEBHOOK_SECRET',
+      'PRODUCTION_OPERATOR_COMPANY_ID',
+    ]);
+    const complete = {
+      ...production,
+      SUPABASE_DB_URL: 'postgresql://db',
+      WHOP_APP_ID: 'app_Prod1',
+      WHOP_API_KEY: 'apik_prod',
+      WHOP_WEBHOOK_SECRET: 'ws_prod',
+      OPERATOR_COMPANY_ID: 'biz_Prod1',
+    };
+    expect(prepare(complete)).toMatchObject({
+      missingRequired: [],
+      missingOptional: [],
+      // Under the names the Worker reads.
+      secrets: { WHOP_API_KEY: 'apik_prod', WHOP_WEBHOOK_SECRET: 'ws_prod' },
+    });
+    // An address pasted for an id is unreadable; a secret that is not one value is named as
+    // stored.
+    expect(
+      prepare({ ...complete, OPERATOR_COMPANY_ID: 'https://whop.com/dashboard/biz_Prod1/' })
+        .missingRequired,
+    ).toEqual(['PRODUCTION_OPERATOR_COMPANY_ID']);
+    expect(prepare({ ...complete, WHOP_API_KEY: 'apik_a b' })).toMatchObject({
+      missingRequired: [],
+      malformed: [{ name: 'PRODUCTION_WHOP_API_KEY', shape: '1 line: apik_… (8 characters)' }],
+    });
+    expect(settingName('SUPABASE_DB_URL', 'production')).toBe('PRODUCTION_SUPABASE_DB_URL');
+    expect(settingName('TELEGRAM_BOT_TOKEN', 'production')).toBe('PRODUCTION_TELEGRAM_BOT_TOKEN');
+    expect(settingName('CLOUDFLARE_API_TOKEN', 'production')).toBe('CLOUDFLARE_API_TOKEN');
+    expect(settingName('SUPABASE_DB_URL', 'sandbox')).toBe('SUPABASE_DB_URL');
   });
 
   it('uploads the cleaned value and says which secret needed it', () => {

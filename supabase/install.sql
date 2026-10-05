@@ -1,5 +1,5 @@
 -- StayPut: the whole database schema, for a new Supabase project or to update one.
--- Generated from supabase/migrations (0001_foundation.sql to 0042_operations.sql) by `npm run db:bundle`:
+-- Generated from supabase/migrations (0001_foundation.sql to 0043_deployment_target.sql) by `npm run db:bundle`:
 -- do not edit.
 --
 -- Supabase -> SQL Editor -> New query -> paste this whole file -> Run. Only the migrations not
@@ -10365,6 +10365,28 @@ revoke all on function stayput.operator_status(timestamptz) from public;
 revoke all on function stayput.replay_failed_webhooks(integer, timestamptz) from public;
 $migration$;
   insert into stayput.schema_migrations (name) values ('0042_operations.sql');
+end $install$;
+
+-- ==========================================================================================
+-- 0043_deployment_target.sql
+-- ==========================================================================================
+
+do $install$
+begin
+  if exists (select 1 from stayput.schema_migrations where name = '0043_deployment_target.sql') then
+    raise notice 'already applied: 0043_deployment_target.sql';
+    return;
+  end if;
+  execute $migration$
+-- SPEC Phase 9: one database, one deployment. The sandbox and production each have their own
+-- database (docs/production.md); the deployment that first migrates a database claims it here
+-- (scripts/migrate.ts, STAYPUT_TARGET), and the other one is refused from then on, before any
+-- migration runs. Production never writes into the sandbox's database, nor the reverse, whatever
+-- address was pasted where.
+alter table stayput.app_settings
+  add column deployment_target text check (deployment_target in ('sandbox', 'production'));
+$migration$;
+  insert into stayput.schema_migrations (name) values ('0043_deployment_target.sql');
 end $install$;
 
 commit;
