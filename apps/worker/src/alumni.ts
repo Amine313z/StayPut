@@ -1,4 +1,10 @@
-import type { AlumniProblem, AlumniReturn, AlumniStep, AlumniView } from '@stayput/core';
+import {
+  alumniReturnRate,
+  type AlumniProblem,
+  type AlumniReturn,
+  type AlumniStep,
+  type AlumniView,
+} from '@stayput/core';
 import { WHOP_CHECKOUT_BASE_URL, WhopApiError, type WhopClient, type WhopEnv } from '@stayput/whop';
 import { withUser, type Db, type TransactionalDb } from './db';
 
@@ -33,16 +39,37 @@ interface OfferRow {
   completed_at: Date | string | null;
 }
 
+/** `alumni_view` (0039): the offer, the counts, and the money by currency, the largest first. */
+interface AlumniViewRow {
+  offer: {
+    name: string;
+    url: string | null;
+    createdAt: string;
+    completedAt: string | null;
+  } | null;
+  entered: number | string;
+  left: number | string;
+  returned: number | string;
+  recovered: { currency: string; amount: number | string }[];
+}
+
 export async function readAlumni(
   db: TransactionalDb,
   userId: string,
   companyId: string,
 ): Promise<AlumniView | null> {
   const [row] = await withUser(db, userId, (tx) =>
-    tx.query<{ view: AlumniView | null }>('select stayput.alumni_view($1) as view', [companyId]),
+    tx.query<{ view: AlumniViewRow | null }>('select stayput.alumni_view($1) as view', [companyId]),
   );
   const view = row?.view;
   if (!view) return null;
+  const counts = {
+    entered: Number(view.entered),
+    left: Number(view.left),
+    returned: Number(view.returned),
+  };
+  // The money by currency, the largest first: the main one is shown, the others flagged.
+  const [main, ...others] = view.recovered;
   return {
     offer: view.offer
       ? {
@@ -54,9 +81,15 @@ export async function readAlumni(
             : null,
         }
       : null,
-    entered: Number(view.entered),
-    left: Number(view.left),
-    returned: Number(view.returned),
+    ...counts,
+    returnRate: alumniReturnRate(counts),
+    recovered: main
+      ? {
+          amount: Math.round(Number(main.amount) * 100) / 100,
+          currency: main.currency,
+          otherCurrencies: others.length > 0,
+        }
+      : null,
   };
 }
 

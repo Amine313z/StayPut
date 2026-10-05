@@ -3293,3 +3293,39 @@ prévu.
 
 - Dans le cadre (iframe) de Whop, le téléchargement d'un fichier peut être bloqué par le bac à
   sable du cadre. À essayer sur le sandbox ; sinon, ouvrir l'export dans un nouvel onglet.
+
+## 2026-10-05 — Phase 6.13 : les chiffres de l'Alumni
+
+### Les trois chiffres
+
+- **Dans l'Alumni** : les anciens membres qui y sont aujourd'hui et ne paient pas encore
+  (`alumni_members.status = 'entered'`).
+- **Taux de retour** : sur tous les anciens membres entrés un jour dans l'Alumni (encore dedans,
+  partis de l'Alumni ou revenus), la part qui paie à nouveau. `alumniReturnRate` dans
+  packages/core ; aucun taux tant que personne n'est entré (« Pas encore »).
+- **Argent récupéré** : ce que les anciens membres revenus ont payé **depuis leur première entrée
+  dans l'Alumni** (paiements réussis, montant positif ; remboursés ou contestés exclus, comme en
+  6.4). Dans la devise principale ; les autres devises sont signalées par l'API, pas additionnées.
+- Ce n'est pas la même chose que « Sauvé » (6.4) : « Sauvé » ne compte un retour que s'il passe
+  par un code de retour StayPut, et seulement son premier paiement. L'Alumni compte tous les
+  retours et tout ce qu'ils ont payé depuis : c'est le chiffre que la SPEC demande pour la page
+  Alumni, et la page dit exactement ce qu'il compte (info-bulle sur chaque chiffre).
+
+### Où
+
+- 0039 remplace `alumni_view` (même signature, mêmes droits) pour ajouter l'argent, par devise.
+- Automatisations › File d'attente › Alumni : les trois chiffres en haut, puis une ligne « 12
+  anciens membres sont entrés dans l'Alumni. Revenus : 2 · partis de l'Alumni : 1. », puis le
+  lien et le message « User left » comme avant.
+- Démo : 9 dans l'Alumni, 1 parti, 2 revenus (17 %), et 147,00 $ : les deux revenus ont repris
+  l'abonnement mensuel (49 $), l'un il y a cinq semaines (deux paiements), l'autre il y a douze
+  jours (un paiement). `demo.test.ts` vérifie que ces chiffres se tiennent.
+
+### Tests
+
+- `packages/core/test/alumni.test.ts` : le taux, et pas de taux sans entrée.
+- `apps/worker/test/alumni-money-sql.test.ts` : seuls les revenus comptent, seulement depuis leur
+  entrée, jamais un remboursement ; une autre devise est signalée à part ; rien pour qui n'est
+  pas de l'équipe.
+- `apps/web/test/app.test.tsx` : les trois chiffres, leurs info-bulles, « Pas encore » en
+  français avant toute entrée.

@@ -342,6 +342,17 @@ describe('the demo community', () => {
     });
   });
 
+  it('gives Alumni figures that add up (SPEC 6.13)', () => {
+    const alumni = world.pages.alumni();
+    const everyone = alumni.entered + alumni.left + alumni.returned;
+    expect(alumni.returnRate).toBe(alumni.returned / everyone);
+    // Those who came back took the monthly plan again: whole monthly payments, one each at least.
+    const monthly = 49;
+    expect(joined.some((m) => m.membership?.price === monthly)).toBe(true);
+    expect(alumni.recovered!.amount % monthly).toBe(0);
+    expect(alumni.recovered!.amount / monthly).toBeGreaterThanOrEqual(alumni.returned);
+  });
+
   it('fills Analytics, Integrations › Activity and Settings › Risk score', () => {
     const { pages } = createWorld(NOW);
     // July's arrivals left faster: flagged; a month too recent shows no rate.

@@ -17,3 +17,4 @@ export * from './outcomes';
 export * from './forecast';
 export * from './weekly';
 export * from './badge';
+export * from './alumni';

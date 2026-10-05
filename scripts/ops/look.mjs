@@ -683,6 +683,16 @@ report.team = await desktop.page.evaluate(() => ({
     /Delete all data/.test(button.textContent ?? ''),
   ).length,
 }));
+// Automations › Queue › Alumni (SPEC 6.13): who is in it, the share who came back, the money.
+await desktop.page.goto(`${base}/demo/actions/queue/alumni`, { waitUntil: 'domcontentloaded' });
+await desktop.page.locator('[data-alumni-figures]').waitFor({ timeout: 30_000 });
+await desktop.page.waitForTimeout(1500);
+report.alumni = await desktop.page.evaluate(() =>
+  [...document.querySelectorAll('[data-alumni-figures] dd')].map((dd) => dd.textContent),
+);
+await desktop.page
+  .locator('section:has([data-alumni-figures])')
+  .screenshot({ path: `${out}/alumni-figures.png` });
 
 // Automations › Queue › History: what came of each action, the proof of value (block 4).
 await desktop.page.goto(`${base}/demo/actions/queue/history`, { waitUntil: 'domcontentloaded' });
@@ -967,6 +977,7 @@ const ok =
   report.badge.greyed === 1 &&
   report.team.rows === 3 &&
   report.team.greyed === 1 &&
+  JSON.stringify(report.alumni) === JSON.stringify(['9', '17%', '$147.00']) &&
   report.analytics.reports.sent &&
   report.analytics.reports.switchOn;
 writeFileSync(`${out}/report.json`, `${JSON.stringify(report, null, 2)}\n`);

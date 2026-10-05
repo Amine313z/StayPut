@@ -11,6 +11,7 @@ import {
   MESSAGE_KINDS,
   NICHE_PRESETS,
   actionOutcome,
+  alumniReturnRate,
   analyzeCohorts,
   findBlockingLessons,
   normalizeWeights,
@@ -1241,17 +1242,22 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       riskSettings = { ...next, weights: normalizeWeights(next.weights) };
       return riskSettings;
     },
-    alumni: () => ({
-      offer: {
-        name: `${community} Alumni`,
-        url: DEMO_ALUMNI_URL,
-        createdAt: ago(46 * DAY),
-        completedAt: ago(46 * DAY),
-      },
-      entered: 9,
-      left: 1,
-      returned: 2,
-    }),
+    alumni: () => {
+      const counts = { entered: 9, left: 1, returned: 2 };
+      return {
+        offer: {
+          name: `${community} Alumni`,
+          url: DEMO_ALUMNI_URL,
+          createdAt: ago(46 * DAY),
+          completedAt: ago(46 * DAY),
+        },
+        ...counts,
+        returnRate: alumniReturnRate(counts),
+        // The two who came back took the monthly plan again ($49): one five weeks ago, who has
+        // paid twice since, and one twelve days ago, once.
+        recovered: { amount: 3 * 49, currency: 'usd', otherCurrencies: false },
+      };
+    },
     discordChannels: () => channels,
     saveDiscordChannels: (ids) => {
       channels = channels.map((c) => ({ ...c, followed: c.readable && ids.includes(c.id) }));

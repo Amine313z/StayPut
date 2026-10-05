@@ -1118,7 +1118,22 @@ export const fr: Messages = {
     'Whop l’envoie à chaque membre qui quitte votre communauté, en message privé et par e-mail. Dans Whop : tableau de bord → Support chats → messages automatiques → « User left » : collez ce texte, cochez l’e-mail, puis activez-le.',
   'alumni.userLeft.text':
     'Salut, merci d’avoir fait partie de la communauté ! Pour garder le contact gratuitement (actualités et offres de retour), rejoins l’Alumni : {url}',
-  'alumni.stats': 'Dans l’Alumni : {entered} · revenus : {returned} · partis : {left}',
+  'alumni.figures.in': 'Dans l’Alumni',
+  'alumni.figures.in.info':
+    'Les anciens membres dans l’Alumni aujourd’hui, qui ne paient pas encore.',
+  'alumni.figures.rate': 'Taux de retour',
+  'alumni.figures.rate.info':
+    'Sur tous les anciens membres entrés un jour dans l’Alumni, la part qui paie à nouveau.',
+  'alumni.figures.recovered': 'Argent récupéré',
+  'alumni.figures.recovered.info':
+    'Ce que les anciens membres revenus ont payé depuis leur entrée dans l’Alumni, remboursements exclus.',
+  'alumni.figures.none': 'Pas encore',
+  'alumni.figures.caption.one':
+    '{count} ancien membre est entré dans l’Alumni. Revenus : {returned} · partis de l’Alumni : {left}.',
+  'alumni.figures.caption.other':
+    '{count} anciens membres sont entrés dans l’Alumni. Revenus : {returned} · partis de l’Alumni : {left}.',
+  'alumni.figures.empty':
+    'Aucun ancien membre n’est encore entré dans l’Alumni. On y entre par le lien ci-dessous.',
 
   'actionSettings.title': 'Actions et garde-fous',
   'actionSettings.description':

@@ -1085,7 +1085,21 @@ export const en = {
     'Whop sends it to everyone who leaves your community, as a DM and by e-mail. In Whop: Dashboard → Support chats → automatic messages → “User left”: paste this text, tick the e-mail, then turn it on.',
   'alumni.userLeft.text':
     'Hi, thank you for being part of the community! To stay in touch for free (news and comeback offers), join the Alumni: {url}',
-  'alumni.stats': 'In the Alumni: {entered} · came back: {returned} · left: {left}',
+  'alumni.figures.in': 'In the Alumni',
+  'alumni.figures.in.info': 'Former members in the Alumni now, who do not pay yet.',
+  'alumni.figures.rate': 'Return rate',
+  'alumni.figures.rate.info':
+    'Of all the former members who ever entered the Alumni, the share who pay again.',
+  'alumni.figures.recovered': 'Money recovered',
+  'alumni.figures.recovered.info':
+    'What the former members who came back paid since they entered the Alumni. Refunds are left out.',
+  'alumni.figures.none': 'Not yet',
+  'alumni.figures.caption.one':
+    '{count} former member entered the Alumni. Came back: {returned} · left it: {left}.',
+  'alumni.figures.caption.other':
+    '{count} former members entered the Alumni. Came back: {returned} · left it: {left}.',
+  'alumni.figures.empty':
+    'No former member has entered the Alumni yet. They enter by the link below.',
 
   'actionSettings.title': 'Actions and guardrails',
   'actionSettings.description': 'How actions leave, and the limits StayPut never crosses.',

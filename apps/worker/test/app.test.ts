@@ -1467,6 +1467,8 @@ describe('the Alumni offer (SPEC 5.9)', () => {
       entered: 0,
       left: 0,
       returned: 0,
+      returnRate: null,
+      recovered: null,
     });
     expect((await request(path, json(owner, 'POST', { name: ' ' }))).status).toBe(400);
 

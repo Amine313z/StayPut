@@ -9,6 +9,7 @@ import { Badge, Notice } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ExternalButton } from '../ui/ExternalLink';
+import { SecondaryMetric } from '../ui/Metric';
 import { FIELD } from './SettingsParts';
 import { ErrorPanel, Loading } from './Status';
 
@@ -60,7 +61,7 @@ function Alumni({
   whopAppId: string | null;
   onAnswer: (view: AlumniView) => void;
 }) {
-  const { t, number } = useI18n();
+  const { t } = useI18n();
   const demo = useDemo();
   const id = useId();
   const [name, setName] = useState(() => view.offer?.name ?? t('alumni.defaultName'));
@@ -87,6 +88,7 @@ function Alumni({
         <Notice tone="accent" icon={<CircleCheck aria-hidden="true" className="size-4" />}>
           {t('alumni.ready', { name: offer.name })}
         </Notice>
+        <AlumniFigures view={view} />
         <div className="space-y-2">
           <p className="flex items-center gap-2 text-sm font-medium">
             {t('alumni.link')}
@@ -105,13 +107,6 @@ function Alumni({
           <p className="text-sm text-muted">{t('alumni.linkHint')}</p>
         </div>
         <UserLeft url={offer.url} />
-        <p className="tabular text-sm text-muted">
-          {t('alumni.stats', {
-            entered: number(view.entered),
-            returned: number(view.returned),
-            left: number(view.left),
-          })}
-        </p>
       </div>
     );
   }
@@ -151,6 +146,53 @@ function Alumni({
           </p>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The Alumni's figures (SPEC Phase 6.13): the former members in it now, the share of all who ever
+ * entered it who pay again, and what those who came back paid since.
+ */
+function AlumniFigures({ view }: { view: AlumniView }) {
+  const { t, plural, number, percent, currency } = useI18n();
+  const total = view.entered + view.left + view.returned;
+  const recovered = view.recovered;
+  return (
+    <div className="space-y-3" data-alumni-figures="">
+      <div className="flex flex-wrap gap-x-10 gap-y-5">
+        <SecondaryMetric
+          better="up"
+          label={t('alumni.figures.in')}
+          tip={t('alumni.figures.in.info')}
+          value={view.entered}
+          format={number}
+        />
+        <SecondaryMetric
+          better="up"
+          label={t('alumni.figures.rate')}
+          tip={t('alumni.figures.rate.info')}
+          value={view.returnRate}
+          format={percent}
+          empty={t('alumni.figures.none')}
+        />
+        <SecondaryMetric
+          better="up"
+          label={t('alumni.figures.recovered')}
+          tip={t('alumni.figures.recovered.info')}
+          value={recovered?.amount ?? null}
+          format={(amount) => (recovered ? currency(amount, recovered.currency) : number(amount))}
+          empty={t('alumni.figures.none')}
+        />
+      </div>
+      <p className="tabular text-[0.8125rem] text-subtle">
+        {total === 0
+          ? t('alumni.figures.empty')
+          : plural('alumni.figures.caption', total, {
+              returned: number(view.returned),
+              left: number(view.left),
+            })}
+      </p>
     </div>
   );
 }

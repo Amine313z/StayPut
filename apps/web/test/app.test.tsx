@@ -330,7 +330,14 @@ const ACTION_SETTINGS: ActionSettingsView = {
   rulesOff: [],
 };
 
-const NO_ALUMNI: AlumniView = { offer: null, entered: 0, left: 0, returned: 0 };
+const NO_ALUMNI: AlumniView = {
+  offer: null,
+  entered: 0,
+  left: 0,
+  returned: 0,
+  returnRate: null,
+  recovered: null,
+};
 
 /**
  * The home's chart as the Worker sends it on Oct 1: from Jul 1 (the 1st of the month 89 days
@@ -5351,6 +5358,8 @@ describe('the guide (brief v4 §10)', () => {
       entered: 0,
       left: 0,
       returned: 0,
+      returnRate: null,
+      recovered: null,
       problem: null,
     };
     const calls = mockApi({
@@ -5966,6 +5975,8 @@ describe('the demo leads nowhere outside StayPut (fix prompt v4.1, block 5)', ()
             entered: 3,
             left: 0,
             returned: 1,
+            returnRate: 0.25,
+            recovered: { amount: 49, currency: 'usd', otherCurrencies: false },
           } satisfies AlumniView,
         },
       ],
@@ -5976,6 +5987,75 @@ describe('the demo leads nowhere outside StayPut (fix prompt v4.1, block 5)', ()
     expect(open.getAttribute('target')).toBe('_blank');
     expect(screen.queryByText('Example')).toBeNull();
     expect(document.querySelector('[data-demo-disabled]')).toBeNull();
+  });
+});
+
+describe('the Alumni’s figures (SPEC Phase 6.13)', () => {
+  const offer = {
+    name: 'Alumni du Club',
+    url: 'https://whop.com/le-club/alumni-du-club/',
+    createdAt: '2026-10-01T10:00:00.000Z',
+    completedAt: '2026-10-01T10:05:00.000Z',
+  };
+  const figures = () =>
+    Array.from(document.querySelectorAll('[data-alumni-figures] dd')).map((dd) => dd.textContent);
+  const caption = () => document.querySelector('[data-alumni-figures] > p')?.textContent;
+
+  it('shows who is in it, the share who came back and what they paid since', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/alumni': [
+        {
+          status: 200,
+          body: {
+            offer,
+            entered: 9,
+            left: 1,
+            returned: 2,
+            returnRate: 2 / 12,
+            recovered: { amount: 147, currency: 'usd', otherCurrencies: false },
+          } satisfies AlumniView,
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions/queue/alumni');
+    await vi.waitFor(() => expect(figures()).toEqual(['9', '17%', '$147.00']));
+    expect(caption()).toBe('12 former members entered the Alumni. Came back: 2 · left it: 1.');
+    // What each counts is its label's tooltip.
+    expect(
+      within(document.querySelector<HTMLElement>('[data-alumni-figures]')!)
+        .getAllByRole('tooltip')
+        .map((tip) => tip.textContent),
+    ).toEqual([
+      'Former members in the Alumni now, who do not pay yet.',
+      'Of all the former members who ever entered the Alumni, the share who pay again.',
+      'What the former members who came back paid since they entered the Alumni. Refunds are left out.',
+    ]);
+  });
+
+  it('says « not yet » before anyone entered, in French too', async () => {
+    window.localStorage.setItem('stayput.locale.biz_A1', 'fr');
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/alumni': [
+        {
+          status: 200,
+          body: {
+            offer,
+            entered: 0,
+            left: 0,
+            returned: 0,
+            returnRate: null,
+            recovered: null,
+          } satisfies AlumniView,
+        },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/actions/queue/alumni');
+    await vi.waitFor(() => expect(figures()).toEqual(['0', 'Pas encore', 'Pas encore']));
+    expect(caption()).toBe(
+      'Aucun ancien membre n’est encore entré dans l’Alumni. On y entre par le lien ci-dessous.',
+    );
   });
 });
 
@@ -6484,6 +6564,8 @@ describe('the actions (SPEC Phase 4)', () => {
       entered: 0,
       left: 0,
       returned: 0,
+      returnRate: null,
+      recovered: null,
       problem: { step: 'experience', permission: 'experience:create' },
     };
     const ready: AlumniView = {
@@ -6491,6 +6573,8 @@ describe('the actions (SPEC Phase 4)', () => {
       offer: { ...stopped.offer!, completedAt: '2026-10-01T10:05:00.000Z' },
       entered: 3,
       returned: 1,
+      returnRate: 0.25,
+      recovered: { amount: 49, currency: 'usd', otherCurrencies: false },
       problem: null,
     };
     const calls = mockApi({
@@ -6518,7 +6602,9 @@ describe('the actions (SPEC Phase 4)', () => {
     expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: /User left/ }).value).toContain(
       'join the Alumni: https://whop.com/checkout/plan_Alu1',
     );
-    expect(screen.getByText('In the Alumni: 3 · came back: 1 · left: 0')).toBeTruthy();
+    expect(
+      screen.getByText('4 former members entered the Alumni. Came back: 1 · left it: 0.'),
+    ).toBeTruthy();
     expect(calls.filter((c) => c === 'POST /api/creator/biz_A1/alumni')).toHaveLength(2);
   });
 

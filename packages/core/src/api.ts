@@ -1207,6 +1207,16 @@ export interface AlumniView {
   entered: number;
   left: number;
   returned: number;
+  /**
+   * Of the former members who ever entered the Alumni, the share who pay again, from 0 to 1
+   * (`alumniReturnRate`); null while nobody entered it.
+   */
+  returnRate: number | null;
+  /**
+   * What those who came back paid since they entered the Alumni (refunds left out), in its main
+   * currency; null while nothing came in.
+   */
+  recovered: { amount: number; currency: string; otherCurrencies: boolean } | null;
   /** The answer of a creation that stopped: the step, and the permission Whop lacked (403). */
   problem?: AlumniProblem | null;
 }
