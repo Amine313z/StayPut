@@ -61,7 +61,13 @@ import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
 import { readBadge, readPublicBadge, saveBadgeSetting } from './badge';
 import { readBenchmarks, saveBenchmarksSetting } from './benchmarks';
-import { deleteCompanyData, exportCompanyData, readTeam } from './data';
+import {
+  deleteCompanyData,
+  exportCompanyData,
+  exportMemberData,
+  forgetMember,
+  readTeam,
+} from './data';
 import { readWeeklyReports, saveWeeklyReportSetting } from './reports';
 import { alumniOfMember, createAlumniOffer, readAlumni } from './alumni';
 import { readInsightsOverview } from './analytics';
@@ -933,6 +939,62 @@ export function createApp(deps: AppDeps) {
       }
       const deleted = await deleteCompanyData(db, companyId);
       console.info(`Data of ${companyId} deleted at the request of ${c.get('userId')}.`);
+      return c.json({ deleted });
+    },
+  );
+
+  /**
+   * A member's data (SPEC Phase 8.3), from their drawer: everything StayPut keeps about them, as
+   * a JSON file.
+   */
+  app.get(
+    '/api/creator/:companyId/members/:memberId/export',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const memberId = c.req.param('memberId');
+      if (!/^mber_[A-Za-z0-9]+$/.test(memberId)) {
+        return apiError('invalid_request', 'not a member id');
+      }
+      const data = await exportMemberData(
+        db,
+        c.get('userId'),
+        c.get('companyId'),
+        memberId,
+        deps.now(),
+      );
+      if (!data) return apiError('not_found', 'no such member');
+      const day = data.exportedAt.slice(0, 10);
+      return c.json(data, 200, {
+        'Content-Disposition': `attachment; filename="stayput-${memberId}-${day}.json"`,
+      });
+    },
+  );
+
+  /**
+   * A member's data deleted at the community's request (SPEC Phase 8.3): everything StayPut keeps
+   * about them, and they are never taken in again. The request names the member again.
+   */
+  app.post(
+    '/api/creator/:companyId/members/:memberId/delete',
+    authenticate,
+    withDb,
+    requireCreator,
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const memberId = c.req.param('memberId');
+      const body = await c.req.json<unknown>().catch(() => null);
+      if ((body as { confirm?: unknown } | null)?.confirm !== memberId) {
+        return apiError('invalid_request', 'expected { confirm: <the member id> }');
+      }
+      const companyId = c.get('companyId');
+      const deleted = await forgetMember(db, companyId, memberId, deps.now());
+      if (!deleted) return apiError('not_found', 'no such member');
+      console.info(`A member of ${companyId} was deleted at the request of ${c.get('userId')}.`);
       return c.json({ deleted });
     },
   );
@@ -2842,9 +2904,9 @@ async function fileWebhook(db: Db, id: string, now: Date): Promise<void> {
 
 /**
  * A team member of the company opened the dashboard: the company exists for StayPut (created on
- * the first visit, reactivated after an uninstall), and the Whop check is recorded for RLS.
+ * the first visit, reactivated after an uninstall or a lost access), and the Whop check is
+ * recorded for RLS. Answers whether the company has its time zone.
  */
-/** Records the company and the admin's check; answers whether the company has its time zone. */
 async function recordAdmin(
   db: ClosableDb,
   companyId: string,
@@ -2855,8 +2917,10 @@ async function recordAdmin(
   return db.transaction(async (tx) => {
     await tx.query(
       `insert into stayput.companies (id, installed_at) values ($1, $2::timestamptz)
-       on conflict (id) do update set status = 'active', uninstalled_at = null
-         where stayput.companies.status = 'uninstalled'`,
+       on conflict (id) do update set status = 'active', uninstalled_at = null,
+                                      access_lost_at = null
+         where stayput.companies.status = 'uninstalled'
+            or stayput.companies.access_lost_at is not null`,
       [companyId, at],
     );
     await tx.query(

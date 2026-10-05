@@ -3,6 +3,7 @@ import { Download, Trash2, Users } from 'lucide-react';
 import { useId, useState } from 'react';
 import { getJson, postJson, useApi } from '../api';
 import { useDemo } from '../demoMode';
+import { downloadJson } from '../download';
 import { useI18n } from '../i18n';
 import { Avatar } from '../ui/Avatar';
 import { Button, buttonClass, leadingMark } from '../ui/Button';
@@ -83,12 +84,7 @@ export function DataCard({
     setExporting(true);
     try {
       const data = await getJson<DataExport>(`${api}/export`);
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `stayput-${companyId}-${data.exportedAt.slice(0, 10)}.json`;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      downloadJson(data, `stayput-${companyId}-${data.exportedAt.slice(0, 10)}.json`);
     } catch (error) {
       toast({ tone: 'error', title: failureText(error, t) });
     } finally {

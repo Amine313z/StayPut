@@ -1502,6 +1502,16 @@ export interface DataExport {
   tables: Record<string, { rows: Record<string, unknown>[]; truncated: boolean }>;
 }
 
+/**
+ * GET /api/creator/:companyId/members/:memberId/export (SPEC Phase 8.3): everything StayPut
+ * keeps about one member, table by table, as stored.
+ */
+export interface MemberDataExport {
+  exportedAt: string;
+  member: Record<string, unknown>;
+  tables: Record<string, Record<string, unknown>[]>;
+}
+
 /** GET /health */
 export interface HealthReport {
   status: 'ok' | 'degraded';

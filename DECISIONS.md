@@ -3406,3 +3406,55 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
    `access_pass:create`, `plan:create`, `experience:create`, `experience:attach`), puis approuver
    à nouveau l'app (Whop → Paramètres → Applications autorisées).
 3. Au choix : activer le badge et le partage des benchmarks dans Réglages.
+
+## 2026-10-05 — Phase 8.2 et 8.3 : données minimales et droits des personnes
+
+### Ce que Whop envoie
+
+- **Trouvé en préparant la politique de confidentialité** : les envois bruts de Whop
+  (`webhook_events.payload`) étaient gardés tels quels et sans limite de durée. Ils contiennent
+  l'e-mail du membre (`user.email`, `customer_email`), son téléphone, et pour un message de chat
+  son texte (`content`). Contraire à la SPEC 8.2 (« pas de contenu des messages stocké »), à
+  l'en-tête de 0005 (« les e-mails ne sont jamais stockés ») et à ce que disait 151e (« gardés
+  quelques jours »). Sur le sandbox, aucun envoi n'était stocké (« Webhook deliveries : none »).
+- 0040 : un déclencheur retire ces champs de chaque envoi avant qu'il soit gardé (e-mails,
+  téléphones, adresses, texte des messages, pièces jointes), à toute profondeur ; les envois
+  déjà gardés sont nettoyés de la même façon. Ce que StayPut lit (ids, nom, dates, montants)
+  reste : le traitement est inchangé (testé sur un membre, un paiement et un message).
+- Un envoi traité ou ignoré part après **7 jours** (le temps de vérifier un doute), tout envoi
+  après **30 jours** au plus (les rejeux abandonnent après 5 essais) : chaque heure.
+
+### Les données d'un membre (fiche du membre › « Ses données »)
+
+- **Exporter (JSON)** : tout ce que StayPut garde sur ce membre, lu sous RLS comme le membre de
+  l'équipe : chaque table qui pointe vers un membre (`MEMBER_TABLES` dans
+  apps/worker/src/data.ts ; un test échoue si une nouvelle table manque), plus ses abonnements
+  et paiements lus avant lui (par ses ids Whop) et ses comptes Discord et Telegram.
+- **Supprimer ses données** : après confirmation, tout ce qui le concerne est supprimé
+  (`forget_member`), et StayPut ne le reprend **plus jamais** dans cette communauté : ni par Whop
+  (synchronisation, envois), ni par Discord ou Telegram. Pour cela StayPut garde l'**empreinte**
+  (SHA-256) de ses ids (`erased_people`), jamais les ids ; des déclencheurs écartent toute ligne
+  qui le concerne. L'historique des actions de l'équipe (`audit_log`) reste, sans dire sur qui.
+- Grisé dans la démo, l'export y marche (les données fictives du membre).
+
+### Désinstallation, puis suppression au bout de 30 jours
+
+- Whop n'envoie aucun événement de désinstallation (Phase 0). StayPut la déduit : quand la
+  lecture des membres d'une communauté est refusée (403), il demande à Whop ce que l'app peut
+  encore y faire (`GET /permissions`, au plus toutes les 6 heures). Rien d'accordé pendant
+  **un jour** : la communauté est « désinstallée », depuis le premier refus. Une réponse 401 (la
+  clé elle-même refusée) concerne tout le monde : personne n'est marqué. Rouvrir StayPut, ou un
+  accès rendu, annule tout.
+- **30 jours** après, tout est supprimé (comme « Supprimer toutes les données »), jamais la démo.
+- À confirmer en vrai : ce que Whop répond exactement après une désinstallation (Phase 0 l'avait
+  laissé « à confirmer en sandbox ») ; il faudrait désinstaller l'app du sandbox pour le voir.
+
+## 2026-10-05 — Phase 8.4 : l'activité détaillée gardée 12 mois
+
+- Chaque lundi, les événements d'activité de plus de 12 mois sont supprimés (0041) ; leurs
+  comptes par jour (`member_stats_daily`) restent.
+- Le recalcul des comptes d'un jour (`refresh_activity_stats`) ne remonte plus avant le premier
+  jour dont tous les événements sont encore gardés : sinon un recalcul demandé de loin aurait
+  effacé les comptes des jours aux événements supprimés. Testé : purge puis recalcul, les comptes
+  anciens ne bougent pas.
+- Conséquence : les leçons bloquantes ne regardent plus que les 12 derniers mois de leçons.

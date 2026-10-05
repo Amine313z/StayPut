@@ -3,6 +3,7 @@ import type {
   CreatorMessagesResult,
   CreatorOffersResult,
   CreatorRetryResult,
+  MemberDataExport,
   RiskSettingsView,
   SyncRun,
 } from '@stayput/core';
@@ -114,6 +115,23 @@ export async function answerDemo(method: string, path: string, body: unknown): P
       return answer(
         pages.platforms.slot(slot[1] as 'discord' | 'telegram', Number(slot[2]), Number(slot[3])),
       );
+    }
+    // A member's data as a file (SPEC Phase 8.3): what the demo knows of them.
+    const exported = /^members\/([^/]+)\/export$/.exec(route);
+    if (exported) {
+      const id = decodeURIComponent(exported[1]!);
+      const row = demo.members.members.find((m) => m.id === id);
+      const detail = demo.memberDetail(id);
+      if (!row || !detail) throw new ApiError('not_found', 'no such member here');
+      return answer({
+        exportedAt: new Date().toISOString(),
+        member: { ...row },
+        tables: {
+          memberships: detail.memberships.map((m) => ({ ...m })),
+          payments: detail.payments.map((p) => ({ ...p })),
+          risk_scores: detail.scores.map((s) => ({ ...s })),
+        },
+      } satisfies MemberDataExport);
     }
     const member = /^members\/([^/]+)$/.exec(route);
     if (member) {

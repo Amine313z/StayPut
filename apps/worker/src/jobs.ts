@@ -6,6 +6,7 @@ import { refreshBenchmarks } from './benchmarks';
 import { sendWeeklyReports } from './reports';
 import { recordSaves } from './saves';
 import { SYNC_REQUEST_BUDGET, summarize, syncDueCompanies } from './sync';
+import { upkeep } from './upkeep';
 
 /** Deliveries replayed per run at most: failed ones, or ones the background never finished. */
 export const WEBHOOK_REPLAY_LIMIT = 100;
@@ -152,5 +153,40 @@ export const benchmarks: CronJob = {
     if (!db) return;
     const rows = await refreshBenchmarks(db, now);
     console.info(`Benchmarks: ${rows} figure(s) made.`);
+  },
+};
+
+/**
+ * SPEC Phase 8.2 and 8.3, every hour: Whop's deliveries once done with, the communities whose
+ * access Whop withdrew (uninstalled after a day of refusals), and those uninstalled 30 days ago,
+ * deleted.
+ */
+export const dataUpkeep: CronJob = {
+  name: 'data-upkeep',
+  async run({ db, whop, now }) {
+    if (!db) return;
+    const done = await upkeep(db, whop, now);
+    if (done.purged + done.checked + done.deleted.length > 0) {
+      console.info(
+        `Upkeep: ${done.purged} delivery(ies) purged, ${done.checked} access(es) checked, ` +
+          `${done.uninstalled.length} uninstalled, ${done.deleted.length} deleted.`,
+      );
+    }
+  },
+};
+
+/**
+ * SPEC Phase 8.4, every Monday: the detailed activity older than 12 months, deleted; its daily
+ * counts stay.
+ */
+export const activityRetention: CronJob = {
+  name: 'activity-retention',
+  async run({ db, now }) {
+    if (!db) return;
+    const [row] = await db.query<{ count: number }>(
+      'select stayput.purge_old_activity($1::timestamptz) as count',
+      [now.toISOString()],
+    );
+    if (Number(row?.count ?? 0) > 0) console.info(`Activity: ${row?.count} old event(s) deleted.`);
   },
 };

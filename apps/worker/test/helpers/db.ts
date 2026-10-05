@@ -33,7 +33,11 @@ export interface TestDb {
  * migration (as `npm run db:migrate`) or through supabase/install.sql (as the SQL Editor).
  */
 export async function createTestDb(
-  options: { via?: 'migrations' | 'install-sql' } = {},
+  options: {
+    via?: 'migrations' | 'install-sql';
+    /** Stops before this migration (its file name), to test what it does to older rows. */
+    until?: string;
+  } = {},
 ): Promise<TestDb> {
   const pg = await PGlite.create();
   await pg.exec(SUPABASE_LIKE_SETUP);
@@ -41,6 +45,7 @@ export async function createTestDb(
     await pg.exec(buildInstallSql(MIGRATIONS_DIR));
   } else {
     for (const file of migrationFiles(MIGRATIONS_DIR)) {
+      if (options.until !== undefined && file >= options.until) break;
       await pg.exec(readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8'));
     }
   }

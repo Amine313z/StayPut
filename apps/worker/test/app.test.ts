@@ -30,6 +30,7 @@ import type {
   BadgeView,
   TeamView,
   DataExport,
+  MemberDataExport,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS } from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
@@ -1824,6 +1825,44 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
       `select count(*)::int as n from stayput.companies where id = 'biz_Data1'`,
     );
     expect(left!.n).toBe(0);
+  });
+
+  it('exports one member’s data, and deletes it for good once the member is named again', async () => {
+    const { request } = setup({ 'user_rita:biz_Data2': 'admin', 'user_sam:biz_Data2': 'customer' });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Data2/session', init);
+    await settle();
+    await t.db.query(
+      `insert into stayput.members (id, company_id, user_id, display_name, status)
+       values ('mber_Data2', 'biz_Data2', 'user_Data2', 'Lea Martin', 'joined')`,
+    );
+    const base = '/api/creator/biz_Data2/members/mber_Data2';
+    const exported = await request(`${base}/export`, init);
+    expect(exported.status).toBe(200);
+    expect(exported.headers.get('content-disposition')).toMatch(
+      /^attachment; filename="stayput-mber_Data2-\d{4}-\d{2}-\d{2}\.json"$/,
+    );
+    const data = (await exported.json()) as MemberDataExport;
+    expect(data.member).toMatchObject({ id: 'mber_Data2', display_name: 'Lea Martin' });
+    expect((await request('/api/creator/biz_Data2/members/nope/export', init)).status).toBe(400);
+    expect((await request('/api/creator/biz_Data2/members/mber_Unknown/export', init)).status).toBe(
+      404,
+    );
+    const customer = await asUser('user_sam');
+    expect((await request(`${base}/export`, customer)).status).toBe(403);
+    // Deleting needs the member named again, by the team.
+    expect((await request(`${base}/delete`, post(init, {}))).status).toBe(400);
+    expect(
+      (await request(`${base}/delete`, post(customer, { confirm: 'mber_Data2' }))).status,
+    ).toBe(403);
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const deleted = await request(`${base}/delete`, post(init, { confirm: 'mber_Data2' }));
+    expect(await deleted.json()).toEqual({ deleted: true });
+    info.mockRestore();
+    expect((await request(`${base}/export`, init)).status).toBe(404);
+    expect((await request(`${base}/delete`, post(init, { confirm: 'mber_Data2' }))).status).toBe(
+      404,
+    );
   });
 
   it('serves the verified retention badge and its page once the team turns it on', async () => {

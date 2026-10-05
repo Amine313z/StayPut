@@ -41,6 +41,7 @@ import type {
   BadgeView,
   TeamView,
   DataExport,
+  MemberDataExport,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS, forecastRevenue } from '@stayput/core';
 import type { Locale } from '@stayput/i18n';
@@ -1415,6 +1416,55 @@ describe('creator view', () => {
     const bruno = screen.getByRole('row', { name: /Bruno Petit/ });
     expect(within(bruno).getAllByRole('cell').at(-1)!.textContent).toBe('Do not contact');
     expect(within(bruno).getAllByRole('cell').at(-1)!.querySelector('svg')).not.toBeNull();
+  });
+
+  it('exports a member’s data, and deletes it for good once confirmed (SPEC Phase 8.3)', async () => {
+    onOct1();
+    const exported: MemberDataExport = {
+      exportedAt: '2026-10-01T09:00:00.000Z',
+      member: { id: 'mber_3', display_name: 'Bruno Petit' },
+      tables: { payments: [] },
+    };
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/members': [
+        { status: 200, body: MEMBERS },
+        {
+          status: 200,
+          body: { ...MEMBERS, members: MEMBERS.members.filter((m) => m.id !== 'mber_3') },
+        },
+      ],
+      '/api/creator/biz_A1/members/mber_3': [{ status: 200, body: DETAIL_BRUNO }],
+      '/api/creator/biz_A1/members/mber_3/export': [{ status: 200, body: exported }],
+      'POST /api/creator/biz_A1/members/mber_3/delete': [{ status: 200, body: { deleted: true } }],
+    });
+    const createObjectURL = vi.fn(() => 'blob:stayput-member');
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    try {
+      renderAt('/dashboard/biz_A1/members?member=mber_3');
+      const drawer = await screen.findByRole('dialog', { name: 'Bruno Petit' });
+      const data = within(drawer).getByRole('region', { name: 'Their data' });
+      fireEvent.click(within(data).getByRole('button', { name: 'Export (JSON)' }));
+      await vi.waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+      expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe(
+        'stayput-mber_3-2026-10-01.json',
+      );
+      fireEvent.click(within(data).getByRole('button', { name: 'Delete their data' }));
+      const confirm = await screen.findByRole('dialog', { name: 'Delete Bruno Petit’s data?' });
+      fireEvent.click(within(confirm).getByRole('button', { name: 'Delete for good' }));
+      expect(await screen.findByText('Bruno Petit’s data is deleted.')).toBeTruthy();
+      expect(bodies.get('POST /api/creator/biz_A1/members/mber_3/delete')).toEqual({
+        confirm: 'mber_3',
+      });
+      // The drawer closes; the list, read again, no longer has him.
+      await vi.waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: 'Bruno Petit' })).toBeNull(),
+      );
+      await vi.waitFor(() => expect(screen.queryByRole('row', { name: /Bruno Petit/ })).toBeNull());
+    } finally {
+      click.mockRestore();
+    }
   });
 
   it('opens on the level a link asks for', async () => {

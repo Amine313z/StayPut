@@ -1430,6 +1430,16 @@ export const en = {
   'member.why': 'Why',
   'member.why.none': 'Nothing worrying right now.',
   'member.actions': 'Quick actions',
+  'member.data': 'Their data',
+  'member.data.hint':
+    'What StayPut keeps about this member, for their requests: a copy, or deleting it for good.',
+  'member.data.export': 'Export (JSON)',
+  'member.data.delete': 'Delete their data',
+  'member.data.confirm.title': 'Delete {name}’s data?',
+  'member.data.confirm.body':
+    'StayPut deletes everything it keeps about them: scores, activity, actions, payments read from Whop, their Discord and Telegram accounts. It never takes them in again in this community, even while Whop still lists them. This cannot be undone.',
+  'member.data.confirm.delete': 'Delete for good',
+  'member.data.deleted': '{name}’s data is deleted.',
   'member.subscription': 'Subscription',
   'member.since': 'Since {date}',
   'member.payments': 'Payments',

@@ -1475,6 +1475,16 @@ export const fr: Messages = {
   'member.why': 'Pourquoi',
   'member.why.none': 'Rien d’inquiétant pour l’instant.',
   'member.actions': 'Actions rapides',
+  'member.data': 'Ses données',
+  'member.data.hint':
+    'Ce que StayPut garde sur ce membre, pour ses demandes : une copie, ou la suppression définitive.',
+  'member.data.export': 'Exporter (JSON)',
+  'member.data.delete': 'Supprimer ses données',
+  'member.data.confirm.title': 'Supprimer les données de {name} ?',
+  'member.data.confirm.body':
+    'StayPut supprime tout ce qu’il garde sur ce membre : scores, activité, actions, paiements lus chez Whop, ses comptes Discord et Telegram. Il ne le reprend plus jamais dans cette communauté, même si Whop le liste encore. C’est définitif.',
+  'member.data.confirm.delete': 'Supprimer définitivement',
+  'member.data.deleted': 'Les données de {name} sont supprimées.',
   'member.subscription': 'Abonnement',
   'member.since': 'Depuis le {date}',
   'member.payments': 'Paiements',

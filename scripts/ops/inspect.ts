@@ -58,7 +58,9 @@ async function main() {
 
   const companies = await sql`
     select c.id, c.status, c.is_demo, c.installed_at, s.last_synced_at, s.lease_until,
-           s.stats_dirty_since
+           s.stats_dirty_since,
+           -- 0040: when Whop withdrew access, if it did (read whole: older schemas have neither).
+           to_jsonb(c) ->> 'access_lost_at' as access_lost_at, c.uninstalled_at
       from stayput.companies c left join stayput.company_sync s on s.company_id = c.id
      order by c.installed_at`;
   out('### Companies');
@@ -357,7 +359,12 @@ async function main() {
       out();
       table(
         await sql`
-          select (select coalesce(sum(cs.eligible_90), 0) from stayput.cohort_stats cs
+          select (select count(*) from stayput.webhook_events w
+                   where w.company_id = ${id as string}) as deliveries_kept,
+                 (select count(*) from stayput.activity_events e
+                   where e.company_id = ${id as string}
+                     and e.occurred_at < now() - interval '12 months') as activity_over_12_months,
+                 (select coalesce(sum(cs.eligible_90), 0) from stayput.cohort_stats cs
                    where cs.company_id = ${id as string}
                      and cs.cohort_month >= date_trunc('month', now()) - interval '12 months')
                    as badge_members,

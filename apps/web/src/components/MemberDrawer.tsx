@@ -1,4 +1,5 @@
 import type {
+  MemberDataExport,
   MemberDetail,
   MemberDetailMembership,
   MemberDetailPayment,
@@ -7,10 +8,12 @@ import type {
 } from '@stayput/core';
 import { PAID_PAYMENT_STATUSES, isFailedPayment } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
-import { BellOff, Clock, RotateCw, Store } from 'lucide-react';
+import { BellOff, Clock, Download, RotateCw, Store, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useId, useState, type ReactNode } from 'react';
-import { putJson, useApi, type ApiError } from '../api';
+import { getJson, postJson, putJson, useApi, type ApiError } from '../api';
+import { useDemo } from '../demoMode';
+import { downloadJson } from '../download';
 import { useI18n } from '../i18n';
 import {
   URGENT_MS,
@@ -25,15 +28,18 @@ import { ease } from '../motion';
 import { reasonText } from '../risk-text';
 import { Avatar } from '../ui/Avatar';
 import { DiscordIcon, TelegramIcon } from '../ui/BrandIcons';
-import { Button } from '../ui/Button';
+import { Button, buttonClass, leadingMark } from '../ui/Button';
+import { Dialog } from '../ui/Dialog';
 import { Drawer } from '../ui/Drawer';
+import { IconTip } from '../ui/IconTip';
 import { Stagger, StaggerItem } from '../ui/Motion';
 import { RiskRing } from '../ui/RiskRing';
 import { Skeleton } from '../ui/Skeleton';
 import { Switch } from '../ui/Switch';
+import { useToast } from '../ui/Toast';
 import { UrgentDot } from '../ui/UrgentDot';
 import { Sparkline } from '../ui/charts/Sparkline';
-import { MemberActions } from './MemberActions';
+import { MemberActions, failureText } from './MemberActions';
 import { membershipLine } from './MemberRows';
 import { stateText } from './MemberTable';
 import { LEVELS, RiskReasons } from './Risk';
@@ -155,6 +161,17 @@ export function MemberDrawer({
             />
           </StaggerItem>
         ) : null}
+        <StaggerItem>
+          <MemberData
+            api={api}
+            memberId={member.id}
+            name={name}
+            onDeleted={() => {
+              onChanged();
+              onClose();
+            }}
+          />
+        </StaggerItem>
       </Stagger>
     </Drawer>
   );
@@ -549,6 +566,118 @@ function DoNotContact({
 }
 
 /** The member's history did not come: said in a line, with « Retry ». */
+/**
+ * The member's data (SPEC Phase 8.3), for their requests: what StayPut keeps about them as a
+ * file, or deleted for good; then StayPut never takes them in again in this community. Deleting
+ * is refused in the demo.
+ */
+function MemberData({
+  api,
+  memberId,
+  name,
+  onDeleted,
+}: {
+  api: string;
+  memberId: string;
+  name: string;
+  onDeleted: () => void;
+}) {
+  const { t } = useI18n();
+  const toast = useToast();
+  const demo = useDemo();
+  const tipId = useId();
+  const [exporting, setExporting] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const base = `${api}/members/${encodeURIComponent(memberId)}`;
+  const download = async () => {
+    setExporting(true);
+    try {
+      const data = await getJson<MemberDataExport>(`${base}/export`);
+      downloadJson(data, `stayput-${memberId}-${data.exportedAt.slice(0, 10)}.json`);
+    } catch (error) {
+      toast({ tone: 'error', title: failureText(error, t) });
+    } finally {
+      setExporting(false);
+    }
+  };
+  const remove = async () => {
+    setDeleting(true);
+    try {
+      await postJson<{ deleted: boolean }>(`${base}/delete`, { confirm: memberId });
+      setAsking(false);
+      toast({ tone: 'success', title: t('member.data.deleted', { name }) });
+      onDeleted();
+    } catch (error) {
+      toast({ tone: 'error', title: failureText(error, t) });
+    } finally {
+      setDeleting(false);
+    }
+  };
+  return (
+    <Section title={t('member.data')}>
+      <p className="text-sm text-muted">{t('member.data.hint')}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Download aria-hidden="true" className="size-4" />}
+          loading={exporting}
+          onClick={() => void download()}
+        >
+          {t('member.data.export')}
+        </Button>
+        {demo ? (
+          <IconTip label={t('demo.disabled')} id={tipId}>
+            <button
+              type="button"
+              aria-disabled="true"
+              aria-describedby={tipId}
+              data-demo-disabled=""
+              className={buttonClass('danger', 'sm')}
+              onClick={(event) => event.currentTarget.focus()}
+            >
+              {leadingMark('danger', <Trash2 aria-hidden="true" className="size-4" />)}
+              {t('member.data.delete')}
+            </button>
+          </IconTip>
+        ) : (
+          <Button
+            variant="danger"
+            size="sm"
+            icon={<Trash2 aria-hidden="true" className="size-4" />}
+            onClick={() => setAsking(true)}
+          >
+            {t('member.data.delete')}
+          </Button>
+        )}
+      </div>
+      {asking ? (
+        <Dialog
+          title={t('member.data.confirm.title', { name })}
+          description={t('member.data.confirm.body')}
+          onClose={() => setAsking(false)}
+        >
+          <div className="flex justify-end gap-2 px-4 py-4 sm:px-5">
+            <Button variant="ghost" size="sm" onClick={() => setAsking(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              icon={<Trash2 aria-hidden="true" className="size-4" />}
+              loading={deleting}
+              onClick={() => void remove()}
+            >
+              {t('member.data.confirm.delete')}
+            </Button>
+          </div>
+        </Dialog>
+      ) : null}
+    </Section>
+  );
+}
+
 function LoadFailed({ error, onRetry }: { error: ApiError; onRetry: () => void }) {
   const { t } = useI18n();
   return (
