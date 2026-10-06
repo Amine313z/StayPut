@@ -3713,3 +3713,32 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
   Telegram répond « too large » ; les plus gros réglages légitimes passent.
 - `probe.ts` essayé sur le Worker servi en local : les 31 contrôles qui ne demandent ni la base ni
   le site statique passent.
+
+## 2026-10-06 — Tests fonctionnels : la boucle de l'argent sur de faux membres
+
+- **`scripts/seed/scenarios.ts`** : une communauté à part (`biz_ScenarioRun1`, mode automatique,
+  mode test coupé) et ses 25 faux membres (le générateur du sandbox, avec ses propres
+  identifiants `scen…` : ceux de Whop sont uniques dans toute la base, et les faux membres du
+  sandbox ont déjà les `seed…`), puis les **vraies tâches horaires du Worker** (`SCHEDULE` de
+  `cron.ts`), heure après heure, face à un Whop qui ne fait que noter ce qu'on lui demande. 21
+  contrôles : chaque membre noté ; un avis à chaque membre au paiement refusé, la nouvelle
+  tentative de celui que Whop laisse à StayPut (une seule) ; l'avis 3-D Secure avec son lien ; le
+  questionnaire de départ à chaque annulation programmée ; la relance de chaque inactif gardée
+  pour son heure ; rien pour un membre sur la liste « ne pas contacter » (sa relance est bloquée
+  par le garde-fou) ; la bienvenue au nouveau venu inactif ; une relance par membre et par 5 jours
+  au plus ; puis Whop répond (deux paiements payés, une offre acceptée et l'annulation retirée) :
+  2 × 49 $ récupérés, comptés une fois, sur le tableau de bord et dans le rapport du lundi, et le
+  renouvellement après l'annulation retirée compté lui aussi.
+- Deux exécutions du même scénario : `scenarios.test.ts` en CI (base en mémoire), et
+  `seed-sandbox.ts scenarios` (workflow « Seed sandbox ») sur la base du sandbox elle-même, dans
+  **une transaction annulée à la fin** : rien ne reste, rien ne part chez Whop. Dans cette
+  transaction seulement, les autres communautés sont mises de côté comme communautés de démo (que
+  toutes les tâches ignorent) ; une lecture sous RLS (le tableau de bord) se fait dans un
+  savepoint défait après elle, pour que son rôle ne survive pas.
+- Essayé avant le sandbox sur un PostgreSQL 16 local, avec les 43 migrations et la communauté de
+  test et ses 25 faux membres : 21 contrôles sur 21, et les mêmes nombres de lignes avant et après
+  (la transaction n'a rien laissé). Cet essai a trouvé une erreur du script lui-même (une
+  communauté « désinstallée » doit avoir sa date), corrigée avant tout passage sur le sandbox.
+- Ce que ce scénario ne prouve pas : la réponse du vrai Whop (le sandbox de Whop refuse les
+  envois des apps et ne connaît pas ces faux membres). Ce sera l'essai avec les comptes de test du
+  fondateur (carte 4000 0000 0000 0341 : le renouvellement refusé, puis la carte mise à jour).

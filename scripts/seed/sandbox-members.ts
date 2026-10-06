@@ -70,11 +70,24 @@ const NAMES = [
 
 const DAY = 86_400_000;
 const PRICE = 49;
-export const SEED_PLAN = 'plan_seedmonthly';
-export const SEED_PRODUCT = 'prod_seedcommunity';
-const CHANNEL = 'chat_seedgeneral';
-const COURSE = 'cors_seedstart';
-const FORUM = 'exp_seedforum';
+/**
+ * What every id of the fake members starts with: `seed` in the sandbox (`mber_seed01`…). Whop's
+ * ids are unique across StayPut's database, so another set of fake members takes another tag.
+ */
+export const SEED_TAG = 'seed';
+
+/** What the fake members of a tag share: their plan and product, chat, course and forum. */
+function sharedIds(tag: string) {
+  return {
+    plan: `plan_${tag}monthly`,
+    product: `prod_${tag}community`,
+    channel: `chat_${tag}general`,
+    course: `cors_${tag}start`,
+    forum: `exp_${tag}forum`,
+  };
+}
+export const SEED_PLAN = sharedIds(SEED_TAG).plan;
+export const SEED_PRODUCT = sharedIds(SEED_TAG).product;
 
 export interface SeedMember {
   index: number;
@@ -86,12 +99,12 @@ export interface SeedMember {
 }
 
 /** The 25 members, the same every time (only the dates follow `now`). */
-export function seedMembers(now: Date): SeedMember[] {
+export function seedMembers(now: Date, tag = SEED_TAG): SeedMember[] {
   const members: SeedMember[] = [];
   for (const [profile, count] of PROFILES) {
     for (let k = 0; k < count; k += 1) {
       const index = members.length + 1;
-      const tag = `seed${String(index).padStart(2, '0')}`;
+      const id = `${tag}${String(index).padStart(2, '0')}`;
       const random = generator(index);
       const daysAgo =
         profile === 'newcomer'
@@ -102,8 +115,8 @@ export function seedMembers(now: Date): SeedMember[] {
       members.push({
         index,
         profile,
-        memberId: `mber_${tag}`,
-        userId: `user_${tag}`,
+        memberId: `mber_${id}`,
+        userId: `user_${id}`,
         name: NAMES[index - 1] ?? `Member ${index}`,
         joinedAt: new Date(now.getTime() - daysAgo * DAY - Math.floor(random() * 8) * 3_600_000),
       });
@@ -128,9 +141,9 @@ const LESSON_TITLES = [
   'Bilan et suite',
 ];
 
-function lessonOf(count: number): { id: string; title: string } {
+function lessonOf(count: number, tag: string): { id: string; title: string } {
   const index = count % LESSON_TITLES.length;
-  return { id: `lesn_seed${index + 1}`, title: `${index + 1}. ${LESSON_TITLES[index] ?? ''}` };
+  return { id: `lesn_${tag}${index + 1}`, title: `${index + 1}. ${LESSON_TITLES[index] ?? ''}` };
 }
 
 /** Messages a day `daysAgo` days back, on average, for each profile. */
@@ -154,8 +167,12 @@ function messageRate(profile: Profile, daysAgo: number): number {
 }
 
 /** The pages to ingest, kind by kind, in the order the links need. */
-export function seedPages(now: Date): { kind: string; scope: string | null; data: unknown[] }[] {
-  const members = seedMembers(now);
+export function seedPages(
+  now: Date,
+  tag = SEED_TAG,
+): { kind: string; scope: string | null; data: unknown[] }[] {
+  const members = seedMembers(now, tag);
+  const shared = sharedIds(tag);
   const iso = (date: Date) => date.toISOString();
   const pages: { kind: string; scope: string | null; data: unknown[] }[] = [];
 
@@ -164,8 +181,8 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
     scope: null,
     data: [
       {
-        id: SEED_PLAN,
-        product: { id: SEED_PRODUCT },
+        id: shared.plan,
+        product: { id: shared.product },
         plan_type: 'renewal',
         initial_price: PRICE,
         renewal_price: PRICE,
@@ -206,8 +223,8 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
     memberships.push({
       id: `mem_${m.memberId.slice(5)}`,
       user_id: m.userId,
-      product_id: SEED_PRODUCT,
-      plan_id: SEED_PLAN,
+      product_id: shared.product,
+      plan_id: shared.plan,
       status: due?.substatus === 'failed' ? 'past_due' : 'active',
       cancel_at_period_end: m.profile === 'scheduled_cancellation',
       created_at: iso(m.joinedAt),
@@ -278,7 +295,7 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
             id: `crlsi_${id}`,
             completed: true,
             created_at: iso(at),
-            lesson: lessonOf(lessons.length),
+            lesson: lessonOf(lessons.length, tag),
             user: { id: m.userId },
           });
         }
@@ -292,10 +309,10 @@ export function seedPages(now: Date): { kind: string; scope: string | null; data
         }
       }
     }
-    pages.push({ kind: 'messages', scope: CHANNEL, data: messages });
+    pages.push({ kind: 'messages', scope: shared.channel, data: messages });
     pages.push({ kind: 'reactions', scope: null, data: reactions });
-    pages.push({ kind: 'lesson_interactions', scope: COURSE, data: lessons });
-    pages.push({ kind: 'forum_posts', scope: FORUM, data: posts });
+    pages.push({ kind: 'lesson_interactions', scope: shared.course, data: lessons });
+    pages.push({ kind: 'forum_posts', scope: shared.forum, data: posts });
   }
   return pages;
 }
@@ -390,20 +407,21 @@ function generator(seed: number): () => number {
 }
 
 /** Writes the fake members into `companyId`, then recomputes its statistics. */
-export async function runSeed(db: SeedDb, companyId: string, now: Date) {
+export async function runSeed(db: SeedDb, companyId: string, now: Date, tag = SEED_TAG) {
   // The payment problems of an earlier run give way to this run's.
   await db.query(
-    `delete from stayput.payments where company_id = $1 and id like 'pay\\_seed%x%'
+    `delete from stayput.payments where company_id = $1 and id like $3
         and id <> all (string_to_array($2, ','))`,
     [
       companyId,
-      seedMembers(now)
+      seedMembers(now, tag)
         .map((m) => `${problemPrefix(m)}${Math.floor(now.getTime() / 3_600_000)}`)
         .join(','),
+      `pay\\_${tag}%x%`,
     ],
   );
   let items = 0;
-  for (const page of seedPages(now)) {
+  for (const page of seedPages(now, tag)) {
     if (page.data.length === 0) continue;
     await db.query('select stayput.ingest_page($1, $2, $3, $4::text::jsonb)', [
       companyId,
@@ -417,7 +435,7 @@ export async function runSeed(db: SeedDb, companyId: string, now: Date) {
     now.toISOString(),
     companyId,
   ]);
-  return { members: seedMembers(now).length, items };
+  return { members: seedMembers(now, tag).length, items };
 }
 
 /**

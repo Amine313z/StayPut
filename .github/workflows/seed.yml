@@ -5,14 +5,17 @@ name: Seed sandbox
 # reports them by risk score with their reasons (scripts/seed-sandbox.ts; seed and report compute
 # the scores and the weekly analyses again with the current rules; the report is in the run's
 # summary). `journey` walks one fake member from the goal to the testimonial card (SPEC Phase 5),
-# its public page in the summary. Refused when the repository variable WHOP_ENV is "production".
+# its public page in the summary. `scenarios` runs the money loop on fake members of a community
+# of its own through the Worker's hourly jobs (scripts/seed/scenarios.ts), inside one transaction
+# rolled back: nothing stays, nothing reaches Whop; its verdicts are in the summary. Refused when
+# the repository variable WHOP_ENV is "production".
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: seed (add the fake members), remove (take them away), report (by risk score) or journey (goal to card)
+        description: seed (add the fake members), remove (take them away), report (by risk score), journey (goal to card) or scenarios (the money loop, rolled back)
         type: choice
-        options: [seed, remove, report, journey]
+        options: [seed, remove, report, journey, scenarios]
         default: seed
       company:
         description: The sandbox company (biz_…)

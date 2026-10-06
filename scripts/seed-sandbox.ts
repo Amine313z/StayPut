@@ -8,9 +8,16 @@
  *   DATABASE_URL=… npx tsx scripts/seed-sandbox.ts remove [biz_…]
  *   DATABASE_URL=… npx tsx scripts/seed-sandbox.ts report [biz_…]
  *   DATABASE_URL=… npx tsx scripts/seed-sandbox.ts journey [biz_…]
+ *   DATABASE_URL=… npx tsx scripts/seed-sandbox.ts scenarios
  *
  * SPEC Phase 5: `journey` walks one fake member from the goal to the testimonial card
  * (scripts/seed/member-journey.ts); its public page is on STAYPUT_URL (the Worker's address).
+ *
+ * `scenarios` runs the money loop on fake members of a community of its own
+ * (scripts/seed/scenarios.ts) through the Worker's hourly jobs, inside one transaction rolled back
+ * at the end: nothing stays in the database, and nothing reaches Whop. The other communities are
+ * set aside within that transaction only (as demo communities, which every job skips), so that
+ * the jobs work on the scenarios' alone.
  *
  * The « Seed sandbox » workflow runs it (GitHub → Actions → Seed sandbox → Run workflow). Refused
  * when WHOP_ENV is production, and for a company StayPut does not know.
@@ -25,6 +32,8 @@ import {
   runSeed,
 } from './seed/sandbox-members';
 import { runJourney } from './seed/member-journey';
+import { SCENARIO_COMPANY, runScenarios, verdictTable, type Verdict } from './seed/scenarios';
+import type { Db, TransactionalDb } from '../apps/worker/src/db';
 
 /** « StayPut Test », the founder's sandbox account (not a secret). */
 const SANDBOX_COMPANY = 'biz_2whAzkbCRpcGqQ';
@@ -38,8 +47,8 @@ function fail(message: string): never {
 }
 
 if (!url) fail('Set DATABASE_URL.');
-if (!['seed', 'remove', 'report', 'journey'].includes(action)) {
-  fail('Usage: seed-sandbox.ts seed|remove|report|journey [biz_…]');
+if (!['seed', 'remove', 'report', 'journey', 'scenarios'].includes(action)) {
+  fail('Usage: seed-sandbox.ts seed|remove|report|journey|scenarios [biz_…]');
 }
 if ((process.env.WHOP_ENV || 'sandbox') !== 'sandbox') {
   fail('Refused: WHOP_ENV is not "sandbox". Fake members never go into production.');
@@ -58,7 +67,67 @@ const db = {
     Array.from(await sql.unsafe(text, params as postgres.ParameterOrJSON<never>[])) as T[],
 };
 
+/** Thrown to roll a transaction (or a savepoint) back once its work is done. */
+class RolledBack extends Error {}
+
+/**
+ * The scenarios on this database, inside one transaction rolled back: a reading under RLS
+ * (withUser) runs in a savepoint undone after it, so that its role and user end with it.
+ */
+async function scenariosRolledBack(now: Date): Promise<Verdict[]> {
+  const run = async <T>(
+    client: postgres.TransactionSql,
+    text: string,
+    params: readonly unknown[] = [],
+  ): Promise<T[]> =>
+    Array.from(await client.unsafe(text, params as postgres.ParameterOrJSON<never>[])) as T[];
+  let verdicts: Verdict[] = [];
+  try {
+    await sql.begin(async (tx) => {
+      // Every scheduled job skips a demo community: the others become one, here only.
+      await tx.unsafe(
+        `update stayput.companies set is_demo = true where id <> $1 and not is_demo`,
+        [SCENARIO_COMPANY],
+      );
+      const inTransaction: TransactionalDb = {
+        query: <T>(text: string, params?: readonly unknown[]) => run<T>(tx, text, params),
+        transaction: async <T>(work: (reading: Db) => Promise<T>): Promise<T> => {
+          let result: T | undefined;
+          await tx
+            .savepoint(async (sp) => {
+              result = await work({
+                query: <R>(text: string, params?: readonly unknown[]) => run<R>(sp, text, params),
+              });
+              throw new RolledBack();
+            })
+            .catch((error: unknown) => {
+              if (!(error instanceof RolledBack)) throw error;
+            });
+          return result as T;
+        },
+      };
+      verdicts = await runScenarios(inTransaction, now);
+      throw new RolledBack();
+    });
+  } catch (error) {
+    if (!(error instanceof RolledBack)) throw error;
+  }
+  return verdicts;
+}
+
 async function main() {
+  if (action === 'scenarios') {
+    const verdicts = await scenariosRolledBack(new Date());
+    const lines = verdictTable(
+      'The money loop on fake members (the sandbox’s database, rolled back)',
+      verdicts,
+    );
+    console.info(lines.join('\n'));
+    const summary = process.env.GITHUB_STEP_SUMMARY;
+    if (summary) appendFileSync(summary, `${lines.join('\n')}\n`);
+    if (verdicts.some((v) => !v.ok)) process.exitCode = 1;
+    return;
+  }
   const [company] = await db.query<{ status: string }>(
     'select status from stayput.companies where id = $1',
     [companyId],

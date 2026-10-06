@@ -16,8 +16,16 @@ pour la production ; pour la production, les réglages GitHub portent le préfix
 - **`/health`** : `{"status":"ok","whopEnv":…,"database":"ok"}`, sinon une réponse 503 qui dit
   pourquoi (`not_configured`, `outdated`, `unreachable`, `timeout`).
 - **Actions → Inspect** (sandbox) : la base en nombres seulement, les permissions que Whop
-  accorde, Telegram, le site et la démo dans Chrome, les captures. Sur la production, seulement
-  le site et la démo : les journaux de ce dépôt public ne montrent aucune communauté cliente.
+  accorde, Telegram, le site et la démo dans Chrome, les captures, et le Worker attaqué depuis
+  l'extérieur (`scripts/ops/probe.ts` : jetons forgés, webhooks forgés ou rejoués, envois trop
+  gros, autre site, en-têtes ; un verdict par contrôle). Sur la production, seulement le site, la
+  démo et l'attaque : les journaux de ce dépôt public ne montrent aucune communauté cliente.
+- **Actions → Seed sandbox → `scenarios`** : la boucle de l'argent sur de faux membres d'une
+  communauté à part (`scripts/seed/scenarios.ts`), par les tâches horaires du Worker, sur la base
+  du sandbox, dans une transaction annulée à la fin : rien ne reste, rien ne part chez Whop. Les
+  verdicts (paiements relancés et récupérés, questionnaire de départ, offre acceptée, relances à
+  l'heure du membre, « ne pas contacter », tableau de bord, rapport du lundi) sont dans le
+  résumé du run.
 
 ## Lire le journal d'audit
 
