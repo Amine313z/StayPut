@@ -3677,3 +3677,39 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
   impossible à écrire ; la connexion d'un serveur Discord.
 - `routing.test.ts` : chaque route qui change quelque chose a sa ligne, ou sa raison de ne pas en
   avoir ; vérifié qu'il échoue quand une route perd son marqueur.
+
+## 2026-10-06 — Sécurité : la taille des envois, et le Worker attaqué depuis l'extérieur
+
+- **Trouvé pendant l'audit** : les deux webhooks ne refusaient un envoi trop gros que d'après son
+  en-tête `Content-Length`. Envoyé par morceaux (sans longueur annoncée), il était lu en entier en
+  mémoire avant d'être mesuré : une seule requête de quelques dizaines de Mo pouvait épuiser la
+  mémoire du Worker (128 Mo), et faire échouer les autres requêtes qu'il servait au même moment.
+- Le corps se lit maintenant morceau par morceau, et la lecture s'arrête à la limite
+  (`readCapped`, `apps/worker/src/http.ts`) : 256 Ko pour Whop, 64 Ko pour Telegram (qui reçoit
+  toujours « ok, ignoré », pour ne pas le renvoyer). Toute l'API (`/api/*`) a sa limite, 64 Ko
+  (`bodyLimit` de Hono), avant même de savoir qui appelle : ce que le tableau de bord envoie de plus
+  gros (les réglages des actions, avec chaque message écrit dans les deux langues) reste sous
+  25 Ko. Le logo d'une communauté, lu chez Whop, s'arrête aussi à 1 Mo, quoi que dise sa longueur.
+- **`scripts/ops/probe.ts`**, dans Inspect (sandbox et production) : ce qu'aucun navigateur de
+  créateur ou de membre n'envoie, chaque fois refusé comme il le faut — pas de jeton, un jeton sans
+  signature (`alg: none`), signé par une autre clé ou par un secret partagé (HS256), un cookie de
+  session forgé ; les webhooks de Whop non signés, mal signés, ou bien signés mais rejoués 10
+  minutes plus tard ; celui de Telegram sans son secret ; les corps trop gros, avec ou sans leur
+  longueur ; un autre site (CORS) ; les en-têtes de sécurité ; les fichiers jamais servis (`.env`,
+  `.git/config`, `wrangler.toml`…) ; `/health` sans rien de secret. Une ligne par contrôle, son
+  verdict et le code de statut : jamais un corps, un jeton ni un secret, les journaux de ce dépôt
+  public étant publics. Rien n'est écrit : tout est refusé avant d'être gardé.
+- Pour information seulement (pas un échec) : qui peut afficher le site dans un cadre
+  (`frame-ancestors`), HTTPS imposé (`Strict-Transport-Security`), et la limite de débit, absente
+  sur `workers.dev` (une règle Cloudflare la donnera sur le domaine de la production).
+
+### Testé
+
+- `http.test.ts` : la limite exacte passe, un octet de plus non ; une longueur annoncée trop grande
+  refusée sans lecture ; les octets comptés, pas les caractères ; un caractère coupé entre deux
+  morceaux bien relu.
+- `app.test.ts` : un corps sans longueur au-delà de la limite, refusé (413) sur l'API avant
+  l'identification, sur le webhook de Whop et pour le logo, après quelques morceaux lus seulement ;
+  Telegram répond « too large » ; les plus gros réglages légitimes passent.
+- `probe.ts` essayé sur le Worker servi en local : les 31 contrôles qui ne demandent ni la base ni
+  le site statique passent.

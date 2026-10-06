@@ -3,9 +3,11 @@ name: Inspect
 # Started by hand (GitHub -> Actions -> Inspect -> Run workflow) or by Claude through the API:
 # what the database holds, as counts only (scripts/ops/inspect.ts), which permissions Whop
 # grants the app's key (scripts/ops/whop-permissions.ts), how Telegram sees the connected
-# groups (scripts/ops/telegram-groups.ts), and what a browser gets from the deployed Worker.
-# It changes nothing. On production (`target`), only what the browser gets: this repository is
-# public, and so are its runs' logs, where no creator's community may show.
+# groups (scripts/ops/telegram-groups.ts), what a browser gets from the deployed Worker, and
+# how it answers what no browser of a creator or a member sends (scripts/ops/probe.ts).
+# It changes nothing. On production (`target`), only what the browser gets and the attack from
+# outside: this repository is public, and so are its runs' logs, where no creator's community
+# may show.
 on:
   workflow_dispatch:
     inputs:
@@ -26,7 +28,7 @@ env:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     environment: ${{ inputs.target || 'sandbox' }}
     steps:
       - uses: actions/checkout@v5
@@ -52,6 +54,17 @@ jobs:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: npx tsx scripts/ops/telegram-groups.ts
+
+      # The deployed Worker attacked from outside (scripts/ops/probe.ts): no token, forged tokens
+      # and cookies, forged and replayed webhooks, bodies too large, another site's origin, the
+      # headers, the files never served. One verdict per check: never a body, a token or a secret.
+      - name: Attack the deployed Worker from outside (verdicts only)
+        if: always()
+        env:
+          STAYPUT_URL: ${{ vars[inputs.target == 'production' && 'PRODUCTION_STAYPUT_URL' || 'STAYPUT_URL'] || env.DEFAULT_URL }}
+          WHOP_APP_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_APP_ID' || 'WHOP_APP_ID'] }}
+          WHOP_WEBHOOK_SECRET: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_WHOP_WEBHOOK_SECRET' || 'WHOP_WEBHOOK_SECRET'] }}
+        run: npx tsx scripts/ops/probe.ts
 
       # Satoshi is downloaded at deployment, never committed (scripts/deploy/satoshi.ts): what
       # Fontshare's package holds, its license, and the fingerprint of the font served.

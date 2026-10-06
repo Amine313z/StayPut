@@ -42,6 +42,8 @@ import { AccessCache } from '../src/access';
 import { prepareActions } from '../src/actions';
 import {
   HEALTH_DB_TIMEOUT_MS,
+  MAX_API_BODY_BYTES,
+  MAX_LOGO_BYTES,
   MAX_WEBHOOK_BYTES,
   companyIdOf,
   createApp,
@@ -92,6 +94,19 @@ async function settle() {
   while (pending.length > 0) await Promise.all(pending.splice(0));
 }
 afterEach(settle);
+
+/** A body sent chunk by chunk without its length (up to 16 MB): how many chunks were read. */
+function endless(chunk: number) {
+  let pulled = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      pulled += 1;
+      if (pulled > 1024) controller.close();
+      else controller.enqueue(new Uint8Array(chunk).fill(97));
+    },
+  });
+  return { stream, pulled: () => pulled };
+}
 
 const EMPTY_PAGE = '{"data":[],"page_info":{"end_cursor":null,"has_next_page":false}}';
 
@@ -304,6 +319,33 @@ describe('/api authentication', () => {
       expect(res.status).toBe(401);
     }
   });
+
+  it('reads no body past its limit, with or without its length, before anyone is known', async () => {
+    const { request } = setup({ 'user_alice:biz_A1': 'admin' });
+    const sent = endless(16 * 1024);
+    const chunked = await request('/api/creator/biz_A1/badge', {
+      method: 'PUT',
+      body: sent.stream,
+      duplex: 'half',
+    });
+    expect(chunked.status).toBe(413);
+    expect(await chunked.json()).toMatchObject({ error: { code: 'payload_too_large' } });
+    expect(sent.pulled()).toBeLessThan(MAX_API_BODY_BYTES / (16 * 1024) + 3);
+    const declared = await request('/api/member/exp_A1/space/goals', {
+      method: 'POST',
+      headers: { 'content-length': String(MAX_API_BODY_BYTES + 1) },
+      body: 'x'.repeat(MAX_API_BODY_BYTES + 1),
+    });
+    expect(declared.status).toBe(413);
+    // The largest settings a team saves pass.
+    const init = await asUser('user_alice');
+    const settings = await request('/api/creator/biz_A1/badge', {
+      method: 'PUT',
+      headers: { ...init.headers, 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: true, padding: 'é'.repeat(20_000) }),
+    });
+    expect(settings.status).not.toBe(413);
+  });
 });
 
 describe('the member space, off in V1 (MEMBER_SPACE_ENABLED)', () => {
@@ -461,12 +503,17 @@ describe('GET /api/creator/:companyId/session', () => {
     expect(fetched).toEqual(['https://assets.whop.com/logos/biz_Logo.png']);
     // Not an image: nothing is passed on.
     expect((await request('/api/creator/biz_Logo/logo', init)).status).toBe(404);
+    // Too large, its length untold: read no further than the limit, and not passed on.
+    const sent = endless(64 * 1024);
+    answers.unshift(new Response(sent.stream, { headers: { 'content-type': 'image/png' } }));
+    expect((await request('/api/creator/biz_Logo/logo', init)).status).toBe(404);
+    expect(sent.pulled()).toBeLessThan(MAX_LOGO_BYTES / (64 * 1024) + 3);
     // A community without a logo: none, and nothing is fetched.
     await session('biz_Named');
     await settle();
     expect((await session('biz_Named')).companyLogo).toBe(false);
     expect((await request('/api/creator/biz_Named/logo', init)).status).toBe(404);
-    expect(fetched).toHaveLength(2);
+    expect(fetched).toHaveLength(3);
   });
 
   it('treats an id Whop does not know as no access, and an outage as unavailable', async () => {
@@ -616,6 +663,27 @@ describe('POST /webhooks/whop', () => {
     const big = JSON.stringify({ type: 'x', data: 'a'.repeat(MAX_WEBHOOK_BYTES) });
     const res = await setup().request('/webhooks/whop', await delivery(big, 'msg_big'));
     expect(res.status).toBe(413);
+  });
+
+  it('stops reading a body sent without its length once it passes the limit', async () => {
+    const { request } = setup();
+    const sent = endless(16 * 1024);
+    const res = await request('/webhooks/whop', {
+      method: 'POST',
+      body: sent.stream,
+      duplex: 'half',
+      headers: { 'webhook-id': 'msg_chunked', 'webhook-timestamp': String(NOW_S) },
+    });
+    expect(res.status).toBe(413);
+    expect(sent.pulled()).toBeLessThan(MAX_WEBHOOK_BYTES / (16 * 1024) + 3);
+    // Not oversized, without its length: read and checked as usual.
+    const small = await delivery(EVENT, 'msg_small');
+    const res2 = await request('/webhooks/whop', {
+      ...small,
+      body: new Blob([small.body]).stream(),
+      duplex: 'half',
+    });
+    expect(res2.status).toBe(200);
   });
 
   it('answers 503 until the secret and the database are configured, so Whop retries', async () => {
@@ -1249,6 +1317,18 @@ describe('Discord and Telegram', () => {
     const from = { id: 4242, is_bot: false, language_code: 'fr' };
 
     expect((await telegramUpdate(request, {}, 'wrong')).status).toBe(401);
+    // An update too large is answered (Telegram would send it again) and never read whole.
+    const sent = endless(16 * 1024);
+    const large = await request('/webhooks/telegram', {
+      method: 'POST',
+      headers: {
+        'x-telegram-bot-api-secret-token': await telegramWebhookSecret('123456:telegram-token'),
+      },
+      body: sent.stream,
+      duplex: 'half',
+    });
+    expect(await large.json()).toEqual({ ok: true, ignored: 'too large' });
+    expect(sent.pulled()).toBeLessThan(8);
     const linked = await telegramUpdate(request, {
       update_id: 1,
       message: {

@@ -57,6 +57,7 @@ import {
   type WhopOAuth,
 } from '@stayput/whop';
 import { Hono, type Context } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
@@ -86,7 +87,7 @@ import { readDashboard, readFeed } from './dashboard';
 import { createPostgresDb, type ClosableDb, type Db } from './db';
 import { createDiscordClient, type DiscordClient } from './discord';
 import { readConfig, type Config, type Env } from './env';
-import { API_HEADERS, apiError } from './http';
+import { API_HEADERS, apiError, readBytesCapped, readCapped } from './http';
 import {
   DISCORD_CALLBACK_PATH,
   TELEGRAM_WEBHOOK_PATH,
@@ -290,6 +291,13 @@ export const MAX_TELEGRAM_UPDATE_BYTES = 64 * 1024;
 
 /** Whop's deliveries are small JSON documents; anything bigger is refused unread. */
 export const MAX_WEBHOOK_BYTES = 256 * 1024;
+/**
+ * The most a dashboard or a member's page sends at once: the action settings, with every message
+ * written for both languages, stay under 25 KB.
+ */
+export const MAX_API_BODY_BYTES = 64 * 1024;
+/** A community's logo, passed on from Whop's images: none is near this. */
+export const MAX_LOGO_BYTES = 1_000_000;
 const HEALTH_CACHE_MS = 30_000;
 /** /health never waits longer than this for the database: a silent database is reported. */
 export const HEALTH_DB_TIMEOUT_MS = 5_000;
@@ -327,6 +335,16 @@ export function createApp(deps: AppDeps) {
       if (name !== 'Cache-Control' || !c.res.headers.has(name)) c.res.headers.set(name, value);
     }
   });
+
+  // A request's body is read up to its limit and no further, even without a Content-Length
+  // (chunked), before anyone is identified.
+  app.use(
+    '/api/*',
+    bodyLimit({
+      maxSize: MAX_API_BODY_BYTES,
+      onError: () => apiError('payload_too_large', 'request body too large'),
+    }),
+  );
 
   /**
    * The member space (goals, results, testimonial cards and their public pages, buddies, rescue
@@ -691,13 +709,8 @@ export function createApp(deps: AppDeps) {
       // Whop retries a failed delivery: nothing is lost while the Worker is being set up.
       return apiError('not_configured', 'webhooks are not configured yet');
     }
-    if (Number(c.req.header('content-length') ?? 0) > MAX_WEBHOOK_BYTES) {
-      return apiError('payload_too_large', 'webhook payload too large');
-    }
-    const raw = await c.req.text();
-    if (raw.length > MAX_WEBHOOK_BYTES) {
-      return apiError('payload_too_large', 'webhook payload too large');
-    }
+    const raw = await readCapped(c.req.raw, MAX_WEBHOOK_BYTES);
+    if (raw === null) return apiError('payload_too_large', 'webhook payload too large');
     const verification = await verifyWebhook(
       raw,
       c.req.raw.headers,
@@ -788,12 +801,12 @@ export function createApp(deps: AppDeps) {
       () => null,
     );
     const type = image?.headers.get('content-type') ?? '';
-    const size = Number(image?.headers.get('content-length') ?? '0');
-    if (!image?.ok || !/^image\/(png|jpeg|webp|gif)$/.test(type) || size > 1_000_000) {
+    if (!image?.ok || !/^image\/(png|jpeg|webp|gif)$/.test(type)) {
       return apiError('not_found', 'the logo could not be read');
     }
-    const bytes = await image.arrayBuffer();
-    if (bytes.byteLength > 1_000_000) return apiError('not_found', 'the logo is too large');
+    // Read up to its limit only, whatever the answer says of its length.
+    const bytes = await readBytesCapped(image, MAX_LOGO_BYTES);
+    if (!bytes) return apiError('not_found', 'the logo is too large');
     return new Response(bytes, {
       headers: {
         'Content-Type': type,
@@ -2407,13 +2420,11 @@ export function createApp(deps: AppDeps) {
     if (!timingSafeEqual(c.req.header('x-telegram-bot-api-secret-token') ?? '', secret)) {
       return apiError('unauthenticated', 'invalid Telegram secret');
     }
-    if (Number(c.req.header('content-length') ?? 0) > MAX_TELEGRAM_UPDATE_BYTES) {
-      return c.json({ ok: true, ignored: 'too large' });
-    }
-    const raw = await c.req.text();
+    const raw = await readCapped(c.req.raw, MAX_TELEGRAM_UPDATE_BYTES);
+    if (raw === null) return c.json({ ok: true, ignored: 'too large' });
     let update: unknown;
     try {
-      update = raw.length > MAX_TELEGRAM_UPDATE_BYTES ? null : JSON.parse(raw);
+      update = JSON.parse(raw);
     } catch {
       update = null;
     }
