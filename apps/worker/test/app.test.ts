@@ -1114,6 +1114,12 @@ describe('Discord and Telegram', () => {
       { code: 'good', redirectUri: `${ORIGIN}/auth/discord/callback` },
     ]);
     await settle();
+    // The community's journal: who connected which server.
+    expect(
+      await t.db.query(
+        `select actor, action, target from stayput.audit_log where company_id = 'biz_Int1'`,
+      ),
+    ).toEqual([{ actor: 'user_ivy', action: 'discord.connect', target: { guild: GUILD } }]);
 
     // Signed in to StayPut outside Whop (sandbox) as the creator who asked: the page offers the
     // way back to their dashboard. Someone else's session: no.
@@ -1941,6 +1947,94 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
     expect((await request(`${base}/delete`, post(init, { confirm: 'mber_Data2' }))).status).toBe(
       404,
     );
+  });
+
+  it('keeps who on the team changed what in the journal, and nothing that was refused', async () => {
+    const { request } = setup({ 'user_rita:biz_Jour1': 'admin', 'user_sam:biz_Jour1': 'customer' });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Jour1/session', init);
+    await settle();
+    await t.db.query(
+      `insert into stayput.members (id, company_id, user_id, display_name, status)
+       values ('mber_Jour1', 'biz_Jour1', 'user_Jour1', 'Lea Martin', 'joined')`,
+    );
+    const base = '/api/creator/biz_Jour1';
+    const contact = `${base}/members/mber_Jour1/contact`;
+    expect((await request(`${base}/badge`, put(init, { enabled: true }))).status).toBe(200);
+    expect((await request(`${base}/test-mode/off`, post(init, {}))).status).toBe(200);
+    expect((await request(contact, put(init, { doNotContact: true }))).status).toBe(200);
+    expect((await request(`${base}/export`, init)).status).toBe(200);
+    // Refused: nonsense, someone outside the team, a member StayPut does not know.
+    const customer = await asUser('user_sam');
+    expect((await request(`${base}/badge`, put(init, { enabled: 'yes' }))).status).toBe(400);
+    expect((await request(`${base}/badge`, put(customer, { enabled: false }))).status).toBe(403);
+    expect((await request(`${base}/export`, customer)).status).toBe(403);
+    const unknown = `${base}/members/mber_Nobody/contact`;
+    expect((await request(unknown, put(init, { doNotContact: true }))).status).toBe(404);
+    await settle();
+    const lines = await t.db.query<{ actor: string; action: string; target: unknown; at: number }>(
+      `select actor, action, target, extract(epoch from created_at)::float8 * 1000 as at
+         from stayput.audit_log where company_id = 'biz_Jour1' order by id`,
+    );
+    expect(lines).toEqual(
+      [
+        { action: 'badge.set', target: { enabled: true } },
+        { action: 'test_mode.off', target: {} },
+        { action: 'member.contact', target: { member: 'mber_Jour1', doNotContact: true } },
+        { action: 'data.export', target: {} },
+      ].map((line) => ({ actor: 'user_rita', ...line, at: NOW.getTime() })),
+    );
+  });
+
+  it('says in the journal that a member was deleted, never who, and erases them from it', async () => {
+    const { request } = setup({ 'user_rita:biz_Jour2': 'admin' });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Jour2/session', init);
+    await settle();
+    await t.db.query(
+      `insert into stayput.members (id, company_id, user_id, display_name, status)
+       values ('mber_Jour2', 'biz_Jour2', 'user_Jour2', 'Lea Martin', 'joined')`,
+    );
+    const base = '/api/creator/biz_Jour2/members/mber_Jour2';
+    expect((await request(`${base}/contact`, put(init, { doNotContact: true }))).status).toBe(200);
+    expect((await request(`${base}/export`, init)).status).toBe(200);
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    const deleted = await request(`${base}/delete`, post(init, { confirm: 'mber_Jour2' }));
+    info.mockRestore();
+    expect(deleted.status).toBe(200);
+    expect(
+      await t.db.query(
+        `select actor, action, target from stayput.audit_log
+          where company_id = 'biz_Jour2' order by id`,
+      ),
+    ).toEqual([
+      { actor: 'user_rita', action: 'member.contact', target: { erased: true } },
+      { actor: 'user_rita', action: 'member.export', target: { erased: true } },
+      { actor: 'user_rita', action: 'member.delete', target: {} },
+    ]);
+  });
+
+  it('answers a change made even when its line cannot be written, and records why', async () => {
+    const journalDown: Db = {
+      query: <T>(text: string, params?: readonly unknown[]) =>
+        text.includes('insert into stayput.audit_log')
+          ? Promise.reject(new Error('the journal is unavailable'))
+          : t.db.query<T>(text, params),
+    };
+    const { request } = setup({ 'user_rita:biz_Jour3': 'admin' }, { db: journalDown });
+    const init = await asUser('user_rita');
+    await request('/api/creator/biz_Jour3/session', init);
+    await settle();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const on = await request('/api/creator/biz_Jour3/badge', put(init, { enabled: true }));
+    error.mockRestore();
+    expect(on.status).toBe(200);
+    expect(((await on.json()) as BadgeView).enabled).toBe(true);
+    expect(
+      await t.db.query(
+        `select source, message from stayput.error_log where company_id = 'biz_Jour3'`,
+      ),
+    ).toEqual([{ source: 'audit:badge-set', message: 'the journal is unavailable' }]);
   });
 
   it('serves the verified retention badge and its page once the team turns it on', async () => {

@@ -3643,3 +3643,37 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
   redonne maintenant la connexion à Hyperdrive, qui la vérifie avant de l'accepter.
 - Incertain : les sauvegardes que Supabase garde sur le plan gratuit (le site de Supabase n'est
   pas joignable d'ici) ; `docs/operations.md` dit où le voir et comment faire une copie à la main.
+
+## 2026-10-06 — Sécurité : le journal de l'équipe (`audit_log`)
+
+- **Trouvé pendant l'audit de sécurité** : le SPEC (§3) veut dans `audit_log` « toute action
+  sensible (qui, quoi, quand, pourquoi) », mais seul le rejeu des envois de Whop y écrivait.
+  Exporter les données de tous les membres, couper le mode test, approuver des actions, donner une
+  remise ou effacer un membre ne laissait aucune trace.
+- Chaque route de la vue créateur qui change quelque chose porte maintenant le middleware
+  `audited('<action>')` (`app.ts`), placé après `requireCreator` : une réponse 2xx écrit la ligne
+  (qui, quoi, quand, et sur quoi : `target`, que la route renseigne avec des identifiants, des
+  nombres et des réglages ; jamais un nom, le texte d'un message, ni l'identifiant Discord ou
+  Telegram d'une personne, qui survivrait à son effacement). Une demande refusée n'écrit rien. Les
+  deux exports (la communauté, un membre) aussi, bien qu'ils ne changent rien : ils font sortir les
+  données. Et la connexion d'un serveur Discord (le retour de Discord, hors de l'API).
+- Une ligne qui ne peut pas s'écrire ne fait pas échouer la demande : le changement est déjà fait,
+  le dire raté tromperait. L'erreur va au journal des erreurs (`audit:<action>`).
+- Effacer un membre : la ligne dit qu'un membre a été effacé, par qui et quand, jamais lequel ; ses
+  lignes d'avant gardent l'action, plus sur qui (`forget_member`, 0040).
+- Sans ligne : la suppression de toutes les données (le journal part avec le reste, comme la
+  politique de confidentialité le promet ; le journal du Worker garde qui l'a demandée), les
+  relectures (synchronisation, activité en direct), la pastille « Getting started » et le fuseau
+  du navigateur. `routing.test.ts` échoue sur toute autre route de la vue créateur qui change
+  quelque chose sans ligne.
+- Les workflows CI, Deploy et Seed reçoivent un jeton GitHub en lecture seule
+  (`permissions: contents: read`), comme Inspect, dont seule la tâche des captures écrit (la branche
+  `screenshots`).
+
+### Testé
+
+- `app.test.ts` : les lignes écrites (badge, mode test, « ne pas contacter », export) avec leur
+  auteur et leur heure, aucune pour un refus (400, 403, 404) ; l'effacement d'un membre ; une ligne
+  impossible à écrire ; la connexion d'un serveur Discord.
+- `routing.test.ts` : chaque route qui change quelque chose a sa ligne, ou sa raison de ne pas en
+  avoir ; vérifié qu'il échoue quand une route perd son marqueur.

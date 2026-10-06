@@ -18,6 +18,10 @@ on:
         description: The sandbox company (biz_…)
         default: biz_2whAzkbCRpcGqQ
 
+# The token GitHub gives the run reads the code, and writes nothing on GitHub.
+permissions:
+  contents: read
+
 jobs:
   seed:
     runs-on: ubuntu-latest

@@ -18,6 +18,10 @@ concurrency:
   group: deploy-${{ inputs.target || 'sandbox' }}
   cancel-in-progress: false
 
+# The token GitHub gives the run reads the code, and writes nothing on GitHub.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

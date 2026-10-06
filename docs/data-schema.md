@@ -26,15 +26,15 @@ en retard.
 
 ## Les communautés et leur équipe
 
-| Table              | Contenu                                                                                                                                                                    | Accès       |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
-| `companies`        | une communauté Whop qui a ouvert StayPut : nom, niche, langue, fuseau, mode (`auto`/`manual`), statut, installation et désinstallation, accès retiré par Whop, démo ou non | équipe      |
-| `company_settings` | ses réglages : poids et seuils du score, garde-fous, heures silencieuses, mode test (`dry_run`), offres, règles éteintes, options (rapport du lundi, badge…)               | équipe      |
-| `company_admins`   | qui de l'équipe a ouvert StayPut, et quand son accès a été vérifié auprès de Whop                                                                                          | Worker seul |
-| `company_sync`     | où en est la synchronisation de la communauté (bail, dernier passage, statistiques à refaire)                                                                              | Worker seul |
-| `sync_state`       | l'avancement de chaque flux synchronisé (membres, paiements, salons Discord…) : curseur, passe complète, dernière erreur                                                   | équipe      |
-| `audit_log`        | ce que l'équipe a fait (réglages, approbations, export, suppression, rejeu…), par qui                                                                                      | équipe      |
-| `app_settings`     | une seule ligne : l'arrêt général de StayPut, et le déploiement que la base sert (`sandbox` ou `production`, migration 0043)                                               | Worker seul |
+| Table              | Contenu                                                                                                                                                                                                                                                                                             | Accès       |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `companies`        | une communauté Whop qui a ouvert StayPut : nom, niche, langue, fuseau, mode (`auto`/`manual`), statut, installation et désinstallation, accès retiré par Whop, démo ou non                                                                                                                          | équipe      |
+| `company_settings` | ses réglages : poids et seuils du score, garde-fous, heures silencieuses, mode test (`dry_run`), offres, règles éteintes, options (rapport du lundi, badge…)                                                                                                                                        | équipe      |
+| `company_admins`   | qui de l'équipe a ouvert StayPut, et quand son accès a été vérifié auprès de Whop                                                                                                                                                                                                                   | Worker seul |
+| `company_sync`     | où en est la synchronisation de la communauté (bail, dernier passage, statistiques à refaire)                                                                                                                                                                                                       | Worker seul |
+| `sync_state`       | l'avancement de chaque flux synchronisé (membres, paiements, salons Discord…) : curseur, passe complète, dernière erreur                                                                                                                                                                            | équipe      |
+| `audit_log`        | le journal de l'équipe : qui a changé quoi et quand (réglages, mode test, approbations, messages, offres, relances, « ne pas contacter », Discord et Telegram, exports, suppression d'un membre sans dire lequel, rejeu) ; des identifiants, des nombres et des réglages, jamais un nom ni un texte | équipe      |
+| `app_settings`     | une seule ligne : l'arrêt général de StayPut, et le déploiement que la base sert (`sandbox` ou `production`, migration 0043)                                                                                                                                                                        | Worker seul |
 
 ## Ce que StayPut lit chez Whop
 

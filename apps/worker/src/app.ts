@@ -129,7 +129,13 @@ import { LATEST_MIGRATION } from './schema-version';
 import { goneVerifyPage, verifyPage } from './public-badge';
 import { LEGAL_DOCUMENTS, legalLocale, legalPage } from './legal';
 import { scheduledJobs } from './cron';
-import { logError, readOperatorStatus, replayFailedWebhooks, replayWebhook } from './operations';
+import {
+  logError,
+  readOperatorStatus,
+  recordAudit,
+  replayFailedWebhooks,
+  replayWebhook,
+} from './operations';
 import { goneProofPage, proofPage } from './public-proof';
 import {
   joinRescue,
@@ -274,6 +280,8 @@ type AppEnv = {
     accessLevel: AccessLevel;
     /** Set by requireMember: the experience of the route, checked with Whop. */
     experienceId: string;
+    /** Set by an audited route's handler: what the change was about (ids, counts, settings). */
+    audit: Record<string, unknown> | undefined;
   };
 };
 
@@ -447,6 +455,28 @@ export function createApp(deps: AppDeps) {
     await next();
     return undefined;
   });
+
+  /**
+   * The community's journal (SPEC 3, `audit_log`: every sensitive action, who, what, when),
+   * placed after requireCreator on every route that changes something or takes the members' data
+   * out. A 2xx answer writes the line, with what the handler says the change was about
+   * (`c.set('audit', …)`); a refused or failed request writes nothing. app.test.ts fails on a
+   * creator route that changes something without it.
+   */
+  function audited(action: string) {
+    return Object.assign(
+      createMiddleware<AppEnv>(async (c, next) => {
+        await next();
+        if (c.res.status < 200 || c.res.status >= 300) return;
+        await recordAudit(
+          c.get('db'),
+          { companyId: c.get('companyId'), actor: c.get('userId'), action, target: c.get('audit') },
+          deps.now(),
+        );
+      }),
+      { auditAction: action },
+    );
+  }
 
   /**
    * Work after the response (the Worker's waitUntil), on a database client of its own: the
@@ -915,21 +945,30 @@ export function createApp(deps: AppDeps) {
    * Settings › General, « Export my data » (SPEC Phase 6.12): everything StayPut keeps about the
    * community, as a JSON file.
    */
-  app.get('/api/creator/:companyId/export', authenticate, withDb, requireCreator, async (c) => {
-    const db = c.get('db');
-    if (!db) return apiError('not_configured', 'the database is not configured');
-    const companyId = c.get('companyId');
-    const data = await exportCompanyData(db, c.get('userId'), companyId, deps.now());
-    if (!data) return apiError('not_found', 'no such company');
-    const day = data.exportedAt.slice(0, 10);
-    return c.json(data, 200, {
-      'Content-Disposition': `attachment; filename="stayput-${companyId}-${day}.json"`,
-    });
-  });
+  app.get(
+    '/api/creator/:companyId/export',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('data.export'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const companyId = c.get('companyId');
+      const data = await exportCompanyData(db, c.get('userId'), companyId, deps.now());
+      if (!data) return apiError('not_found', 'no such company');
+      const day = data.exportedAt.slice(0, 10);
+      return c.json(data, 200, {
+        'Content-Disposition': `attachment; filename="stayput-${companyId}-${day}.json"`,
+      });
+    },
+  );
 
   /**
    * Settings › General, « Delete all data » (SPEC Phase 6.12): everything StayPut keeps about the
    * community, at once. The request names the community again, so that no stray call deletes.
+   * Not in the journal: the journal goes with the rest, as the privacy policy promises; the
+   * Worker's log keeps who asked.
    */
   app.post(
     '/api/creator/:companyId/data/delete',
@@ -959,6 +998,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('member.export'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -966,6 +1006,7 @@ export function createApp(deps: AppDeps) {
       if (!/^mber_[A-Za-z0-9]+$/.test(memberId)) {
         return apiError('invalid_request', 'not a member id');
       }
+      c.set('audit', { member: memberId });
       const data = await exportMemberData(
         db,
         c.get('userId'),
@@ -983,13 +1024,15 @@ export function createApp(deps: AppDeps) {
 
   /**
    * A member's data deleted at the community's request (SPEC Phase 8.3): everything StayPut keeps
-   * about them, and they are never taken in again. The request names the member again.
+   * about them, and they are never taken in again. The request names the member again; the
+   * journal says it was done, by whom, and never to whom.
    */
   app.post(
     '/api/creator/:companyId/members/:memberId/delete',
     authenticate,
     withDb,
     requireCreator,
+    audited('member.delete'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1018,17 +1061,25 @@ export function createApp(deps: AppDeps) {
     return view ? c.json(view) : apiError('not_found', 'no such company');
   });
 
-  app.put('/api/creator/:companyId/badge', authenticate, withDb, requireCreator, async (c) => {
-    const db = c.get('db');
-    if (!db) return apiError('not_configured', 'the database is not configured');
-    const body = await c.req.json<unknown>().catch(() => null);
-    const enabled = (body as { enabled?: unknown } | null)?.enabled;
-    if (typeof enabled !== 'boolean') return apiError('invalid_request', 'expected { enabled }');
-    await saveBadgeSetting(db, c.get('companyId'), enabled);
-    const origin = new URL(c.req.url).origin;
-    const view = await readBadge(db, c.get('userId'), c.get('companyId'), deps.now(), origin);
-    return view ? c.json(view) : apiError('not_found', 'no such company');
-  });
+  app.put(
+    '/api/creator/:companyId/badge',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('badge.set'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<unknown>().catch(() => null);
+      const enabled = (body as { enabled?: unknown } | null)?.enabled;
+      if (typeof enabled !== 'boolean') return apiError('invalid_request', 'expected { enabled }');
+      await saveBadgeSetting(db, c.get('companyId'), enabled);
+      c.set('audit', { enabled });
+      const origin = new URL(c.req.url).origin;
+      const view = await readBadge(db, c.get('userId'), c.get('companyId'), deps.now(), origin);
+      return view ? c.json(view) : apiError('not_found', 'no such company');
+    },
+  );
 
   /**
    * Analytics › Overview, « Communities like yours » (SPEC Phase 6.10): the community's retention
@@ -1041,16 +1092,24 @@ export function createApp(deps: AppDeps) {
     return view ? c.json(view) : apiError('not_found', 'no such company');
   });
 
-  app.put('/api/creator/:companyId/benchmarks', authenticate, withDb, requireCreator, async (c) => {
-    const db = c.get('db');
-    if (!db) return apiError('not_configured', 'the database is not configured');
-    const body = await c.req.json<unknown>().catch(() => null);
-    const optedIn = (body as { optedIn?: unknown } | null)?.optedIn;
-    if (typeof optedIn !== 'boolean') return apiError('invalid_request', 'expected { optedIn }');
-    await saveBenchmarksSetting(db, c.get('companyId'), optedIn);
-    const view = await readBenchmarks(db, c.get('userId'), c.get('companyId'), deps.now());
-    return view ? c.json(view) : apiError('not_found', 'no such company');
-  });
+  app.put(
+    '/api/creator/:companyId/benchmarks',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('benchmarks.set'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<unknown>().catch(() => null);
+      const optedIn = (body as { optedIn?: unknown } | null)?.optedIn;
+      if (typeof optedIn !== 'boolean') return apiError('invalid_request', 'expected { optedIn }');
+      await saveBenchmarksSetting(db, c.get('companyId'), optedIn);
+      c.set('audit', { optedIn });
+      const view = await readBenchmarks(db, c.get('userId'), c.get('companyId'), deps.now());
+      return view ? c.json(view) : apiError('not_found', 'no such company');
+    },
+  );
 
   /**
    * Analytics › Reports (SPEC Phase 6.9): the Monday reports of the last 12 weeks, when the next
@@ -1063,16 +1122,24 @@ export function createApp(deps: AppDeps) {
     return view ? c.json(view) : apiError('not_found', 'no such company');
   });
 
-  app.put('/api/creator/:companyId/reports', authenticate, withDb, requireCreator, async (c) => {
-    const db = c.get('db');
-    if (!db) return apiError('not_configured', 'the database is not configured');
-    const body = await c.req.json<unknown>().catch(() => null);
-    const enabled = (body as { enabled?: unknown } | null)?.enabled;
-    if (typeof enabled !== 'boolean') return apiError('invalid_request', 'expected { enabled }');
-    await saveWeeklyReportSetting(db, c.get('companyId'), enabled);
-    const view = await readWeeklyReports(db, c.get('userId'), c.get('companyId'), deps.now());
-    return view ? c.json(view) : apiError('not_found', 'no such company');
-  });
+  app.put(
+    '/api/creator/:companyId/reports',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('reports.set'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<unknown>().catch(() => null);
+      const enabled = (body as { enabled?: unknown } | null)?.enabled;
+      if (typeof enabled !== 'boolean') return apiError('invalid_request', 'expected { enabled }');
+      await saveWeeklyReportSetting(db, c.get('companyId'), enabled);
+      c.set('audit', { enabled });
+      const view = await readWeeklyReports(db, c.get('userId'), c.get('companyId'), deps.now());
+      return view ? c.json(view) : apiError('not_found', 'no such company');
+    },
+  );
 
   /** How the risk score is computed for this company (SPEC Phase 3: weights, thresholds). */
   app.get(
@@ -1097,6 +1164,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('risk.settings'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1117,6 +1185,7 @@ export function createApp(deps: AppDeps) {
           now.toISOString(),
         ],
       );
+      c.set('audit', { ...settings });
       inBackground(c, 'Rescoring', async (work) => {
         await refreshDetection(work, companyId, now, REQUEST_RISK_BATCH);
       });
@@ -1138,24 +1207,32 @@ export function createApp(deps: AppDeps) {
   });
 
   /** The creator writes their own goals for members, or goes back to the niche's (null). */
-  app.put('/api/creator/:companyId/goals', authenticate, withDb, requireCreator, async (c) => {
-    const db = c.get('db');
-    if (!db) return apiError('not_configured', 'the database is not configured');
-    const body = await c.req.json<{ proposals?: unknown }>().catch(() => null);
-    const proposals = body?.proposals === null ? null : parseGoalProposals(body?.proposals);
-    if (body?.proposals !== null && !proposals) {
-      return apiError('invalid_request', 'expected { proposals: up to 6 goals, or null }');
-    }
-    const companyId = c.get('companyId');
-    await saveGoalProposals(db, companyId, proposals);
-    const view = await readGoalProposals(
-      db,
-      c.get('userId'),
-      companyId,
-      spaceLocale(c.req.query('lang')),
-    );
-    return view ? c.json(view) : apiError('not_found', 'no settings for this company');
-  });
+  app.put(
+    '/api/creator/:companyId/goals',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('goals.set'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ proposals?: unknown }>().catch(() => null);
+      const proposals = body?.proposals === null ? null : parseGoalProposals(body?.proposals);
+      if (body?.proposals !== null && !proposals) {
+        return apiError('invalid_request', 'expected { proposals: up to 6 goals, or null }');
+      }
+      const companyId = c.get('companyId');
+      await saveGoalProposals(db, companyId, proposals);
+      c.set('audit', { goals: proposals ? proposals.length : 'niche' });
+      const view = await readGoalProposals(
+        db,
+        c.get('userId'),
+        companyId,
+        spaceLocale(c.req.query('lang')),
+      );
+      return view ? c.json(view) : apiError('not_found', 'no settings for this company');
+    },
+  );
 
   /** The earned days (SPEC Phase 5, point 5): free days for the milestones members reach. */
   app.get(
@@ -1176,6 +1253,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('earned_days.set'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1184,6 +1262,7 @@ export function createApp(deps: AppDeps) {
         return apiError('invalid_request', 'expected { enabled, at50, at100 } (0 to 14 days)');
       }
       await saveEarnedDays(db, c.get('companyId'), settings);
+      c.set('audit', { ...settings });
       const saved = await readEarnedDays(db, c.get('userId'), c.get('companyId'));
       return saved ? c.json(saved) : apiError('not_found', 'no settings for this company');
     },
@@ -1200,15 +1279,23 @@ export function createApp(deps: AppDeps) {
     return view ? c.json(view) : apiError('not_found', 'no settings for this company');
   });
 
-  app.put('/api/creator/:companyId/buddies', authenticate, withDb, requireCreator, async (c) => {
-    const db = c.get('db');
-    if (!db) return apiError('not_configured', 'the database is not configured');
-    const enabled = parseBuddiesUpdate(await c.req.json<unknown>().catch(() => null));
-    if (enabled === null) return apiError('invalid_request', 'expected { enabled: boolean }');
-    await saveBuddies(db, c.get('companyId'), enabled);
-    const view = await readBuddiesView(db, c.get('userId'), c.get('companyId'), deps.now());
-    return view ? c.json(view) : apiError('not_found', 'no settings for this company');
-  });
+  app.put(
+    '/api/creator/:companyId/buddies',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('buddies.set'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const enabled = parseBuddiesUpdate(await c.req.json<unknown>().catch(() => null));
+      if (enabled === null) return apiError('invalid_request', 'expected { enabled: boolean }');
+      await saveBuddies(db, c.get('companyId'), enabled);
+      c.set('audit', { enabled });
+      const view = await readBuddiesView(db, c.get('userId'), c.get('companyId'), deps.now());
+      return view ? c.json(view) : apiError('not_found', 'no settings for this company');
+    },
+  );
 
   /**
    * The member space in the dashboard (SPEC Phase 5), every part in one place: what members do
@@ -1271,15 +1358,23 @@ export function createApp(deps: AppDeps) {
     return view ? c.json(view) : apiError('not_found', 'no settings for this company');
   });
 
-  app.put('/api/creator/:companyId/rescues', authenticate, withDb, requireCreator, async (c) => {
-    const db = c.get('db');
-    if (!db) return apiError('not_configured', 'the database is not configured');
-    const enabled = parseRescuesUpdate(await c.req.json<unknown>().catch(() => null));
-    if (enabled === null) return apiError('invalid_request', 'expected { enabled: boolean }');
-    await saveRescues(db, c.get('companyId'), enabled);
-    const view = await readRescuesView(db, c.get('userId'), c.get('companyId'), deps.now());
-    return view ? c.json(view) : apiError('not_found', 'no settings for this company');
-  });
+  app.put(
+    '/api/creator/:companyId/rescues',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('rescues.set'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const enabled = parseRescuesUpdate(await c.req.json<unknown>().catch(() => null));
+      if (enabled === null) return apiError('invalid_request', 'expected { enabled: boolean }');
+      await saveRescues(db, c.get('companyId'), enabled);
+      c.set('audit', { enabled });
+      const view = await readRescuesView(db, c.get('userId'), c.get('companyId'), deps.now());
+      return view ? c.json(view) : apiError('not_found', 'no settings for this company');
+    },
+  );
 
   /**
    * Where the members' milestones are announced (SPEC Phase 5, point 4), and where they can be:
@@ -1320,6 +1415,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('announcements.set'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1337,6 +1433,7 @@ export function createApp(deps: AppDeps) {
         return apiError('invalid_request', 'StayPut cannot post there');
       }
       await saveAnnounceTo(db, c.get('companyId'), chosen ?? null);
+      c.set('audit', { to: chosen ? { platform: chosen.platform, id: chosen.id } : null });
       return c.json({ ...view, destination: chosen ?? null } satisfies AnnouncementsView);
     },
   );
@@ -1361,6 +1458,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('actions.approve'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1381,6 +1479,7 @@ export function createApp(deps: AppDeps) {
         'select stayput.approve_actions($1, $2, $3, $4::timestamptz) as approved',
         [companyId, ids ? (ids as string[]).join(',') : null, c.get('userId'), now.toISOString()],
       );
+      c.set('audit', { approved: row?.approved ?? 0, ...(ids ? {} : { all: true }) });
       runActionsInBackground(c, companyId, now);
       return c.json({ approved: row?.approved ?? 0 });
     },
@@ -1392,6 +1491,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('action.cancel'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1401,6 +1501,7 @@ export function createApp(deps: AppDeps) {
         'select stayput.cancel_action($1, $2::uuid, $3, $4::timestamptz) as cancelled',
         [c.get('companyId'), actionId, c.get('userId'), deps.now().toISOString()],
       );
+      c.set('audit', { action: actionId });
       return row?.cancelled
         ? c.json({ cancelled: true })
         : apiError('not_found', 'no such action waiting here');
@@ -1426,6 +1527,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('actions.settings'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1452,6 +1554,11 @@ export function createApp(deps: AppDeps) {
         'guardrails',
         deps.now().toISOString(),
       ]);
+      // The switches and the limits; not the messages' wording.
+      c.set(
+        'audit',
+        Object.fromEntries(Object.entries(settings).filter(([, v]) => typeof v !== 'object')),
+      );
       // In automatic mode, what waits for the guardrails goes through them now.
       if (settings.mode === 'auto') runActionsInBackground(c, companyId, deps.now());
       return c.json((await readActionSettings(db, c.get('userId'), companyId)) ?? settings);
@@ -1467,6 +1574,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('rule.set'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1477,6 +1585,7 @@ export function createApp(deps: AppDeps) {
         return apiError('invalid_request', 'expected { on: boolean }');
       const companyId = c.get('companyId');
       await db.query('select stayput.set_rule($1, $2, $3)', [companyId, rule, on.on]);
+      c.set('audit', { rule, on: on.on });
       const settings = await readActionSettings(db, c.get('userId'), companyId);
       return settings ? c.json(settings) : apiError('not_found', 'no settings for this company');
     },
@@ -1491,6 +1600,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('test_mode.off'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1549,25 +1659,33 @@ export function createApp(deps: AppDeps) {
    * the test mode only; the limits do not count as « set » by it. In automatic mode, what waits
    * goes through the guardrails now.
    */
-  app.post('/api/creator/:companyId/mode', authenticate, withDb, requireCreator, async (c) => {
-    const db = c.get('db');
-    if (!db) return apiError('not_configured', 'the database is not configured');
-    const body = await c.req.json<unknown>().catch(() => null);
-    const mode = (body as { mode?: unknown } | null)?.mode;
-    if (mode !== 'auto' && mode !== 'manual') {
-      return apiError('invalid_request', 'expected { mode: "auto" | "manual" }');
-    }
-    const companyId = c.get('companyId');
-    const current = await readActionSettings(db, c.get('userId'), companyId);
-    if (!current) return apiError('not_found', 'no settings for this company');
-    const next = { ...current, mode };
-    await db.query('select stayput.save_action_settings($1, $2::text::jsonb)', [
-      companyId,
-      JSON.stringify(next),
-    ]);
-    if (mode === 'auto') runActionsInBackground(c, companyId, deps.now());
-    return c.json(next);
-  });
+  app.post(
+    '/api/creator/:companyId/mode',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('mode.set'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<unknown>().catch(() => null);
+      const mode = (body as { mode?: unknown } | null)?.mode;
+      if (mode !== 'auto' && mode !== 'manual') {
+        return apiError('invalid_request', 'expected { mode: "auto" | "manual" }');
+      }
+      const companyId = c.get('companyId');
+      const current = await readActionSettings(db, c.get('userId'), companyId);
+      if (!current) return apiError('not_found', 'no settings for this company');
+      const next = { ...current, mode };
+      await db.query('select stayput.save_action_settings($1, $2::text::jsonb)', [
+        companyId,
+        JSON.stringify(next),
+      ]);
+      c.set('audit', { mode });
+      if (mode === 'auto') runActionsInBackground(c, companyId, deps.now());
+      return c.json(next);
+    },
+  );
 
   /**
    * The creator's time zone, as their browser reports it: kept while the company has none of its
@@ -1605,6 +1723,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('member.contact'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1616,6 +1735,7 @@ export function createApp(deps: AppDeps) {
         'select stayput.set_do_not_contact($1, $2, $3) as found',
         [c.get('companyId'), c.req.param('memberId'), body.doNotContact],
       );
+      c.set('audit', { member: c.req.param('memberId'), doNotContact: body.doNotContact });
       return row?.found
         ? c.json({ doNotContact: body.doNotContact })
         : apiError('not_found', 'no such member here');
@@ -1632,6 +1752,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('members.message'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1651,6 +1772,7 @@ export function createApp(deps: AppDeps) {
         'select stayput.creator_messages($1, $2, $3, $4::timestamptz) as queued',
         [companyId, (ids as string[]).join(','), c.get('userId'), now.toISOString()],
       );
+      c.set('audit', { members: new Set(ids as string[]).size, queued: row?.queued ?? 0 });
       runActionsInBackground(c, companyId, now);
       return c.json({ queued: row?.queued ?? 0 } satisfies CreatorMessagesResult);
     },
@@ -1665,6 +1787,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('member.offer'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1686,6 +1809,7 @@ export function createApp(deps: AppDeps) {
           ? apiError('not_found', 'no such member here')
           : apiError('conflict', made?.error ?? 'no offer made');
       }
+      c.set('audit', { member: memberId, kind });
       runActionsInBackground(c, companyId, now);
       return c.json(made as CreatorOfferMade);
     },
@@ -1701,6 +1825,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('members.offers'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1729,6 +1854,7 @@ export function createApp(deps: AppDeps) {
         );
         if (row?.made && !row.made.error) made += 1;
       }
+      c.set('audit', { kind, made, refused: new Set(ids as string[]).size - made });
       if (made > 0) runActionsInBackground(c, companyId, now);
       return c.json({
         made,
@@ -1748,6 +1874,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('payments.retry'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1758,6 +1885,7 @@ export function createApp(deps: AppDeps) {
         [companyId, c.get('userId'), now.toISOString()],
       );
       const queued = row?.queued ?? 0;
+      c.set('audit', { queued });
       if (queued > 0) runActionsInBackground(c, companyId, now);
       return c.json({ queued } satisfies CreatorRetryResult);
     },
@@ -1823,6 +1951,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('discord.channels'),
     async (c) => {
       const db = c.get('db');
       const discord = deps.discord(c.get('config'));
@@ -1848,6 +1977,7 @@ export function createApp(deps: AppDeps) {
         return apiError('whop_unavailable', 'Discord did not answer');
       }
       if (!channels) return apiError('not_found', 'no such server here');
+      c.set('audit', { guild: c.req.param('guildId'), channels: ids.length });
       // The new channels start reading now rather than at the next run.
       syncInBackground(c, c.get('companyId'), 0);
       return c.json(channels);
@@ -1860,6 +1990,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('discord.disconnect'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1869,6 +2000,7 @@ export function createApp(deps: AppDeps) {
         c.get('companyId'),
         c.req.param('guildId'),
       );
+      c.set('audit', { guild: c.req.param('guildId') });
       return removed ? c.json({ removed }) : apiError('not_found', 'no such server here');
     },
   );
@@ -1879,6 +2011,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('telegram.disconnect'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -1888,6 +2021,7 @@ export function createApp(deps: AppDeps) {
         c.get('companyId'),
         c.req.param('chatId'),
       );
+      c.set('audit', { chat: c.req.param('chatId') });
       return removed ? c.json({ removed }) : apiError('not_found', 'no such group here');
     },
   );
@@ -2045,6 +2179,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('platform.signals'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -2057,6 +2192,7 @@ export function createApp(deps: AppDeps) {
       const companyId = c.get('companyId');
       const now = deps.now();
       const settings = await savePlatformSignals(db, companyId, platform, signals, now);
+      c.set('audit', { platform, ...signals });
       inBackground(c, 'Rescoring', async (work) => {
         await refreshDetection(work, companyId, now, REQUEST_RISK_BATCH);
       });
@@ -2093,31 +2229,39 @@ export function createApp(deps: AppDeps) {
    * Creates the Alumni offer on Whop, or finishes creating it: the answer says the step that
    * stopped, and the permission Whop lacked.
    */
-  app.post('/api/creator/:companyId/alumni', authenticate, withDb, requireCreator, async (c) => {
-    const db = c.get('db');
-    if (!db) return apiError('not_configured', 'the database is not configured');
-    const body = await c.req.json<{ name?: unknown }>().catch(() => null);
-    const name = typeof body?.name === 'string' ? body.name.trim() : '';
-    if (name.length < 1 || name.length > 80) {
-      return apiError('invalid_request', 'expected { name: 1 to 80 characters }');
-    }
-    const config = c.get('config');
-    const whop = deps.whopClient(config);
-    if (!whop || !config.appId) {
-      return apiError('not_configured', 'the Whop API key or app id is not set');
-    }
-    const companyId = c.get('companyId');
-    const problem = await createAlumniOffer(
-      db,
-      whop,
-      { companyId, userId: c.get('userId'), appId: config.appId, name },
-      deps.now(),
-    );
-    const view = await readAlumni(db, c.get('userId'), companyId);
-    return view
-      ? c.json({ ...view, problem } satisfies AlumniView)
-      : apiError('forbidden', 'not a team member of this company');
-  });
+  app.post(
+    '/api/creator/:companyId/alumni',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('alumni.create'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = await c.req.json<{ name?: unknown }>().catch(() => null);
+      const name = typeof body?.name === 'string' ? body.name.trim() : '';
+      if (name.length < 1 || name.length > 80) {
+        return apiError('invalid_request', 'expected { name: 1 to 80 characters }');
+      }
+      const config = c.get('config');
+      const whop = deps.whopClient(config);
+      if (!whop || !config.appId) {
+        return apiError('not_configured', 'the Whop API key or app id is not set');
+      }
+      const companyId = c.get('companyId');
+      const problem = await createAlumniOffer(
+        db,
+        whop,
+        { companyId, userId: c.get('userId'), appId: config.appId, name },
+        deps.now(),
+      );
+      c.set('audit', { step: problem?.step ?? 'done' });
+      const view = await readAlumni(db, c.get('userId'), companyId);
+      return view
+        ? c.json({ ...view, problem } satisfies AlumniView)
+        : apiError('forbidden', 'not a team member of this company');
+    },
+  );
 
   /** The creator ties an account to a member, unties it, or sets it aside (no member). */
   app.post(
@@ -2125,6 +2269,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    audited('accounts.change'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -2170,6 +2315,13 @@ export function createApp(deps: AppDeps) {
         }
       }
       if (!changed) return apiError('not_found', 'no such account or member here');
+      c.set('audit', {
+        change: c.req.param('change'),
+        platform: account.platform,
+        ...(typeof body?.memberId === 'string' && c.req.param('change') === 'link'
+          ? { member: body.memberId }
+          : {}),
+      });
       const view = await accountsView(db, c.get('userId'), companyId);
       return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
     },
@@ -2208,6 +2360,16 @@ export function createApp(deps: AppDeps) {
         redirectUri: `${new URL(c.req.url).origin}${DISCORD_CALLBACK_PATH}`,
         now: deps.now(),
       });
+      await recordAudit(
+        db,
+        {
+          companyId: install.companyId,
+          actor: install.userId,
+          action: 'discord.connect',
+          target: { guild: server.guildId },
+        },
+        deps.now(),
+      );
       syncInBackground(c, install.companyId, 0);
       // Signed in to StayPut outside Whop (sandbox): the page offers the way back to the
       // dashboard. Inside Whop, the creator just closes the tab: there is nothing to go back to.
@@ -2853,6 +3015,7 @@ export function createApp(deps: AppDeps) {
     withDb,
     requireCreator,
     requireOperator,
+    audited('webhooks.replay'),
     async (c) => {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
@@ -2866,16 +3029,7 @@ export function createApp(deps: AppDeps) {
         id === undefined
           ? await replayFailedWebhooks(db, now)
           : { counts: { [await replayWebhook(db, id, now)]: 1 } };
-      await db.query(
-        `insert into stayput.audit_log (company_id, actor, action, target, created_at)
-         values ($1, $2, 'webhooks.replay', $3::text::jsonb, $4::timestamptz)`,
-        [
-          c.get('companyId'),
-          c.get('userId'),
-          JSON.stringify({ delivery: id ?? 'all failed', counts: replay.counts }),
-          now.toISOString(),
-        ],
-      );
+      c.set('audit', { delivery: id ?? 'all failed', counts: replay.counts });
       console.info(`Webhooks replayed by the operator: ${JSON.stringify(replay.counts)}.`);
       return c.json(replay);
     },

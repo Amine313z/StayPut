@@ -19,6 +19,25 @@ pour la production ; pour la production, les réglages GitHub portent le préfix
   accorde, Telegram, le site et la démo dans Chrome, les captures. Sur la production, seulement
   le site et la démo : les journaux de ce dépôt public ne montrent aucune communauté cliente.
 
+## Lire le journal d'audit
+
+Chaque changement fait par l'équipe d'une communauté y laisse une ligne (`stayput.audit_log`) :
+qui (son identifiant Whop), quoi (`action` : `badge.set`, `test_mode.off`, `actions.approve`,
+`member.contact`, `member.delete`, `data.export`, `discord.connect`, `webhooks.replay`…), sur quoi
+(`target` : des identifiants, des nombres, des réglages, jamais un nom ni un texte) et quand.
+L'équipe le retrouve dans l'export de ses données (Réglages › Général › Vos données) ; l'opérateur
+le lit dans le SQL Editor de Supabase :
+
+```
+select created_at, actor, action, target from stayput.audit_log
+ where company_id = 'biz_…' order by created_at desc limit 100;
+```
+
+Une demande refusée (invalide, ou d'un compte hors de l'équipe) n'y laisse rien. Un membre
+supprimé l'est aussi du journal : ses lignes gardent l'action, plus sur qui (`{"erased": true}`).
+La suppression de toutes les données d'une communauté efface son journal avec le reste, comme la
+politique de confidentialité le promet : seul le journal du Worker garde qui l'a demandée.
+
 ## Rejouer les envois de Whop
 
 Un envoi de Whop (un paiement, un abonnement, un membre, un message…) est enregistré dès sa
@@ -61,7 +80,7 @@ valeur seulement après.
 | Jeton Cloudflare                 | Cloudflare → My Profile → API Tokens → le jeton → Roll                                                              | `CLOUDFLARE_API_TOKEN` (partagé)                         | Rien à redéployer : seuls les workflows s'en servent. Un Deploy le vérifie.                                                                                                                                     |
 
 Après une fuite (un secret vu là où il ne devait pas être) : changer la clé tout de suite, puis
-regarder dans Réglages › État et dans le journal d'audit ce qui s'est passé depuis.
+regarder dans Réglages › État et dans le journal d'audit (plus haut) ce qui s'est passé depuis.
 
 ## Sauvegarder la base
 

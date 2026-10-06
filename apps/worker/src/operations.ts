@@ -45,6 +45,36 @@ export async function logError(
   }
 }
 
+/**
+ * A line of the community's journal (`audit_log`): who on its team did what, when, and to what.
+ * The target names ids, counts and settings, never a person's name or a text; a member's id in
+ * it is erased with the member (forget_member). Never throws: the change is already made, so a
+ * line that cannot be written is an error recorded, not a failed request.
+ */
+export async function recordAudit(
+  db: Db | null,
+  entry: { companyId: string; actor: string; action: string; target?: Record<string, unknown> },
+  now: Date,
+): Promise<void> {
+  if (!db) return;
+  try {
+    await db.query(
+      `insert into stayput.audit_log (company_id, actor, action, target, created_at)
+       values ($1, $2, $3, $4::text::jsonb, $5::timestamptz)`,
+      [
+        entry.companyId,
+        entry.actor,
+        entry.action,
+        JSON.stringify(entry.target ?? {}),
+        now.toISOString(),
+      ],
+    );
+  } catch (error) {
+    console.error(`Could not record ${entry.action} in the journal:`, scrubErrorMessage(error));
+    await logError(db, `audit:${entry.action}`, entry.companyId, error, now);
+  }
+}
+
 /** Records a scheduled job's run, failed (`error`) or not. Never throws. */
 export async function recordJobRun(
   db: Db | null,
