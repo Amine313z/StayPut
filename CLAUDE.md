@@ -182,9 +182,10 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   0001→0043, Hyperdrive `stayput-db-production`, Worker `stayput-app`, `/health` ok **and through
   Whop's relay** — but Cloudflare refused its 3 crons (account limit, the sandbox held 3) while
   the run stayed green (`wrangler | tee` without pipefail): fixed by the one-trigger design above,
-  pipefail, and the read-back. Still to do: the Discord redirect
-  `https://stayput-app.chezbenz18.workers.dev/auth/discord/callback` (deploy warning), install the
-  hidden app in « StayPut Community » and check the 3 views.
+  pipefail, and the read-back. Redeployed the same evening, sandbox (run 37672711550) then
+  production (run 37673301225): both on `*/5 * * * *`, 2 cron triggers on the account, relay ok,
+  the production Discord redirect declared. Still to do: install the hidden app in « StayPut
+  Community » and check its views, Inspect production.
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;
   Whop's side: `GET /webhooks/{id}/deliveries` and `POST /webhooks/{id}/test` with

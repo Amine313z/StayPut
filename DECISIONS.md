@@ -3868,6 +3868,10 @@ qui reste la voie quand la limite de CPU (10 ms) ou de sous-requêtes gênera, a
 ### Ordre de remise en route
 
 Le sandbox d'abord (il passe de 3 déclencheurs à 1 et libère la place), puis la production.
+Fait le soir même : sandbox (run 37672711550), « Cloudflare runs stayput on */5 * * * * », 1
+déclencheur sur le compte ; production (run 37673301225), « Cloudflare runs stayput-app on
+*/5 * * * * », 2 sur 5, `/health` ok directement et par le relais de Whop, la redirection Discord
+de production déclarée, l'identifiant de compte masqué (`***`) dans les journaux.
 
 ### Testé
 
