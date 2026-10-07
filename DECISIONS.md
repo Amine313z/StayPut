@@ -3773,6 +3773,11 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
 - **Les listes de permissions** passent de `scripts/ops/whop-permissions.ts` à
   `packages/whop/src/permissions.ts` : le script d'Inspect lance sa lecture dès qu'on l'importe, le
   contrôle du déploiement ne pouvait pas les lui emprunter.
+- **L'environnement GitHub de la production s'appelle « production stayput off »** (le nom que le
+  fondateur lui a donné, gardé à sa demande) : Deploy et Inspect le lisent pour la cible
+  `production`. Le premier déploiement de production lisait `production`, que GitHub a créé vide :
+  les cinq réglages `PRODUCTION_…` manquaient, et le déploiement s'est arrêté à sa première
+  vérification, avant toute modification.
 - **La page Discover** (`/discover`, `apps/web/src/views/Discover.tsx`) : ce qu'un créateur voit
   de StayPut dans l'App Store de Whop avant de l'installer, avec les textes validés de la fiche
   (`docs/app-store.md`) : détecter, agir, prouver ; le mode test au départ, les deux modes, les

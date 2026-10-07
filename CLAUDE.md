@@ -171,8 +171,10 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   Geist and the chart, and pushes its screenshots to the `screenshots` branch
   (`git fetch origin screenshots`).
 - **Production, under way** (2026-10-07, `docs/production.md`): the founder created the Supabase
-  project `stayput-production` and the GitHub environment `production` (secret
-  `PRODUCTION_SUPABASE_DB_URL`, required reviewer); the Whop app on whop.com comes next. Each
+  project `stayput-production` and the GitHub environment **`production stayput off`** (the
+  founder's name: Deploy and Inspect map the `production` target to it; secrets
+  `PRODUCTION_SUPABASE_DB_URL`, `PRODUCTION_WHOP_API_KEY`, required reviewer), and the Whop app
+  on whop.com with its webhook. Each
   deployment reads the Whop app's settings (`scripts/deploy/check-app.ts`: the views' paths
   against `WHOP_VIEW_PATHS`, the permissions, then `/health` through Whop's relay) and stops
   production on a difference. `/discover` is the app store's Discover view

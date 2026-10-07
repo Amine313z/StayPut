@@ -2,7 +2,7 @@
 
 Aucune valeur secrète dans le code ni dans un fichier du dépôt. Trois endroits seulement :
 
-1. **GitHub** (Settings → Secrets and variables → Actions, et l'environnement `production`) : ce
+1. **GitHub** (Settings → Secrets and variables → Actions, et l'environnement `production stayput off`) : ce
    que les workflows Deploy et Inspect lisent. Les secrets y sont masqués dans les journaux.
 2. **Le Worker Cloudflare** : ses `vars` (dans `apps/worker/wrangler.toml`, publiques) et ses
    secrets, envoyés par le workflow Deploy à chaque déploiement (`wrangler deploy

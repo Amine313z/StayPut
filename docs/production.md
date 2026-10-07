@@ -71,10 +71,12 @@ Sur **whop.com** (pas le sandbox) → **Dashboard → Developer → Create app**
 
 ## 3. GitHub : les réglages de production
 
-**Settings → Environments → New environment** → `production`. Cocher **Required reviewers** =
-toi : aucun déploiement de production ne part sans ton accord (un bouton « Review deployments »
-apparaît sur le workflow). Dans cet environnement, **Add environment secret** / **Add
-environment variable** :
+**Settings → Environments** → l'environnement **`production stayput off`** (le nom choisi par le
+fondateur le 07/10/2026 : les workflows Deploy et Inspect le lisent pour la cible `production`,
+lettre pour lettre ; un autre nom, et GitHub leur crée un environnement vide). Cocher **Required
+reviewers** = toi : aucun déploiement de production ne part sans ton accord (un bouton « Review
+deployments » apparaît sur le workflow). Dans cet environnement, **Add environment secret** /
+**Add environment variable** :
 
 | Nom                              | Type     | Valeur                                                                                                                  |
 | -------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------- |
