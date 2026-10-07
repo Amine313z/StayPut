@@ -73,6 +73,8 @@ const OFFER_TYPES: readonly ActionType[] = [
 
 export interface DemoPagesInput {
   now: number;
+  /** The demo's clock (world.ts): `now`, then the time passing since; never the real date. */
+  clock: () => number;
   community: string;
   rows: readonly MemberRow[];
   /** What a member pays a month. */
@@ -184,7 +186,7 @@ function nextHour(now: number, hour: number, minutes = 0): number {
 }
 
 export function createDemoPages(input: DemoPagesInput): DemoPages {
-  const { now, community, rows, monthly } = input;
+  const { now, clock, community, rows, monthly } = input;
   const iso = (time: number) => new Date(time).toISOString();
   const ago = (ms: number) => iso(now - ms);
   const byName = (name: string) => {
@@ -1073,7 +1075,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       actions = actions.map((row) => {
         if (row.status !== 'proposed' || (ids && !ids.includes(row.id))) return row;
         approved += 1;
-        const soon = Date.now() + 2 * MINUTE;
+        const soon = clock() + 2 * MINUTE;
         return {
           ...row,
           status: 'scheduled',
@@ -1150,7 +1152,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
             (row) =>
               row.message !== null &&
               ['proposed', 'approved', 'scheduled', 'sent', 'simulated'].includes(row.status) &&
-              Date.now() - moment(row) < 5 * DAY,
+              clock() - moment(row) < 5 * DAY,
           )
           .map((row) => row.member.id),
       ),
@@ -1216,7 +1218,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       } else if (what === 'dismiss') {
         if (found.status !== 'unlinked') return null;
         found.status = body.as === 'guest' ? 'guest' : 'team';
-        found.setAsideAt = Date.now();
+        found.setAsideAt = clock();
       } else if (what === 'restore') {
         if (found.status !== 'team' && found.status !== 'guest') return null;
         found.status = 'unlinked';

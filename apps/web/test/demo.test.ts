@@ -29,6 +29,27 @@ describe('the demo community', () => {
     expect(createWorld(NOW).dashboard()).toEqual(world.dashboard());
   });
 
+  it('keeps its own clock: the same day of the demo whatever the real date', () => {
+    // Everything is dated from `now`: the real date must change nothing, the 5-day windows
+    // included (they drifted on 2026-10-07, five days after NOW, when they read the real clock).
+    // Each demo made and read on its own day (time never runs backwards inside one).
+    const seenOn = (realDate: number) => {
+      vi.setSystemTime(realDate);
+      const demo = createWorld(NOW);
+      return {
+        dashboard: demo.dashboard(),
+        queue: demo.pages.actions('queue'),
+        reached: [...demo.pages.reached()].sort(),
+      };
+    };
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      expect(seenOn(NOW + 40 * 86_400_000)).toEqual(seenOn(NOW));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('looks real: full names, each once, never a test placeholder', () => {
     const names = world.members.members.map((m) => m.name ?? '');
     expect(new Set(names).size).toBe(names.length);

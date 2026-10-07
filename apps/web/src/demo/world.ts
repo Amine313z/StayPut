@@ -454,6 +454,12 @@ export interface DemoWorld {
  * zone), so every date the demo shows falls on the same day.
  */
 export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
+  // The demo's clock: `now` when the world is made, then the real time passing (the live feed,
+  // what the visitor approves). Never the real date itself: everything here is dated from
+  // `now`, and the same `now` gives the same demo whatever the day (a test's fixed date drifted
+  // past the 5-day windows on 2026-10-07).
+  const startedAt = Date.now();
+  const clock = () => now + (Date.now() - startedAt);
   const random = seeded(20_261_002);
   const between = ([low, high]: Range) => low + Math.floor(random() * (high - low + 1));
   const at = (ago: number) => new Date(now - ago).toISOString();
@@ -730,6 +736,7 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
 
   const pages = createDemoPages({
     now,
+    clock,
     community: COMMUNITY,
     rows,
     monthly: price,
@@ -1279,7 +1286,7 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
     settings,
     pages,
     dashboard: () => {
-      const current = Date.now();
+      const current = clock();
       // The community's calendar as Settings › Automations says now.
       const days = calendar(settings.timezone);
       // Members at high risk no message reached (or will) within 5 days, as the Worker counts.
@@ -1354,7 +1361,7 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
     },
     advance,
     feed: () => {
-      advance(Date.now());
+      advance(clock());
       return { items: feed };
     },
     message: (memberIds) => {
@@ -1362,7 +1369,7 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
       for (const id of memberIds) {
         const member = memberOf(id);
         if (!member || member.doNotContact) continue;
-        reached.set(id, Date.now());
+        reached.set(id, clock());
         queued += 1;
       }
       return queued;
@@ -1379,7 +1386,7 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
       if (!member.membership || price(member) === 0) return { error: 'no_membership' };
       if (offers.has(id)) return { error: 'offer_open' };
       offers.set(id, kind);
-      reached.set(id, Date.now());
+      reached.set(id, clock());
       return {
         offerId: `demo-offer-${offers.size}`,
         kind,
@@ -1430,7 +1437,7 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
       }
     },
     syncNow: () => {
-      const moment = new Date().toISOString();
+      const moment = new Date(clock()).toISOString();
       sync.lastSyncAt = moment;
       for (const stream of sync.streams) stream.lastPassAt = moment;
     },
