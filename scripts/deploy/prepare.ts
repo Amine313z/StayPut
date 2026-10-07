@@ -254,7 +254,9 @@ function main() {
         ' id, OPERATOR_COMPANY_ID a biz_… id; production: docs/production.md)',
     );
   }
-  // The next steps (Hyperdrive, wrangler) read the cleaned id from their environment.
+  // The next steps (Hyperdrive, wrangler) read the cleaned id from their environment. GitHub masks
+  // the secret as stored, not an id found inside it, and this repository's logs are public.
+  if (process.env.GITHUB_ACTIONS && accountId) console.info(`::add-mask::${accountId}`);
   if (process.env.GITHUB_ENV && accountId) {
     appendFileSync(process.env.GITHUB_ENV, `CLOUDFLARE_ACCOUNT_ID=${accountId}\n`);
   }

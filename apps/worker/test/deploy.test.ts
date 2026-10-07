@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import {
@@ -10,6 +12,15 @@ import {
   type AppSettings,
 } from '../../../scripts/deploy/check-app';
 import { checkDiscord, checkTelegram, type Finding } from '../../../scripts/deploy/check-bots';
+import {
+  FREE_PLAN_CRONS,
+  PRODUCTION_WORKER,
+  accountCrons,
+  cronFindings,
+  readCrons,
+  tomlCrons,
+  workerName,
+} from '../../../scripts/deploy/check-crons';
 import { checkWhopKey, deployedVar } from '../../../scripts/deploy/check-whop';
 import {
   hyperdriveName,
@@ -34,6 +45,7 @@ import {
 } from '../../../scripts/deploy/satoshi';
 
 const ID = '0123456789abcdef0123456789abcdef';
+const WRANGLER_TOML = readFileSync(path.resolve(import.meta.dirname, '../wrangler.toml'), 'utf8');
 
 describe('hyperdriveName', () => {
   it('gives each deployment its own configuration, the sandbox keeping its first one', () => {
@@ -1064,5 +1076,109 @@ describe('readApp', () => {
         })
       ).found,
     ).toBe(false);
+  });
+});
+
+describe('the cron triggers, read back from Cloudflare', () => {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+  const schedules = (...crons: string[]) =>
+    json({ success: true, result: { schedules: crons.map((cron) => ({ cron })) } });
+
+  it('reads the Worker and its trigger from wrangler.toml, production under its own name', () => {
+    expect(tomlCrons(WRANGLER_TOML)).toEqual(['*/5 * * * *']);
+    expect(tomlCrons('crons = ["*/10 * * * *", "0  * * * *"]')).toEqual([
+      '*/10 * * * *',
+      '0 * * * *',
+    ]);
+    expect(tomlCrons('name = "stayput"')).toEqual([]);
+    expect(workerName(undefined, WRANGLER_TOML)).toBe('stayput');
+    expect(workerName('sandbox', WRANGLER_TOML)).toBe('stayput');
+    expect(workerName('production', WRANGLER_TOML)).toBe(PRODUCTION_WORKER);
+    expect(() => workerName('sandbox', 'main = "src/index.ts"')).toThrow();
+  });
+
+  it("asks Cloudflare for the Worker's schedules, with the token", async () => {
+    const calls: { url: string; auth: string | null }[] = [];
+    const fetch = (url: string, init: RequestInit) => {
+      calls.push({ url, auth: new Headers(init.headers).get('authorization') });
+      return Promise.resolve(schedules('*/5 * * * *'));
+    };
+    expect(await readCrons(ID, 'cf_token', 'stayput-app', { fetch })).toEqual({
+      crons: ['*/5 * * * *'],
+    });
+    expect(calls).toEqual([
+      {
+        url: `https://api.cloudflare.com/client/v4/accounts/${ID}/workers/scripts/stayput-app/schedules`,
+        auth: 'Bearer cf_token',
+      },
+    ]);
+  });
+
+  it('says why the schedules could not be read', async () => {
+    const missing = json(
+      { success: false, errors: [{ code: 10007, message: 'workers.api.error.script_not_found' }] },
+      404,
+    );
+    expect(await readCrons(ID, 't', 'nope', { fetch: () => Promise.resolve(missing) })).toEqual({
+      error: 'Cloudflare answered HTTP 404: 10007 workers.api.error.script_not_found',
+    });
+    const offline = await readCrons(ID, 't', 'stayput', {
+      fetch: () => Promise.reject(new TypeError('fetch failed')),
+    });
+    expect(offline).toEqual({ error: 'Cloudflare could not be reached (fetch failed)' });
+  });
+
+  it('counts the cron triggers of every Worker on the account', async () => {
+    const held: Record<string, string[]> = {
+      stayput: ['*/5 * * * *'],
+      'stayput-app': ['*/5 * * * *'],
+      other: ['0 0 * * *', '0 12 * * *'],
+    };
+    const fetch = (url: string) => {
+      const worker = /\/workers\/scripts\/([^/]+)\/schedules$/.exec(url)?.[1];
+      if (worker) return Promise.resolve(schedules(...(held[decodeURIComponent(worker)] ?? [])));
+      return Promise.resolve(
+        json({ success: true, result: Object.keys(held).map((id) => ({ id })) }),
+      );
+    };
+    expect(await accountCrons(ID, 't', { fetch })).toEqual({ total: 4 });
+    expect(
+      await accountCrons(ID, 't', { fetch: () => Promise.resolve(json({ success: false }, 403)) }),
+    ).toEqual({ error: 'Cloudflare answered HTTP 403' });
+  });
+
+  it('stops on a Worker without its triggers, and warns when the account is full', () => {
+    const levels = (findings: { level: string }[]) => findings.map((finding) => finding.level);
+    expect(
+      levels(cronFindings('stayput', ['*/5 * * * *'], { crons: ['*/5 * * * *'] }, { total: 2 })),
+    ).toEqual(['ok', 'note']);
+    // 7 October 2026: production's three triggers refused, the sandbox's three filling the account.
+    const refused = cronFindings(
+      'stayput-app',
+      ['*/10 * * * *', '0 * * * *', '30 7 * * 1'],
+      { crons: [] },
+      { total: 3 },
+    );
+    expect(refused[0]?.level).toBe('error');
+    expect(refused[0]?.text).toContain('Cloudflare holds no cron trigger for stayput-app');
+    expect(refused[0]?.text).toContain(`allows ${FREE_PLAN_CRONS} cron triggers per account`);
+    const full = cronFindings(
+      'stayput-app',
+      ['*/5 * * * *'],
+      { crons: ['*/5 * * * *'] },
+      { total: FREE_PLAN_CRONS },
+    );
+    expect(levels(full)).toEqual(['ok', 'warning']);
+    expect(full[1]?.text).toContain('one more would be refused');
+    expect(
+      levels(
+        cronFindings('stayput', ['*/5 * * * *'], { error: 'HTTP 403' }, { error: 'HTTP 403' }),
+      ),
+    ).toEqual(['error', 'note']);
+    expect(levels(cronFindings('stayput', [], { crons: [] }, { total: 0 }))).toEqual([
+      'error',
+      'note',
+    ]);
   });
 });

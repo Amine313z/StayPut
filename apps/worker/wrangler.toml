@@ -36,9 +36,11 @@ OPERATOR_COMPANY_ID = "biz_2whAzkbCRpcGqQ"
 # id = "<id printed by npx wrangler hyperdrive create>"
 
 [triggers]
-# The synchronization with Whop every 10 minutes, hourly work, and the weekly analyses on Monday
-# 07:30 UTC (src/cron.ts).
-crons = ["*/10 * * * *", "0 * * * *", "30 7 * * 1"]
+# One trigger: Cloudflare's free plan allows 5 per account, and the account runs the sandbox's
+# Worker and production's. Each tick runs the jobs its time names (src/cron.ts, groupAt): the
+# hourly work on the hour, a slice of the synchronization with Whop at 5, 15, …, 55 past, the
+# weekly analyses on Monday 07:30 UTC.
+crons = ["*/5 * * * *"]
 
 [observability]
 enabled = true

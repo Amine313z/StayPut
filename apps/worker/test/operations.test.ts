@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { HOURLY_CRON, runScheduled, scheduledJobs, type JobContext } from '../src/cron';
+import { runScheduled, scheduledJobs, type JobContext } from '../src/cron';
 import type { ClosableDb } from '../src/db';
 import {
   logError,
@@ -59,7 +59,7 @@ describe('the scheduled jobs and the error log', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const info = vi.spyOn(console, 'info').mockImplementation(() => {});
     const schedule = {
-      [HOURLY_CRON]: [
+      hourly: [
         { name: 'risk', run: () => Promise.resolve() },
         {
           name: 'actions',
@@ -70,8 +70,8 @@ describe('the scheduled jobs and the error log', () => {
         },
       ],
     };
-    await runScheduled(HOURLY_CRON, schedule, ctx(NOW));
-    await runScheduled(HOURLY_CRON, schedule, ctx(later(60)));
+    await runScheduled('hourly', schedule, ctx(NOW));
+    await runScheduled('hourly', schedule, ctx(later(60)));
     errors.mockRestore();
     info.mockRestore();
 

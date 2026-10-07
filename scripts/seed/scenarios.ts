@@ -15,7 +15,7 @@
 import { DEFAULT_GUARDRAILS } from '@stayput/core';
 import type { WhopClient } from '@stayput/whop';
 import { executeAction, prepareActions } from '../../apps/worker/src/actions';
-import { HOURLY_CRON, SCHEDULE, runScheduled } from '../../apps/worker/src/cron';
+import { SCHEDULE, runScheduled } from '../../apps/worker/src/cron';
 import { readDashboard } from '../../apps/worker/src/dashboard';
 import type { ClosableDb, TransactionalDb } from '../../apps/worker/src/db';
 import { readConfig } from '../../apps/worker/src/env';
@@ -122,7 +122,7 @@ export async function runScenarios(db: TransactionalDb, now: Date): Promise<Verd
     close: () => Promise.resolve(),
   };
   const hourly = (when: Date) =>
-    runScheduled(HOURLY_CRON, SCHEDULE, { config, db: closable, whop, syncWhop: whop, now: when });
+    runScheduled('hourly', SCHEDULE, { config, db: closable, whop, syncWhop: whop, now: when });
   const actionsOf = () =>
     db.query<ActionRow>(
       `select id::text, member_id, type, status, message_kind from stayput.actions

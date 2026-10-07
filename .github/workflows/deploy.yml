@@ -98,12 +98,17 @@ jobs:
       # the variables are set (always for production, checked above). Production is its own
       # Worker, « stayput-app », beside the sandbox's « stayput ».
       - name: Publish the Worker
+        id: publish
         working-directory: apps/worker
         env:
           WHOP_APP_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_APP_ID' || 'WHOP_APP_ID'] }}
           WHOP_ENV: ${{ inputs.target == 'production' && 'production' || vars.WHOP_ENV }}
           OPERATOR_COMPANY_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_OPERATOR_COMPANY_ID' || 'OPERATOR_COMPANY_ID'] }}
         run: |
+          # wrangler's failure stops the deployment: through tee alone, its refused cron triggers
+          # passed unseen (2026-10-07). The Worker's secrets leave the runner however it ends.
+          set -o pipefail
+          trap 'rm -f "$RUNNER_TEMP/secrets.json"' EXIT
           overrides=()
           if [ -n "$WHOP_ENV" ]; then overrides+=(--var "WHOP_ENV:$WHOP_ENV"); fi
           if [ -n "$WHOP_APP_ID" ]; then overrides+=(--var "WHOP_APP_ID:$WHOP_APP_ID"); fi
@@ -113,7 +118,13 @@ jobs:
           if [ "$STAYPUT_TARGET" = production ]; then overrides+=(--name stayput-app); fi
           npx wrangler deploy --secrets-file "$RUNNER_TEMP/secrets.json" "${overrides[@]}" |
             tee "$RUNNER_TEMP/deploy.log"
-          rm -f "$RUNNER_TEMP/secrets.json"
+
+      # The Worker's cron triggers as Cloudflare holds them, read back
+      # (scripts/deploy/check-crons.ts): its free plan allows 5 per account, shared by the
+      # sandbox's Worker and production's. Also after a failed publication, to say why.
+      - name: Read the Worker's cron triggers back from Cloudflare
+        if: ${{ !cancelled() && steps.publish.outcome != 'skipped' }}
+        run: npx tsx scripts/deploy/check-crons.ts apps/worker/wrangler.toml
 
       # A new workers.dev address can answer 404 "error code: 1042", then nothing, before requests
       # reach the Worker (about 8 minutes for StayPut's first deployment): keep asking for up to 3

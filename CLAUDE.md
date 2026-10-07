@@ -178,7 +178,13 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   deployment reads the Whop app's settings (`scripts/deploy/check-app.ts`: the views' paths
   against `WHOP_VIEW_PATHS`, the permissions, then `/health` through Whop's relay) and stops
   production on a difference. `/discover` is the app store's Discover view
-  (`apps/web/src/views/Discover.tsx`).
+  (`apps/web/src/views/Discover.tsx`). First production deploy (run 37669919711): migrations
+  0001→0043, Hyperdrive `stayput-db-production`, Worker `stayput-app`, `/health` ok **and through
+  Whop's relay** — but Cloudflare refused its 3 crons (account limit, the sandbox held 3) while
+  the run stayed green (`wrangler | tee` without pipefail): fixed by the one-trigger design above,
+  pipefail, and the read-back. Still to do: the Discord redirect
+  `https://stayput-app.chezbenz18.workers.dev/auth/discord/callback` (deploy warning), install the
+  hidden app in « StayPut Community » and check the 3 views.
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;
   Whop's side: `GET /webhooks/{id}/deliveries` and `POST /webhooks/{id}/test` with
@@ -229,8 +235,14 @@ npm run e2e          # after `npm run build`: Playwright on the build (vite prev
   encode a JS string as a JSON string scalar; PGlite hides the difference).
 - **Clock**: business code takes `now` as a parameter (`deps.now()`, `JobContext.now`), never
   `new Date()`.
-- **Free plan limits**: 10 ms CPU per invocation, 50 subrequests, 5 crons. Heavy work goes to
-  SQL; sync advances by small batches with a cursor.
+- **Free plan limits**: 10 ms CPU per invocation, 50 subrequests, 5 cron triggers **per
+  account**, shared by the sandbox's Worker and production's. So each Worker has ONE trigger,
+  `*/5 * * * *`, and `groupAt` (`apps/worker/src/cron.ts`) picks the job group from the tick's
+  scheduled time: hourly at `:00` (it must stay on the hour: `nextLocalHour` rounds up, a late
+  run puts golden-hour actions off by a day), sync at `:05`…`:55`, weekly Monday 07:30 UTC; a new
+  pace is a new group, never a second trigger. The deploy reads the triggers back from Cloudflare
+  (`scripts/deploy/check-crons.ts`). Heavy work goes to SQL; sync advances by small batches with
+  a cursor.
 - **Sync** (`apps/worker/src/sync.ts`, DECISIONS.md « Phase 2 »): `STREAMS` lists every Whop
   list; `planPass` decides what is due; each page goes **raw** to `stayput.sync_page` (never
   `JSON.parse` a page in the Worker); the sync client has `maxRetries: 0` and each call costs one

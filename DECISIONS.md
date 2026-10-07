@@ -3817,3 +3817,63 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
   déploiement de production dira si Whop la transmet sans session ; sinon ce n'est qu'un
   avertissement, et l'affichage se vérifie à l'œil en ouvrant StayPut dans la communauté, l'app
   encore cachée (`docs/production.md`, étape 5).
+
+## 2026-10-07 — Premier déploiement de production : un seul déclencheur par Worker
+
+### Ce qui s'est passé
+
+Le premier déploiement de production (run 37669919711) a tout fait : migrations 0001 → 0043, base
+réservée à la production, Hyperdrive `stayput-db-production`, Worker `stayput-app`, `/health` ok,
+et **`/health` ok à travers le relais de Whop** (`hz7d7jwf1wfrbos5s6ur.apps.whop.com`) : le point
+« Incertain » de l'entrée précédente est levé, Whop transmet la réponse sans session. Mais
+Cloudflare a refusé ses trois déclencheurs : « This account has reached the Workers Free limit of
+5 cron triggers per account » (code 10072). Le sandbox en tenait déjà trois, et 3 + 3 dépasse 5.
+Le run est pourtant resté vert : `wrangler deploy … | tee` rend le code de `tee`, sans
+`pipefail`. Sans déclencheur, la production n'aurait rien synchronisé, rien noté, rien envoyé.
+
+### Un déclencheur toutes les 5 minutes, et son heure choisit le travail
+
+La limite était connue (« 5 crons par compte », Phase 1), pas son partage entre deux Workers.
+Chaque Worker n'a plus qu'**un** déclencheur, `*/5 * * * *` : le compte en tient deux, il en
+reste trois. `groupAt` (`apps/worker/src/cron.ts`) lit l'heure prévue du passage :
+
+- `:00` → les tâches horaires. Elles restent pile à l'heure : `nextLocalHour` cherche la
+  prochaine heure d'or **à partir** de l'heure du passage (arrondie au-dessus), donc un passage à
+  `:05` repousserait d'un jour une action due dans l'heure.
+- `:05`, `:15`, … `:55` → la synchronisation : six passages par heure comme avant, donc le même
+  budget (40 appels à Whop par passage, environ 240 par heure).
+- lundi `7:30` → les tâches hebdomadaires, à la même heure qu'avant.
+- les autres passages ne font rien et s'arrêtent avant d'ouvrir la base.
+
+Chaque groupe a son exécution, donc ses 50 sous-requêtes, comme avec trois déclencheurs. Écartés :
+réunir le travail horaire et la synchronisation dans le même passage (les deux budgets se
+seraient partagé 50 sous-requêtes) ; décaler l'horaire à `:05` (l'heure d'or) ; retirer des
+déclencheurs au sandbox (il doit tourner comme la production) ; Workers payant (5 $/mois),
+qui reste la voie quand la limite de CPU (10 ms) ou de sous-requêtes gênera, au choix du fondateur.
+
+### Le déploiement ne laisse plus passer un refus de Cloudflare
+
+- `set -o pipefail` sur la publication : une erreur de wrangler arrête le déploiement (un `trap`
+  retire quand même le fichier des secrets du Worker).
+- `scripts/deploy/check-crons.ts`, juste après : relit chez Cloudflare les déclencheurs du Worker
+  publié (`GET …/workers/scripts/{nom}/schedules`) et s'arrête s'ils ne sont pas ceux de
+  `wrangler.toml`, en rappelant la limite. Il compte aussi les déclencheurs de tout le compte, en
+  nombre seulement (les journaux sont publics : aucun autre Worker n'y est nommé), et avertit à
+  5 sur 5. Il tourne aussi après une publication en échec, pour dire pourquoi.
+- `prepare.ts` masque l'identifiant de compte Cloudflare nettoyé (`::add-mask::`) : GitHub ne
+  masque que le secret tel qu'il est rangé, et l'identifiant extrait apparaissait en clair dans
+  les journaux publics des étapes suivantes. Les journaux des runs passés le montrent encore :
+  les effacer est au choix du fondateur.
+
+### Ordre de remise en route
+
+Le sandbox d'abord (il passe de 3 déclencheurs à 1 et libère la place), puis la production.
+
+### Testé
+
+- `runtime.test.ts` : `wrangler.toml` déclare le seul déclencheur ; chaque minute de l'heure a
+  son groupe (et le lundi 7:30) ; sur deux semaines de passages, chaque groupe revient exactement
+  à son rythme (`EVERY_MINUTES`, celui de la page d'état), un seul groupe par passage.
+- `deploy.test.ts` : le nom du Worker (production : `stayput-app`), les déclencheurs de
+  `wrangler.toml`, la lecture chez Cloudflare avec le jeton, une erreur de Cloudflare dite telle
+  quelle, le compte de tout le compte, et le cas du 07/10 (aucun déclencheur, la limite rappelée).

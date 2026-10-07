@@ -3,12 +3,14 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { AccessCache } from '../src/access';
 import {
-  HOURLY_CRON,
-  SYNC_CRON,
-  WEEKLY_CRON,
+  CRON,
+  EVERY_MINUTES,
+  SCHEDULE,
+  groupAt,
   runScheduled,
   type CronJob,
   type JobContext,
+  type JobGroup,
 } from '../src/cron';
 import { readConfig } from '../src/env';
 
@@ -100,17 +102,45 @@ describe('AccessCache', () => {
 });
 
 describe('cron', () => {
-  it('declares in wrangler.toml exactly the triggers src/cron.ts handles', () => {
+  it('declares in wrangler.toml the one trigger src/cron.ts handles', () => {
     const toml = readFileSync(path.resolve(import.meta.dirname, '../wrangler.toml'), 'utf8');
     const crons = /^crons\s*=\s*\[(.*)\]$/m.exec(toml)?.[1];
-    expect(crons?.split(',').map((c) => c.trim().replace(/"/g, ''))).toEqual([
-      SYNC_CRON,
-      HOURLY_CRON,
-      WEEKLY_CRON,
-    ]);
+    expect(crons?.split(',').map((c) => c.trim().replace(/"/g, ''))).toEqual([CRON]);
   });
 
-  it('runs every job of the trigger, past a failing one', async () => {
+  it('gives each tick its group: the hourly jobs on the hour, the sync, the weekly ones', () => {
+    // Tuesday 6 October 2026, then Monday 5 October (UTC).
+    const at = (iso: string) => groupAt(new Date(iso));
+    expect(at('2026-10-06T09:00:00Z')).toBe('hourly');
+    expect(at('2026-10-06T00:00:00Z')).toBe('hourly');
+    for (const minute of ['05', '15', '25', '35', '45', '55']) {
+      expect(at(`2026-10-06T09:${minute}:00Z`)).toBe('sync');
+    }
+    for (const minute of ['10', '20', '30', '40', '50']) {
+      expect(at(`2026-10-06T09:${minute}:00Z`)).toBeNull();
+    }
+    expect(at('2026-10-05T07:30:00Z')).toBe('weekly');
+    expect(at('2026-10-05T07:00:00Z')).toBe('hourly');
+    expect(at('2026-10-05T08:30:00Z')).toBeNull();
+    expect(at('2026-10-06T07:30:00Z')).toBeNull();
+  });
+
+  it('runs each group at the pace the status page expects, one group per tick', () => {
+    // Two weeks of the trigger's ticks, every 5 minutes from a Monday at midnight UTC.
+    const start = Date.parse('2026-10-05T00:00:00Z');
+    const ticks = new Map<JobGroup, number[]>();
+    for (let t = start; t < start + 14 * 24 * 60 * 60_000; t += 5 * 60_000) {
+      const group = groupAt(new Date(t));
+      if (group) ticks.set(group, [...(ticks.get(group) ?? []), t]);
+    }
+    expect([...ticks.keys()].sort()).toEqual(Object.keys(SCHEDULE).sort());
+    for (const [group, times] of ticks) {
+      const gaps = new Set(times.slice(1).map((t, i) => (t - (times[i] ?? 0)) / 60_000));
+      expect({ group, gaps: [...gaps] }).toEqual({ group, gaps: [EVERY_MINUTES[group]] });
+    }
+  });
+
+  it('runs every job of the group, past a failing one', async () => {
     const order: string[] = [];
     const job = (name: string, fail = false): CronJob => ({
       name,
@@ -122,8 +152,8 @@ describe('cron', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const info = vi.spyOn(console, 'info').mockImplementation(() => {});
     const result = await runScheduled(
-      HOURLY_CRON,
-      { [HOURLY_CRON]: [job('sync'), job('scores', true), job('actions')] },
+      'hourly',
+      { hourly: [job('sync'), job('scores', true), job('actions')] },
       { db: null, now: new Date('2026-10-05T09:00:00Z') } as JobContext,
     );
     expect(order).toEqual(['sync', 'scores', 'actions']);
@@ -133,7 +163,7 @@ describe('cron', () => {
     info.mockRestore();
   });
 
-  it('runs nothing for a trigger it does not know', async () => {
+  it('runs nothing for a group it does not know', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(await runScheduled('* * * * *', {}, {} as JobContext)).toEqual({ ran: [], failed: [] });
     expect(warn).toHaveBeenCalledOnce();

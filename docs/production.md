@@ -103,7 +103,9 @@ réglage `PRODUCTION_…` obligatoire existe et se lit (une adresse collée à l
 est refusée), demande à Whop s'il accepte la clé, **relit l'app chez Whop** (ses trois chemins,
 les permissions qu'elle demande : toutes celles dont StayPut a besoin, ni e-mail ni téléphone),
 réserve la base de production (ou s'arrête si c'est celle du sandbox), applique les migrations,
-crée la connexion Hyperdrive `stayput-db-production`, publie le Worker `stayput-app`, attend que
+crée la connexion Hyperdrive `stayput-db-production`, publie le Worker `stayput-app`, **relit chez
+Cloudflare son déclencheur** (`scripts/deploy/check-crons.ts` : l'offre gratuite en permet 5 par
+compte, partagés avec le sandbox, et chaque Worker n'en a qu'un, `docs/jobs.md`), attend que
 `/health` réponde `ok`, puis **demande `/health` à travers Whop** (l'adresse de l'app chez Whop,
 celle que le cadre de Whop charge) : si Whop répond « App Base URL not set », le déploiement
 s'arrête en disant quoi taper (`scripts/deploy/check-app.ts`). Chaque écart est nommé, avec
