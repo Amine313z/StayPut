@@ -55,6 +55,23 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: npx tsx scripts/ops/telegram-groups.ts
 
+      # The Whop app as Whop holds it, and StayPut reached through Whop's relay in production
+      # (scripts/deploy/check-app.ts, as at deployment): a setting changed since on whop.com
+      # shows here. The app's own settings only, never a community's.
+      - name: Read the Whop app's settings and reach StayPut through Whop
+        if: always()
+        env:
+          STAYPUT_URL: ${{ vars[inputs.target == 'production' && 'PRODUCTION_STAYPUT_URL' || 'STAYPUT_URL'] || env.DEFAULT_URL }}
+          WHOP_API_KEY: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_WHOP_API_KEY' || 'WHOP_API_KEY'] }}
+          WHOP_ENV: ${{ inputs.target == 'production' && 'production' || vars.WHOP_ENV }}
+          WHOP_APP_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_APP_ID' || 'WHOP_APP_ID'] }}
+        run: |
+          status=0
+          npx tsx scripts/deploy/check-app.ts settings apps/worker/wrangler.toml || status=1
+          npx tsx scripts/deploy/check-app.ts reach apps/worker/wrangler.toml "$STAYPUT_URL" ||
+            status=1
+          exit "$status"
+
       # The deployed Worker attacked from outside (scripts/ops/probe.ts): no token, forged tokens
       # and cookies, forged and replayed webhooks, bodies too large, another site's origin, the
       # headers, the files never served. One verdict per check: never a body, a token or a secret.

@@ -45,9 +45,9 @@ import type {
   DataExport,
   MemberDataExport,
 } from '@stayput/core';
-import { DEFAULT_PLATFORM_SIGNALS, forecastRevenue } from '@stayput/core';
+import { DEFAULT_PLATFORM_SIGNALS, WHOP_VIEW_PATHS, forecastRevenue } from '@stayput/core';
 import type { Locale } from '@stayput/i18n';
-import { RouterProvider, createMemoryRouter } from 'react-router';
+import { RouterProvider, createMemoryRouter, matchRoutes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '../src/App';
 import { DEMO_COMPANY_ID } from '../src/api';
@@ -4915,6 +4915,64 @@ describe('shell', () => {
   it('shows a not-found page for an unknown path', () => {
     renderAt('/nowhere');
     expect(screen.getByRole('heading', { name: 'Page not found' })).toBeTruthy();
+  });
+});
+
+describe('the views Whop opens', () => {
+  it('serves each at the path the Whop app’s settings name (WHOP_VIEW_PATHS)', () => {
+    const served = (path: string) =>
+      matchRoutes(routes, path)
+        ?.map((match) => match.route.path)
+        .filter(Boolean)
+        .join(' > ');
+    // Whop replaces the bracketed part with the community or the experience.
+    const filled = (path: string) =>
+      path.replace('[experienceId]', 'exp_E1').replace('[companyId]', 'biz_A1');
+    expect(served(filled(WHOP_VIEW_PATHS.experience_path))).toBe('experiences/:experienceId/*');
+    expect(served(filled(WHOP_VIEW_PATHS.dashboard_path))).toBe('dashboard/:companyId');
+    expect(served(filled(WHOP_VIEW_PATHS.discover_path))).toBe('discover');
+  });
+
+  it('shows the Discover view without any call, nothing leaving Whop’s frame', async () => {
+    const calls = mockApi({});
+    renderAt('/discover');
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Keep your members, and see the revenue you saved.',
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Predict churn. Recover failed payments. Win members back.'),
+    ).toBeTruthy();
+    for (const step of [
+      'Know who is about to leave',
+      'Act before they go',
+      'See the money saved',
+    ]) {
+      expect(screen.getByRole('heading', { name: step })).toBeTruthy();
+    }
+    expect(screen.getByText(/starts in test mode/)).toBeTruthy();
+    // The demo is StayPut's own page, in the same frame.
+    const demo = screen.getByRole('link', { name: 'See the live demo' });
+    expect(demo.getAttribute('href')).toBe('/demo');
+    expect(demo.getAttribute('target')).toBeNull();
+    // The legal texts open in a window, never in another tab.
+    fireEvent.click(screen.getByRole('button', { name: 'Privacy policy' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Privacy policy' });
+    expect(dialog.querySelector('iframe')?.getAttribute('src')).toBe('/privacy?lang=en&view=app');
+    expect(calls).toEqual([]);
+  });
+
+  it('speaks French when the interface does', async () => {
+    mockApi({});
+    renderAt('/discover', 'fr');
+    expect(
+      await screen.findByText(
+        'Anticipez les départs. Récupérez les paiements échoués. Faites revenir vos membres.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Voir la démo' })).toBeTruthy();
   });
 });
 

@@ -1,5 +1,14 @@
 import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
+import {
+  baseUrlFinding,
+  checkRelay,
+  readApp,
+  readAppSettings,
+  relayAnswer,
+  settingsFindings,
+  type AppSettings,
+} from '../../../scripts/deploy/check-app';
 import { checkDiscord, checkTelegram, type Finding } from '../../../scripts/deploy/check-bots';
 import { checkWhopKey, deployedVar } from '../../../scripts/deploy/check-whop';
 import {
@@ -727,5 +736,333 @@ describe('Satoshi, downloaded at deployment', () => {
     expect(checkSatoshi(digest, '')).toBe('unpinned');
     expect(checkSatoshi(digest, digest)).toBe('reviewed');
     expect(checkSatoshi(digest, sha256(Buffer.from('another file')))).toBe('changed');
+  });
+});
+
+/** Whop's `GET /apps/{id}` answer for an app set as StayPut wants it (fields as of 2026-10-07). */
+function whopApp(over: Record<string, unknown> = {}): Record<string, unknown> {
+  const asked = [
+    'company:basic:read',
+    'member:basic:read',
+    'access_pass:basic:read',
+    'plan:basic:read',
+    'payment:basic:read',
+    'promo_code:basic:read',
+    'shipment:basic:read',
+    'chat:read',
+    'forum:read',
+    'support_chat:read',
+    'courses:read',
+    'course_analytics:read',
+    'webhook_receive:memberships',
+    'webhook_receive:payments',
+    'webhook_receive:members',
+    'webhook_receive:chat',
+    'webhook_receive:courses',
+    'member:manage',
+    'payment:manage',
+    'promo_code:create',
+    'notification:create',
+    'access_pass:create',
+    'plan:create',
+    'experience:create',
+    'experience:attach',
+  ];
+  return {
+    id: 'app_Prod1',
+    name: 'StayPut',
+    status: 'hidden',
+    base_url: null,
+    origin: 'https://abc123.apps.whop.com',
+    experience_path: '/experiences/[experienceId]',
+    dashboard_path: '/dashboard/[companyId]',
+    discover_path: '/discover',
+    api_key: null,
+    requested_permissions: asked.map((action) => ({
+      permission_action: { action, name: action },
+      is_required: true,
+      justification: 'why',
+    })),
+    ...over,
+  };
+}
+
+const settingsOf = (over: Record<string, unknown> = {}): AppSettings => {
+  const app = readAppSettings(whopApp(over));
+  if (!app) throw new Error('not an app');
+  return app;
+};
+const levels = (findings: { level: string }[]) => findings.map((f) => f.level);
+
+describe('readAppSettings', () => {
+  it("keeps what StayPut checks of Whop's answer, and nothing that is not an app", () => {
+    expect(settingsOf()).toMatchObject({
+      status: 'hidden',
+      baseUrl: null,
+      origin: 'https://abc123.apps.whop.com',
+      paths: {
+        experience_path: '/experiences/[experienceId]',
+        dashboard_path: '/dashboard/[companyId]',
+        discover_path: '/discover',
+      },
+    });
+    expect(settingsOf().permissions).toHaveLength(25);
+    expect(settingsOf({ discover_path: null, requested_permissions: [] })).toMatchObject({
+      paths: { discover_path: null },
+      permissions: null,
+    });
+    expect(readAppSettings(null)).toBeNull();
+    expect(readAppSettings({ error: { type: 'not_found' } })).toBeNull();
+  });
+});
+
+describe('settingsFindings', () => {
+  it('passes an app set as StayPut serves it, the status said', () => {
+    const findings = settingsFindings(settingsOf(), 'production');
+    expect(levels(findings)).toEqual(['ok', 'ok', 'ok', 'ok', 'note']);
+    expect(findings.at(-1)?.text).toBe('Status on Whop: hidden.');
+  });
+
+  it('stops production on a path typed wrong or left empty, naming where to fix it', () => {
+    const findings = settingsFindings(
+      settingsOf({ experience_path: '/experiences/[experienceid]', discover_path: null }),
+      'production',
+    );
+    expect(findings.filter((f) => f.level === 'error').map((f) => f.text)).toEqual([
+      'App path is "/experiences/[experienceid]" on Whop, StayPut serves /experiences/[experienceId]:' +
+        ' type it by hand in Developer → StayPut → Hosting, then Save.',
+      'Discover path is empty on Whop, StayPut serves /discover: type it by hand in Developer →' +
+        ' StayPut → Hosting, then Save.',
+    ]);
+  });
+
+  it('only reports in the sandbox, whose app predates the Discover view', () => {
+    const findings = settingsFindings(
+      settingsOf({ dashboard_path: '/dashboard', discover_path: null }),
+      'sandbox',
+    );
+    expect(levels(findings)).toEqual(['ok', 'warning', 'note', 'ok', 'note']);
+  });
+
+  it('wants every permission StayPut needs, and none it never reads (SPEC 8.2)', () => {
+    const asked = (whopApp().requested_permissions as Record<string, unknown>[]).filter(
+      (p) =>
+        !['member:manage', 'chat:read'].includes(
+          (p.permission_action as { action: string }).action,
+        ),
+    );
+    const extra = (action: string) => ({
+      permission_action: { action, name: action },
+      is_required: true,
+    });
+    const app = settingsOf({
+      requested_permissions: [
+        ...asked,
+        extra('member:email:read'),
+        extra('member:phone:read'),
+        extra('stats:read'),
+      ],
+    });
+    const production = settingsFindings(app, 'production');
+    expect(production.filter((f) => f.level !== 'ok' && f.level !== 'note')).toEqual([
+      {
+        level: 'error',
+        text:
+          'The app does not ask for chat:read, member:manage: StayPut cannot work without them.' +
+          ' Add them in Developer → StayPut → Permissions.',
+      },
+      {
+        level: 'error',
+        text:
+          'The app asks for member:email:read and member:phone:read, which StayPut never reads' +
+          ' (SPEC 8.2): remove them in Developer → StayPut → Permissions.',
+      },
+      { level: 'warning', text: 'The app asks for permissions StayPut does not use: stats:read.' },
+    ]);
+    // The sandbox app still asks for e-mail and phone (Phase 2): said, not held against it.
+    expect(
+      settingsFindings(app, 'sandbox').find((f) => f.text.includes('never reads'))?.level,
+    ).toBe('note');
+  });
+
+  it('keeps the Alumni offer optional, and says when Whop lists no permission at all', () => {
+    const withoutAlumni = (whopApp().requested_permissions as Record<string, unknown>[]).slice(
+      0,
+      21,
+    );
+    const findings = settingsFindings(
+      settingsOf({ requested_permissions: withoutAlumni }),
+      'production',
+    );
+    expect(findings.find((f) => f.text.startsWith("The Alumni offer's"))).toEqual({
+      level: 'note',
+      text:
+        "The Alumni offer's permissions are not asked for (access_pass:create, plan:create," +
+        ' experience:create, experience:attach): the offer stays off.',
+    });
+    expect(levels(findings)).not.toContain('error');
+    const none = settingsFindings(settingsOf({ requested_permissions: null }), 'production');
+    expect(none.find((f) => f.text.startsWith('Whop lists no permission'))?.level).toBe('error');
+  });
+});
+
+describe('baseUrlFinding', () => {
+  const url = 'https://stayput-app.chezbenz18.workers.dev';
+
+  it('compares the base URL when Whop shows it, a trailing slash aside', () => {
+    expect(baseUrlFinding(settingsOf({ base_url: `${url}/` }), url, 'production')).toEqual({
+      level: 'ok',
+      text: `Base URL: ${url}`,
+    });
+    expect(
+      baseUrlFinding(
+        settingsOf({ base_url: 'https://stayput.chezbenz18.workers.dev' }),
+        url,
+        'production',
+      ),
+    ).toEqual({
+      level: 'error',
+      text:
+        'Base URL is "https://stayput.chezbenz18.workers.dev" on Whop, StayPut answers at' +
+        ` ${url}: type it in Developer → StayPut → Hosting, then Save.`,
+    });
+  });
+
+  it('leaves it to the relay when Whop hides it from the app key', () => {
+    expect(baseUrlFinding(settingsOf(), url, 'production')).toEqual({
+      level: 'note',
+      text:
+        'Base URL: Whop shows it only to the developers of the app, so StayPut is asked through' +
+        ' Whop below.',
+    });
+  });
+});
+
+describe('relayAnswer', () => {
+  it("tells StayPut's /health, the other deployment's, Whop's page and anything else apart", () => {
+    const health = (whopEnv: string) => JSON.stringify({ status: 'ok', whopEnv, database: 'ok' });
+    expect(relayAnswer(health('production'), 'production')).toEqual({ kind: 'stayput' });
+    expect(relayAnswer(health('sandbox'), 'production')).toEqual({
+      kind: 'wrong_env',
+      whopEnv: 'sandbox',
+    });
+    expect(
+      relayAnswer('<h1>App Base URL not set</h1><p>If you are the developer…', 'production'),
+    ).toEqual({ kind: 'not_set' });
+    expect(relayAnswer('{"status":"degraded","whopEnv":"production"}', 'production')).toEqual({
+      kind: 'other',
+    });
+    expect(relayAnswer('<html>Sign in</html>', 'production')).toEqual({ kind: 'other' });
+  });
+});
+
+describe('checkRelay', () => {
+  const url = 'https://stayput-app.chezbenz18.workers.dev';
+  const origin = 'https://abc123.apps.whop.com';
+  const noSleep = () => Promise.resolve();
+  const page =
+    (body: string, status = 200, type = 'text/html') =>
+    () =>
+      Promise.resolve(new Response(body, { status, headers: { 'content-type': type } }));
+
+  it("asks /health through the app's origin, and passes when StayPut answers", async () => {
+    const asked: string[] = [];
+    let attempt = 0;
+    const fetch = (input: string) => {
+      asked.push(input);
+      attempt += 1;
+      // Whop may take a moment to follow its settings: a first answer is not the last.
+      return attempt === 1
+        ? page('<p>App Base URL not set</p>')()
+        : page(JSON.stringify({ status: 'ok', whopEnv: 'production' }), 200, 'application/json')();
+    };
+    expect(await checkRelay(`${origin}/`, 'production', url, { fetch, sleep: noSleep })).toEqual({
+      level: 'ok',
+      text: `Whop's relay (${origin}) reaches StayPut: /health ok.`,
+    });
+    expect(asked).toEqual([`${origin}/health`, `${origin}/health`]);
+  });
+
+  it('stops production when Whop says the base URL is not set, or reaches the sandbox', async () => {
+    const notSet = await checkRelay(origin, 'production', url, {
+      fetch: page('<h1>App Base URL not set</h1>'),
+      sleep: noSleep,
+    });
+    expect(notSet).toEqual({
+      level: 'error',
+      text:
+        `Whop's relay (${origin}) answers « App Base URL not set »: the base URL is missing.` +
+        ` Type ${url} in Developer → StayPut → Hosting, then Save.`,
+    });
+    const sandbox = await checkRelay(origin, 'production', url, {
+      fetch: page(JSON.stringify({ status: 'ok', whopEnv: 'sandbox' }), 200, 'application/json'),
+      sleep: noSleep,
+    });
+    expect(sandbox.level).toBe('error');
+    expect(sandbox.text).toContain('reaches the sandbox StayPut');
+  });
+
+  it('only warns when the relay answers something else, or cannot be reached', async () => {
+    expect(
+      await checkRelay(origin, 'production', url, {
+        fetch: page('', 302, 'text/html; charset=utf-8'),
+        sleep: noSleep,
+      }),
+    ).toEqual({
+      level: 'warning',
+      text:
+        "Whop's relay answered HTTP 302 (text/html): StayPut could not be confirmed through it." +
+        ' Open StayPut in your community to check.',
+    });
+    const offline = () => Promise.reject(new TypeError('fetch failed'));
+    expect(
+      (await checkRelay(origin, 'production', url, { fetch: offline, sleep: noSleep })).level,
+    ).toBe('warning');
+    expect((await checkRelay(null, 'production', url)).level).toBe('warning');
+  });
+
+  it('is not asked in the sandbox, whose frames show no app', async () => {
+    const never = () => Promise.reject(new Error('the relay must not be asked'));
+    expect((await checkRelay(origin, 'sandbox', url, { fetch: never })).level).toBe('note');
+  });
+});
+
+describe('readApp', () => {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+  it('reads the app with the app key, and again without it when Whop refuses the key', async () => {
+    const calls: { url: string; auth: string | null }[] = [];
+    const fetch = (url: string, init: RequestInit) => {
+      const auth = new Headers(init.headers).get('authorization');
+      calls.push({ url, auth });
+      return Promise.resolve(auth ? json({ error: {} }, 403) : json(whopApp()));
+    };
+    const read = await readApp('app_Prod1', 'production', 'apik_x', { fetch });
+    expect(read.found).toBe(true);
+    expect(calls).toEqual([
+      { url: 'https://api.whop.com/api/v1/apps/app_Prod1', auth: 'Bearer apik_x' },
+      { url: 'https://api.whop.com/api/v1/apps/app_Prod1', auth: null },
+    ]);
+  });
+
+  it('tells a missing app from Whop being unreachable', async () => {
+    expect(
+      await readApp('app_Nope', 'sandbox', null, {
+        fetch: () => Promise.resolve(json({ error: {} }, 404)),
+      }),
+    ).toEqual({ found: false, reason: 'missing', detail: 'Whop (sandbox) has no app app_Nope' });
+    expect(
+      await readApp('app_X', 'production', null, {
+        fetch: () => Promise.resolve(json({ error: {} }, 503)),
+      }),
+    ).toEqual({ found: false, reason: 'unreachable', detail: 'Whop answered HTTP 503' });
+    expect(
+      (
+        await readApp('app_X', 'production', null, {
+          fetch: () => Promise.reject(new TypeError('fetch failed')),
+        })
+      ).found,
+    ).toBe(false);
   });
 });

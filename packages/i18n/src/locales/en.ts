@@ -717,6 +717,32 @@ export const en = {
   'home.point.activity':
     'Activity from Whop, Discord and Telegram, without ever reading a message.',
 
+  // The Discover view (Whop's app store): what a creator sees of StayPut before installing it.
+  'discover.subtitle': 'Predict churn. Recover failed payments. Win members back.',
+  'discover.demo': 'See the live demo',
+  'discover.demoHint': 'An imaginary community: nothing real, nothing sent.',
+  'discover.detect.title': 'Know who is about to leave',
+  'discover.detect.body':
+    'Every hour, each member gets a churn risk score from 0 to 100 with its reasons: a failed payment, a cancellation scheduled, a member gone quiet on Whop, Discord or Telegram.',
+  'discover.act.title': 'Act before they go',
+  'discover.act.body':
+    'Failed payments retried and card updates asked for, check-ins at the hour members are online, a departure survey with the offer that answers their reason, comeback codes for former members.',
+  'discover.prove.title': 'See the money saved',
+  'discover.prove.body':
+    'Every save is counted with its proof: the payment recovered, the cancellation withdrawn, the member who came back. A Monday report sums up your week.',
+  'discover.control.title': 'You stay in control',
+  'discover.control.testMode':
+    'A new community starts in test mode: StayPut computes everything and sends nothing until you turn it off.',
+  'discover.control.mode':
+    'Approve each message from a queue, or let StayPut act on its own within your limits.',
+  'discover.control.guardrails':
+    'Quiet hours, frequency limits, a do-not-contact list and a global stop apply to every message.',
+  'discover.privacy.title': 'Built for privacy',
+  'discover.privacy.contacts':
+    'StayPut never reads your members’ e-mail addresses or phone numbers.',
+  'discover.privacy.retention':
+    'Detailed activity is kept for 12 months, and your community’s data is deleted 30 days after you uninstall StayPut.',
+
   'risk.level.low': 'Low risk',
   'risk.level.medium': 'Medium risk',
   'risk.level.high': 'High risk',

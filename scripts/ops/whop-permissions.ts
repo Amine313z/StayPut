@@ -10,51 +10,16 @@
  * The Inspect workflow runs it after the database report.
  */
 import { appendFileSync } from 'node:fs';
-import { WHOP_API_BASE_URL, WHOP_API_VERSION_DATE, parseWhopEnv } from '@stayput/whop';
+import {
+  ALUMNI_PERMISSIONS,
+  PHASE_2_PERMISSIONS,
+  PHASE_4_PERMISSIONS,
+  UNNEEDED_PERMISSIONS,
+  WHOP_API_BASE_URL,
+  WHOP_API_VERSION_DATE,
+  parseWhopEnv,
+} from '@stayput/whop';
 import { secretValue } from '../deploy/prepare';
-
-/** The read permissions of Phase 2 (docs/whop-api-verification.md, section 10). */
-export const PHASE_2_PERMISSIONS = [
-  'company:basic:read',
-  'member:basic:read',
-  'access_pass:basic:read',
-  'plan:basic:read',
-  'payment:basic:read',
-  'promo_code:basic:read',
-  'shipment:basic:read',
-  'chat:read',
-  'forum:read',
-  'support_chat:read',
-  'courses:read',
-  'course_analytics:read',
-  'webhook_receive:memberships',
-  'webhook_receive:payments',
-  'webhook_receive:members',
-  'webhook_receive:chat',
-  'webhook_receive:courses',
-] as const;
-
-/** What the actions of Phase 4 write (section 10): pause, free days, consent, retries, codes. */
-export const PHASE_4_PERMISSIONS = [
-  'member:manage',
-  'payment:manage',
-  'promo_code:create',
-  'notification:create',
-] as const;
-
-/** The Alumni offer (SPEC 5.9, section 10), for the creators who turn it on. */
-export const ALUMNI_PERMISSIONS = [
-  'access_pass:create',
-  'plan:create',
-  'experience:create',
-  'experience:attach',
-] as const;
-
-/**
- * Asked of the sandbox app since Phase 2 and never read (SPEC 8.2): StayPut keeps no e-mail and
- * no phone number. The production app leaves them out (Phase 9, the production checklist).
- */
-export const UNNEEDED_PERMISSIONS = ['member:email:read', 'member:phone:read'] as const;
 
 const GROUPS: readonly { title: string; actions: readonly string[]; wanted: boolean }[] = [
   { title: 'Phase 2, reading', actions: PHASE_2_PERMISSIONS, wanted: true },

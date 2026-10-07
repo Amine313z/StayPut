@@ -743,6 +743,33 @@ export const fr: Messages = {
     'Paiements échoués et annulations programmées, vus avant que le membre parte.',
   'home.point.activity': "L'activité de Whop, Discord et Telegram, sans jamais lire un message.",
 
+  // The Discover view (Whop's app store): what a creator sees of StayPut before installing it.
+  'discover.subtitle':
+    'Anticipez les départs. Récupérez les paiements échoués. Faites revenir vos membres.',
+  'discover.demo': 'Voir la démo',
+  'discover.demoHint': 'Une communauté imaginaire : rien de réel, rien n’est envoyé.',
+  'discover.detect.title': 'Sachez qui va partir',
+  'discover.detect.body':
+    'Chaque heure, chaque membre reçoit un score de risque de départ de 0 à 100, avec ses raisons : un paiement échoué, une annulation programmée, un membre devenu silencieux sur Whop, Discord ou Telegram.',
+  'discover.act.title': 'Agissez avant qu’ils partent',
+  'discover.act.body':
+    'Paiements échoués relancés et mise à jour de la carte demandée, prises de nouvelles à l’heure où les membres sont en ligne, questionnaire de départ avec l’offre qui répond à leur raison, codes de retour pour les anciens membres.',
+  'discover.prove.title': 'Voyez l’argent sauvé',
+  'discover.prove.body':
+    'Chaque sauvetage est compté avec sa preuve : le paiement récupéré, l’annulation retirée, le membre revenu. Un rapport du lundi résume votre semaine.',
+  'discover.control.title': 'Vous gardez la main',
+  'discover.control.testMode':
+    'Une nouvelle communauté démarre en mode test : StayPut calcule tout et n’envoie rien tant que vous ne l’avez pas désactivé.',
+  'discover.control.mode':
+    'Validez chaque message depuis une file d’attente, ou laissez StayPut agir seul dans vos limites.',
+  'discover.control.guardrails':
+    'Heures silencieuses, limites de fréquence, liste « ne jamais contacter » et arrêt général s’appliquent à chaque message.',
+  'discover.privacy.title': 'Pensé pour la confidentialité',
+  'discover.privacy.contacts':
+    'StayPut ne lit jamais les adresses e-mail ni les numéros de téléphone de vos membres.',
+  'discover.privacy.retention':
+    'L’activité détaillée est gardée 12 mois, et les données de votre communauté sont supprimées 30 jours après la désinstallation de StayPut.',
+
   'risk.level.low': 'Risque faible',
   'risk.level.medium': 'Risque moyen',
   'risk.level.high': 'Risque élevé',

@@ -3742,3 +3742,73 @@ Tous sont dans la démo en ligne (`/demo`), photographiés à chaque Inspect.
 - Ce que ce scénario ne prouve pas : la réponse du vrai Whop (le sandbox de Whop refuse les
   envois des apps et ne connaît pas ces faux membres). Ce sera l'essai avec les comptes de test du
   fondateur (carte 4000 0000 0000 0341 : le renouvellement refusé, puis la carte mise à jour).
+
+## 2026-10-07 — Vers le Whop officiel : l'app relue à chaque déploiement, la page Discover
+
+- **Pourquoi.** Dans le sandbox, le cadre de Whop affiche « App Base URL not set » : son relais
+  de production ne connaît pas les apps du sandbox. En production, ce même écran voudrait dire une
+  Base URL absente ou mal tapée dans les réglages de l'app sur whop.com. Le fondateur : « sur Whop
+  officiel, pas droit à l'erreur ». Une valeur mal tapée ne doit donc jamais passer inaperçue.
+- **Ce que Whop montre** (relu le 07/10/2026 sur l'app du sandbox) : `GET /apps/{id}` répond
+  **sans clé**, avec les chemins (`experience_path`, `dashboard_path`, `discover_path`), le statut,
+  l'`origin` (l'adresse de l'app chez Whop, que son cadre charge) et les permissions demandées. La
+  `base_url` reste `null` pour qui n'est pas développeur du compte de l'app ; avec la clé de
+  compte du sandbox, elle apparaît. Le proxy de cette session refuse `*.apps.whop.com` : le passage
+  par le relais se vérifie depuis GitHub.
+- **`scripts/deploy/check-app.ts`**, deux étapes du déploiement :
+  - `settings`, avant toute modification : les trois chemins doivent être ceux de
+    `WHOP_VIEW_PATHS` (`packages/core/src/whop-views.ts`, la constante qu'un test confronte aussi
+    au routeur de l'app) ; l'app doit demander les 21 permissions dont StayPut a besoin, et ni
+    `member:email:read` ni `member:phone:read`. Celles de l'offre Alumni restent facultatives (une
+    note) ; une permission que StayPut n'utilise pas est un avertissement.
+  - `reach`, une fois le Worker en ligne : la Base URL comparée quand Whop la montre, et en
+    production `/health` demandé à travers l'`origin`. « App Base URL not set » arrête le
+    déploiement en disant quoi taper, un StayPut de l'autre environnement aussi ; toute autre
+    réponse (une connexion demandée, par exemple) n'est qu'un avertissement, faute de pouvoir
+    conclure. Trois essais à 5 secondes d'écart : Whop peut mettre un moment à suivre ses réglages.
+  - En production, un écart arrête le déploiement. Sur le sandbox, il est seulement signalé : son
+    app n'a pas de chemin Discover, demande encore l'e-mail et le téléphone, et le sandbox
+    n'affiche aucune app.
+  - Inspect fait les deux relectures : un réglage changé plus tard sur whop.com s'y voit.
+- **Les listes de permissions** passent de `scripts/ops/whop-permissions.ts` à
+  `packages/whop/src/permissions.ts` : le script d'Inspect lance sa lecture dès qu'on l'importe, le
+  contrôle du déploiement ne pouvait pas les lui emprunter.
+- **La page Discover** (`/discover`, `apps/web/src/views/Discover.tsx`) : ce qu'un créateur voit
+  de StayPut dans l'App Store de Whop avant de l'installer, avec les textes validés de la fiche
+  (`docs/app-store.md`) : détecter, agir, prouver ; le mode test au départ, les deux modes, les
+  garde-fous ; ni e-mail ni téléphone, 12 mois d'activité, suppression 30 jours après la
+  désinstallation. Statique : aucun appel à l'API, aucun lien qui sort du cadre (la démo est une
+  page de StayPut, les textes légaux s'ouvrent dans une fenêtre). Le bouton d'installation est
+  celui de Whop, autour de la page.
+
+- **La démo, une seule horloge** (trouvé en lançant toute la suite) : `createWorld(now)` datait
+  tout de `now`, mais lisait l'heure réelle pour les fenêtres de 5 jours (qui a déjà reçu un
+  message) et pour ce que le visiteur fait. Le test du 02/10 a donc échoué le 07/10 : Sarah Cohen,
+  prévenue de son paiement refusé dans la journée de la démo, ne comptait plus comme prévenue. La
+  démo a maintenant son horloge (`now`, puis le temps qui passe depuis sa création), passée aux
+  pages (`DemoPagesInput.clock`). Pour un visiteur rien ne change (sa démo commence à l'heure
+  réelle) ; un test lu 40 jours plus tard voit exactement la même démo.
+
+### Testé
+
+- `deploy.test.ts` (15 cas) : une app réglée comme il faut passe ; un chemin mal tapé ou vide
+  arrête la production en disant où le corriger, et n'est que signalé sur le sandbox ; une
+  permission nécessaire absente, l'e-mail ou le téléphone demandés ; l'offre Alumni facultative ;
+  la Base URL comparée à une barre oblique près ; les réponses du relais (StayPut, l'autre
+  environnement, « App Base URL not set », autre chose, rien) ; l'app relue sans la clé quand Whop
+  la refuse ; une app absente distinguée de Whop injoignable.
+- `demo.test.ts` : la même démo vue au jour de `now` et 40 jours plus tard (échoue sans la
+  correction, comme le test des actions du jour).
+- `app.test.tsx` : chaque chemin de `WHOP_VIEW_PATHS`, rempli comme Whop le fait, mène à la bonne
+  page ; la page Discover s'affiche sans aucun appel, sa démo reste dans le cadre, ses textes
+  légaux s'ouvrent dans une fenêtre ; en français aussi.
+- Contre le vrai Whop (sandbox) : deux chemins justes, Discover vide (une note), les 21
+  permissions demandées, l'e-mail et le téléphone signalés, sortie 0. Avec `WHOP_ENV=production`
+  et l'identifiant de l'app du sandbox : « Whop (production) has no app … », sortie 1.
+
+### Incertain
+
+- La réponse du relais de production à `/health` n'a pas pu être lue d'ici (proxy). Le premier
+  déploiement de production dira si Whop la transmet sans session ; sinon ce n'est qu'un
+  avertissement, et l'affichage se vérifie à l'œil en ouvrant StayPut dans la communauté, l'app
+  encore cachée (`docs/production.md`, étape 5).

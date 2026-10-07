@@ -15,6 +15,11 @@ Guidance for Claude Code in this repository.
   the solution yourself (documentation, API, sandbox) before handing the founder an errand
   (searching a dashboard, writing to support). Only ask for what truly needs them: a click in
   an account only they can reach, a decision, a secret stored in the environment.
+- Be thoughtful, precise and meticulous on every change (the founder, 2026-10-07, for the whole
+  project): understand the code and the real behavior first (read it, ask Whop's API, the docs),
+  check each claim at its source, cover the edge cases with tests, follow a change through every
+  layer (SQL, Worker, web, demo, i18n, docs), re-read the whole diff before committing, and say
+  plainly what is verified and what is not.
 - Never ask for a secret (API key, password, connection string) in the chat. Secrets go in
   the cloud environment's variables (environment menu in the session title bar → Edit →
   Environment variables); a new session picks them up.
@@ -165,6 +170,13 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   stop per page. The « look » job of Inspect opens the live demo in Chrome, checks Satoshi,
   Geist and the chart, and pushes its screenshots to the `screenshots` branch
   (`git fetch origin screenshots`).
+- **Production, under way** (2026-10-07, `docs/production.md`): the founder created the Supabase
+  project `stayput-production` and the GitHub environment `production` (secret
+  `PRODUCTION_SUPABASE_DB_URL`, required reviewer); the Whop app on whop.com comes next. Each
+  deployment reads the Whop app's settings (`scripts/deploy/check-app.ts`: the views' paths
+  against `WHOP_VIEW_PATHS`, the permissions, then `/health` through Whop's relay) and stops
+  production on a difference. `/discover` is the app store's Discover view
+  (`apps/web/src/views/Discover.tsx`).
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;
   Whop's side: `GET /webhooks/{id}/deliveries` and `POST /webhooks/{id}/test` with

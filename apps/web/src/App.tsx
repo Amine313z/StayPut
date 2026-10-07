@@ -19,6 +19,7 @@ import { MemberSpaceOnly, SectionHome, SectionLayout } from './views/creator/Sec
 import { GeneralSettingsTab, RiskSettingsTab, SpaceSettingsTab } from './views/creator/SettingsTab';
 import { SpaceCardsTab, SpaceOverviewTab, SpacePreviewTab } from './views/creator/SpaceTab';
 import { ActivityAddress, DiscordTab, TelegramTab, WhopTab } from './views/creator/SourcesTab';
+import { Discover } from './views/Discover';
 import { Home } from './views/Home';
 import { MemberView } from './views/MemberView';
 import { NotFound } from './views/NotFound';
@@ -96,8 +97,9 @@ function creatorSections(): RouteObject[] {
 }
 
 /**
- * The two entries Whop opens (docs/whop-api-verification.md, section 4): the dashboard view
- * (`dashboard_path`) and the experience view (`experience_path`). The dashboard has its own
+ * The entries Whop opens (docs/whop-api-verification.md, section 4; WHOP_VIEW_PATHS): the
+ * dashboard view (`dashboard_path`), the experience view (`experience_path`) and the Discover
+ * view (`discover_path`, the app store's page of StayPut). The dashboard has its own
  * frame (components/CreatorShell.tsx) and sections, each with its tabs (views/creator/
  * sections.ts); any other sub-page (`[restPath]`, e.g. from a notification) opens its overview.
  * /demo is the same dashboard on an imaginary community, for anyone (nothing real, nothing
@@ -111,6 +113,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Home /> },
       { path: 'experiences/:experienceId/*', element: <MemberView /> },
+      { path: 'discover', element: <Discover /> },
       { path: 'connected', element: <Connected /> },
       { path: '*', element: <NotFound /> },
     ],

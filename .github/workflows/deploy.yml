@@ -63,6 +63,16 @@ jobs:
           WHOP_ENV: ${{ inputs.target == 'production' && 'production' || vars.WHOP_ENV }}
         run: npx tsx scripts/deploy/check-whop.ts apps/worker/wrangler.toml
 
+      # The app's views and permissions as Whop holds them (scripts/deploy/check-app.ts): a path
+      # typed wrong in Whop's dashboard stops a production deployment here, before anything
+      # changes. The sandbox only reports.
+      - name: Read the Whop app's settings
+        env:
+          WHOP_API_KEY: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_WHOP_API_KEY' || 'WHOP_API_KEY'] }}
+          WHOP_ENV: ${{ inputs.target == 'production' && 'production' || vars.WHOP_ENV }}
+          WHOP_APP_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_APP_ID' || 'WHOP_APP_ID'] }}
+        run: npx tsx scripts/deploy/check-app.ts settings apps/worker/wrangler.toml
+
       # Also claims the database for this deployment, or stops when the other one claimed it
       # (scripts/deploy/claim.ts): one database, one deployment.
       - name: Apply the database migrations
@@ -135,6 +145,17 @@ jobs:
             echo "- /health: HTTP $code \`$body\`"
           } >> "$GITHUB_STEP_SUMMARY"
           grep -q '"status":"ok"' "$body_file"
+
+      # Whop's frame loads StayPut through the app's own address on Whop: in production, /health
+      # is asked that way, and Whop's « App Base URL not set » stops here, with what to type
+      # (scripts/deploy/check-app.ts). The base URL is compared too when Whop shows it.
+      - name: Reach StayPut through Whop
+        env:
+          WHOP_API_KEY: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_WHOP_API_KEY' || 'WHOP_API_KEY'] }}
+          WHOP_ENV: ${{ inputs.target == 'production' && 'production' || vars.WHOP_ENV }}
+          WHOP_APP_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_APP_ID' || 'WHOP_APP_ID'] }}
+          STAYPUT_URL: ${{ vars[inputs.target == 'production' && 'PRODUCTION_STAYPUT_URL' || 'STAYPUT_URL'] }}
+        run: npx tsx scripts/deploy/check-app.ts reach apps/worker/wrangler.toml "$WORKER_URL"
 
       # The optional modules: Discord and Telegram say whether they accept the bots' secrets, and
       # what a creator still relies on (the redirect, privacy mode, the webhook). Warnings only: a

@@ -2,6 +2,7 @@ export * from './access';
 export * from './api';
 export * from './ids';
 export * from './whop-status';
+export * from './whop-views';
 export * from './analyses';
 export * from './risk';
 export * from './actions';
