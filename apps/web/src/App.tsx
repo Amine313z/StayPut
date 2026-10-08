@@ -3,7 +3,7 @@ import type { RouteObject } from 'react-router';
 import { AppShell } from './components/AppShell';
 import { CreatorView } from './views/CreatorView';
 import { Overview } from './views/creator/Overview';
-import { SectionHome, SectionLayout } from './views/creator/SectionLayout';
+import { MemberSpaceOnly, SectionHome, SectionLayout } from './views/creator/SectionLayout';
 import type { SectionId } from './views/creator/sections';
 
 /**
@@ -97,10 +97,10 @@ function creatorSections(): RouteObject[] {
       {
         path: 'space',
         ...screen(() =>
-          Promise.all([import('./views/creator/SectionLayout'), settings()]).then(([l, m]) => (
-            <l.MemberSpaceOnly section="settings">
+          settings().then((m) => (
+            <MemberSpaceOnly section="settings">
               <m.SpaceSettingsTab />
-            </l.MemberSpaceOnly>
+            </MemberSpaceOnly>
           )),
         ),
       },
