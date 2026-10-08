@@ -157,8 +157,8 @@ export async function answerDemo(method: string, path: string, body: unknown): P
     noted += 1;
     return {
       actionId: `demo-note-${noted}`,
+      status: sent.simulated ? 'simulated' : 'sent',
       sendAt: new Date().toISOString(),
-      simulated: sent.simulated,
     } satisfies CreatorNoteSent;
   }
   if (method === 'POST' && route === 'payments/retry') {

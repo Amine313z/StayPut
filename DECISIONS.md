@@ -3955,3 +3955,38 @@ file », sans pouvoir écrire ni envoyer. Il veut écrire lui-même et que ça p
   refusé ; « ne jamais contacter » refusé ; un membre inconnu, 404.
 - `app.test.tsx` (web) : la fenêtre, le titre proposé, « Send » inactif sans texte, le compteur,
   « Sent to … », l'heure de départ dans les heures calmes, le refus du quatrième dit en clair.
+
+## 2026-10-08 — « Message » dit ce que Whop en a fait, jamais « envoyé » avant
+
+### Pourquoi
+
+Premier essai en production : le fondateur écrit à un membre, voit « Sent to … », et rien
+n'arrive. StayPut n'avait encore aucun espace dans la communauté (son `experience_id`, appris
+quand quelqu'un ouvre StayPut côté membre) : l'action attendait, retentée toutes les heures. La
+réponse donnait l'heure de départ calculée, pas ce qui s'était passé. Whop, lui, ne livre une
+notification d'app qu'aux utilisateurs de son espace (`user_ids` « provided they are in the
+targeted experience »), et laisse tomber les autres sans rien dire.
+
+### Ce qui change
+
+- Sans espace connu, « Message » est refusé (409 `no_space`) et rien n'est créé ; le créateur lit
+  que Whop ne peut rien livrer à ses membres tant que StayPut n'a pas d'espace dans sa
+  communauté. En mode test, il est simulé comme avant (rien ne part de toute façon).
+- Envoyé maintenant, le message part dans la requête même (`prepareActions` puis
+  `executeAction`, comme une offre acceptée par un membre), et la réponse relit l'action :
+  `sent` (Whop l'a pris), `scheduled` (heures calmes, avec l'heure), `simulated`, `retrying`
+  (Whop ne l'a pas pris, nouvel essai dans une heure) ou `failed` avec sa raison.
+- Avant d'envoyer un message du créateur, StayPut demande à Whop si le membre a accès à son
+  espace (`checkAccess`) : sinon, échec final `no_access`, aucune notification, et le créateur
+  le lit. Sans réponse de Whop à cette question, le message part comme les autres.
+- Les messages automatiques ne changent pas. Qu'une communauté sans espace StayPut ne reçoive
+  aucun message reste à signaler ailleurs qu'ici (dans le tableau de bord), avant la bêta.
+
+### Testé
+
+- `app.test.ts` (Worker) : sans espace, 409 `no_space` et aucune action ; en mode test, simulé ;
+  un membre sans accès, `failed` / `no_access` et aucune notification ; Whop en panne,
+  `retrying` avec le nouvel essai une heure plus tard ; le cas nominal dit `sent`, les heures
+  calmes `scheduled`.
+- `app.test.tsx` (web) : « Sent to … » seulement sur `sent` ; « Not sent to … yet » et le
+  prochain essai ; le membre sans accès ; le refus sans espace, la fenêtre reste ouverte.

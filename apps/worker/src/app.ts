@@ -11,7 +11,6 @@ import {
   CREATOR_NOTE_LIMITS,
   creatorNote,
   isCreatorOfferKind,
-  outOfQuietHours,
   isRuleId,
   isExitReason,
   isNiche,
@@ -84,7 +83,7 @@ import {
   readPlatformActivity,
 } from './accounts';
 import { isActionView, readActionSettings, readActions, validActionSettings } from './action-views';
-import { executeAction, executeDueActions, prepareActions } from './actions';
+import { executeAction, executeDueActions, NO_ACCESS_ERROR, prepareActions } from './actions';
 import { readDashboard, readFeed } from './dashboard';
 import { createPostgresDb, type ClosableDb, type Db } from './db';
 import { createDiscordClient, type DiscordClient } from './discord';
@@ -1780,7 +1779,8 @@ export function createApp(deps: AppDeps) {
    * « Message » on one member: words the creator wrote themselves (a title and a text), sent word
    * for word as a Whop notification with their picture, now or at the end of the quiet hours. No
    * follow-up cap holds it back; « never contact », the stops and test mode do (create_creator_note,
-   * migration 0045). The journal keeps who wrote to whom, never the words.
+   * migration 0045). Sent now, it runs in the request: the answer says what Whop did with it,
+   * never « sent » before. The journal keeps who wrote to whom, never the words.
    */
   app.post(
     '/api/creator/:companyId/members/:memberId/note',
@@ -1801,6 +1801,19 @@ export function createApp(deps: AppDeps) {
       }
       const companyId = c.get('companyId');
       const now = deps.now();
+      // Whop delivers an app's notification only through its space in the community, which
+      // StayPut learns when someone opens it there: without one, nothing could leave. Test mode
+      // sends nothing, so it simulates all the same.
+      const [space] = await db.query<{ experience_id: string | null; dry_run: boolean | null }>(
+        `select c.experience_id, s.dry_run
+           from stayput.companies c
+           left join stayput.company_settings s on s.company_id = c.id
+          where c.id = $1`,
+        [companyId],
+      );
+      if (!space?.experience_id && space?.dry_run !== true) {
+        return apiError('conflict', 'no_space');
+      }
       const [row] = await db.query<{ made: Record<string, unknown> }>(
         'select stayput.create_creator_note($1, $2, $3, $4, $5, $6::timestamptz) as made',
         [companyId, memberId, note.title, note.body, c.get('userId'), now.toISOString()],
@@ -1812,17 +1825,40 @@ export function createApp(deps: AppDeps) {
           : apiError('conflict', typeof made?.error === 'string' ? made.error : 'not sent');
       }
       c.set('audit', { member: memberId });
-      runActionsInBackground(c, companyId, now);
-      const sendAt = outOfQuietHours(now.getTime(), {
-        timezone: typeof made.timezone === 'string' ? made.timezone : 'UTC',
-        quietHoursStart: Number(made.quietHoursStart ?? 22),
-        quietHoursEnd: Number(made.quietHoursEnd ?? 8),
-      });
-      return c.json({
-        actionId: made.actionId,
-        sendAt: new Date(sendAt).toISOString(),
-        simulated: made.dryRun === true,
-      } satisfies CreatorNoteSent);
+      try {
+        await prepareActions(db, companyId, now, { memberSpace: c.get('config').memberSpace });
+        await executeAction(db, deps.whopClient(c.get('config')), made.actionId, now);
+      } catch (error) {
+        // Kept scheduled: the next pass sends it, and the answer below says it waits.
+        console.error('Creator message not run:', describe(error));
+      }
+      const [action] = await db.query<{
+        status: string;
+        send_at: Date | string;
+        attempts: number;
+        last_error: string | null;
+      }>(
+        `select status, send_at, attempts, error_log -> -1 ->> 'error' as last_error
+           from stayput.actions where id = $1::uuid`,
+        [made.actionId],
+      );
+      const sendAt = new Date(action?.send_at ?? now).toISOString();
+      const answer: CreatorNoteSent =
+        action?.status === 'sent' || action?.status === 'simulated'
+          ? { actionId: made.actionId, status: action.status, sendAt }
+          : action?.status === 'scheduled' || action?.status === 'approved'
+            ? {
+                actionId: made.actionId,
+                status: (action.attempts ?? 0) > 0 ? 'retrying' : 'scheduled',
+                sendAt,
+              }
+            : {
+                actionId: made.actionId,
+                status: 'failed',
+                sendAt,
+                reason: action?.last_error === NO_ACCESS_ERROR ? 'no_access' : 'refused',
+              };
+      return c.json(answer);
     },
   );
 

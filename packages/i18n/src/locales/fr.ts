@@ -1483,6 +1483,13 @@ export const fr: Messages = {
   'dash.note.sent.laterBody': 'À la fin de vos heures calmes.',
   'dash.note.sent.test': 'Simulé pour {name}',
   'dash.note.tooMany': 'Déjà trois messages à ce membre aujourd’hui : réécrivez demain.',
+  'dash.note.retrying': 'Pas encore envoyé à {name}',
+  'dash.note.retryingBody': 'Whop ne l’a pas pris. StayPut réessaie {when}.',
+  'dash.note.noAccess':
+    '{name} n’a pas accès à StayPut dans votre communauté : Whop ne le lui livrerait pas. Rien n’est parti.',
+  'dash.note.refused': 'Whop l’a refusé : rien n’est parti pour {name}.',
+  'dash.note.noSpace':
+    'StayPut n’a pas encore d’espace dans votre communauté : Whop ne peut livrer aucun message à vos membres. Rien n’est parti.',
   'dash.act.pauseLabel': 'Proposer une pause à {name}',
   'dash.act.offerLabel': 'Faire une offre à {name}',
   'dash.act.neverContact':

@@ -27,6 +27,7 @@ const REFUSALS: Readonly<Record<string, MessageKey>> = {
   no_membership: 'dash.act.noMembership',
   offer_open: 'error.conflict',
   too_many_notes: 'dash.note.tooMany',
+  no_space: 'dash.note.noSpace',
 };
 
 /** What went wrong, in words the creator can act on. */
@@ -100,16 +101,31 @@ export function MemberActions({
       onClose={() => setWriting(false)}
       onSent={(sent) => {
         setWriting(false);
-        const sendAt = new Date(sent.sendAt);
+        // What Whop did with it, as the Worker read it back: never « sent » before Whop took it.
+        const when = relative(new Date(sent.sendAt));
         toast(
-          sent.simulated
-            ? { title: t('dash.note.sent.test', { name }), body: t('dash.note.how.test') }
-            : sendAt.getTime() > Date.now() + 60_000
-              ? {
-                  title: t('dash.note.sent.later', { name, when: relative(sendAt) }),
-                  body: t('dash.note.sent.laterBody'),
-                }
-              : { title: t('dash.note.sent.now', { name }) },
+          sent.status === 'sent'
+            ? { title: t('dash.note.sent.now', { name }) }
+            : sent.status === 'simulated'
+              ? { title: t('dash.note.sent.test', { name }), body: t('dash.note.how.test') }
+              : sent.status === 'scheduled'
+                ? {
+                    title: t('dash.note.sent.later', { name, when }),
+                    body: t('dash.note.sent.laterBody'),
+                  }
+                : sent.status === 'retrying'
+                  ? {
+                      tone: 'error',
+                      title: t('dash.note.retrying', { name }),
+                      body: t('dash.note.retryingBody', { when }),
+                    }
+                  : {
+                      tone: 'error',
+                      title: t(
+                        sent.reason === 'no_access' ? 'dash.note.noAccess' : 'dash.note.refused',
+                        { name },
+                      ),
+                    },
         );
         onDone();
       }}

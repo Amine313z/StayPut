@@ -1440,6 +1440,13 @@ export const en = {
   'dash.note.sent.laterBody': 'When your quiet hours end.',
   'dash.note.sent.test': 'Simulated for {name}',
   'dash.note.tooMany': 'Three messages to this member today already: write again tomorrow.',
+  'dash.note.retrying': 'Not sent to {name} yet',
+  'dash.note.retryingBody': 'Whop did not take it. StayPut tries again {when}.',
+  'dash.note.noAccess':
+    '{name} cannot open StayPut in your community, so Whop would not deliver it. Nothing was sent.',
+  'dash.note.refused': 'Whop refused it: nothing was sent to {name}.',
+  'dash.note.noSpace':
+    'StayPut has no space in your community yet, so Whop cannot deliver a message to your members. Nothing was sent.',
   'dash.act.pauseLabel': 'Offer {name} a pause',
   'dash.act.offerLabel': 'Make {name} an offer',
   'dash.act.neverContact': 'On the do-not-contact list: StayPut takes no action for this member.',

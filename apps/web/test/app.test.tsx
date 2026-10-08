@@ -749,23 +749,20 @@ describe('creator view', () => {
     expect(screen.queryByRole('heading', { name: 'New members who have not started' })).toBeNull();
   });
 
-  it('lets the creator write to a member in their own words, and says when it leaves', async () => {
+  it('lets the creator write to a member in their own words, and says what Whop did', async () => {
     const now = Date.now();
+    const at = (hours: number) => new Date(now + hours * 3_600_000).toISOString();
     mockApi({
       ...dashboard(),
       'POST /api/creator/biz_A1/members/mber_3/note': [
+        { status: 200, body: { actionId: 'a1', status: 'sent', sendAt: at(0) } },
+        { status: 200, body: { actionId: 'a2', status: 'scheduled', sendAt: at(9) } },
+        { status: 200, body: { actionId: 'a3', status: 'retrying', sendAt: at(1) } },
         {
           status: 200,
-          body: { actionId: 'a1', sendAt: new Date(now).toISOString(), simulated: false },
+          body: { actionId: 'a4', status: 'failed', sendAt: at(0), reason: 'no_access' },
         },
-        {
-          status: 200,
-          body: {
-            actionId: 'a2',
-            sendAt: new Date(now + 9 * 3_600_000).toISOString(),
-            simulated: false,
-          },
-        },
+        { status: 409, body: { error: { code: 'conflict', message: 'no_space' } } },
         { status: 409, body: { error: { code: 'conflict', message: 'too_many_notes' } } },
       ],
     });
@@ -801,6 +798,36 @@ describe('creator view', () => {
     fireEvent.click(send());
     expect(await screen.findByText('Bruno Petit gets it in 9 hours')).toBeTruthy();
     expect(screen.getByText('When your quiet hours end.')).toBeTruthy();
+
+    // Whop did not take it: never « sent », and when StayPut tries again.
+    const write = async (words: string) => {
+      dialog = await open();
+      fireEvent.change(within(dialog).getByRole('textbox', { name: 'Your message' }), {
+        target: { value: words },
+      });
+      fireEvent.click(send());
+    };
+    await write('Are you there?');
+    expect(await screen.findByText('Not sent to Bruno Petit yet')).toBeTruthy();
+    expect(
+      screen.getByText(/^Whop did not take it\. StayPut tries again in \d+ (hour|minutes)/),
+    ).toBeTruthy();
+    // Whop would drop it: the member cannot open StayPut in the community.
+    await write('Still there?');
+    expect(
+      await screen.findByText(
+        'Bruno Petit cannot open StayPut in your community, so Whop would not deliver it. Nothing was sent.',
+      ),
+    ).toBeTruthy();
+    // No space in the community yet: refused, the words stay.
+    await write('Hello?');
+    expect(
+      await screen.findByText(
+        'StayPut has no space in your community yet, so Whop cannot deliver a message to your members. Nothing was sent.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Write to Bruno Petit' })).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
     // Three a day at most: said as such, the words stay to try again.
     dialog = await open();

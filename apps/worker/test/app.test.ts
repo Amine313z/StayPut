@@ -1,6 +1,7 @@
 import type {
   AccountsView,
   AlumniView,
+  CreatorNoteSent,
   DashboardView,
   FeedView,
   AnnouncementsView,
@@ -2796,8 +2797,8 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
       body: 'Ana, how is it going?\nTell me.',
     });
     expect(sent.status).toBe(200);
-    expect(await sent.json()).toMatchObject({ sendAt: NOW.toISOString(), simulated: false });
-    await settle();
+    // Said sent once Whop took it, in the same request.
+    expect(await sent.json()).toMatchObject({ status: 'sent', sendAt: NOW.toISOString() });
     const [row] = await t.db.query<Record<string, unknown>>(
       `select status, message_kind, trigger, content, approved_by, error_log from stayput.actions
         where company_id = $1 and type = 'creator_note'`,
@@ -2832,9 +2833,10 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     // During the quiet hours, it waits for their end.
     const hour = localHour(NOW.getTime(), 'America/New_York');
     await quiet(hour, (hour + 1) % 24);
-    const later = (await (await write({ title: 'Late', body: 'A third word.' })).json()) as {
-      sendAt: string;
-    };
+    const later = (await (
+      await write({ title: 'Late', body: 'A third word.' })
+    ).json()) as CreatorNoteSent;
+    expect(later.status).toBe('scheduled');
     expect(Date.parse(later.sendAt)).toBeGreaterThan(NOW.getTime());
     // Three a day at most.
     expect((await write({ title: 'More', body: 'A fourth word.' })).status).toBe(409);
@@ -2854,6 +2856,72 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
         )
       ).status,
     ).toBe(404);
+  });
+
+  it('says what Whop did with a creator’s message: no space, no access, an outage', async () => {
+    const env = await departing(16);
+    const boss = await env.boss();
+    const write = (member: string, title: string) =>
+      env.request(
+        `/api/creator/${env.company}/members/${member}/note`,
+        json(boss, 'POST', { title, body: 'Hello' }),
+      );
+    const notes = async () =>
+      (
+        await t.db.query<{ n: number }>(
+          `select count(*)::int as n from stayput.actions
+            where company_id = $1 and type = 'creator_note'`,
+          [env.company],
+        )
+      )[0]?.n;
+    const notified = (title: string) =>
+      env.whop.writes.some(
+        (w) => w.path === '/notifications' && (w.body as { title?: string }).title === title,
+      );
+    await t.db.query(
+      `update stayput.company_settings set quiet_hours_start = 0, quiet_hours_end = 0
+        where company_id = $1`,
+      [env.company],
+    );
+    // Nobody opened StayPut in the community yet: Whop could deliver nothing, nothing is made.
+    const nowhere = await write('mber_Ret16', 'Nowhere');
+    expect(nowhere.status).toBe(409);
+    expect(await nowhere.json()).toMatchObject({ error: { message: 'no_space' } });
+    expect(await notes()).toBe(0);
+    // In test mode, nothing leaves anyway: simulated.
+    await t.db.query(`update stayput.company_settings set dry_run = true where company_id = $1`, [
+      env.company,
+    ]);
+    expect(await (await write('mber_Ret16', 'Pretend')).json()).toMatchObject({
+      status: 'simulated',
+    });
+    expect(notified('Pretend')).toBe(false);
+    await t.db.query(`update stayput.company_settings set dry_run = false where company_id = $1`, [
+      env.company,
+    ]);
+    // Ana opens StayPut: the space is known. Bob cannot open it: Whop would drop it, he is not
+    // written to, and the creator is told.
+    await env.read();
+    await t.db.query('select stayput.ingest_page($1, $2, null, $3::text::jsonb)', [
+      env.company,
+      'members',
+      JSON.stringify(page([member('mber_Bob16', 'user_bob16')])),
+    ]);
+    expect(await (await write('mber_Bob16', 'Outside')).json()).toMatchObject({
+      status: 'failed',
+      reason: 'no_access',
+    });
+    expect(notified('Outside')).toBe(false);
+    // Whop is down: not sent, tried again in an hour, and said so.
+    env.whop.refusals['POST /notifications'] = new WhopApiError(503, 'unavailable', 'down', {
+      method: 'POST',
+      path: '/notifications',
+    });
+    expect(await (await write('mber_Ret16', 'Down')).json()).toMatchObject({
+      status: 'retrying',
+      sendAt: new Date(NOW.getTime() + 3_600_000).toISOString(),
+    });
+    expect(notified('Down')).toBe(false);
   });
 
   it('offers a pause to the members leaving, and retries the failed payments now', async () => {

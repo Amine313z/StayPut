@@ -791,13 +791,17 @@ export interface CreatorOffersResult {
 
 /** POST /api/creator/:companyId/members/:memberId/offer */
 /**
- * POST /api/creator/:companyId/members/:memberId/note: the creator's own message, on its way.
- * `sendAt` is now, or the end of the quiet hours; `simulated` when test mode is on.
+ * POST /api/creator/:companyId/members/:memberId/note: what became of the creator's own message,
+ * as Whop answered it, never before. `sent`: Whop took it; `scheduled`: it leaves at `sendAt`, the
+ * end of the quiet hours; `simulated`: test mode, nothing left; `retrying`: Whop did not take it,
+ * StayPut tries again at `sendAt`; `failed`: it will not leave, for `reason`.
  */
 export interface CreatorNoteSent {
   actionId: string;
+  status: 'sent' | 'scheduled' | 'simulated' | 'retrying' | 'failed';
   sendAt: string;
-  simulated: boolean;
+  /** `no_access`: the member cannot open StayPut in the community, so Whop would not deliver it. */
+  reason?: 'no_access' | 'refused';
 }
 
 export interface CreatorOfferMade {

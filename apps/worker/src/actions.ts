@@ -50,6 +50,8 @@ export const SCHEDULE_BATCH = 50;
 export const EXECUTE_BATCH = 20;
 /** A Whop outage is tried again an hour later, three attempts in all. */
 export const MAX_ATTEMPTS = 3;
+/** A creator's message to a member who cannot open StayPut in the community (runAction). */
+export const NO_ACCESS_ERROR = 'the member cannot open StayPut in the community';
 const RETRY_DELAY_MS = 3_600_000;
 
 /** What stayput.actions_to_schedule returns. */
@@ -404,6 +406,14 @@ export async function runAction(
       retry: true,
     };
   }
+  if (note) {
+    // Whop drops, without a word, a notification to a user outside the experience: a creator
+    // who wrote is told instead. Without an answer, it goes, as every message does.
+    const access = await whop.checkAccess(action.member.userId, experienceId).catch(() => null);
+    if (access?.accessLevel === 'no_access') {
+      return { status: 'failed', error: NO_ACCESS_ERROR, retry: false };
+    }
+  }
   return callWhop(action, () =>
     whop.request('POST', '/notifications', {
       body: {
@@ -737,7 +747,8 @@ async function callWhop(action: DueAction, call: () => Promise<unknown>): Promis
 
 /**
  * Runs one action now when it is scheduled and due (a member's accepted offer, in automatic
- * mode): the member sees what came of it in the same request. Returns its outcome's status.
+ * mode; a creator's own message): who asked sees what came of it in the same request. Returns
+ * its outcome's status.
  */
 export async function executeAction(
   db: Db,
