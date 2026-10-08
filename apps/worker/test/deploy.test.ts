@@ -26,6 +26,7 @@ import {
   hyperdriveName,
   hyperdriveOrigin,
   sameOrigin,
+  supabaseRegion,
   withHyperdriveBinding,
 } from '../../../scripts/deploy/hyperdrive';
 import {
@@ -82,6 +83,14 @@ describe('hyperdriveOrigin', () => {
     expect(decodeURIComponent(direct.password)).toBe('p@ss/word');
     expect(direct.pathname).toBe('/postgres');
     expect(hyperdriveOrigin(pooler.replace(':5432/', ':6543/'))).toContain(':5432/');
+  });
+
+  it("reads the database's region from the pooler's address, and only from it", () => {
+    expect(supabaseRegion(pooler)).toBe('eu-west-3');
+    expect(supabaseRegion(`postgresql://postgres:pw@db.${ref}.supabase.co:5432/postgres`)).toBe(
+      null,
+    );
+    expect(supabaseRegion('not a url')).toBe(null);
   });
 
   it('keeps any other URI as it is', () => {
@@ -953,7 +962,17 @@ describe('baseUrlFinding', () => {
 describe('relayAnswer', () => {
   it("tells StayPut's /health, the other deployment's, Whop's page and anything else apart", () => {
     const health = (whopEnv: string) => JSON.stringify({ status: 'ok', whopEnv, database: 'ok' });
-    expect(relayAnswer(health('production'), 'production')).toEqual({ kind: 'stayput' });
+    expect(relayAnswer(health('production'), 'production')).toEqual({
+      kind: 'stayput',
+      colo: null,
+      databaseMs: null,
+    });
+    expect(
+      relayAnswer(
+        JSON.stringify({ ...JSON.parse(health('production')), colo: 'CDG', databaseMs: 12 }),
+        'production',
+      ),
+    ).toEqual({ kind: 'stayput', colo: 'CDG', databaseMs: 12 });
     expect(relayAnswer(health('sandbox'), 'production')).toEqual({
       kind: 'wrong_env',
       whopEnv: 'sandbox',
@@ -993,6 +1012,16 @@ describe('checkRelay', () => {
       text: `Whop's relay (${origin}) reaches StayPut: /health ok.`,
     });
     expect(asked).toEqual([`${origin}/health`, `${origin}/health`]);
+    // Where StayPut ran when Whop called it, and its database's answer time from there.
+    const placed = page(
+      JSON.stringify({ status: 'ok', whopEnv: 'production', colo: 'CDG', databaseMs: 9 }),
+      200,
+      'application/json',
+    );
+    expect(await checkRelay(origin, 'production', url, { fetch: placed, sleep: noSleep })).toEqual({
+      level: 'ok',
+      text: `Whop's relay (${origin}) reaches StayPut: /health ok (run in Cloudflare's CDG data center, database probe 9 ms).`,
+    });
   });
 
   it('stops production when Whop says the base URL is not set, or reaches the sandbox', async () => {

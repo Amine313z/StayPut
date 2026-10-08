@@ -36,6 +36,7 @@ import { Badge, Notice } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ExternalButton } from '../ui/ExternalLink';
+import { readPreference, writePreference } from '../storage';
 
 type Departure = NonNullable<MemberRetentionView['departure']>;
 type Payment = NonNullable<MemberRetentionView['payment']>;
@@ -716,6 +717,9 @@ async function copy(text: string): Promise<boolean> {
   }
 }
 
+/** The team's preview folded away on this device (Preview). */
+const PREVIEW_FOLDED = 'stayput.memberPreview.folded';
+
 /**
  * The team's preview: the survey as a member sees it, with the creator's offers. Every reason can
  * be tried; nothing is recorded, nothing applied.
@@ -734,16 +738,43 @@ function Preview({
   const { t } = useI18n();
   const [reason, setReason] = useState<ExitReason | null>(null);
   const [decided, setDecided] = useState(false);
+  // Folded away on this device by whoever previewed it enough; a member never sees it.
+  const [folded, setFolded] = useState(() => readPreference(PREVIEW_FOLDED) === '1');
+  const fold = (next: boolean) => {
+    setFolded(next);
+    writePreference(PREVIEW_FOLDED, next ? '1' : '0');
+  };
   const again = () => {
     setReason(null);
     setDecided(false);
   };
+  if (folded) {
+    return (
+      <Card
+        icon={<Eye aria-hidden="true" className="size-4" />}
+        title={t('member.preview.title')}
+        description={t('member.preview.folded')}
+        actions={
+          <Button variant="secondary" size="sm" onClick={() => fold(false)}>
+            {t('member.preview.show')}
+          </Button>
+        }
+      />
+    );
+  }
   return (
     <Card
       icon={<Eye aria-hidden="true" className="size-4" />}
       title={t('member.preview.title')}
       description={t('member.preview.body')}
-      actions={<Badge tone="info">{t('member.preview.badge')}</Badge>}
+      actions={
+        <span className="flex items-center gap-2">
+          <Badge tone="info">{t('member.preview.badge')}</Badge>
+          <Button variant="ghost" size="sm" onClick={() => fold(true)}>
+            {t('member.preview.hide')}
+          </Button>
+        </span>
+      }
     >
       <div className="space-y-4">
         {testMode ? (

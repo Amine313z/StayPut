@@ -1,29 +1,26 @@
+import type { ReactNode } from 'react';
 import type { RouteObject } from 'react-router';
 import { AppShell } from './components/AppShell';
-import { Connected } from './views/Connected';
 import { CreatorView } from './views/CreatorView';
-import { ActionSettings } from './views/creator/ActionSettings';
-import {
-  ActionsHome,
-  ActionsTab,
-  AlumniTab,
-  QueueFilterAddress,
-  QueueTab,
-} from './views/creator/ActionsTab';
-import { CohortsTab, LessonsTab, OverviewTab } from './views/creator/InsightsTab';
-import { ReportsTab } from './views/creator/ReportsTab';
-import { MembersTab, NeverContactTab } from './views/creator/MembersTab';
 import { Overview } from './views/creator/Overview';
-import { OperatorTab } from './views/creator/OperatorTab';
-import { MemberSpaceOnly, SectionHome, SectionLayout } from './views/creator/SectionLayout';
-import { GeneralSettingsTab, RiskSettingsTab, SpaceSettingsTab } from './views/creator/SettingsTab';
-import { SpaceCardsTab, SpaceOverviewTab, SpacePreviewTab } from './views/creator/SpaceTab';
-import { ActivityAddress, DiscordTab, TelegramTab, WhopTab } from './views/creator/SourcesTab';
-import { Discover } from './views/Discover';
-import { Home } from './views/Home';
-import { MemberView } from './views/MemberView';
-import { NotFound } from './views/NotFound';
+import { SectionHome, SectionLayout } from './views/creator/SectionLayout';
 import type { SectionId } from './views/creator/sections';
+
+/**
+ * A screen loaded the first time it is opened: its code is a file of its own, so the page Whop
+ * opens (the dashboard's home, or a member's page) downloads only what it shows. The router
+ * waits for the file before leaving the screen on view: never a blank page in between.
+ */
+function screen(load: () => Promise<ReactNode>): Pick<RouteObject, 'lazy'> {
+  return { lazy: async () => ({ element: await load() }) };
+}
+
+const actions = () => import('./views/creator/ActionsTab');
+const insights = () => import('./views/creator/InsightsTab');
+const members = () => import('./views/creator/MembersTab');
+const settings = () => import('./views/creator/SettingsTab');
+const sources = () => import('./views/creator/SourcesTab');
+const space = () => import('./views/creator/SpaceTab');
 
 /** A section of the dashboard: its tabs, and its first tab for any other address in it. */
 function section(id: SectionId, path: string | undefined, tabs: RouteObject[]): RouteObject {
@@ -39,59 +36,85 @@ function creatorSections(): RouteObject[] {
   return [
     section('dashboard', undefined, [{ index: true, element: <Overview /> }]),
     section('members', 'members', [
-      { index: true, element: <MembersTab /> },
-      { path: 'never-contact', element: <NeverContactTab /> },
+      { index: true, ...screen(() => members().then((m) => <m.MembersTab />)) },
+      { path: 'never-contact', ...screen(() => members().then((m) => <m.NeverContactTab />)) },
     ]),
     // Two tabs (brief v4 §9.4): the rules, and the queue with its filters.
     section('actions', 'actions', [
-      { index: true, element: <ActionsHome /> },
+      { index: true, ...screen(() => actions().then((m) => <m.ActionsHome />)) },
       {
         path: 'queue',
-        element: <QueueTab />,
+        ...screen(() => actions().then((m) => <m.QueueTab />)),
         children: [
-          { index: true, element: <ActionsTab view="queue" /> },
-          { path: 'scheduled', element: <ActionsTab view="scheduled" /> },
-          { path: 'history', element: <ActionsTab view="history" /> },
-          { path: 'alumni', element: <AlumniTab /> },
+          { index: true, ...screen(() => actions().then((m) => <m.ActionsTab view="queue" />)) },
+          {
+            path: 'scheduled',
+            ...screen(() => actions().then((m) => <m.ActionsTab view="scheduled" />)),
+          },
+          {
+            path: 'history',
+            ...screen(() => actions().then((m) => <m.ActionsTab view="history" />)),
+          },
+          { path: 'alumni', ...screen(() => actions().then((m) => <m.AlumniTab />)) },
         ],
       },
-      { path: 'scheduled', element: <QueueFilterAddress filter="scheduled" /> },
-      { path: 'history', element: <QueueFilterAddress filter="history" /> },
-      { path: 'alumni', element: <QueueFilterAddress filter="alumni" /> },
+      {
+        path: 'scheduled',
+        ...screen(() => actions().then((m) => <m.QueueFilterAddress filter="scheduled" />)),
+      },
+      {
+        path: 'history',
+        ...screen(() => actions().then((m) => <m.QueueFilterAddress filter="history" />)),
+      },
+      {
+        path: 'alumni',
+        ...screen(() => actions().then((m) => <m.QueueFilterAddress filter="alumni" />)),
+      },
     ]),
     section('insights', 'insights', [
-      { index: true, element: <OverviewTab /> },
-      { path: 'cohorts', element: <CohortsTab /> },
-      { path: 'lessons', element: <LessonsTab /> },
-      { path: 'reports', element: <ReportsTab /> },
+      { index: true, ...screen(() => insights().then((m) => <m.OverviewTab />)) },
+      { path: 'cohorts', ...screen(() => insights().then((m) => <m.CohortsTab />)) },
+      { path: 'lessons', ...screen(() => insights().then((m) => <m.LessonsTab />)) },
+      {
+        path: 'reports',
+        ...screen(() => import('./views/creator/ReportsTab').then((m) => <m.ReportsTab />)),
+      },
     ]),
     section('sources', 'sources', [
-      { index: true, element: <WhopTab /> },
-      { path: 'discord', element: <DiscordTab /> },
-      { path: 'telegram', element: <TelegramTab /> },
+      { index: true, ...screen(() => sources().then((m) => <m.WhopTab />)) },
+      { path: 'discord', ...screen(() => sources().then((m) => <m.DiscordTab />)) },
+      { path: 'telegram', ...screen(() => sources().then((m) => <m.TelegramTab />)) },
       // Its content is in each platform's tab now (fix prompt v4.1, block 7).
-      { path: 'activity', element: <ActivityAddress /> },
+      { path: 'activity', ...screen(() => sources().then((m) => <m.ActivityAddress />)) },
     ]),
     section('settings', 'settings', [
-      { index: true, element: <GeneralSettingsTab /> },
-      { path: 'risk', element: <RiskSettingsTab /> },
-      { path: 'actions', element: <ActionSettings /> },
+      { index: true, ...screen(() => settings().then((m) => <m.GeneralSettingsTab />)) },
+      { path: 'risk', ...screen(() => settings().then((m) => <m.RiskSettingsTab />)) },
+      {
+        path: 'actions',
+        ...screen(() => import('./views/creator/ActionSettings').then((m) => <m.ActionSettings />)),
+      },
       {
         path: 'space',
-        element: (
-          <MemberSpaceOnly section="settings">
-            <SpaceSettingsTab />
-          </MemberSpaceOnly>
+        ...screen(() =>
+          Promise.all([import('./views/creator/SectionLayout'), settings()]).then(([l, m]) => (
+            <l.MemberSpaceOnly section="settings">
+              <m.SpaceSettingsTab />
+            </l.MemberSpaceOnly>
+          )),
         ),
       },
       // StayPut's internal status page (SPEC Phase 8.5): the operator's own community only.
-      { path: 'status', element: <OperatorTab /> },
+      {
+        path: 'status',
+        ...screen(() => import('./views/creator/OperatorTab').then((m) => <m.OperatorTab />)),
+      },
     ]),
     // The member space: kept, shown only while it is on (features.ts).
     section('space', 'space', [
-      { index: true, element: <SpaceOverviewTab /> },
-      { path: 'cards', element: <SpaceCardsTab /> },
-      { path: 'preview', element: <SpacePreviewTab /> },
+      { index: true, ...screen(() => space().then((m) => <m.SpaceOverviewTab />)) },
+      { path: 'cards', ...screen(() => space().then((m) => <m.SpaceCardsTab />)) },
+      { path: 'preview', ...screen(() => space().then((m) => <m.SpacePreviewTab />)) },
     ]),
   ];
 }
@@ -111,11 +134,17 @@ export const routes: RouteObject[] = [
   {
     element: <AppShell />,
     children: [
-      { index: true, element: <Home /> },
-      { path: 'experiences/:experienceId/*', element: <MemberView /> },
-      { path: 'discover', element: <Discover /> },
-      { path: 'connected', element: <Connected /> },
-      { path: '*', element: <NotFound /> },
+      { index: true, ...screen(() => import('./views/Home').then((m) => <m.Home />)) },
+      {
+        path: 'experiences/:experienceId/*',
+        ...screen(() => import('./views/MemberView').then((m) => <m.MemberView />)),
+      },
+      { path: 'discover', ...screen(() => import('./views/Discover').then((m) => <m.Discover />)) },
+      {
+        path: 'connected',
+        ...screen(() => import('./views/Connected').then((m) => <m.Connected />)),
+      },
+      { path: '*', ...screen(() => import('./views/NotFound').then((m) => <m.NotFound />)) },
     ],
   },
 ];

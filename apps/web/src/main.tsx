@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { RouterProvider, createBrowserRouter } from 'react-router';
 import { routes } from './App';
 import { I18nProvider, detectLocale } from './i18n';
+import { prefetchScreen } from './prefetch';
 import { ToastProvider } from './ui/Toast';
 import './styles.css';
 
@@ -14,6 +15,8 @@ if (!root) throw new Error('index.html has no #root');
 // whether to offer a translation (a French page declared English got one).
 const locale = detectLocale();
 document.documentElement.lang = locale;
+// The dashboard's first readings leave now, all at once, while the page is still loading.
+prefetchScreen(window.location.pathname, locale);
 
 createRoot(root).render(
   <StrictMode>

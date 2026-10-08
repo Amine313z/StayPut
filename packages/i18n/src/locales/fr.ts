@@ -719,6 +719,10 @@ export const fr: Messages = {
   'member.result.failed':
     'Votre offre n’a pas pu être appliquée pour l’instant. L’équipe de la communauté le voit et reviendra vers vous.',
   'member.result.cancelled': 'Cette offre n’est plus disponible.',
+  'member.preview.hide': 'Masquer',
+  'member.preview.show': 'Afficher l’aperçu',
+  'member.preview.folded':
+    'Masqué sur cet appareil. Vos membres voient toujours ce qui les concerne.',
   'member.preview.badge': 'Aperçu',
   'member.preview.title': 'Ce que voient vos membres',
   'member.preview.body':

@@ -40,6 +40,23 @@ export function hyperdriveOrigin(databaseUrl: string): string {
   return url.toString();
 }
 
+/**
+ * The AWS region of a Supabase database, read from its pooler's address
+ * (`aws-0-eu-west-2.pooler.supabase.com`): where the Worker had better run (wrangler.toml,
+ * [placement]). Null for any other address.
+ */
+export function supabaseRegion(databaseUrl: string): string | null {
+  try {
+    return (
+      /^aws-\d+-([a-z]{2}-[a-z]+-\d)\.pooler\.supabase\.com$/.exec(
+        new URL(databaseUrl).hostname,
+      )?.[1] ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** wrangler.toml with the HYPERDRIVE binding added, unless an active one is already there. */
 export function withHyperdriveBinding(toml: string, id: string): string {
   if (!/^[0-9a-f]{32}$/.test(id)) throw new Error(`unexpected Hyperdrive id "${id}"`);
@@ -138,6 +155,8 @@ async function main() {
   }
   writeFileSync(tomlPath, withHyperdriveBinding(readFileSync(tomlPath, 'utf8'), config.id));
   console.info(`Hyperdrive ${name}: ${config.id}`);
+  const region = supabaseRegion(databaseUrl);
+  if (region) console.info(`The database is in AWS ${region} (its pooler's address).`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -3593,9 +3593,9 @@ describe('risk settings', () => {
 });
 
 describe('back from Discord', () => {
-  it('says the server is connected, and that the tab can be closed', () => {
+  it('says the server is connected, and that the tab can be closed', async () => {
     renderAt('/connected?source=discord&status=ok&name=Le%20Club&channels=2');
-    expect(screen.getByRole('heading', { name: 'Discord is connected' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Discord is connected' })).toBeTruthy();
     expect(
       screen.getByText('"Le Club": 2 channels followed. The last 90 days are being read.'),
     ).toBeTruthy();
@@ -3603,21 +3603,22 @@ describe('back from Discord', () => {
     expect(screen.queryByRole('link', { name: /Back to StayPut/ })).toBeNull();
   });
 
-  it('offers the way back when signed in to StayPut outside Whop', () => {
+  it('offers the way back when signed in to StayPut outside Whop', async () => {
     renderAt('/connected?source=discord&status=ok&name=Le%20Club&channels=2&company=biz_A1', 'fr');
-    expect(screen.getByRole('link', { name: /Revenir à StayPut/ }).getAttribute('href')).toBe(
-      '/dashboard/biz_A1/sources/discord',
-    );
+    expect(
+      (await screen.findByRole('link', { name: /Revenir à StayPut/ })).getAttribute('href'),
+    ).toBe('/dashboard/biz_A1/sources/discord');
     expect(screen.getByText(/Ou fermez cet onglet/)).toBeTruthy();
     cleanup();
     // Never a link built from anything but a company id.
     renderAt('/connected?source=discord&status=ok&company=https://evil.example');
+    expect(await screen.findByRole('heading', { name: 'Discord is connected' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: /Back to StayPut/ })).toBeNull();
   });
 
-  it('says why it did not work', () => {
+  it('says why it did not work', async () => {
     renderAt('/connected?source=discord&status=failed&reason=expired', 'fr');
-    expect(screen.getByRole('heading', { name: "Discord n'est pas connecté" })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: "Discord n'est pas connecté" })).toBeTruthy();
     expect(screen.getByText(/Ce lien a expiré/)).toBeTruthy();
   });
 });
@@ -4151,6 +4152,16 @@ describe('member view', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try another answer' }));
     expect(screen.getByRole('group', { name: 'Why are you leaving?' })).toBeTruthy();
     expect(calls.filter((call) => call.startsWith('POST'))).toEqual([]);
+    // Folded away on this device, and back; the mark at the top leads nowhere (no dead end).
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }));
+    expect(screen.queryByRole('group', { name: 'Why are you leaving?' })).toBeNull();
+    expect(
+      screen.getByText('Hidden on this device. Your members always see what concerns them.'),
+    ).toBeTruthy();
+    expect(window.localStorage.getItem('stayput.memberPreview.folded')).toBe('1');
+    fireEvent.click(screen.getByRole('button', { name: 'Show the preview' }));
+    expect(screen.getByRole('group', { name: 'Why are you leaving?' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'StayPut' })).toBeNull();
   });
 
   it('speaks to a French member in their language', async () => {
@@ -4984,9 +4995,9 @@ describe('shell', () => {
     expect(screen.queryByRole('combobox', { name: 'Theme' })).toBeNull();
   });
 
-  it('shows a not-found page for an unknown path', () => {
+  it('shows a not-found page for an unknown path', async () => {
     renderAt('/nowhere');
-    expect(screen.getByRole('heading', { name: 'Page not found' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeTruthy();
   });
 });
 

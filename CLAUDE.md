@@ -189,6 +189,15 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   app is unlisted. New communities start on New York's time (0044, no browser zone any more) in
   manual mode, test mode off. « Message » on one member is the creator's own words
   (`creator_note`, 0045: no follow-up cap, quiet hours and « never contact » hold, 3 a day).
+  The first production app (`app_LRq2G68rpP3FpW`) stayed linked to its deleted product (gallery
+  broken, no API to relink): **production is now `app_GimcEN4Jfpn4Ma`** (listing product
+  `prod_6S7xpEfw0hPwc` « StayPut »: never delete or archive it), unlisted, installed in
+  « StayPut Community »; the old app is hidden, to delete. Whop delivers a notification only to
+  users of the app's space in the community: « Message » refuses (`no_space`) until StayPut has
+  one, and checks the member's access first. Load time (2026-10-08): Smart Placement, the
+  dashboard's reads in 3 concurrent waves, one Whop access check per screen, the first readings
+  asked before React draws (`prefetch.ts`), every screen but the dashboard home loaded on first
+  use; `/health` says where the Worker ran (`colo`) and the database probe's time.
   Still to do: check the views and the status page, Inspect production.
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;

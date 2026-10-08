@@ -199,7 +199,7 @@ export function baseUrlFinding(app: AppSettings, publicUrl: string, env: WhopEnv
 }
 
 export type RelayAnswer =
-  | { kind: 'stayput' }
+  | { kind: 'stayput'; colo: string | null; databaseMs: number | null }
   /** StayPut answered, but a deployment of the other environment. */
   | { kind: 'wrong_env'; whopEnv: string }
   | { kind: 'not_set' }
@@ -216,7 +216,11 @@ export function relayAnswer(body: string, env: WhopEnv): RelayAnswer {
   }
   if (!isRecord(parsed) || parsed.status !== 'ok') return { kind: 'other' };
   return parsed.whopEnv === env
-    ? { kind: 'stayput' }
+    ? {
+        kind: 'stayput',
+        colo: typeof parsed.colo === 'string' ? parsed.colo : null,
+        databaseMs: typeof parsed.databaseMs === 'number' ? parsed.databaseMs : null,
+      }
     : { kind: 'wrong_env', whopEnv: String(parsed.whopEnv) };
 }
 
@@ -260,7 +264,18 @@ export async function checkRelay(
         answer: relayAnswer(body, env),
       };
       if (last.answer.kind === 'stayput') {
-        return { level: 'ok', text: `Whop's relay (${bare(origin)}) reaches StayPut: /health ok.` };
+        // Where the Worker ran when Whop's relay called it, and the database's answer time from
+        // there: what every screen of the dashboard waits for, query after query.
+        const { colo, databaseMs } = last.answer;
+        const where =
+          colo === null
+            ? ''
+            : ` (run in Cloudflare's ${colo} data center` +
+              (databaseMs === null ? ')' : `, database probe ${databaseMs} ms)`);
+        return {
+          level: 'ok',
+          text: `Whop's relay (${bare(origin)}) reaches StayPut: /health ok${where}.`,
+        };
       }
     } catch {
       last = null;

@@ -35,6 +35,13 @@ OPERATOR_COMPANY_ID = "biz_2whAzkbCRpcGqQ"
 # binding = "HYPERDRIVE"
 # id = "<id printed by npx wrangler hyperdrive create>"
 
+# Cloudflare runs the Worker where a request is answered fastest (Smart Placement): a screen
+# of the dashboard reads the database several times while the browser waits once, so near
+# the database (Europe) rather than near whoever called, Whop's relay included. Static files
+# are served from the nearest data center whatever this says. /health tells where it ran.
+[placement]
+mode = "smart"
+
 [triggers]
 # One trigger: Cloudflare's free plan allows 5 per account, and the account runs the sandbox's
 # Worker and production's. Each tick runs the jobs its time names (src/cron.ts, groupAt): the

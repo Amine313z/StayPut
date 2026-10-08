@@ -236,7 +236,10 @@ function setup(
     openDb: (): ClosableDb | null =>
       db && {
         query: <T>(text: string, params?: readonly unknown[]) => db.query<T>(text, params),
-        transaction: <T>(work: (tx: Db) => Promise<T>) => t.db.transaction(work),
+        // The test database's transactions; a stand-in database (a failing or silent one) runs
+        // the work on itself.
+        transaction: <T>(work: (tx: Db) => Promise<T>) =>
+          db === t.db ? t.db.transaction(work) : work(db),
         close: () => Promise.resolve(),
       },
     whopClient: (config) => (config.apiKey ? whop.client : null),
@@ -268,7 +271,13 @@ describe('GET /health', () => {
   it('reports a reachable, up-to-date database', async () => {
     const res = await setup().request('/health');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ status: 'ok', whopEnv: 'sandbox', database: 'ok' });
+    expect(await res.json()).toEqual({
+      status: 'ok',
+      whopEnv: 'sandbox',
+      database: 'ok',
+      colo: null,
+      databaseMs: expect.any(Number) as number,
+    });
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
   });
@@ -456,6 +465,25 @@ describe('GET /api/creator/:companyId/session', () => {
     await request('/api/creator/biz_A1/session', init);
     await request('/api/creator/biz_A1/session', init);
     // Its access checks (the other calls are the background sync's).
+    expect(whop.calls.filter((call) => !/^[A-Z]+ \//.test(call))).toEqual(['user_alice:biz_A1']);
+  });
+
+  it('asks Whop once for the calls a screen makes at the same time', async () => {
+    const init = await asUser('user_alice');
+    // The community exists (an earlier visit, on another instance of the Worker).
+    await setup({ 'user_alice:biz_A1': 'admin' }).request('/api/creator/biz_A1/session', init);
+    await settle();
+    const { request, whop } = setup({ 'user_alice:biz_A1': 'admin' });
+    // Whop takes its time: the four calls are all waiting for its answer at once.
+    const ask = whop.client.checkAccess.bind(whop.client);
+    whop.client.checkAccess = (user, resource) =>
+      new Promise((resolve) => setTimeout(resolve, 30)).then(() => ask(user, resource));
+    const answers = await Promise.all(
+      ['session', 'members', 'dashboard', 'integrations'].map((path) =>
+        Promise.resolve(request(`/api/creator/biz_A1/${path}`, init)),
+      ),
+    );
+    expect(answers.map((answer) => answer.status)).toEqual([200, 200, 200, 200]);
     expect(whop.calls.filter((call) => !/^[A-Z]+ \//.test(call))).toEqual(['user_alice:biz_A1']);
   });
 

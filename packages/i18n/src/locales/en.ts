@@ -693,6 +693,9 @@ export const en = {
   'member.result.failed':
     'Your offer could not be applied yet. The community’s team can see it and will get back to you.',
   'member.result.cancelled': 'This offer is no longer available.',
+  'member.preview.hide': 'Hide',
+  'member.preview.show': 'Show the preview',
+  'member.preview.folded': 'Hidden on this device. Your members always see what concerns them.',
   'member.preview.badge': 'Preview',
   'member.preview.title': 'What your members see',
   'member.preview.body':

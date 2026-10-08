@@ -3990,3 +3990,54 @@ targeted experience »), et laisse tomber les autres sans rien dire.
   calmes `scheduled`.
 - `app.test.tsx` (web) : « Sent to … » seulement sur `sent` ; « Not sent to … yet » et le
   prochain essai ; le membre sans accès ; le refus sans espace, la fenêtre reste ouverte.
+
+## 2026-10-08 — Nouvelle app de production ; StayPut plus rapide à s'ouvrir
+
+### L'app de production refaite
+
+La première app de production (`app_LRq2G68rpP3FpW`) restait liée à son produit de fiche
+supprimé (`prod_GfpyTV98LoDAu`, 404) : la galerie de l'App Store ne se chargeait plus
+(« Failed to load app gallery ») et l'API n'a aucun champ pour changer ce lien (`UpdateApp`
+n'a pas de `product_id`). Le fondateur a créé `app_GimcEN4Jfpn4Ma` (même hébergement, mêmes 25
+permissions, même webhook) ; seuls `PRODUCTION_WHOP_APP_ID`, `PRODUCTION_WHOP_API_KEY` et
+`PRODUCTION_WHOP_WEBHOOK_SECRET` ont changé, aucun code. Les données ne bougent pas : elles
+sont rattachées à la communauté, pas à l'app. Le produit de fiche de la nouvelle app
+(`prod_6S7xpEfw0hPwc`, « StayPut ») apparaît dans la liste Produits de la communauté : ne
+jamais le supprimer ni l'archiver.
+
+### Pourquoi c'était lent, et ce qui change
+
+L'écran d'accueil attendait : la session (vérification Whop + base), puis seulement les
+membres, les sources, la synchronisation et les chiffres, chacun avec sa propre vérification
+Whop ; les chiffres faisaient 11 lectures de la base l'une après l'autre ; le premier fichier
+JavaScript (333 Ko compressés) contenait toutes les pages.
+
+- **Smart Placement** (`wrangler.toml`, `[placement] mode = "smart"`) : Cloudflare fait tourner
+  le Worker là où il répond le plus vite, près de la base plutôt que près de l'appelant (le
+  relais de Whop compris). Disponible sur l'offre gratuite ; il lui faut un trafic régulier
+  pour décider. `/health` dit maintenant dans quel centre le Worker a tourné (`colo`) et le
+  temps de la sonde de la base (`databaseMs`), et le déploiement l'affiche à travers le relais
+  de Whop : de quoi trancher sur des chiffres (et, au besoin, fixer une région).
+- **Les lectures du tableau de bord en 3 vagues simultanées** au lieu de 11 en file
+  (`dashboard.ts`) : postgres.js envoie à la suite les requêtes lancées ensemble sur la
+  connexion de la transaction. `/health` fait désormais sa sonde de la même façon (deux
+  requêtes à la fois dans une transaction, à travers Hyperdrive) : chaque déploiement, celui du
+  sandbox d'abord, vérifie que ce chemin fonctionne avant la production.
+- **Une seule question à Whop par écran** : les appels simultanés d'un écran partagent la
+  vérification d'accès en cours (avant : une chacun tant que la réponse n'était pas en cache).
+- **Les premières lectures partent avant que React dessine** (`prefetch.ts`, appelé par
+  `main.tsx`) : session, membres, sources, synchronisation et, sur l'accueil, les chiffres,
+  tous en même temps ; l'écran prend la réponse au lieu de redemander. Une réponse en échec
+  (première visite : la communauté est écrite par la session) est redemandée par l'écran.
+- **Chaque page sauf l'accueil se charge à sa première ouverture** (`App.tsx`, `lazy` du
+  routeur) : 253 Ko au premier chargement au lieu de 333 (espace membre, analyses,
+  automatisations, réglages, sources à part).
+
+### Testé
+
+- Worker : 4 appels simultanés d'un écran, une seule vérification Whop (le test échoue sans
+  le correctif) ; `/health` avec `colo` et `databaseMs` ; le message du relais avec le centre
+  et le temps ; la région de la base lue dans l'adresse du pooler ; tous les tests du tableau
+  de bord inchangés avec les vagues.
+- Web : les lectures en avance prises par leur écran, jamais redemandées ; redemandées après un
+  échec ou après 10 secondes ; rien hors d'un tableau de bord ; les pages chargées à la demande.

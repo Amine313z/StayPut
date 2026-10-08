@@ -85,7 +85,7 @@ import {
 import { isActionView, readActionSettings, readActions, validActionSettings } from './action-views';
 import { executeAction, executeDueActions, NO_ACCESS_ERROR, prepareActions } from './actions';
 import { readDashboard, readFeed } from './dashboard';
-import { createPostgresDb, type ClosableDb, type Db } from './db';
+import { createPostgresDb, type ClosableDb, type Db, type TransactionalDb } from './db';
 import { createDiscordClient, type DiscordClient } from './discord';
 import { readConfig, type Config, type Env } from './env';
 import { API_HEADERS, apiError, readBytesCapped, readCapped } from './http';
@@ -434,6 +434,12 @@ export function createApp(deps: AppDeps) {
   const nowSeconds = () => Math.floor(deps.now().getTime() / 1000);
 
   /** The current user's access to a Whop resource, or the error response to send. */
+  /**
+   * The access checks under way: a screen opens with several calls at once, and on an instance
+   * that has not cached the answer yet they share one question to Whop instead of each asking.
+   */
+  const checking = new Map<string, Promise<AccessLevel>>();
+
   async function accessTo(c: Context<AppEnv>, resourceId: string): Promise<AccessLevel | Response> {
     const config = c.get('config');
     const userId = c.get('userId');
@@ -445,7 +451,16 @@ export function createApp(deps: AppDeps) {
     if (!whop) return apiError('not_configured', 'WHOP_API_KEY is not set');
     let level: AccessLevel;
     try {
-      level = (await whop.checkAccess(userId, resourceId)).accessLevel;
+      const key = `${userId}:${resourceId}`;
+      let asked = checking.get(key);
+      if (!asked) {
+        asked = whop
+          .checkAccess(userId, resourceId)
+          .then((answer) => answer.accessLevel)
+          .finally(() => checking.delete(key));
+        checking.set(key, asked);
+      }
+      level = await asked;
     } catch (error) {
       // An id Whop does not know (or refuses to look up) gives no access; anything else is
       // Whop being unavailable, or our key lacking a permission: retry later.
@@ -693,10 +708,16 @@ export function createApp(deps: AppDeps) {
   app.get('/health', withDb, async (c) => {
     const now = deps.now().getTime();
     if (!health || now - health.at >= HEALTH_CACHE_MS) {
+      const db = c.get('db');
+      const started = Date.now();
+      const database = await databaseState(db);
+      const colo = (c.req.raw as { cf?: { colo?: unknown } }).cf?.colo;
       const report: HealthReport = {
         status: 'ok',
         whopEnv: c.get('config').whopEnv,
-        database: await databaseState(c.get('db')),
+        database,
+        colo: typeof colo === 'string' ? colo : null,
+        databaseMs: db ? Date.now() - started : null,
       };
       if (report.database !== 'ok') report.status = 'degraded';
       health = { report, at: now };
@@ -3206,19 +3227,29 @@ export function createApp(deps: AppDeps) {
   return app;
 }
 
-async function databaseState(db: Db | null): Promise<HealthReport['database']> {
+async function databaseState(db: TransactionalDb | null): Promise<HealthReport['database']> {
   if (!db) return 'not_configured';
   let timer: ReturnType<typeof setTimeout> | undefined;
   const silence = new Promise<'timeout'>((resolve) => {
     timer = setTimeout(() => resolve('timeout'), HEALTH_DB_TIMEOUT_MS);
   });
   try {
+    // As the screens read (the dashboard, dashboard.ts): two statements sent at once in one
+    // transaction, through Hyperdrive. Every deployment asks /health, the sandbox's first: a
+    // database path that refused them would stop it there, before production.
     const answer = await Promise.race([
-      db.query<{ name: string | null }>('select max(name) as name from stayput.schema_migrations'),
+      db.transaction((tx) =>
+        Promise.all([
+          tx.query<{ name: string | null }>(
+            'select max(name) as name from stayput.schema_migrations',
+          ),
+          tx.query<{ one: number }>('select 1 as one'),
+        ]),
+      ),
       silence,
     ]);
     if (answer === 'timeout') return 'timeout';
-    return answer[0]?.name === LATEST_MIGRATION ? 'ok' : 'outdated';
+    return answer[0][0]?.name === LATEST_MIGRATION && answer[1][0]?.one === 1 ? 'ok' : 'outdated';
   } catch (error) {
     // 42P01 / 3F000: the table or the schema is missing, the database is reachable.
     const code = isObject(error) ? error.code : undefined;

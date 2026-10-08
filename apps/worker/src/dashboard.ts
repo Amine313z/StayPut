@@ -41,7 +41,7 @@ export async function dashboardOf(
   now: Date,
 ): Promise<DashboardView | null> {
   const at = now.toISOString();
-  const [company] = await tx.query<{
+  const companyRead = tx.query<{
     mode: 'auto' | 'manual';
     zone: string;
     dry_run: boolean;
@@ -65,10 +65,9 @@ export async function dashboardOf(
       where c.id = $1`,
     [companyId],
   );
-  if (!company) return null;
 
   // What each member still paying brings in a month, per currency; their risk level.
-  const paying = await tx.query<{
+  const payingRead = tx.query<{
     member_id: string;
     currency: string;
     monthly: number;
@@ -86,21 +85,8 @@ export async function dashboardOf(
       group by ms.member_id, upper(ms.currency)`,
     [companyId],
   );
-  const totals = new Map<string, number>();
-  for (const p of paying) totals.set(p.currency, (totals.get(p.currency) ?? 0) + p.monthly);
-  // The currency the community is paid in most; else the one of its saves.
-  const currency =
-    [...totals.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? null;
-  const monthlyOf = new Map(
-    paying.filter((p) => p.currency === currency).map((p) => [p.member_id, p.monthly]),
-  );
-  const atRiskRevenue = paying
-    .filter(
-      (p) => p.currency === currency && (p.level === 'high' || p.level === 'scheduled_departure'),
-    )
-    .reduce((total, p) => total + p.monthly, 0);
 
-  const [figures] = await tx.query<{
+  const figuresRead = tx.query<{
     members: number;
     new_7: number;
     high: number;
@@ -170,11 +156,84 @@ export async function dashboardOf(
     [companyId, at],
   );
 
+  // Members at high risk nobody reached in 5 days, the « never contact » list aside.
+  const unreachedRead = tx.query<{ member_id: string }>(
+    `select k.member_id from stayput.member_risk k
+       join stayput.members m on m.company_id = k.company_id and m.id = k.member_id
+      where k.company_id = $1 and k.level = 'high' and m.status = 'joined'
+        and not m.do_not_contact and coalesce(m.access_level, '') <> 'admin'
+        and not exists (
+          select 1 from stayput.actions a
+           where a.company_id = k.company_id and a.member_id = k.member_id
+             and a.message_kind <> 'none'
+             and a.status in ('proposed', 'approved', 'scheduled', 'sent', 'simulated')
+             and coalesce(a.sent_at, a.send_at, a.created_at)
+                 > $2::timestamptz - make_interval(days => $3))
+      order by k.score desc, k.member_id`,
+    [companyId, at, REACHED_DAYS],
+  );
+
+  // Every member whose last payment failed: still unpaid, whatever StayPut is doing about it.
+  const failedRead = tx.query<{ member_id: string; amount: number; currency: string }>(
+    `select l.member_id, l.amount::float8 as amount, upper(l.currency) as currency
+       from (select distinct on (p.member_id) p.member_id, p.amount, p.currency, p.status
+               from stayput.payments p
+               join stayput.members m on m.company_id = p.company_id and m.id = p.member_id
+              where p.company_id = $1 and m.status = 'joined'
+                and coalesce(m.access_level, '') <> 'admin'
+              order by p.member_id, p.whop_created_at desc, p.id) l
+      where l.status = any (array['failed', 'past_due', 'uncollectible', 'unresolved'])`,
+    [companyId],
+  );
+
+  // Every member leaving (a cancellation scheduled, not over yet): whether a pause can still be
+  // offered to them (reachable, no offer of the creator's open).
+  const leavingRead = tx.query<{ member_id: string; reachable: boolean }>(
+    `select ms.member_id,
+            bool_and(not m.do_not_contact and not exists (
+              select 1 from stayput.creator_offers o
+               where o.company_id = ms.company_id and o.member_id = ms.member_id
+                 and o.outcome = 'open' and o.expires_at > $2::timestamptz)) as reachable
+       from stayput.memberships ms
+       join stayput.members m on m.company_id = ms.company_id and m.id = ms.member_id
+      where ms.company_id = $1 and (ms.cancel_at_period_end or ms.status = 'canceling')
+        and ms.status = any (array['trialing', 'active', 'past_due', 'canceling'])
+        and ms.current_period_end > $2::timestamptz
+        and m.status = 'joined' and coalesce(m.access_level, '') <> 'admin'
+      group by ms.member_id`,
+    [companyId, at],
+  );
+
+  // The reads above depend on nothing read before them: sent at once, they cost the round trip
+  // of one (postgres.js pipelines them on the transaction's connection), not six in a row.
+  const [[company], paying, [figures], unreached, failed, leaving] = await Promise.all([
+    companyRead,
+    payingRead,
+    figuresRead,
+    unreachedRead,
+    failedRead,
+    leavingRead,
+  ]);
+  if (!company) return null;
+  const totals = new Map<string, number>();
+  for (const p of paying) totals.set(p.currency, (totals.get(p.currency) ?? 0) + p.monthly);
+  // The currency the community is paid in most; else the one of its saves.
+  const currency =
+    [...totals.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] ?? null;
+  const monthlyOf = new Map(
+    paying.filter((p) => p.currency === currency).map((p) => [p.member_id, p.monthly]),
+  );
+  const atRiskRevenue = paying
+    .filter(
+      (p) => p.currency === currency && (p.level === 'high' || p.level === 'scheduled_departure'),
+    )
+    .reduce((total, p) => total + p.monthly, 0);
+
   // Saved this month and last month, in the community's own calendar: the months begin at
   // midnight there, and a save counts up to now included, as on the chart. A save keeps the
   // currency of its payment, which Whop writes in lowercase (`usd`): compared in capitals, as
   // the memberships' and the chart's.
-  const savedRows = await tx.query<{
+  const savedRowsRead = tx.query<{
     currency: string;
     category: 'direct' | 'influenced';
     this_month: boolean;
@@ -195,6 +254,21 @@ export async function dashboardOf(
       group by upper(v.currency), v.category, this_month`,
     [companyId, at, company.zone],
   );
+
+  const historyRead = tx.query<RiskDay>(
+    `select to_char(r.day, 'YYYY-MM-DD') as day,
+            count(*) filter (where r.level = 'scheduled_departure')::int as departure,
+            count(*) filter (where r.level = 'high')::int as high,
+            count(*) filter (where r.level = 'medium')::int as medium,
+            count(*) filter (where r.level = 'low')::int as low
+       from stayput.risk_scores r
+       join stayput.members m on m.company_id = r.company_id and m.id = r.member_id
+      where r.company_id = $1 and coalesce(m.access_level, '') <> 'admin'
+        and r.day > ($2::timestamptz at time zone $3)::date - 30
+      group by r.day order by r.day`,
+    [companyId, at, company.zone],
+  );
+  const [savedRows, history] = await Promise.all([savedRowsRead, historyRead]);
   const savedCurrency =
     currency ??
     [...savedRows].sort((a, b) => b.amount - a.amount || a.currency.localeCompare(b.currency))[0]
@@ -210,26 +284,12 @@ export async function dashboardOf(
         .reduce((total, r) => total + r.amount, 0),
     );
 
-  const history = await tx.query<RiskDay>(
-    `select to_char(r.day, 'YYYY-MM-DD') as day,
-            count(*) filter (where r.level = 'scheduled_departure')::int as departure,
-            count(*) filter (where r.level = 'high')::int as high,
-            count(*) filter (where r.level = 'medium')::int as medium,
-            count(*) filter (where r.level = 'low')::int as low
-       from stayput.risk_scores r
-       join stayput.members m on m.company_id = r.company_id and m.id = r.member_id
-      where r.company_id = $1 and coalesce(m.access_level, '') <> 'admin'
-        and r.day > ($2::timestamptz at time zone $3)::date - 30
-      group by r.day order by r.day`,
-    [companyId, at, company.zone],
-  );
-
   // The chart: what was saved each day (direct saves) and what the members at risk that day
   // pay a month, in the community's main currency, from the 1st of the month 89 days ago to
   // today: 90 days at least, each month whole so that its balance adds up from its 1st (brief
   // v4 §8). A day without scores has no risk figure (null), not a zero.
   const chartCurrency = currency ?? savedCurrency ?? '';
-  const revenue = await tx.query<RevenueDay>(
+  const revenueRead = tx.query<RevenueDay>(
     `with paying as (
        select ms.member_id, sum(${monthlyPrice('ms')}) as monthly
          from stayput.memberships ms
@@ -272,7 +332,7 @@ export async function dashboardOf(
 
   // The members StayPut saved in the chart's last 30 days, each once: the plans behind its
   // 30-day total (brief v4 §13), so its direct saves, in its currency, on its days.
-  const [savedMembers] = await tx.query<{ members: number }>(
+  const savedMembersRead = tx.query<{ members: number }>(
     `select count(distinct v.member_id)::int as members
        from stayput.saves v
       where v.company_id = $1 and v.category = 'direct' and upper(v.currency) = $4
@@ -282,62 +342,20 @@ export async function dashboardOf(
     [companyId, at, company.zone, chartCurrency],
   );
 
-  // Members at high risk nobody reached in 5 days, the « never contact » list aside.
-  const unreached = await tx.query<{ member_id: string }>(
-    `select k.member_id from stayput.member_risk k
-       join stayput.members m on m.company_id = k.company_id and m.id = k.member_id
-      where k.company_id = $1 and k.level = 'high' and m.status = 'joined'
-        and not m.do_not_contact and coalesce(m.access_level, '') <> 'admin'
-        and not exists (
-          select 1 from stayput.actions a
-           where a.company_id = k.company_id and a.member_id = k.member_id
-             and a.message_kind <> 'none'
-             and a.status in ('proposed', 'approved', 'scheduled', 'sent', 'simulated')
-             and coalesce(a.sent_at, a.send_at, a.created_at)
-                 > $2::timestamptz - make_interval(days => $3))
-      order by k.score desc, k.member_id`,
-    [companyId, at, REACHED_DAYS],
-  );
-
   // The failed payments StayPut may retry now (0029), what they come to in the main currency.
-  const [retryable] = await tx.query<{ payments: number; revenue: number }>(
+  const retryableRead = tx.query<{ payments: number; revenue: number }>(
     `select count(*)::int as payments,
             round(coalesce(sum(r.amount) filter (where r.currency = $3), 0), 2)::float8
               as revenue
        from stayput.payments_to_retry($1, $2::timestamptz) r`,
     [companyId, at, chartCurrency],
   );
+  const [revenue, [savedMembers], [retryable]] = await Promise.all([
+    revenueRead,
+    savedMembersRead,
+    retryableRead,
+  ]);
 
-  // Every member whose last payment failed: still unpaid, whatever StayPut is doing about it.
-  const failed = await tx.query<{ member_id: string; amount: number; currency: string }>(
-    `select l.member_id, l.amount::float8 as amount, upper(l.currency) as currency
-       from (select distinct on (p.member_id) p.member_id, p.amount, p.currency, p.status
-               from stayput.payments p
-               join stayput.members m on m.company_id = p.company_id and m.id = p.member_id
-              where p.company_id = $1 and m.status = 'joined'
-                and coalesce(m.access_level, '') <> 'admin'
-              order by p.member_id, p.whop_created_at desc, p.id) l
-      where l.status = any (array['failed', 'past_due', 'uncollectible', 'unresolved'])`,
-    [companyId],
-  );
-
-  // Every member leaving (a cancellation scheduled, not over yet): whether a pause can still be
-  // offered to them (reachable, no offer of the creator's open).
-  const leaving = await tx.query<{ member_id: string; reachable: boolean }>(
-    `select ms.member_id,
-            bool_and(not m.do_not_contact and not exists (
-              select 1 from stayput.creator_offers o
-               where o.company_id = ms.company_id and o.member_id = ms.member_id
-                 and o.outcome = 'open' and o.expires_at > $2::timestamptz)) as reachable
-       from stayput.memberships ms
-       join stayput.members m on m.company_id = ms.company_id and m.id = ms.member_id
-      where ms.company_id = $1 and (ms.cancel_at_period_end or ms.status = 'canceling')
-        and ms.status = any (array['trialing', 'active', 'past_due', 'canceling'])
-        and ms.current_period_end > $2::timestamptz
-        and m.status = 'joined' and coalesce(m.access_level, '') <> 'admin'
-      group by ms.member_id`,
-    [companyId, at],
-  );
   const failedRevenue = round2(
     failed.filter((p) => p.currency === chartCurrency).reduce((t, p) => t + p.amount, 0),
   );

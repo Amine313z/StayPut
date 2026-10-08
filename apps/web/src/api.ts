@@ -56,12 +56,45 @@ export const DEMO_WHOP_ID = 'biz_AtlasTradingClub';
 /** Where the demo community's calls go: answered in the browser (demo/api.ts), never sent. */
 export const DEMO_API = `/api/creator/${DEMO_COMPANY_ID}/`;
 
+/**
+ * Readings asked ahead of their screen (`prefetch`): the page asks them all at once, as it
+ * opens, instead of waiting for the session's answer before asking the rest. The screen that
+ * reads one first takes it; one left unread for 10 seconds is dropped, and one that failed is
+ * asked again (on a first visit, the community is written by the session's reading).
+ */
+const early = new Map<string, { at: number; answer: Promise<unknown> }>();
+const EARLY_MS = 10_000;
+
+/** Asks for `path` now, for the screen about to read it (GET, never the demo's). */
+export function prefetch(path: string): void {
+  if (path.startsWith(DEMO_API) || early.has(path)) return;
+  const answer = requestJson<unknown>('GET', path);
+  // A failure is left to the screen's own reading, which asks again.
+  answer.catch(() => {});
+  early.set(path, { at: Date.now(), answer });
+}
+
+function takeEarly(path: string): Promise<unknown> | null {
+  const entry = early.get(path);
+  if (!entry) return null;
+  early.delete(path);
+  return Date.now() - entry.at <= EARLY_MS ? entry.answer : null;
+}
+
 async function requestJson<T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   signal?: AbortSignal,
   body?: unknown,
 ): Promise<T> {
+  const asked = method === 'GET' ? takeEarly(path) : null;
+  if (asked) {
+    try {
+      return (await asked) as T;
+    } catch {
+      // Asked again below.
+    }
+  }
   if (path.startsWith(DEMO_API)) {
     // Loaded only when someone opens the demo: its data never weighs on the real dashboard.
     const { answerDemo } = await import('./demo/api');
