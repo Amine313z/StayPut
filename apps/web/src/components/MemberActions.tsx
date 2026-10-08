@@ -25,9 +25,10 @@ import { FIELD } from './SettingsParts';
 const REFUSALS: Readonly<Record<string, MessageKey>> = {
   do_not_contact: 'dash.act.neverContact',
   no_membership: 'dash.act.noMembership',
-  offer_open: 'error.conflict',
+  offer_open: 'dash.offer.open',
   too_many_notes: 'dash.note.tooMany',
-  no_space: 'dash.note.noSpace',
+  already_decided: 'dash.pause.alreadyApplied',
+  expired: 'dash.pause.expired',
 };
 
 /** What went wrong, in words the creator can act on. */
@@ -40,8 +41,8 @@ export function failureText(error: unknown, t: (key: MessageKey) => string): str
 
 /**
  * What the creator can do for one member from the dashboard: write to them in their own words
- * (sent word for word, now or after the quiet hours), offer them a pause or a discount
- * (confirmed first: it gives something). Each says how it went in a toast; an offer stays marked
+ * (sent word for word in the support chat, now or after the quiet hours), give them a discount
+ * or propose a pause (confirmed first: it gives something). Each says how it went in a toast; an offer stays marked
  * on the row. A member on the « never contact » list gets nothing, said as such; a member without
  * a paid membership can only be written to.
  */
@@ -122,7 +123,7 @@ export function MemberActions({
                   : {
                       tone: 'error',
                       title: t(
-                        sent.reason === 'no_access' ? 'dash.note.noAccess' : 'dash.note.refused',
+                        sent.reason === 'permission' ? 'dash.note.permission' : 'dash.note.refused',
                         { name },
                       ),
                     },
@@ -146,7 +147,11 @@ export function MemberActions({
             made.kind === 'pause_offer' ? 'dash.toast.offered.pause' : 'dash.toast.offered.promo',
             { name },
           ),
-          body: t('dash.toast.offered.body'),
+          body: t(
+            made.kind === 'pause_offer'
+              ? 'dash.toast.offered.pauseBody'
+              : 'dash.toast.offered.promoBody',
+          ),
         });
         onDone();
       }}
@@ -344,7 +349,8 @@ function NoteDialog({
 
 /**
  * Before an offer leaves: exactly what the member gets (the creator's offer settings), and how
- * it works. Confirmed, it goes through the guardrails like every action.
+ * it works: a discount is applied when its message leaves, a pause waits for the member's yes in
+ * the support chat (0046). Confirmed, it goes through the guardrails like every action.
  */
 function OfferDialog({
   kind,
@@ -393,7 +399,9 @@ function OfferDialog({
             <Skeleton className="mt-2 h-4 w-64" />
           ) : null}
         </div>
-        <p className="text-sm text-muted">{t('dash.offer.how')}</p>
+        <p className="text-sm text-muted">
+          {t(pause ? 'dash.offer.how.pause' : 'dash.offer.how.promo')}
+        </p>
         <p className="text-xs text-subtle">{t('dash.offer.settings')}</p>
         <div className="flex flex-wrap justify-end gap-2 pt-1">
           <Button variant="secondary" onClick={onClose}>

@@ -55,7 +55,9 @@ Sur **whop.com** (pas le sandbox) → **Dashboard → Developer → Create app**
      `chat:read`, `forum:read`, `support_chat:read`, `courses:read`, `course_analytics:read` ;
    - webhooks : `webhook_receive:memberships`, `webhook_receive:payments`,
      `webhook_receive:members`, `webhook_receive:chat`, `webhook_receive:courses` ;
-   - actions : `member:manage`, `payment:manage`, `promo_code:create`, `notification:create` ;
+   - actions : `member:manage`, `payment:manage`, `promo_code:create`, `notification:create`,
+     `support_chat:create`, `support_chat:message:create` (les messages aux membres partent dans
+     le chat de support de la communauté : ils n'ont pas d'espace StayPut, 08/10/2026) ;
    - offre Alumni (facultative) : `access_pass:create`, `plan:create`, `experience:create`,
      `experience:attach`.
 4. **Webhook** de l'app : URL `https://stayput-app.chezbenz18.workers.dev/webhooks/whop`, avec

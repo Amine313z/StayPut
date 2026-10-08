@@ -20,6 +20,7 @@ import { putJson, useApi } from '../../api';
 import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { REASON_LABELS } from '../../exit-reasons';
+import { memberSpaceEnabled } from '../../features';
 import { useI18n } from '../../i18n';
 import { SUGGESTED_TIME_ZONES, timeZoneGroups, zoneLabel } from '../../timezone';
 import { Notice } from '../../ui/Badge';
@@ -63,6 +64,17 @@ const OFFER_FIELDS: readonly { key: OfferNumber; label: MessageKey; reason?: Exi
   { key: 'promoPercent', label: 'actionSettings.offers.promoPercent', reason: 'too_expensive' },
   { key: 'promoMonths', label: 'actionSettings.offers.promoMonths' },
   { key: 'extendDays', label: 'actionSettings.offers.extendDays', reason: 'other' },
+];
+
+/**
+ * Without a member space (2026-10-08), the offers are the creator's own, from a member's sheet:
+ * a pause and a discount, no reason picked by the member, no free days nor coaching words (the
+ * departure survey's answers, given in a space members no longer have).
+ */
+const CREATOR_OFFER_FIELDS: typeof OFFER_FIELDS = [
+  { key: 'pauseDays', label: 'actionSettings.offers.pauseDaysPlain' },
+  { key: 'promoPercent', label: 'actionSettings.offers.promoPercentPlain' },
+  { key: 'promoMonths', label: 'actionSettings.offers.promoMonths' },
 ];
 
 interface Draft extends Omit<ActionSettingsView, Cap | 'offers'> {
@@ -171,6 +183,8 @@ export function ActionSettings() {
 
 function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
   const { t } = useI18n();
+  // The departure survey's offers live in the member space; without it, the creator's own.
+  const space = memberSpaceEnabled();
   const { api, testMode } = useCreatorData();
   const [draft, setDraft] = useState(() => toDraft(initial));
   const [saved, setSaved] = useState(() => canonical(initial));
@@ -499,11 +513,16 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
           </div>
         </Row>
 
-        <Row label={t('actionSettings.offers')} labelId={`${ids}-offers`}>
+        <Row
+          label={t(space ? 'actionSettings.offers' : 'actionSettings.offers.yours')}
+          labelId={`${ids}-offers`}
+        >
           <div role="group" aria-labelledby={`${ids}-offers`} className="space-y-4">
-            <p className="text-sm text-muted">{t('actionSettings.offers.hint')}</p>
+            <p className="text-sm text-muted">
+              {t(space ? 'actionSettings.offers.hint' : 'actionSettings.offers.hintChat')}
+            </p>
             <div className="grid gap-4 sm:grid-cols-2">
-              {OFFER_FIELDS.map(({ key, label, reason }) => (
+              {(space ? OFFER_FIELDS : CREATOR_OFFER_FIELDS).map(({ key, label, reason }) => (
                 <NumberField
                   key={key}
                   id={`${ids}-offer-${key}`}
@@ -523,40 +542,43 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
                 {t('actionSettings.offers.promoBlocked')}
               </Notice>
             ) : null}
-            {(offerValue('extendDays', draft.offers.extendDays) ?? 0) >
-            (capValue('maxFreeDaysPerQuarter', draft.caps.maxFreeDaysPerQuarter) ?? Infinity) ? (
+            {space &&
+            (offerValue('extendDays', draft.offers.extendDays) ?? 0) >
+              (capValue('maxFreeDaysPerQuarter', draft.caps.maxFreeDaysPerQuarter) ?? Infinity) ? (
               <Notice tone="warning" icon={<OctagonX aria-hidden="true" className="size-4" />}>
                 {t('actionSettings.offers.extendBlocked', {
                   cap: draft.caps.maxFreeDaysPerQuarter,
                 })}
               </Notice>
             ) : null}
-            <div>
-              <label htmlFor={`${ids}-coaching`} className="text-sm">
-                {t('actionSettings.offers.coachingMessage', {
-                  reason: t(REASON_LABELS.no_results),
-                })}
-              </label>
-              <textarea
-                id={`${ids}-coaching`}
-                rows={3}
-                maxLength={COACHING_MESSAGE_MAX}
-                value={draft.offers.coachingMessage}
-                placeholder={t('member.offer.coaching.body')}
-                aria-describedby={`${ids}-coaching-hint`}
-                onChange={(event) => {
-                  const coachingMessage = event.target.value;
-                  edit((current) => ({
-                    ...current,
-                    offers: { ...current.offers, coachingMessage },
-                  }));
-                }}
-                className={`${FIELD} mt-1 w-full`}
-              />
-              <p id={`${ids}-coaching-hint`} className="mt-1.5 text-sm text-muted">
-                {t('actionSettings.offers.coachingHint')}
-              </p>
-            </div>
+            {space ? (
+              <div>
+                <label htmlFor={`${ids}-coaching`} className="text-sm">
+                  {t('actionSettings.offers.coachingMessage', {
+                    reason: t(REASON_LABELS.no_results),
+                  })}
+                </label>
+                <textarea
+                  id={`${ids}-coaching`}
+                  rows={3}
+                  maxLength={COACHING_MESSAGE_MAX}
+                  value={draft.offers.coachingMessage}
+                  placeholder={t('member.offer.coaching.body')}
+                  aria-describedby={`${ids}-coaching-hint`}
+                  onChange={(event) => {
+                    const coachingMessage = event.target.value;
+                    edit((current) => ({
+                      ...current,
+                      offers: { ...current.offers, coachingMessage },
+                    }));
+                  }}
+                  className={`${FIELD} mt-1 w-full`}
+                />
+                <p id={`${ids}-coaching-hint`} className="mt-1.5 text-sm text-muted">
+                  {t('actionSettings.offers.coachingHint')}
+                </p>
+              </div>
+            ) : null}
           </div>
         </Row>
 

@@ -192,9 +192,13 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   The first production app (`app_LRq2G68rpP3FpW`) stayed linked to its deleted product (gallery
   broken, no API to relink): **production is now `app_GimcEN4Jfpn4Ma`** (listing product
   `prod_6S7xpEfw0hPwc` « StayPut »: never delete or archive it), unlisted, installed in
-  « StayPut Community »; the old app is hidden, to delete. Whop delivers a notification only to
-  users of the app's space in the community: « Message » refuses (`no_space`) until StayPut has
-  one, and checks the member's access first. Load time (2026-10-08): the deployment pins the
+  « StayPut Community »; the old app is hidden, to delete. **Members have no StayPut space**
+  (founder, 2026-10-08): every message to a member goes in the community's support chat with
+  them (`messageMember`: `POST /support_channels` then `POST /messages`; permissions
+  `support_chat:create` + `support_chat:message:create`, required by the deployment); a discount
+  is given (applied when its message leaves), a pause is proposed and the creator applies it
+  from the member's sheet after their yes (0046); the member view says « nothing to do here »
+  unless the member space is on. Load time (2026-10-08): the deployment pins the
   Worker to the database's AWS region (targeted placement, `withPlacement` in
   `scripts/deploy/hyperdrive.ts`; production `remote-LHR`, probe 83 ms instead of ~500 ms), the
   dashboard's reads in 3 concurrent waves, one Whop access check per screen, the first readings

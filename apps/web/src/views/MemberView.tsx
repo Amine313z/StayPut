@@ -18,13 +18,28 @@ import { Card } from '../ui/Card';
 import { ExternalButton } from '../ui/ExternalLink';
 
 /**
- * The member view (Whop "experience view", /experiences/:experienceId), never surveillance and
- * never a risk score (SPEC 5.3), in the community's language for its members (never the
- * browser's). In V1 it is the member's subscription only: a payment that needs them, and the
- * cancellation they scheduled with its survey and offer; the member space (goals, badges…) comes
- * back with its switch (features.ts).
+ * The member view (Whop "experience view", /experiences/:experienceId). Members have no StayPut
+ * space (founder, 2026-10-08): StayPut writes to them in the community's support chat, and a
+ * member who opens StayPut all the same finds nothing to do, said plainly. With the member space
+ * on (features.ts), it is their space: never surveillance and never a risk score (SPEC 5.3), in
+ * the community's language for its members (never the browser's).
  */
 export function MemberView() {
+  return memberSpaceEnabled() ? <SpaceView /> : <NothingHere />;
+}
+
+/** No space: nothing to read, nothing to answer, no call to the Worker. */
+function NothingHere() {
+  const { t } = useI18n();
+  return (
+    <div className="mx-auto max-w-md py-16 text-center">
+      <p className="title-section">{t('member.none.title')}</p>
+      <p className="mt-2 text-sm text-muted">{t('member.none.body')}</p>
+    </div>
+  );
+}
+
+function SpaceView() {
   const { experienceId = '' } = useParams();
   const api = `/api/member/${encodeURIComponent(experienceId)}`;
   const { state, retry } = useApi<MemberSession>(`${api}/session`);

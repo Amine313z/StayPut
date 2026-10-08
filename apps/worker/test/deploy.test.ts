@@ -803,6 +803,8 @@ function whopApp(over: Record<string, unknown> = {}): Record<string, unknown> {
     'payment:manage',
     'promo_code:create',
     'notification:create',
+    'support_chat:create',
+    'support_chat:message:create',
     'access_pass:create',
     'plan:create',
     'experience:create',
@@ -846,7 +848,7 @@ describe('readAppSettings', () => {
         discover_path: '/discover',
       },
     });
-    expect(settingsOf().permissions).toHaveLength(25);
+    expect(settingsOf().permissions).toHaveLength(27);
     expect(settingsOf({ discover_path: null, requested_permissions: [] })).toMatchObject({
       paths: { discover_path: null },
       permissions: null,
@@ -928,7 +930,7 @@ describe('settingsFindings', () => {
   it('keeps the Alumni offer optional, and says when Whop lists no permission at all', () => {
     const withoutAlumni = (whopApp().requested_permissions as Record<string, unknown>[]).slice(
       0,
-      21,
+      23,
     );
     const findings = settingsFindings(
       settingsOf({ requested_permissions: withoutAlumni }),

@@ -27,6 +27,7 @@ import {
   type AffiliateLinkView,
   type CreatorMessagesResult,
   type CreatorNoteSent,
+  type CreatorOfferApplied,
   type CreatorOfferMade,
   type CreatorOffersResult,
   type CreatorRetryResult,
@@ -83,7 +84,7 @@ import {
   readPlatformActivity,
 } from './accounts';
 import { isActionView, readActionSettings, readActions, validActionSettings } from './action-views';
-import { executeAction, executeDueActions, NO_ACCESS_ERROR, prepareActions } from './actions';
+import { executeAction, executeDueActions, prepareActions } from './actions';
 import { readDashboard, readFeed } from './dashboard';
 import { createPostgresDb, type ClosableDb, type Db, type TransactionalDb } from './db';
 import { createDiscordClient, type DiscordClient } from './discord';
@@ -1798,7 +1799,7 @@ export function createApp(deps: AppDeps) {
 
   /**
    * « Message » on one member: words the creator wrote themselves (a title and a text), sent word
-   * for word as a Whop notification with their picture, now or at the end of the quiet hours. No
+   * for word in the community's support chat with them, now or at the end of the quiet hours. No
    * follow-up cap holds it back; « never contact », the stops and test mode do (create_creator_note,
    * migration 0045). Sent now, it runs in the request: the answer says what Whop did with it,
    * never « sent » before. The journal keeps who wrote to whom, never the words.
@@ -1822,19 +1823,6 @@ export function createApp(deps: AppDeps) {
       }
       const companyId = c.get('companyId');
       const now = deps.now();
-      // Whop delivers an app's notification only through its space in the community, which
-      // StayPut learns when someone opens it there: without one, nothing could leave. Test mode
-      // sends nothing, so it simulates all the same.
-      const [space] = await db.query<{ experience_id: string | null; dry_run: boolean | null }>(
-        `select c.experience_id, s.dry_run
-           from stayput.companies c
-           left join stayput.company_settings s on s.company_id = c.id
-          where c.id = $1`,
-        [companyId],
-      );
-      if (!space?.experience_id && space?.dry_run !== true) {
-        return apiError('conflict', 'no_space');
-      }
       const [row] = await db.query<{ made: Record<string, unknown> }>(
         'select stayput.create_creator_note($1, $2, $3, $4, $5, $6::timestamptz) as made',
         [companyId, memberId, note.title, note.body, c.get('userId'), now.toISOString()],
@@ -1877,7 +1865,8 @@ export function createApp(deps: AppDeps) {
                 actionId: made.actionId,
                 status: 'failed',
                 sendAt,
-                reason: action?.last_error === NO_ACCESS_ERROR ? 'no_access' : 'refused',
+                // A 403: StayPut may not write in the support chat yet (its permissions).
+                reason: action?.last_error?.startsWith('403 ') ? 'permission' : 'refused',
               };
       return c.json(answer);
     },
@@ -1885,7 +1874,9 @@ export function createApp(deps: AppDeps) {
 
   /**
    * « Pause » or « Offer » on the dashboard: an offer to one member, in the creator's offer
-   * settings; they hear of it, and accept it in their space within 7 days.
+   * settings, in the support chat with them (0046). A discount is given: applied when its
+   * message leaves, which says so. A pause is proposed: the member answers in the chat, and the
+   * creator applies it (below) within 7 days.
    */
   app.post(
     '/api/creator/:companyId/members/:memberId/offer',
@@ -1917,6 +1908,43 @@ export function createApp(deps: AppDeps) {
       c.set('audit', { member: memberId, kind });
       runActionsInBackground(c, companyId, now);
       return c.json(made as CreatorOfferMade);
+    },
+  );
+
+  /**
+   * « They said yes »: the pause a member accepted in the support chat, applied by the creator
+   * (stayput.apply_creator_offer), now, like the member's own acceptance used to be.
+   */
+  app.post(
+    '/api/creator/:companyId/members/:memberId/offers/:offerId/apply',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('member.offer.apply'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const memberId = c.req.param('memberId');
+      const offerId = c.req.param('offerId');
+      if (!MEMBER_ID.test(memberId) || !UUID.test(offerId)) {
+        return apiError('invalid_request', 'expected a member and an offer');
+      }
+      const companyId = c.get('companyId');
+      const now = deps.now();
+      const [row] = await db.query<{ applied: { error?: string; actionId?: string } | null }>(
+        `select stayput.apply_creator_offer($1, o.id, $3, $4::timestamptz) as applied
+           from stayput.creator_offers o
+          where o.company_id = $1 and o.id = $2::uuid and o.member_id = $5`,
+        [companyId, offerId, c.get('userId'), now.toISOString(), memberId],
+      );
+      const applied = row?.applied;
+      if (!applied) return apiError('not_found', 'no such offer for this member');
+      if (applied.error || !applied.actionId) {
+        return apiError('conflict', applied.error ?? 'not applied');
+      }
+      c.set('audit', { member: memberId, offer: offerId });
+      runActionsInBackground(c, companyId, now);
+      return c.json({ actionId: applied.actionId } satisfies CreatorOfferApplied);
     },
   );
 

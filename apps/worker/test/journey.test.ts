@@ -46,7 +46,8 @@ function fakeWhop() {
   const whop = {
     request: vi.fn((method: string, path: string) => {
       calls.push({ method, path });
-      return Promise.resolve({});
+      // The support chat with a member: Whop opens it, or gives the one there is.
+      return Promise.resolve(path === '/support_channels' ? { id: 'supp_1' } : {});
     }),
   } as unknown as WhopClient;
   return { whop, calls };
@@ -136,7 +137,9 @@ describe('a community’s key path, from Whop’s deliveries to the money saved'
     expect(calls).toEqual(
       expect.arrayContaining([
         { method: 'POST', path: '/payments/pay_Bo/retry' },
-        { method: 'POST', path: '/notifications' },
+        // The notice, in the support chat with Bo.
+        { method: 'POST', path: '/support_channels' },
+        { method: 'POST', path: '/messages' },
       ]),
     );
 

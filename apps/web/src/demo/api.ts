@@ -275,6 +275,16 @@ export async function answerDemo(method: string, path: string, body: unknown): P
     }
     return made;
   }
+  const apply = /^members\/([^/]+)\/offers\/([^/]+)\/apply$/.exec(route);
+  if (method === 'POST' && apply) {
+    const applied = demo.applyPause(decodeURIComponent(apply[1]!), decodeURIComponent(apply[2]!));
+    if ('error' in applied) {
+      throw applied.error === 'not_found'
+        ? new ApiError('not_found', 'no such offer for this member')
+        : new ApiError('conflict', applied.error);
+    }
+    return applied;
+  }
   const contact = /^members\/([^/]+)\/contact$/.exec(route);
   if (method === 'PUT' && contact) {
     const wanted = (body as { doNotContact?: unknown } | null)?.doNotContact === true;

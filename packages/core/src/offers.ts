@@ -164,10 +164,14 @@ export function isCreatorOfferKind(value: unknown): value is CreatorOfferKind {
 /** What such an offer gives, fixed when it is made (the creator's offer settings). */
 export type CreatorOfferTerms = { days: number } | { percentOff: number; months: number };
 
-/** How long the member has to accept it. */
+/** How long a pause offer waits for the member's yes (the creator applies it meanwhile). */
 export const CREATOR_OFFER_DAYS = 7;
 
-/** The offer in words, for `{offer}` in its message: « a 30-day pause… », « 20% off… ». */
+/**
+ * The offer in words, for `{offer}` in its message (« Hi Léa, {offer} »). Members have no space
+ * to accept it in (2026-10-08): a discount is already applied when it is announced, a pause is
+ * proposed and the member answers in the chat, never imposed.
+ */
 export function creatorOfferText(
   locale: 'en' | 'fr',
   kind: CreatorOfferKind,
@@ -175,13 +179,15 @@ export function creatorOfferText(
 ): string {
   if (kind === 'pause_offer' && 'days' in terms) {
     return locale === 'fr'
-      ? `une pause de ${terms.days} jours : ton abonnement t’attend`
-      : `a ${terms.days}-day pause: your membership waits for you`;
+      ? `une pause de ${terms.days} jours t’aiderait ? Ton abonnement t’attendrait. Réponds à ce message cette semaine et on la met en place.`
+      : `would a ${terms.days}-day pause help? Your membership would wait for you. Answer this message this week and it is set up.`;
   }
   if ('percentOff' in terms) {
-    if (locale === 'fr') return `-${terms.percentOff}\u00a0% pendant ${terms.months} mois`;
+    if (locale === 'fr') {
+      return `voici -${terms.percentOff}\u00a0% pendant ${terms.months} mois, déjà appliqués à tes prochains paiements : tu n’as rien à faire.`;
+    }
     const months = terms.months === 1 ? '1 month' : `${terms.months} months`;
-    return `${terms.percentOff}% off for ${months}`;
+    return `here is ${terms.percentOff}% off for ${months}, already applied to your next payments: nothing to do.`;
   }
-  return locale === 'fr' ? 'une offre' : 'an offer';
+  return locale === 'fr' ? 'on a quelque chose pour toi.' : 'we have something for you.';
 }

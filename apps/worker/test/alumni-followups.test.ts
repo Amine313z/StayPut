@@ -6,7 +6,7 @@ import { createTestDb, type TestDb } from './helpers/db';
 
 /**
  * Migration 0019, the Alumni offer's follow-ups (SPEC 5.9): J+7, J+30 and J+60 after the
- * departure, news and a return code through the Alumni space, planned once per step, through the
+ * departure, news and a return code in the support chat, planned once per step, through the
  * guardrails like every action, and the code in the former member's view of the Alumni.
  */
 
@@ -139,7 +139,12 @@ function fakeWhop(answer: (path: string) => unknown = () => ({})) {
     request: vi.fn((method: string, path: string, options?: { body?: unknown }) => {
       calls.push({ method, path, body: options?.body });
       const result = answer(path);
-      return result instanceof Error ? Promise.reject(result) : Promise.resolve(result);
+      if (result instanceof Error) return Promise.reject(result);
+      // The support chat with a member: Whop opens it, or gives the one there is.
+      if (path === '/support_channels' && !(result as { id?: unknown }).id) {
+        return Promise.resolve({ id: 'supp_1' });
+      }
+      return Promise.resolve(result);
     }),
   } as unknown as WhopClient;
   return { whop, calls };
@@ -205,7 +210,7 @@ describe('the Alumni follow-ups (0019)', () => {
     ]);
   });
 
-  it('sends news and a return code through the Alumni space, then shows the code', async () => {
+  it('sends news and a return code in the support chat, then shows the code', async () => {
     const club = await community();
     const ana = await former(club, 'Ana Lopez', '2026-09-23T10:00:00Z');
     expect(await alumniOfMember(t.db, club.c, ana.user, NOW, 'sandbox')).toMatchObject({
@@ -243,17 +248,22 @@ describe('the Alumni follow-ups (0019)', () => {
           churned_users_only: true,
         }) as unknown,
       },
+      // In the community's support chat with her: a former member keeps it.
       {
         method: 'POST',
-        path: '/notifications',
+        path: '/support_channels',
+        body: { account_id: club.c, user_id: ana.user },
+      },
+      {
+        method: 'POST',
+        path: '/messages',
         body: {
-          experience_id: club.experience,
-          user_ids: [ana.user],
-          title: 'Des nouvelles de Le Club',
-          content: expect.stringContaining(code) as string,
+          channel_id: 'supp_1',
+          content: expect.stringMatching(/^\*\*Des nouvelles de Le Club\*\*\n\n/) as string,
         },
       },
     ]);
+    expect(String((calls[2]?.body as { content?: unknown }).content)).toContain(code);
 
     // Ana opens StayPut in the Alumni space: her code, and the checkout of the plan she left.
     expect(await alumniOfMember(t.db, club.c, ana.user, at, 'sandbox')).toEqual({
@@ -292,7 +302,7 @@ describe('the Alumni follow-ups (0019)', () => {
     ]);
   });
 
-  it('keeps the code made before an outage, and sends only the notification an hour later', async () => {
+  it('keeps the code made before an outage, and sends only the message an hour later', async () => {
     const club = await community();
     await former(club, 'Ana Lopez', '2026-09-23T10:00:00Z');
     await prepareActions(t.db, club.c, NOW);
@@ -313,7 +323,7 @@ describe('the Alumni follow-ups (0019)', () => {
     expect(await executeDueActions(t.db, back.whop, new Date(at.getTime() + 3_600_000))).toEqual({
       sent: 1,
     });
-    expect(back.calls.map((call) => call.path)).toEqual(['/notifications']);
+    expect(back.calls.map((call) => call.path)).toEqual(['/support_channels', '/messages']);
     expect((await followups(club.c))[0]).toMatchObject({
       status: 'sent',
       result: {

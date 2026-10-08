@@ -44,7 +44,11 @@ export interface WhopCall {
 /** Whop as StayPut calls it: every call kept and answered, nothing sent anywhere. */
 export function recordingWhop(): { whop: WhopClient; calls: WhopCall[] } {
   const calls: WhopCall[] = [];
-  const answer = (method: string, path: string): unknown => {
+  const answer = (method: string, path: string, body: Record<string, unknown>): unknown => {
+    // The support chat with a member: Whop opens it (or gives the one there is).
+    if (method === 'POST' && path === '/support_channels') {
+      return { id: `supp_${String(body.user_id)}` };
+    }
     if (path === '/permissions') {
       return { data: [{ action: 'company:basic:read', granted: true }] };
     }
@@ -59,8 +63,9 @@ export function recordingWhop(): { whop: WhopClient; calls: WhopCall[] } {
   const whop = {
     env: 'sandbox',
     request(method: string, path: string, options?: { body?: unknown }) {
-      calls.push({ method, path, body: (options?.body ?? {}) as Record<string, unknown> });
-      return Promise.resolve(answer(method, path));
+      const body = (options?.body ?? {}) as Record<string, unknown>;
+      calls.push({ method, path, body });
+      return Promise.resolve(answer(method, path, body));
     },
   } as unknown as WhopClient;
   return { whop, calls };
@@ -206,13 +211,11 @@ export async function runScenarios(db: TransactionalDb, now: Date): Promise<Verd
   let actions = await actionsOf();
   const done = (memberId: string, type: string, statuses = ['sent']) =>
     actions.some((a) => a.member_id === memberId && a.type === type && statuses.includes(a.status));
+  // A message in the member's support chat with the community (they have no StayPut space).
   const notified = (userId: string) =>
     calls.some(
       (c) =>
-        c.method === 'POST' &&
-        c.path === '/notifications' &&
-        Array.isArray(c.body.user_ids) &&
-        c.body.user_ids.includes(userId),
+        c.method === 'POST' && c.path === '/messages' && c.body.channel_id === `supp_${userId}`,
     );
   const noticed = owing.filter(
     (m) => done(m.memberId, 'payment_failed_notice') && notified(m.userId),

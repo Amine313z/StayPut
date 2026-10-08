@@ -1,4 +1,5 @@
 import type {
+  CreatorOfferApplied,
   MemberDataExport,
   MemberDetail,
   MemberDetailMembership,
@@ -8,7 +9,7 @@ import type {
 } from '@stayput/core';
 import { PAID_PAYMENT_STATUSES, isFailedPayment } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
-import { BellOff, Clock, Download, RotateCw, Store, Trash2 } from 'lucide-react';
+import { BellOff, Clock, Download, PauseCircle, RotateCw, Store, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useId, useState, type ReactNode } from 'react';
 import { getJson, postJson, putJson, useApi, type ApiError } from '../api';
@@ -26,6 +27,7 @@ import {
 } from '../members';
 import { ease } from '../motion';
 import { reasonText } from '../risk-text';
+import { ActionButton } from '../ui/ActionButton';
 import { Avatar } from '../ui/Avatar';
 import { DiscordIcon, TelegramIcon } from '../ui/BrandIcons';
 import { Button, buttonClass, leadingMark } from '../ui/Button';
@@ -116,8 +118,23 @@ export function MemberDrawer({
                 api={api}
                 testMode={testMode}
                 wide
-                onDone={onChanged}
+                onDone={() => {
+                  detail.reload();
+                  onChanged();
+                }}
               />
+              {data?.pauseOffer ? (
+                <PauseWaiting
+                  api={api}
+                  memberId={member.id}
+                  name={name}
+                  offer={data.pauseOffer}
+                  onApplied={() => {
+                    detail.reload();
+                    onChanged();
+                  }}
+                />
+              ) : null}
             </Section>
           </StaggerItem>
         ) : null}
@@ -504,6 +521,50 @@ function PlatformIcon({ platform }: { platform: MemberPlatformActivity['platform
     return <TelegramIcon aria-hidden="true" className="size-4 text-telegram" />;
   }
   return <Store aria-hidden="true" className="size-4 text-fg" />;
+}
+
+/**
+ * A pause proposed in the support chat, waiting for the member's yes (0046): the creator reads
+ * the answer there and applies it here, in one click, until the proposal expires.
+ */
+function PauseWaiting({
+  api,
+  memberId,
+  name,
+  offer,
+  onApplied,
+}: {
+  api: string;
+  memberId: string;
+  name: string;
+  offer: NonNullable<MemberDetail['pauseOffer']>;
+  onApplied: () => void;
+}) {
+  const { t, date } = useI18n();
+  const toast = useToast();
+  return (
+    <div className="mt-3 space-y-3 rounded-xl border border-line bg-surface-2 p-4">
+      <p className="flex items-start gap-2 text-sm">
+        <PauseCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-accent" />
+        {t('dash.pause.waiting', { days: offer.days, date: date(new Date(offer.expiresAt)) })}
+      </p>
+      <ActionButton
+        size="sm"
+        run={async () => {
+          await postJson<CreatorOfferApplied>(
+            `${api}/members/${encodeURIComponent(memberId)}/offers/${encodeURIComponent(offer.id)}/apply`,
+            {},
+          );
+          toast({ title: t('dash.pause.applied', { name }), body: t('dash.pause.appliedBody') });
+          onApplied();
+        }}
+        onError={(error) => toast({ tone: 'error', title: failureText(error, t) })}
+        icon={<PauseCircle aria-hidden="true" className="size-4" />}
+      >
+        {t('dash.pause.apply')}
+      </ActionButton>
+    </div>
+  );
 }
 
 /**

@@ -2,6 +2,7 @@ import type { WhopClient } from '@stayput/whop';
 import { WhopApiError } from '@stayput/whop';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  chatText,
   executeDueActions,
   prepareActions,
   runAction,
@@ -78,14 +79,23 @@ async function member(
 async function payment(
   companyId: string,
   memberId: string,
-  over: { status: string; at: string; retryable?: boolean; next?: string; recovery?: string },
+  over: {
+    status: string;
+    at: string;
+    retryable?: boolean;
+    next?: string;
+    recovery?: string;
+    /** Its membership on Whop, not synchronized yet. */
+    membership?: string;
+  },
 ) {
   n += 1;
   const id = `pay_Act${n}`;
   await t.db.query(
     `insert into stayput.payments (id, company_id, member_id, amount, currency, status, retryable,
-                                   next_payment_attempt_at, recovery_url, whop_created_at)
-     values ($1, $2, $3, 49, 'usd', $4, $5, $6::timestamptz, $7, $8::timestamptz)`,
+                                   next_payment_attempt_at, recovery_url, whop_created_at,
+                                   whop_membership_id)
+     values ($1, $2, $3, 49, 'usd', $4, $5, $6::timestamptz, $7, $8::timestamptz, $9)`,
     [
       id,
       companyId,
@@ -95,6 +105,7 @@ async function payment(
       over.next ?? null,
       over.recovery ?? null,
       over.at,
+      over.membership ?? null,
     ],
   );
   return id;
@@ -391,7 +402,12 @@ describe('running the actions', () => {
         (method: string, path: string, options?: { body?: unknown; idempotencyKey?: string }) => {
           calls.push({ method, path, body: options?.body, key: options?.idempotencyKey });
           const result = answer(path);
-          return result instanceof Error ? Promise.reject(result) : Promise.resolve(result);
+          if (result instanceof Error) return Promise.reject(result);
+          // The support chat with a member: Whop opens it, or gives the one there is.
+          if (path === '/support_channels' && !(result as { id?: unknown }).id) {
+            return Promise.resolve({ id: 'supp_1' });
+          }
+          return Promise.resolve(result);
         },
       ),
     } as unknown as WhopClient;
@@ -405,7 +421,11 @@ describe('running the actions', () => {
     await risk(c, ana, { level: 'low', since: hoursAgo(1), newcomer: true });
     const bo = await member(c, { name: 'Bo' });
     await activity(c, bo, '2026-09-19T09:00:00Z', 'Chart patterns');
-    const failed = await payment(c, bo, { status: 'failed', at: hoursAgo(30) });
+    const failed = await payment(c, bo, {
+      status: 'failed',
+      at: hoursAgo(30),
+      membership: 'mem_Bo1',
+    });
     await prepareActions(t.db, c, NOW);
     return { c, ana, bo, failed };
   }
@@ -434,39 +454,63 @@ describe('running the actions', () => {
     expect(byType.get('payment_retry')).toMatchObject({ status: 'simulated' });
   });
 
-  it('sends through Whop: a notification to each member, the payment charged again', async () => {
+  it('writes to each member in the support chat, and charges the payment again', async () => {
     const { c, ana, bo, failed } = await scheduled();
-    const { whop, calls } = fakeWhop();
+    const { whop, calls } = fakeWhop((path) =>
+      path === '/memberships/mem_Bo1' ? { manage_url: 'https://whop.com/billing/mem_Bo1' } : {},
+    );
     expect(await executeDueActions(t.db, whop, NOW)).toEqual({ sent: 3 });
-    const key = expect.stringMatching(/^stayput-action-/) as string;
-    expect(calls).toHaveLength(3);
+    const chat = expect.stringMatching(/^stayput-chat-.+-channel$/) as string;
+    const message = expect.stringMatching(/^stayput-chat-[^-]+-[^-]+-[^-]+-[^-]+-[^-]+$/) as string;
+    // The chat opened (or found) for each member, then the message in it: no StayPut space.
     expect(calls).toEqual(
       expect.arrayContaining([
         {
           method: 'POST',
-          path: '/notifications',
-          body: {
-            experience_id: 'exp_Club1',
-            user_ids: [userOf(ana)],
-            title: 'Bienvenue, Ana',
-            content: expect.stringContaining('Le Club') as string,
-          },
-          key,
+          path: '/support_channels',
+          body: { account_id: c, user_id: userOf(ana) },
+          key: chat,
         },
         {
           method: 'POST',
-          path: '/notifications',
+          path: '/messages',
           body: {
-            experience_id: 'exp_Club1',
-            user_ids: [userOf(bo)],
-            title: 'Ton paiement n’est pas passé',
-            content: expect.stringContaining('Salut Bo,') as string,
+            channel_id: 'supp_1',
+            content: expect.stringMatching(
+              /^\*\*Bienvenue, Ana\*\*\n\nContent .*Le Club/,
+            ) as string,
           },
-          key,
+          key: message,
         },
-        { method: 'POST', path: `/payments/${failed}/retry`, body: undefined, key },
+        {
+          method: 'POST',
+          path: '/support_channels',
+          body: { account_id: c, user_id: userOf(bo) },
+          key: chat,
+        },
+        // Where Bo updates his card, under the message: Whop's page for his membership.
+        { method: 'GET', path: '/memberships/mem_Bo1', body: undefined, key: undefined },
+        {
+          method: 'POST',
+          path: '/messages',
+          body: {
+            channel_id: 'supp_1',
+            content: expect.stringMatching(
+              /^\*\*Ton paiement n’est pas passé\*\*\n\nSalut Bo,.*\n\nhttps:\/\/whop\.com\/billing\/mem_Bo1$/s,
+            ) as string,
+          },
+          key: message,
+        },
+        {
+          method: 'POST',
+          path: `/payments/${failed}/retry`,
+          body: undefined,
+          key: expect.stringMatching(/^stayput-action-/) as string,
+        },
       ]),
     );
+    expect(calls).toHaveLength(6);
+    expect(calls.some((call) => call.path === '/notifications')).toBe(false);
     expect((await rows(c)).map((r) => r.status)).toEqual(['sent', 'sent', 'sent']);
   });
 
@@ -475,7 +519,7 @@ describe('running the actions', () => {
     // Bo paid in the meantime: no « your payment failed », no retry.
     await t.db.query(`update stayput.payments set status = 'paid' where id = $1`, [failed]);
     const { whop } = fakeWhop((path) =>
-      path === '/notifications'
+      path === '/messages'
         ? new WhopApiError(503, 'unavailable', 'try later', { method: 'POST', path })
         : {},
     );
@@ -526,11 +570,10 @@ describe('running the actions', () => {
     ]);
   });
 
-  it('waits for StayPut to know its experience in the community', async () => {
+  it('needs no StayPut space in the community: members are written to in the support chat', async () => {
     const { c } = await scheduled({ experience: null });
-    expect(await executeDueActions(t.db, fakeWhop().whop, NOW)).toEqual({ retried: 2, sent: 1 });
-    const welcome = (await rows(c)).find((r) => r.type === 'welcome_message');
-    expect(welcome).toMatchObject({ status: 'scheduled', attempts: 1, errors: 1 });
+    expect(await executeDueActions(t.db, fakeWhop().whop, NOW)).toEqual({ sent: 3 });
+    expect((await rows(c)).map((r) => r.status)).toEqual(['sent', 'sent', 'sent']);
   });
 
   /** An offer a member accepted, as due_actions gives it. */
@@ -563,6 +606,74 @@ describe('running the actions', () => {
     },
     values: {},
     ...over,
+  });
+
+  it('gives the creator’s discount, then says so in the support chat, never the reverse', async () => {
+    const at = NOW.getTime();
+    const given = offer({
+      type: 'creator_offer',
+      content: {
+        offerId: 'o1',
+        kind: 'promo_offer',
+        terms: { percentOff: 20, months: 3 },
+        apply: true,
+      },
+      locale: 'fr',
+      values: { first_name: 'Léa', creator_name: 'Le Club' },
+    });
+    const { whop, calls } = fakeWhop((path) => (path === '/promo_codes' ? { id: 'promo_G1' } : {}));
+    expect(await runAction(given, whop, at)).toMatchObject({
+      status: 'sent',
+      result: {
+        message: { title: 'Quelque chose pour toi de Le Club' },
+        applied: true,
+        percent_off: 20,
+        months: 3,
+        promo_code_id: 'promo_G1',
+      },
+    });
+    // On the membership first, its cancellation left alone (the member asked for nothing), then
+    // the message that says it is done.
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      'POST /promo_codes',
+      'POST /memberships/mem_X1/apply_promo_code',
+      'POST /support_channels',
+      'POST /messages',
+    ]);
+    expect(String((calls[3]?.body as { content?: unknown }).content)).toBe(
+      '**Quelque chose pour toi de Le Club**\n\nSalut Léa, voici -20\u00a0% pendant 3 mois, déjà appliqués à tes prochains paiements : tu n’as rien à faire.',
+    );
+
+    // Whop refuses the discount: no message saying it was given.
+    const refused = fakeWhop((path) =>
+      path === '/promo_codes'
+        ? new WhopApiError(403, 'forbidden', 'missing permission', { method: 'POST', path })
+        : {},
+    );
+    expect(await runAction(given, refused.whop, at)).toMatchObject({
+      status: 'failed',
+      retry: false,
+    });
+    expect(refused.calls.map((c) => c.path)).toEqual(['/promo_codes']);
+
+    // A pause is only proposed: the message, nothing on the membership.
+    const proposed = fakeWhop();
+    const pause = offer({
+      type: 'creator_offer',
+      content: { offerId: 'o2', kind: 'pause_offer', terms: { days: 30 }, apply: false },
+    });
+    expect(await runAction(pause, proposed.whop, at)).toMatchObject({ status: 'sent' });
+    expect(proposed.calls.map((c) => c.path)).toEqual(['/support_channels', '/messages']);
+    expect(String((proposed.calls[1]?.body as { content?: unknown }).content)).toContain(
+      'would a 30-day pause help?',
+    );
+  });
+
+  it('writes a message as the chat shows it: the title in bold, the text, the link', () => {
+    expect(chatText({ title: 'Hi **you**', body: ' Hello ', link: 'https://whop.com/x' })).toBe(
+      '**Hi you**\n\nHello\n\nhttps://whop.com/x',
+    );
+    expect(chatText({ title: '  ', body: 'Only words' })).toBe('Only words');
   });
 
   it('applies an accepted offer: the membership kept with consent, then the pause', async () => {
@@ -780,17 +891,18 @@ describe('running the actions', () => {
         },
         key: 'stayput-action-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6-promo',
       },
+      // In the community's support chat with them: a former member keeps it.
       {
         method: 'POST',
-        path: '/notifications',
-        // Through the Alumni space, the only one a former member can still open.
-        body: {
-          experience_id: 'exp_Alu1',
-          user_ids: ['user_X'],
-          title: message.title,
-          content: message.body,
-        },
-        key: 'stayput-action-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6-notify',
+        path: '/support_channels',
+        body: { account_id: 'biz_X', user_id: 'user_X' },
+        key: 'stayput-chat-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6-channel',
+      },
+      {
+        method: 'POST',
+        path: '/messages',
+        body: { channel_id: 'supp_1', content: `**${message.title}**\n\n${message.body}` },
+        key: 'stayput-chat-7f3c2a10-9b4e-4c1d-8e2f-a1b2c3d4e5f6',
       },
     ]);
 
@@ -809,7 +921,7 @@ describe('running the actions', () => {
     });
     expect(test.calls).toEqual([]);
 
-    // Whop refuses the code (a permission missing): no notification without it.
+    // Whop refuses the code (a permission missing): no message without it.
     const refused = fakeWhop((path) =>
       path === '/promo_codes'
         ? new WhopApiError(403, 'forbidden', 'missing permission promo_code:create', {
@@ -825,7 +937,7 @@ describe('running the actions', () => {
     expect(refused.calls.map((c) => c.path)).toEqual(['/promo_codes']);
   });
 
-  it('sends only the notification when an outage stopped it after the code was made', async () => {
+  it('sends only the message when an outage stopped it after the code was made', async () => {
     const at = NOW.getTime();
     const down = fakeWhop((path) =>
       path === '/promo_codes'
@@ -854,8 +966,8 @@ describe('running the actions', () => {
       at + 3_600_000,
     );
     expect(retried).toEqual({ status: 'sent', result: kept });
-    expect(again.calls.map((c) => c.path)).toEqual(['/notifications']);
-    expect(again.calls[0]?.body).toMatchObject({
+    expect(again.calls.map((c) => c.path)).toEqual(['/support_channels', '/messages']);
+    expect(again.calls[1]?.body).toMatchObject({
       content: expect.stringContaining(`${String(kept.code)} (-20`) as string,
     });
   });
@@ -873,16 +985,6 @@ describe('running the actions', () => {
       status: 'cancelled',
       result: { reason: 'left_alumni' },
     });
-    // The space is gone: nothing to send it through.
-    expect(
-      await runAction(
-        followup({
-          alumni: { status: 'entered', experienceId: null, percentOff: 20, months: 3 },
-        }),
-        null,
-        at,
-      ),
-    ).toEqual({ status: 'failed', error: 'the Alumni space is not ready', retry: false });
   });
 
   it('drops an offer whose membership ended, and what no longer holds', async () => {
@@ -1143,7 +1245,9 @@ describe('the buddies’ introductions (SPEC Phase 5, point 8)', () => {
     const whop = {
       request: (_method: string, path: string, options?: { body?: unknown }) => {
         calls.push({ path, body: options?.body });
-        return Promise.resolve({});
+        // Each one's support chat: Whop names it after them.
+        const user = (options?.body as { user_id?: unknown } | undefined)?.user_id;
+        return Promise.resolve(path === '/support_channels' ? { id: `supp_${String(user)}` } : {});
       },
     } as unknown as WhopClient;
     expect(await executeDueActions(t.db, whop, new Date('2026-10-01T17:00:00Z'))).toEqual({
@@ -1152,23 +1256,19 @@ describe('the buddies’ introductions (SPEC Phase 5, point 8)', () => {
     expect(calls).toEqual(
       expect.arrayContaining([
         {
-          path: '/notifications',
+          path: '/messages',
           body: {
-            experience_id: 'exp_Club1',
-            user_ids: [`user_Act${lea.replace('mber_Act', '')}`],
-            title: 'Ton binôme t’attend, Léa',
+            channel_id: `supp_user_Act${lea.replace('mber_Act', '')}`,
             content:
-              'Bienvenue dans Le Club ! Ana est membre depuis un moment et va t’aider à bien démarrer. Dis-lui bonjour dans la communauté.',
+              '**Ton binôme t’attend, Léa**\n\nBienvenue dans Le Club ! Ana est membre depuis un moment et va t’aider à bien démarrer. Dis-lui bonjour dans la communauté.',
           },
         },
         {
-          path: '/notifications',
+          path: '/messages',
           body: {
-            experience_id: 'exp_Club1',
-            user_ids: [`user_Act${ana.replace('mber_Act', '')}`],
-            title: 'Un nouveau à accueillir, Ana',
+            channel_id: `supp_user_Act${ana.replace('mber_Act', '')}`,
             content:
-              'Léa vient d’arriver dans Le Club. Tu connais le chemin : dis-lui bonjour et partage ton meilleur premier pas. Si ton binôme est toujours là dans 30 jours, tu gagnes le badge Mentor.',
+              '**Un nouveau à accueillir, Ana**\n\nLéa vient d’arriver dans Le Club. Tu connais le chemin : dis-lui bonjour et partage ton meilleur premier pas. Si ton binôme est toujours là dans 30 jours, tu gagnes le badge Mentor.',
           },
         },
       ]),

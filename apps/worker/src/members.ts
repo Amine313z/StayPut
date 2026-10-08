@@ -502,6 +502,16 @@ export async function readMemberDetail(
         linked: member.telegram_linked,
       });
     }
+    // A pause proposed in the support chat, still waiting for the member's yes (0046).
+    const [pause] = await tx.query<{ id: string; days: number; expires_at: Date | string }>(
+      `select id, (terms ->> 'days')::int as days, expires_at
+         from stayput.creator_offers
+        where company_id = $1 and member_id = $2 and kind = 'pause_offer'
+          and outcome = 'open' and expires_at > $3::timestamptz
+        order by created_at desc
+        limit 1`,
+      [companyId, memberId, at],
+    );
     return {
       memberId,
       scores: scores.map((s) => ({ day: day(s.day), score: s.score })),
@@ -524,6 +534,9 @@ export async function readMemberDetail(
         failureReason: p.failure_reason,
       })),
       platforms,
+      pauseOffer: pause
+        ? { id: pause.id, days: pause.days, expiresAt: iso(pause.expires_at)! }
+        : null,
     };
   });
 }

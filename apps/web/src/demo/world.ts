@@ -13,6 +13,7 @@ import {
   signalReasons,
   type ActionSettingsView,
   type CreatorOfferKind,
+  type CreatorOfferApplied,
   type CreatorOfferMade,
   type CreatorSession,
   type DashboardView,
@@ -424,6 +425,8 @@ export interface DemoWorld {
   setRule: (rule: RuleId, on: boolean) => ActionSettingsView;
   /** « Pause » or « Offer »: refused when one is open, when the member cannot be contacted. */
   offer: (memberId: string, kind: CreatorOfferKind) => CreatorOfferMade | { error: string };
+  /** « They said yes »: the proposed pause applied, as stayput.apply_creator_offer (0046). */
+  applyPause: (memberId: string, offerId: string) => CreatorOfferApplied | { error: string };
   setContact: (memberId: string, doNotContact: boolean) => boolean | null;
   /** A Discord server or a Telegram group taken off (Integrations). */
   disconnect: (platform: 'discord' | 'telegram', id: string) => void;
@@ -924,6 +927,9 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
 
   const reached = new Map<string, number>();
   const offers = new Map<string, CreatorOfferKind>();
+  // The pauses the creator applied after the member's yes (« They said yes »).
+  const pausesApplied = new Set<string>();
+  const offerIdOf = (memberId: string) => `demo-offer-${memberId}`;
   /** The failed payments being retried now: nothing more to do about them but wait. */
   const retried = new Set<string>();
   const memberOf = (id: string) => joined.find((m) => m.id === id);
@@ -1161,6 +1167,15 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
         : [],
       payments,
       platforms,
+      // A pause proposed from the demo, until the creator applies it.
+      pauseOffer:
+        offers.get(memberId) === 'pause_offer' && !pausesApplied.has(memberId)
+          ? {
+              id: offerIdOf(memberId),
+              days: settings.offers.pauseDays,
+              expiresAt: new Date((reached.get(memberId) ?? clock()) + 7 * DAY).toISOString(),
+            }
+          : null,
     };
   };
 
@@ -1397,13 +1412,23 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
       offers.set(id, kind);
       reached.set(id, clock());
       return {
-        offerId: `demo-offer-${offers.size}`,
+        offerId: offerIdOf(id),
         kind,
         terms:
           kind === 'pause_offer'
             ? { days: settings.offers.pauseDays }
             : { percentOff: settings.offers.promoPercent, months: settings.offers.promoMonths },
+        // A discount is given; a pause waits for the member's yes in the support chat.
+        applied: kind === 'promo_offer',
       };
+    },
+    applyPause: (id, offerId) => {
+      if (offers.get(id) !== 'pause_offer' || offerId !== offerIdOf(id)) {
+        return { error: 'not_found' };
+      }
+      if (pausesApplied.has(id)) return { error: 'already_decided' };
+      pausesApplied.add(id);
+      return { actionId: `demo-action-pause-${id}` };
     },
     started: (step) => {
       gettingStarted[step] = true;

@@ -489,6 +489,7 @@ const DETAIL_LEAVING: MemberDetail = {
     { platform: 'discord', events: 2, lastAt: '2026-09-29T10:00:00.000Z', linked: true },
     { platform: 'telegram', events: 1, lastAt: '2026-09-28T10:00:00.000Z', linked: false },
   ],
+  pauseOffer: null,
 };
 
 /** Bruno's drawer: quiet for three weeks, on Whop only. */
@@ -521,6 +522,7 @@ const DETAIL_BRUNO: MemberDetail = {
     },
   ],
   platforms: [{ platform: 'whop', events: 4, lastAt: '2026-09-10T10:00:00.000Z', linked: true }],
+  pauseOffer: null,
 };
 
 /** A drawer with nothing in it yet. */
@@ -530,6 +532,7 @@ const DETAIL_EMPTY = (memberId: string): MemberDetail => ({
   memberships: [],
   payments: [],
   platforms: [{ platform: 'whop', events: 0, lastAt: null, linked: true }],
+  pauseOffer: null,
 });
 
 afterEach(() => {
@@ -764,9 +767,8 @@ describe('creator view', () => {
         { status: 200, body: { actionId: 'a3', status: 'retrying', sendAt: at(1) } },
         {
           status: 200,
-          body: { actionId: 'a4', status: 'failed', sendAt: at(0), reason: 'no_access' },
+          body: { actionId: 'a4', status: 'failed', sendAt: at(0), reason: 'permission' },
         },
-        { status: 409, body: { error: { code: 'conflict', message: 'no_space' } } },
         { status: 409, body: { error: { code: 'conflict', message: 'too_many_notes' } } },
       ],
     });
@@ -782,7 +784,7 @@ describe('creator view', () => {
       'A message for you',
     );
     expect(send().hasAttribute('disabled')).toBe(true);
-    expect(dialog.textContent).toContain('word for word as a Whop notification with your picture');
+    expect(dialog.textContent).toContain('word for word in the support chat with them');
     const body = within(dialog).getByRole('textbox', { name: 'Your message' });
     fireEvent.change(body, { target: { value: 'Bruno, how is the course going?' } });
     expect(within(dialog).getByText('31/300')).toBeTruthy();
@@ -816,22 +818,13 @@ describe('creator view', () => {
     expect(
       screen.getByText(/^Whop did not take it\. StayPut tries again in \d+ (hour|minutes)/),
     ).toBeTruthy();
-    // Whop would drop it: the member cannot open StayPut in the community.
+    // StayPut may not write in the support chat yet: what to do, said.
     await write('Still there?');
     expect(
       await screen.findByText(
-        'Bruno Petit cannot open StayPut in your community, so Whop would not deliver it. Nothing was sent.',
+        'StayPut cannot write in your support chat yet: accept its new permissions in Whop. Nothing was sent to Bruno Petit.',
       ),
     ).toBeTruthy();
-    // No space in the community yet: refused, the words stay.
-    await write('Hello?');
-    expect(
-      await screen.findByText(
-        'StayPut has no space in your community yet, so Whop cannot deliver a message to your members. Nothing was sent.',
-      ),
-    ).toBeTruthy();
-    expect(screen.getByRole('dialog', { name: 'Write to Bruno Petit' })).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
     // Three a day at most: said as such, the words stay to try again.
     dialog = await open();
@@ -865,7 +858,9 @@ describe('creator view', () => {
     expect(
       await within(dialog).findByText('A 30-day pause: their membership waits for them.'),
     ).toBeTruthy();
-    expect(dialog.textContent).toContain('accepts it in their space within 7 days');
+    // Proposed in the support chat: nothing changes without the member's yes.
+    expect(dialog.textContent).toContain('Proposed in the support chat with them');
+    expect(dialog.textContent).toContain('you then apply it from their sheet');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Offer the pause' }));
     expect(await screen.findByText('Pause offered to Bruno Petit')).toBeTruthy();
     expect(bodies.get('POST /api/creator/biz_A1/members/mber_3/offer')).toEqual({
@@ -884,7 +879,9 @@ describe('creator view', () => {
     ).toBeTruthy();
     fireEvent.click(within(second).getByRole('button', { name: 'Make the offer' }));
     expect(
-      await screen.findByText('Already under way: an offer is waiting for this member’s answer.'),
+      await screen.findByText(
+        'Already under way: a pause is waiting for this member’s answer, or a discount was given this week.',
+      ),
     ).toBeTruthy();
   });
 
@@ -1440,6 +1437,41 @@ describe('creator view', () => {
       '',
     );
     expect(screen.getByRole('button', { name: /^All/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('applies, in one click, the pause a member said yes to in the support chat', async () => {
+    onOct1();
+    const waiting = {
+      ...DETAIL_BRUNO,
+      pauseOffer: { id: 'offer_1', days: 30, expiresAt: '2026-10-08T12:00:00.000Z' },
+    };
+    const calls = mockApi({
+      ...dashboard(),
+      // Read again once applied: nothing waits any more.
+      '/api/creator/biz_A1/members/mber_3': [
+        { status: 200, body: waiting },
+        { status: 200, body: DETAIL_BRUNO },
+      ],
+      'POST /api/creator/biz_A1/members/mber_3/offers/offer_1/apply': [
+        { status: 200, body: { actionId: 'a1' } },
+      ],
+    });
+    renderAt('/dashboard/biz_A1/members?filter=high&member=mber_3');
+    const drawer = await screen.findByRole('dialog', { name: 'Bruno Petit' });
+    expect(
+      await within(drawer).findByText(
+        /^A 30-day pause is proposed: waiting for their answer in the support chat, until/,
+      ),
+    ).toBeTruthy();
+    fireEvent.click(within(drawer).getByRole('button', { name: 'They said yes: apply the pause' }));
+    expect(await screen.findByText('Pause applied for Bruno Petit')).toBeTruthy();
+    expect(screen.getByText('Tell them in the support chat: it is done.')).toBeTruthy();
+    expect(calls).toContain('POST /api/creator/biz_A1/members/mber_3/offers/offer_1/apply');
+    await vi.waitFor(() =>
+      expect(
+        within(drawer).queryByRole('button', { name: 'They said yes: apply the pause' }),
+      ).toBeNull(),
+    );
   });
 
   it('keeps a member off every action from their drawer, and says when that was not saved', async () => {
@@ -3854,7 +3886,23 @@ describe('the member space in the dashboard', () => {
   });
 });
 
-describe('member view', () => {
+describe('member view, without a member space (2026-10-08)', () => {
+  it('tells a member there is nothing to do here, and asks StayPut nothing', async () => {
+    const calls = mockApi({});
+    renderAt('/experiences/exp_E1');
+    expect(await screen.findByText('Nothing to do here')).toBeTruthy();
+    expect(
+      screen.getByText('Messages from your community reach you in its support chat.'),
+    ).toBeTruthy();
+    // No survey, no offer, no payment, no Telegram: nothing of a space.
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(calls).toEqual([]);
+  });
+});
+
+describe('member view (with the member space)', () => {
+  // The member view is the member space's: off in V1, these tests turn it on.
+  beforeEach(spaceOn);
   const memberSession = {
     status: 200,
     body: { experienceId: 'exp_E1', userId: 'user_m', accessLevel: 'customer', via: 'login' },
@@ -3894,21 +3942,6 @@ describe('member view', () => {
       whopAppId: 'app_stayput',
       ...over,
     } satisfies MemberTelegramStatus,
-  });
-
-  it('opens the member’s subscription, and says plainly when nothing needs them', async () => {
-    mockApi({
-      '/api/member/exp_E1/session': [memberSession],
-      '/api/member/exp_E1/retention': [retention()],
-      '/api/member/exp_E1/telegram?lang=en': [telegram({ available: false, link: null })],
-    });
-    renderAt('/experiences/exp_E1');
-    expect(await screen.findByRole('heading', { name: 'Your membership' })).toBeTruthy();
-    expect(screen.getByText('Your membership is all set: nothing needs you here.')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Sign out' })).toBeTruthy();
-    // The member space is off in V1: no goals, no progress space.
-    expect(screen.queryByRole('heading', { name: 'Your progress space' })).toBeNull();
-    expect(screen.queryByText('Your Telegram account')).toBeNull();
   });
 
   it('gives every member the privacy policy, in their community’s language', async () => {
@@ -7000,7 +7033,36 @@ describe('the actions (SPEC Phase 4)', () => {
     expect(calls.filter((c) => c === 'POST /api/creator/biz_A1/alumni')).toHaveLength(2);
   });
 
-  it('sets the departure offers, within their limits', async () => {
+  it('sets the creator’s own offers, without the departure survey’s (no member space)', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/settings/risk': [
+        {
+          status: 200,
+          body: {
+            niche: 'other',
+            weights: { recency: 0.3, frequency: 0.25, progress: 0.2, payment: 0.15, friction: 0.1 },
+            recencyThresholdDays: 14,
+            mediumFrom: 40,
+            highFrom: 70,
+          },
+        },
+      ],
+      '/api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
+    });
+    renderAt('/dashboard/biz_A1/settings/actions');
+    expect(await screen.findByRole('spinbutton', { name: 'Pause, in days' })).toBeTruthy();
+    expect(screen.getByRole('spinbutton', { name: 'Discount, in %' })).toBeTruthy();
+    expect(screen.getByText(/A pause is proposed in the support chat/)).toBeTruthy();
+    // The departure survey's answers belong to a space members no longer have.
+    expect(screen.queryByRole('spinbutton', { name: /Free days \(/ })).toBeNull();
+    expect(
+      screen.queryByRole('textbox', { name: /Your words to a member without results/ }),
+    ).toBeNull();
+  });
+
+  it('sets the departure offers, within their limits (with the member space)', async () => {
+    spaceOn();
     const calls = mockApi({
       ...dashboard(),
       '/api/creator/biz_A1/settings/risk': [

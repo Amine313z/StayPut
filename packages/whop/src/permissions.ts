@@ -26,12 +26,18 @@ export const PHASE_2_PERMISSIONS = [
   'webhook_receive:courses',
 ] as const;
 
-/** What the actions of Phase 4 write: pause, free days, consent, retries, codes. */
+/**
+ * What the actions of Phase 4 write: pause, free days, consent, retries, codes; the messages to
+ * members in the community's support chat with them (they have no StayPut space, 2026-10-08);
+ * the Monday report to the team, a notification.
+ */
 export const PHASE_4_PERMISSIONS = [
   'member:manage',
   'payment:manage',
   'promo_code:create',
   'notification:create',
+  'support_chat:create',
+  'support_chat:message:create',
 ] as const;
 
 /** The Alumni offer (SPEC 5.9), for the creators who turn it on. */

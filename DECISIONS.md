@@ -4080,3 +4080,41 @@ la base pour une seule attente du navigateur : c'est là que partait le temps.
   entrée, pas où le Worker a tourné : le message du déploiement le dit ainsi.
 - **Mesuré en production** : `cf-placement: remote-LHR` (la base de production est à Londres),
   sonde **83 ms** au lieu de 486–513 ms, par le relais de Whop comme en direct.
+
+## 2026-10-08 — Les membres n'ont pas d'espace : tout passe par le chat de support
+
+Le fondateur, voyant chez un membre « StayPut » avec une pastille dans les Applications de la
+communauté : « les membres n'ont pas d'espace à eux, surtout pas d'incohérence ». Une
+notification Whop n'arrive qu'aux utilisateurs de l'espace de l'app (son expérience) : tant que
+les messages passaient par là, StayPut devait être visible chez les membres. Choix du fondateur
+(questions posées) : **le chat de support** et **les offres appliquées directement**.
+
+- **Chaque message à un membre part dans le chat de support de la communauté avec lui**
+  (`messageMember`, `apps/worker/src/actions.ts`) : `POST /support_channels` (Whop l'ouvre, ou
+  rend celui qui existe), puis `POST /messages`, le titre en gras, le texte, le lien dessous.
+  Les relances automatiques, le « Message » du créateur, les relances Alumni, les offres. Le
+  membre peut répondre : sa réponse arrive au créateur. Plus besoin que StayPut ait une
+  expérience dans la communauté : le refus `no_space` et la vérification d'accès disparaissent.
+- **Permissions** : `support_chat:create` et `support_chat:message:create`, ajoutées aux
+  permissions exigées (`packages/whop/src/permissions.ts`) : en production le déploiement
+  s'arrête tant que l'app ne les demande pas. Un 403 de Whop sur un message du créateur lui dit
+  d'accepter les nouvelles permissions (`reason: 'permission'`).
+- **Les textes ne parlent plus d'espace** : le questionnaire de départ demande de répondre au
+  message ; la relance de paiement porte le lien où régler (la page du paiement, sinon celle de
+  l'abonnement chez Whop, `manage_url`, lue au départ du message ; `due_action` donne désormais
+  l'abonnement du paiement, migration 0046) ; le suivi dit « réponds ici ».
+- **Offres du créateur** (0046) : une **réduction est donnée** — acceptée à sa création, posée
+  sur l'abonnement quand son message part (les garde-fous la retiennent avec lui), puis
+  annoncée ; jamais de résiliation retirée sans accord. Une seule par semaine. Une **pause est
+  proposée**, jamais imposée : le message la propose, le membre répond dans le chat, et le
+  créateur l'applique depuis la fiche du membre (« Le membre a dit oui : appliquer la pause »,
+  `stayput.apply_creator_offer`), dans les 7 jours ; l'abonnement est alors gardé.
+- **La vue membre** (si un membre ouvre StayPut quand même) : « Rien à faire ici », sans aucune
+  fonction ni appel au Worker. Le questionnaire, les offres à accepter et le lien Telegram ne
+  reviennent qu'avec l'espace membre (`VITE_MEMBER_SPACE_ENABLED`).
+- **Réglages** : « Vos offres » (pause, réduction) remplacent les « offres de départ » par
+  raison, qui supposaient le choix du membre dans son espace.
+
+Restent à trancher : l'offre Alumni crée encore un espace StayPut dans son produit gratuit (les
+relances, elles, passent déjà par le chat) ; le lien Telegram d'un membre se faisait depuis sa
+vue (Telegram est éteint en production).

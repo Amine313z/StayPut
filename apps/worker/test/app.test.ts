@@ -137,8 +137,15 @@ function fakeWhop(
       if (method !== 'GET') {
         writes.push({ method, path, body: options?.body, key: options?.idempotencyKey });
       }
-      // A notification to a member: Whop takes it.
+      // A notification to the team: Whop takes it.
       if (method === 'POST' && path === '/notifications') return Promise.resolve({ success: true });
+      // The support chat with a member: Whop opens it (or gives the one there is), then takes
+      // the message.
+      if (method === 'POST' && path === '/support_channels') {
+        const user = (options?.body as { user_id?: unknown } | undefined)?.user_id;
+        return Promise.resolve({ id: `supp_${String(user)}` });
+      }
+      if (method === 'POST' && path === '/messages') return Promise.resolve({ id: 'msg_1' });
       // What creating the Alumni offer asks of Whop.
       if (method === 'POST' && path === '/products') return Promise.resolve({ id: 'prod_Alu1' });
       if (method === 'POST' && path === '/variants') {
@@ -2735,17 +2742,23 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     return { ...env, company, ana, read, answer, decide, boss: () => asUser(`user_boss${n}`) };
   }
 
-  it('lets the creator offer a pause from the dashboard, which the member accepts in their space', async () => {
+  it('proposes a pause in the support chat, applied when the creator says the member agreed', async () => {
     const env = await departing(9);
     const boss = await env.boss();
+    await t.db.query(
+      `update stayput.company_settings set quiet_hours_start = 0, quiet_hours_end = 0
+        where company_id = $1`,
+      [env.company],
+    );
     const offerOf = (body: unknown) =>
       env.request(`/api/creator/${env.company}/members/mber_Ret9/offer`, json(boss, 'POST', body));
     expect((await offerOf({ kind: 'free_lunch' })).status).toBe(400);
     const made = await offerOf({ kind: 'pause_offer' });
     expect(made.status).toBe(200);
     const offer = (await made.json()) as { offerId: string; kind: string; terms: unknown };
-    expect(offer).toMatchObject({ kind: 'pause_offer', terms: { days: 30 } });
-    // One open offer at a time.
+    // Proposed, not given: nothing changes until the member says yes.
+    expect(offer).toMatchObject({ kind: 'pause_offer', terms: { days: 30 }, applied: false });
+    // One at a time.
     expect((await offerOf({ kind: 'promo_offer' })).status).toBe(409);
     // Ana, a member, makes no offers.
     const asAna = await env.request(
@@ -2753,26 +2766,53 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
       json(env.ana, 'POST', { kind: 'pause_offer' }),
     );
     expect(asAna.status).toBe(403);
+    await settle();
+    // The proposal goes to the support chat with Ana as a follow-up, through the guardrails (her
+    // departure survey just went: it waits its turn).
+    const [proposal] = await t.db.query<{ status: string; content: Record<string, unknown> }>(
+      `select status, content from stayput.actions
+        where company_id = $1 and type = 'creator_offer'`,
+      [env.company],
+    );
+    expect(proposal).toMatchObject({
+      status: 'scheduled',
+      content: { offerId: offer.offerId, kind: 'pause_offer', apply: false },
+    });
 
-    expect((await env.read()).creatorOffer).toMatchObject({
+    // Her sheet shows it waiting for her answer, for the week.
+    const sheet = async () =>
+      (
+        (await (
+          await env.request(`/api/creator/${env.company}/members/mber_Ret9`, boss)
+        ).json()) as MemberDetail
+      ).pauseOffer;
+    expect(await sheet()).toEqual({
       id: offer.offerId,
-      kind: 'pause_offer',
-      terms: { days: 30 },
-      outcome: 'open',
-      result: null,
+      days: 30,
+      expiresAt: new Date(NOW.getTime() + 7 * 86_400_000).toISOString(),
     });
-    const decideCreator = (body: unknown) =>
-      env.request(`/api/member/exp_Ret9/retention/creator-offer`, json(env.ana, 'POST', body));
-    expect((await decideCreator({ offerId: offer.offerId })).status).toBe(400);
-    const accepted = (await (
-      await decideCreator({ offerId: offer.offerId, accept: true })
-    ).json()) as MemberRetentionView;
-    // Applied at once: the cancellation withdrawn, then the pause.
-    expect(accepted.creatorOffer).toMatchObject({
-      outcome: 'accepted',
-      result: { status: 'applied', kept: true },
-    });
-    expect((await decideCreator({ offerId: offer.offerId, accept: false })).status).toBe(404);
+    const apply = (offerId: string, memberId = 'mber_Ret9', as = boss) =>
+      env.request(
+        `/api/creator/${env.company}/members/${memberId}/offers/${offerId}/apply`,
+        json(as, 'POST', {}),
+      );
+    expect((await apply('not-an-offer')).status).toBe(400);
+    expect((await apply(offer.offerId, 'mber_Other9')).status).toBe(404);
+    expect((await apply(offer.offerId, 'mber_Ret9', env.ana)).status).toBe(403);
+    // She said yes in the chat: her membership kept, then paused.
+    const applied = await apply(offer.offerId);
+    expect(applied.status).toBe(200);
+    expect(await applied.json()).toEqual({ actionId: expect.any(String) as string });
+    await settle();
+    const writes = env.whop.writes.map((w) => `${w.method} ${w.path}`);
+    expect(writes).toEqual(
+      expect.arrayContaining(['PATCH /memberships/mem_Ret9', 'POST /memberships/mem_Ret9/pause']),
+    );
+    expect(writes.indexOf('PATCH /memberships/mem_Ret9')).toBeLessThan(
+      writes.indexOf('POST /memberships/mem_Ret9/pause'),
+    );
+    expect((await apply(offer.offerId)).status).toBe(409);
+    expect(await sheet()).toBeNull();
   });
 
   it('sends the creator’s word from the dashboard, and shows the home’s figures', async () => {
@@ -2804,8 +2844,6 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
   it('sends one member the creator’s own words, as written, within the guardrails', async () => {
     const env = await departing(15);
     const boss = await env.boss();
-    // Ana opened StayPut once: the community's experience is known, notifications can go.
-    await env.read();
     const write = (body: unknown, as = boss) =>
       env.request(`/api/creator/${env.company}/members/mber_Ret15/note`, json(as, 'POST', body));
     const quiet = (start: number, end: number) =>
@@ -2843,19 +2881,28 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
       },
       approved_by: 'user_boss15',
     });
-    // Word for word, to Ana alone, with the creator's picture (her departure survey goes too).
-    expect(
-      env.whop.writes.find(
-        (w) =>
-          w.path === '/notifications' && (w.body as { title?: string }).title === 'A word from me',
-      )?.body,
-    ).toEqual({
-      experience_id: 'exp_Ret15',
-      user_ids: ['user_ana15'],
-      title: 'A word from me',
-      content: 'Ana, how is it going?\nTell me.',
-      icon_user_id: 'user_boss15',
-    });
+    // Word for word, to Ana alone, in the community's support chat with her (her departure
+    // survey goes there too): no StayPut space was ever opened in the community.
+    expect(env.whop.writes).toEqual(
+      expect.arrayContaining([
+        {
+          method: 'POST',
+          path: '/support_channels',
+          body: { account_id: env.company, user_id: 'user_ana15' },
+          key: expect.stringMatching(/^stayput-chat-.+-channel$/) as string,
+        },
+        {
+          method: 'POST',
+          path: '/messages',
+          body: {
+            channel_id: 'supp_user_ana15',
+            content: '**A word from me**\n\nAna, how is it going?\nTell me.',
+          },
+          key: expect.stringMatching(/^stayput-chat-/) as string,
+        },
+      ]),
+    );
+    expect(env.whop.writes.some((w) => w.path === '/notifications')).toBe(false);
     // No follow-up cap holds it back: a second one the same day goes too.
     expect((await write({ title: 'Again', body: 'A second word.' })).status).toBe(200);
     // During the quiet hours, it waits for their end.
@@ -2886,7 +2933,7 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     ).toBe(404);
   });
 
-  it('says what Whop did with a creator’s message: no space, no access, an outage', async () => {
+  it('says what Whop did with a creator’s message: test mode, no permission, an outage', async () => {
     const env = await departing(16);
     const boss = await env.boss();
     const write = (member: string, title: string) =>
@@ -2904,19 +2951,17 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
       )[0]?.n;
     const notified = (title: string) =>
       env.whop.writes.some(
-        (w) => w.path === '/notifications' && (w.body as { title?: string }).title === title,
+        (w) =>
+          w.path === '/messages' &&
+          String((w.body as { content?: unknown }).content).startsWith(`**${title}**`),
       );
     await t.db.query(
       `update stayput.company_settings set quiet_hours_start = 0, quiet_hours_end = 0
         where company_id = $1`,
       [env.company],
     );
-    // Nobody opened StayPut in the community yet: Whop could deliver nothing, nothing is made.
-    const nowhere = await write('mber_Ret16', 'Nowhere');
-    expect(nowhere.status).toBe(409);
-    expect(await nowhere.json()).toMatchObject({ error: { message: 'no_space' } });
     expect(await notes()).toBe(0);
-    // In test mode, nothing leaves anyway: simulated.
+    // In test mode, nothing leaves: simulated.
     await t.db.query(`update stayput.company_settings set dry_run = true where company_id = $1`, [
       env.company,
     ]);
@@ -2927,23 +2972,23 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     await t.db.query(`update stayput.company_settings set dry_run = false where company_id = $1`, [
       env.company,
     ]);
-    // Ana opens StayPut: the space is known. Bob cannot open it: Whop would drop it, he is not
-    // written to, and the creator is told.
-    await env.read();
-    await t.db.query('select stayput.ingest_page($1, $2, null, $3::text::jsonb)', [
-      env.company,
-      'members',
-      JSON.stringify(page([member('mber_Bob16', 'user_bob16')])),
-    ]);
-    expect(await (await write('mber_Bob16', 'Outside')).json()).toMatchObject({
+    // StayPut may not write in the support chat yet (the permission not accepted): refused for
+    // good, and the creator is told what to do.
+    env.whop.refusals['POST /support_channels'] = new WhopApiError(
+      403,
+      'forbidden',
+      'missing permission support_chat:create',
+      { method: 'POST', path: '/support_channels' },
+    );
+    expect(await (await write('mber_Ret16', 'Forbidden')).json()).toMatchObject({
       status: 'failed',
-      reason: 'no_access',
+      reason: 'permission',
     });
-    expect(notified('Outside')).toBe(false);
+    expect(notified('Forbidden')).toBe(false);
     // Whop is down: not sent, tried again in an hour, and said so.
-    env.whop.refusals['POST /notifications'] = new WhopApiError(503, 'unavailable', 'down', {
+    env.whop.refusals['POST /messages'] = new WhopApiError(503, 'unavailable', 'down', {
       method: 'POST',
-      path: '/notifications',
+      path: '/messages',
     });
     expect(await (await write('mber_Ret16', 'Down')).json()).toMatchObject({
       status: 'retrying',

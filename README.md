@@ -338,10 +338,12 @@ par semaine), **Réglages** choisit la niche, les poids et les seuils. Détails 
 
 **Actions** liste ce que StayPut propose pour chaque membre (à valider en mode manuel), ce qui
 est programmé et ce qui s'est passé ; tout passe par les garde-fous, et le mode test calcule
-sans rien envoyer. Dans la **vue membre**, un membre qui a programmé son annulation dit pourquoi
-en un clic et reçoit l'offre qui répond à sa raison (pause, réduction posée sur son abonnement, aide, jours offerts) ;
-un membre dont le paiement attend voit le bouton pour le régler. L'équipe y voit un aperçu, où
-rien n'est enregistré. L'**offre Alumni** (Automatisations → File d'attente → Offre Alumni) se crée en un clic sur Whop : une
+sans rien envoyer. **Les membres n'ont pas d'espace StayPut** (08/10/2026) : chaque message leur
+arrive dans le chat de support de la communauté, où ils peuvent répondre. Un membre qui a
+programmé son annulation est invité à dire pourquoi en répondant ; un membre dont le paiement
+attend reçoit le lien pour le régler. Depuis la fiche d'un membre, le créateur lui donne une
+réduction (posée sur son abonnement, puis annoncée) ou lui propose une pause, qu'il applique
+quand le membre a dit oui. L'**offre Alumni** (Automatisations → File d'attente → Offre Alumni) se crée en un clic sur Whop : une
 offre gratuite et cachée où les anciens membres gardent le contact. 7, 30 et 60 jours après leur
 départ, ils y reçoivent des nouvelles de la communauté avec un code de retour à usage unique, réservé aux anciens clients, et
 le retrouvent dans leur vue de l'espace Alumni avec le bouton pour revenir. Détails :

@@ -371,6 +371,11 @@ export interface MemberDetail {
   payments: MemberDetailPayment[];
   /** What they did over 30 days, place by place: Whop, then Discord and Telegram if connected. */
   platforms: MemberPlatformActivity[];
+  /**
+   * A pause proposed to them, waiting for their yes in the support chat: the creator applies it
+   * from the drawer until it expires (0046). Null when none is waiting.
+   */
+  pauseOffer: { id: string; days: number; expiresAt: string } | null;
 }
 
 export interface MemberDetailMembership {
@@ -800,14 +805,21 @@ export interface CreatorNoteSent {
   actionId: string;
   status: 'sent' | 'scheduled' | 'simulated' | 'retrying' | 'failed';
   sendAt: string;
-  /** `no_access`: the member cannot open StayPut in the community, so Whop would not deliver it. */
-  reason?: 'no_access' | 'refused';
+  /** `permission`: StayPut may not write in the community's support chat yet (Whop said 403). */
+  reason?: 'permission' | 'refused';
 }
 
 export interface CreatorOfferMade {
   offerId: string;
   kind: CreatorOfferKind;
   terms: CreatorOfferTerms;
+  /** A discount is given (applied when its message leaves); a pause waits for the member's yes. */
+  applied: boolean;
+}
+
+/** A pause the member said yes to, applied by the creator: the action that applies it. */
+export interface CreatorOfferApplied {
+  actionId: string;
 }
 
 /** What a former member sees in StayPut's view of the Alumni space. */

@@ -1280,6 +1280,11 @@ export const fr: Messages = {
   'actionSettings.offers': 'Offres de départ',
   'actionSettings.offers.hint':
     'Un membre qui programme son annulation dit pourquoi en un clic dans l’espace StayPut de votre communauté, et reçoit l’offre qui répond à sa raison. Ce qu’il accepte suit votre mode et les limites ci-dessus.',
+  'actionSettings.offers.yours': 'Vos offres',
+  'actionSettings.offers.hintChat':
+    'Ce que vous faites depuis la fiche d’un membre. Une pause est proposée dans le chat de support, et vous l’appliquez après son oui ; une réduction est appliquée, puis annoncée.',
+  'actionSettings.offers.pauseDaysPlain': 'Pause, en jours',
+  'actionSettings.offers.promoPercentPlain': 'Réduction, en %',
   'actionSettings.offers.pauseDays': 'Pause, en jours (« {reason} »)',
   'actionSettings.offers.promoPercent': 'Réduction du code promo, en % (« {reason} »)',
   'actionSettings.offers.promoMonths': 'Durée du code promo, en mois',
@@ -1459,7 +1464,10 @@ export const fr: Messages = {
   'dash.toast.nothingNew': 'Rien de nouveau à envoyer : ces membres ont déjà été contactés.',
   'dash.toast.offered.pause': 'Pause proposée à {name}',
   'dash.toast.offered.promo': 'Offre faite à {name}',
-  'dash.toast.offered.body': 'Le membre a 7 jours pour l’accepter dans son espace.',
+  'dash.toast.offered.promoBody':
+    'Appliquée à ses prochains paiements au départ du message, qui le lui dit dans le chat de support.',
+  'dash.toast.offered.pauseBody':
+    'Proposée dans le chat de support. Quand le membre dit oui, appliquez-la depuis sa fiche.',
 
   'dash.row.renews': 'Renouvellement le {date}',
   'dash.row.perMonth': '{amount}/mois',
@@ -1478,7 +1486,7 @@ export const fr: Messages = {
   'dash.note.placeholder': 'Écrivez-le comme vous le diriez.',
   'dash.note.count': '{count}/{max}',
   'dash.note.how':
-    'Il part mot pour mot en notification Whop, avec votre photo : tout de suite, ou à la fin de vos heures calmes.',
+    'Il part mot pour mot dans le chat de support avec ce membre, qui peut vous répondre : tout de suite, ou à la fin de vos heures calmes.',
   'dash.note.how.test':
     'Le mode test est activé : StayPut le garde dans l’historique, rien n’est envoyé.',
   'dash.note.send': 'Envoyer',
@@ -1489,11 +1497,9 @@ export const fr: Messages = {
   'dash.note.tooMany': 'Déjà trois messages à ce membre aujourd’hui : réécrivez demain.',
   'dash.note.retrying': 'Pas encore envoyé à {name}',
   'dash.note.retryingBody': 'Whop ne l’a pas pris. StayPut réessaie {when}.',
-  'dash.note.noAccess':
-    '{name} n’a pas accès à StayPut dans votre communauté : Whop ne le lui livrerait pas. Rien n’est parti.',
+  'dash.note.permission':
+    'StayPut ne peut pas encore écrire dans votre chat de support : acceptez ses nouvelles permissions dans Whop. Rien n’est parti pour {name}.',
   'dash.note.refused': 'Whop l’a refusé : rien n’est parti pour {name}.',
-  'dash.note.noSpace':
-    'StayPut n’a pas encore d’espace dans votre communauté : Whop ne peut livrer aucun message à vos membres. Rien n’est parti.',
   'dash.act.pauseLabel': 'Proposer une pause à {name}',
   'dash.act.offerLabel': 'Faire une offre à {name}',
   'dash.act.neverContact':
@@ -1505,9 +1511,20 @@ export const fr: Messages = {
   'dash.offer.pause.terms': 'Une pause de {days} jours : son abonnement l’attend.',
   'dash.offer.promo.terms':
     '{percent} de réduction pendant {months} mois, posée sur son abonnement.',
-  'dash.offer.how':
-    'Le membre est prévenu dans Whop et l’accepte dans son espace sous 7 jours. Rien ne change sans son accord, et vos garde-fous s’appliquent.',
+  'dash.offer.how.promo':
+    'Appliquée à ses prochains paiements au départ de son message, dans le chat de support avec ce membre. Vos garde-fous s’appliquent : pendant vos heures calmes, elle attend.',
+  'dash.offer.how.pause':
+    'Proposée dans le chat de support avec ce membre. Rien ne change sans son oui : vous l’appliquez alors depuis sa fiche, sous 7 jours.',
+  'dash.pause.waiting':
+    'Pause de {days} jours proposée : en attente de sa réponse dans le chat de support, jusqu’au {date}.',
+  'dash.pause.apply': 'Le membre a dit oui : appliquer la pause',
+  'dash.pause.applied': 'Pause appliquée pour {name}',
+  'dash.pause.appliedBody': 'Dites-le-lui dans le chat de support : c’est fait.',
+  'dash.pause.alreadyApplied': 'Cette pause est déjà appliquée.',
+  'dash.pause.expired': 'Cette proposition a expiré : proposez la pause à nouveau.',
   'dash.offer.settings': 'Vous réglez ces conditions dans Réglages › Automatisations.',
+  'dash.offer.open':
+    'Déjà en cours : une pause attend la réponse de ce membre, ou une réduction lui a été faite cette semaine.',
   'dash.offer.confirm.pause': 'Proposer la pause',
   'dash.offer.confirm.promo': 'Faire l’offre',
 
@@ -1539,6 +1556,8 @@ export const fr: Messages = {
   'legal.frame': '{document}, la page',
   'legal.draft': 'Brouillon en cours de relecture : il peut encore changer avant le lancement.',
   'member.privacy': 'Confidentialité',
+  'member.none.title': 'Rien à faire ici',
+  'member.none.body': 'Les messages de votre communauté vous arrivent dans son chat de support.',
   'member.subscription.title': 'Votre abonnement',
   'member.subscription.welcome': 'Ce qui concerne votre abonnement, au même endroit.',
   'member.allSet': 'Votre abonnement est en ordre : rien ne vous attend ici.',
@@ -1652,7 +1671,7 @@ export const fr: Messages = {
   'rules.notice.then': 'Demander au membre de mettre sa carte à jour',
   'rules.cancel.title': 'Questionnaire de départ',
   'rules.cancel.check': 'Avant la fin de son accès',
-  'rules.cancel.then': 'Demander pourquoi en un clic, puis proposer ce qui répond à sa réponse',
+  'rules.cancel.then': 'Demander pourquoi dans le chat de support : sa réponse vous y attend',
   'rules.checkIn.title': 'Message de suivi',
   'rules.checkIn.then': 'Un message personnel à l’heure où il est habituellement en ligne',
   'rules.welcome.title': 'Message de bienvenue',

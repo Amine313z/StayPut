@@ -50,8 +50,6 @@ export const SCHEDULE_BATCH = 50;
 export const EXECUTE_BATCH = 20;
 /** A Whop outage is tried again an hour later, three attempts in all. */
 export const MAX_ATTEMPTS = 3;
-/** A creator's message to a member who cannot open StayPut in the community (runAction). */
-export const NO_ACCESS_ERROR = 'the member cannot open StayPut in the community';
 const RETRY_DELAY_MS = 3_600_000;
 
 /** What stayput.actions_to_schedule returns. */
@@ -202,6 +200,8 @@ export interface DueAction {
     retryable: boolean | null;
     nextAttemptAt: string | null;
     recoveryUrl: string | null;
+    /** Its membership, whose page on Whop is where the member updates their card. */
+    membershipId?: string | null;
   } | null;
   membership: {
     id: string;
@@ -388,46 +388,105 @@ export async function runAction(
   if (MESSAGE_KINDS[type] === 'none') {
     return { status: 'failed', error: `${type} is not run by StayPut`, retry: false };
   }
-  // The creator's own words leave as written, with their picture: no template, no values.
+  // The creator's own words leave as written: no template, no values.
   const note = type === 'creator_note' ? creatorNote(action.content) : null;
   if (type === 'creator_note' && !note) {
     return { status: 'failed', error: 'the message has no title or text', retry: false };
   }
   const message = note ?? actionMessage(action, type as MessageAction);
-  const author = note && typeof action.content.from === 'string' ? action.content.from : null;
-  if (action.dryRun) return { status: 'simulated', result: { message } };
-  if (!whop) return { status: 'failed', error: 'the Whop API key is not set', retry: false };
-  const experienceId = action.experienceId;
-  if (!experienceId) {
-    // Learned when a member first opens StayPut in the community.
+  // A discount the creator gives goes on the membership before its message says so (0046).
+  const given = type === 'creator_offer' && action.content.apply === true;
+  if (action.dryRun) {
+    const offer = given ? await runOffer(discountOf(action), 'promo_offer', null) : null;
     return {
-      status: 'failed',
-      error: 'no StayPut experience known for this company yet',
-      retry: true,
+      status: 'simulated',
+      result: { message, ...(offer && 'result' in offer ? offer.result : {}) },
     };
   }
-  if (note) {
-    // Whop drops, without a word, a notification to a user outside the experience: a creator
-    // who wrote is told instead. Without an answer, it goes, as every message does.
-    const access = await whop.checkAccess(action.member.userId, experienceId).catch(() => null);
-    if (access?.accessLevel === 'no_access') {
-      return { status: 'failed', error: NO_ACCESS_ERROR, retry: false };
-    }
+  if (!whop) return { status: 'failed', error: 'the Whop API key is not set', retry: false };
+  const result: Record<string, unknown> = { message };
+  if (given) {
+    const offer = await runOffer(discountOf(action), 'promo_offer', whop);
+    if (offer.status !== 'sent') return offer;
+    Object.assign(result, offer.result);
   }
-  return callWhop(action, () =>
-    whop.request('POST', '/notifications', {
-      body: {
-        experience_id: experienceId,
-        user_ids: [action.member.userId],
-        title: message.title,
-        content: message.body,
-        ...(author ? { icon_user_id: author } : {}),
-      },
-      idempotencyKey: `stayput-action-${action.id}`,
-    }),
-  ).then((outcome) =>
-    outcome.status === 'sent' ? { status: 'sent', result: { message } } : outcome,
+  const link = await paymentLink(type, action, whop);
+  const outcome = await callWhop(action, () =>
+    messageMember(whop, action, link ? { ...message, link } : message, `stayput-chat-${action.id}`),
   );
+  if (outcome.status === 'sent') return { status: 'sent', result };
+  // A discount already on the membership is kept with the action: a retry sends the message,
+  // Whop answering the same code to the same idempotency keys.
+  return given && outcome.status === 'failed' ? { ...outcome, result } : outcome;
+}
+
+/**
+ * A message to a member, in the community's support chat with them: Whop opens it, or gives the
+ * one there is (POST /support_channels), and the message goes in (POST /messages). The
+ * conversation every member already has with the community, where they can answer; members have
+ * no StayPut space (founder, 2026-10-08), so a Whop notification, which only reaches users of
+ * the app's space, is never what reaches them.
+ */
+export async function messageMember(
+  whop: WhopClient,
+  action: Pick<DueAction, 'companyId' | 'member'>,
+  message: MessageTemplate & { link?: string },
+  key: string,
+): Promise<void> {
+  const channel = await whop.request<{ id?: unknown }>('POST', '/support_channels', {
+    body: { account_id: action.companyId, user_id: action.member.userId },
+    idempotencyKey: `${key}-channel`,
+  });
+  if (typeof channel.id !== 'string') throw new Error('Whop opened no support chat');
+  await whop.request('POST', '/messages', {
+    body: { channel_id: channel.id, content: chatText(message) },
+    idempotencyKey: key,
+  });
+}
+
+/**
+ * A message as the chat shows it (Markdown): its title in bold, its text, the link under it.
+ * The title's own asterisks are taken out, so that it cannot end the bold early.
+ */
+export function chatText(message: MessageTemplate & { link?: string }): string {
+  const title = message.title.replace(/\*/g, '').trim();
+  return [title ? `**${title}**` : null, message.body.trim(), message.link ?? null]
+    .filter((part): part is string => Boolean(part))
+    .join('\n\n');
+}
+
+/** A discount the creator gave, as the offer that applies it: no cancellation withdrawn. */
+function discountOf(action: DueAction): DueAction {
+  const terms = action.content.terms;
+  return {
+    ...action,
+    content: { ...(typeof terms === 'object' && terms !== null ? terms : {}), keep: false },
+  };
+}
+
+/**
+ * Where a member settles a payment, under its message: the payment's own page when the bank
+ * waits for them, else Whop's page for their membership, where they update their card (asked
+ * of Whop when the message leaves: it is not kept). None when Whop gives none.
+ */
+async function paymentLink(
+  type: ActionType,
+  action: DueAction,
+  whop: WhopClient,
+): Promise<string | null> {
+  if (type !== 'payment_failed_notice' && type !== 'payment_action_notice') return null;
+  const payment = action.payment;
+  if (payment?.recoveryUrl) return payment.recoveryUrl;
+  if (type !== 'payment_failed_notice' || !payment?.membershipId) return null;
+  try {
+    const membership = await whop.request<{ manage_url?: unknown }>(
+      'GET',
+      `/memberships/${encodeURIComponent(payment.membershipId)}`,
+    );
+    return typeof membership.manage_url === 'string' ? membership.manage_url : null;
+  } catch {
+    return null;
+  }
 }
 
 /** An announcement's words, from its action: the member's first name, the goal, the milestone. */
@@ -618,8 +677,8 @@ export function followupMessage(
 
 /**
  * An Alumni follow-up (SPEC 5.9): a single-use return code for the product the member left, valid
- * 7 days and reserved to former customers, then the notification through the Alumni space with
- * the code in it. Each Whop call has its own idempotency key and the code comes from the action:
+ * 7 days and reserved to former customers, then the message in the community's support chat
+ * with the code in it. Each Whop call has its own idempotency key and the code comes from the action:
  * a retry never creates a second code, and the expiry Whop answers is the one kept.
  */
 async function runAlumniFollowup(
@@ -628,9 +687,8 @@ async function runAlumniFollowup(
   now: number,
 ): Promise<Outcome> {
   const alumni = action.alumni;
-  const experienceId = alumni?.experienceId;
-  if (!alumni || !experienceId) {
-    return { status: 'failed', error: 'the Alumni space is not ready', retry: false };
+  if (!alumni) {
+    return { status: 'failed', error: 'the Alumni offer is not ready', retry: false };
   }
   // A code an earlier attempt made on Whop is the one sent: same discount, same expiry.
   const earlier = action.result?.promo_created === true ? action.result : null;
@@ -692,15 +750,7 @@ async function runAlumniFollowup(
     if (typeof created.code?.expires_at === 'string') result.expires_at = created.code.expires_at;
   }
   const sent = await callWhop(action, () =>
-    whop.request('POST', '/notifications', {
-      body: {
-        experience_id: experienceId,
-        user_ids: [action.member.userId],
-        title: message.title,
-        content: message.body,
-      },
-      idempotencyKey: `stayput-action-${action.id}-notify`,
-    }),
+    messageMember(whop, action, message, `stayput-chat-${action.id}`),
   );
   if (sent.status === 'sent') return { status: 'sent', result };
   // The code exists: kept with the action, so that a retry only sends the notification.

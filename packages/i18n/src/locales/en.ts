@@ -1242,6 +1242,11 @@ export const en = {
   'actionSettings.offers': 'Departure offers',
   'actionSettings.offers.hint':
     'A member who schedules their cancellation says why in one click in your community’s StayPut space, and gets the offer for their reason. What they accept follows your mode and the limits above.',
+  'actionSettings.offers.yours': 'Your offers',
+  'actionSettings.offers.hintChat':
+    'What you give from a member’s sheet. A pause is proposed in the support chat, and you apply it after their yes; a discount is applied, then announced.',
+  'actionSettings.offers.pauseDaysPlain': 'Pause, in days',
+  'actionSettings.offers.promoPercentPlain': 'Discount, in %',
   'actionSettings.offers.pauseDays': 'Break, in days (“{reason}”)',
   'actionSettings.offers.promoPercent': 'Promo code discount, in % (“{reason}”)',
   'actionSettings.offers.promoMonths': 'Promo code duration, in months',
@@ -1416,7 +1421,10 @@ export const en = {
   'dash.toast.nothingNew': 'Nothing new to send: these members were reached already.',
   'dash.toast.offered.pause': 'Pause offered to {name}',
   'dash.toast.offered.promo': 'Offer made to {name}',
-  'dash.toast.offered.body': 'They have 7 days to accept it in their space.',
+  'dash.toast.offered.promoBody':
+    'Applied to their next payments when the message leaves, which tells them in the support chat.',
+  'dash.toast.offered.pauseBody':
+    'Proposed in the support chat. When they say yes, apply it from their sheet.',
 
   'dash.row.renews': 'Renews on {date}',
   'dash.row.perMonth': '{amount}/mo',
@@ -1435,7 +1443,7 @@ export const en = {
   'dash.note.placeholder': 'Write it as you would say it.',
   'dash.note.count': '{count}/{max}',
   'dash.note.how':
-    'It goes out word for word as a Whop notification with your picture: now, or when your quiet hours end.',
+    'It goes out word for word in the support chat with them, where they can answer: now, or when your quiet hours end.',
   'dash.note.how.test': 'Test mode is on: StayPut keeps it in the history, nothing is sent.',
   'dash.note.send': 'Send',
   'dash.note.sent.now': 'Sent to {name}',
@@ -1445,11 +1453,9 @@ export const en = {
   'dash.note.tooMany': 'Three messages to this member today already: write again tomorrow.',
   'dash.note.retrying': 'Not sent to {name} yet',
   'dash.note.retryingBody': 'Whop did not take it. StayPut tries again {when}.',
-  'dash.note.noAccess':
-    '{name} cannot open StayPut in your community, so Whop would not deliver it. Nothing was sent.',
+  'dash.note.permission':
+    'StayPut cannot write in your support chat yet: accept its new permissions in Whop. Nothing was sent to {name}.',
   'dash.note.refused': 'Whop refused it: nothing was sent to {name}.',
-  'dash.note.noSpace':
-    'StayPut has no space in your community yet, so Whop cannot deliver a message to your members. Nothing was sent.',
   'dash.act.pauseLabel': 'Offer {name} a pause',
   'dash.act.offerLabel': 'Make {name} an offer',
   'dash.act.neverContact': 'On the do-not-contact list: StayPut takes no action for this member.',
@@ -1459,9 +1465,20 @@ export const en = {
   'dash.offer.promo.title': 'Make {name} an offer?',
   'dash.offer.pause.terms': 'A {days}-day pause: their membership waits for them.',
   'dash.offer.promo.terms': '{percent} off for {months} months, put on their membership.',
-  'dash.offer.how':
-    'The member hears of it in Whop and accepts it in their space within 7 days. Nothing changes unless they accept, and your guardrails apply.',
+  'dash.offer.how.promo':
+    'Applied to their next payments when its message leaves, in the support chat with them. Your guardrails apply: during your quiet hours, it waits.',
+  'dash.offer.how.pause':
+    'Proposed in the support chat with them. Nothing changes unless they say yes: you then apply it from their sheet, within 7 days.',
+  'dash.pause.waiting':
+    'A {days}-day pause is proposed: waiting for their answer in the support chat, until {date}.',
+  'dash.pause.apply': 'They said yes: apply the pause',
+  'dash.pause.applied': 'Pause applied for {name}',
+  'dash.pause.appliedBody': 'Tell them in the support chat: it is done.',
+  'dash.pause.alreadyApplied': 'This pause is already applied.',
+  'dash.pause.expired': 'This proposal has expired: propose the pause again.',
   'dash.offer.settings': 'You set these terms in Settings › Automations.',
+  'dash.offer.open':
+    'Already under way: a pause is waiting for this member’s answer, or a discount was given this week.',
   'dash.offer.confirm.pause': 'Offer the pause',
   'dash.offer.confirm.promo': 'Make the offer',
 
@@ -1490,6 +1507,8 @@ export const en = {
   'legal.frame': '{document}, the page',
   'legal.draft': 'Draft, being reviewed: it may still change before StayPut goes live.',
   'member.privacy': 'Privacy',
+  'member.none.title': 'Nothing to do here',
+  'member.none.body': 'Messages from your community reach you in its support chat.',
   'member.subscription.title': 'Your membership',
   'member.subscription.welcome': 'What concerns your membership, in one place.',
   'member.allSet': 'Your membership is all set: nothing needs you here.',
@@ -1602,7 +1621,7 @@ export const en = {
   'rules.notice.then': 'Ask the member to update their card',
   'rules.cancel.title': 'Departure survey',
   'rules.cancel.check': 'Before their access ends',
-  'rules.cancel.then': 'Ask why in one click, then offer what fits the answer',
+  'rules.cancel.then': 'Ask why in the support chat: their answer reaches you there',
   'rules.checkIn.title': 'Check-in message',
   'rules.checkIn.then': 'A personal message at the hour they’re usually online',
   'rules.welcome.title': 'Welcome message',
