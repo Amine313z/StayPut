@@ -715,11 +715,6 @@ export type ActionSettingsUpdate = Omit<ActionSettingsView, 'timezone' | 'offers
   offers?: OfferSettings;
 };
 
-/** POST /api/creator/:companyId/timezone: the zone in effect for the company. */
-export interface TimezoneAnswer {
-  timezone: string;
-}
-
 /**
  * GET /api/member/:experienceId/retention: what the member view shows of the member's own
  * subscription (SPEC Phase 4): a payment that needs them, and the cancellation they scheduled,

@@ -14,14 +14,14 @@ import {
   type TemplateLocale,
 } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
-import { CircleAlert, CircleCheck, Globe, OctagonX, Save, ShieldCheck } from 'lucide-react';
+import { CircleAlert, CircleCheck, OctagonX, Save, ShieldCheck } from 'lucide-react';
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { putJson, useApi } from '../../api';
 import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { REASON_LABELS } from '../../exit-reasons';
 import { useI18n } from '../../i18n';
-import { SUGGESTED_TIME_ZONES, browserTimeZone, timeZoneGroups, zoneLabel } from '../../timezone';
+import { SUGGESTED_TIME_ZONES, timeZoneGroups, zoneLabel } from '../../timezone';
 import { Notice } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
@@ -179,16 +179,7 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
   const [savedZone, setSavedZone] = useState(initial.timezone);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const ids = useId();
-  const browserZone = useMemo(() => browserTimeZone(), []);
-  const zoneGroups = useMemo(
-    () => timeZoneGroups(initial.timezone, browserZone),
-    [initial.timezone, browserZone],
-  );
-  /** « France · Paris » for a suggested zone, « America/New York » for the others. */
-  const zoneName = (zone: string) => {
-    const suggested = SUGGESTED_TIME_ZONES.find((s) => s.zone === zone);
-    return suggested ? t(suggested.label) : zoneLabel(zone);
-  };
+  const zoneGroups = useMemo(() => timeZoneGroups(initial.timezone), [initial.timezone]);
 
   const view = toView(draft);
   const changed = view !== null && canonical(view) !== saved;
@@ -398,18 +389,6 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
               <p id={`${ids}-zone-hint`} className="mt-1.5 text-sm text-muted">
                 {t('actionSettings.timezone.hint')}
               </p>
-              {browserZone && browserZone !== draft.timezone ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="mt-1"
-                  icon={<Globe aria-hidden="true" className="size-4" />}
-                  onClick={() => edit((current) => ({ ...current, timezone: browserZone }))}
-                >
-                  {t('actionSettings.timezone.useBrowser', { zone: zoneName(browserZone) })}
-                </Button>
-              ) : null}
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2 text-sm">

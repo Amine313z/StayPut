@@ -1216,7 +1216,6 @@ export const en = {
   'actionSettings.timezone.losAngeles': 'United States · Los Angeles (Pacific)',
   'actionSettings.timezone.london': 'United Kingdom · London',
   'actionSettings.timezone.paris': 'France · Paris',
-  'actionSettings.timezone.useBrowser': 'Use this browser’s: {zone}',
   'actionSettings.quietFrom': 'Quiet from',
   'actionSettings.quietTo': 'to',
   'actionSettings.quiet.hint': 'No message during these hours, in your time zone.',

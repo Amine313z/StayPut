@@ -3881,3 +3881,42 @@ de production déclarée, l'identifiant de compte masqué (`***`) dans les journ
 - `deploy.test.ts` : le nom du Worker (production : `stayput-app`), les déclencheurs de
   `wrangler.toml`, la lecture chez Cloudflare avec le jeton, une erreur de Cloudflare dite telle
   quelle, le compte de tout le compte, et le cas du 07/10 (aucun déclencheur, la limite rappelée).
+
+## 2026-10-08 — Installée sur le Whop officiel ; New York par défaut ; la promesse du mode test
+
+### L'installation dans « StayPut Community »
+
+Le lien `https://whop.com/apps/<app_…>/install` répondait « This AccessPass was not found » :
+l'app pointait vers un produit supprimé (`prod_GfpyTV98LoDAu` : introuvable par l'API, quand
+les produits masqués et archivés de la communauté y répondent). Rien ne permet de rattacher une
+app à un autre produit (aucun champ dans `PATCH /apps/{id}`). Le fondateur a créé un produit dans
+l'onglet **Produits** de l'app (gratuit, masqué), puis le lien d'installation a fonctionné :
+permissions approuvées, StayPut affiché dans le tableau de bord de Whop. L'API donne toujours
+l'ancien `product_id` : la page d'installation prend donc un produit de l'app, pas ce champ.
+L'app est passée de « masquée » à « non répertoriée » (accessible par lien direct seulement), avec
+une description, comme la bêta le demandera. `docs/production.md` (étape 5) dit la marche.
+
+### L'heure de New York pour toute nouvelle communauté
+
+Choix du fondateur : une nouvelle communauté démarre à l'heure de New York (migration 0044, la
+valeur par défaut de `companies.timezone`, qui était UTC), et l'app ne reprend plus le fuseau du
+navigateur à la première visite (la route `POST /timezone`, son appel et le bouton « fuseau de ce
+navigateur » des réglages sont retirés). L'équipe choisit un autre fuseau dans Settings, New York
+en tête de la liste. La démo est aussi à l'heure de New York. Les communautés existantes gardent le
+leur. Rappelé au fondateur : un créateur de Los Angeles doit changer le sien, sinon ses heures
+calmes et son heure d'or tombent 3 heures trop tôt.
+
+### Le mode test n'est pas activé au départ
+
+La fiche App Store et `docs/production.md` promettaient « une nouvelle communauté démarre en mode
+test » ; le code ne l'a jamais fait (`dry_run` faux par défaut depuis 0001). Décision : garder le
+code, corriger les textes. Une nouvelle communauté démarre en mode **manuel** : rien ne part sans
+l'accord de l'équipe, et ce qu'elle approuve part vraiment. Le mode test par-dessus aurait simulé
+le premier envoi qu'un créateur approuve, qui aurait cru à une panne.
+
+### Testé
+
+- `app.test.ts` (Worker) : une nouvelle communauté lit `America/New_York`, la route du navigateur
+  n'existe plus (404), un enregistrement sans fuseau le garde, avec un fuseau il change.
+- `app.test.tsx` (web) : aucun fuseau envoyé à l'ouverture, aucun bouton de navigateur dans les
+  réglages, le fuseau changé à la main part avec l'enregistrement.

@@ -1,5 +1,5 @@
 -- StayPut: the whole database schema, for a new Supabase project or to update one.
--- Generated from supabase/migrations (0001_foundation.sql to 0043_deployment_target.sql) by `npm run db:bundle`:
+-- Generated from supabase/migrations (0001_foundation.sql to 0044_new_community_defaults.sql) by `npm run db:bundle`:
 -- do not edit.
 --
 -- Supabase -> SQL Editor -> New query -> paste this whole file -> Run. Only the migrations not
@@ -10387,6 +10387,28 @@ alter table stayput.app_settings
   add column deployment_target text check (deployment_target in ('sandbox', 'production'));
 $migration$;
   insert into stayput.schema_migrations (name) values ('0043_deployment_target.sql');
+end $install$;
+
+-- ==========================================================================================
+-- 0044_new_community_defaults.sql
+-- ==========================================================================================
+
+do $install$
+begin
+  if exists (select 1 from stayput.schema_migrations where name = '0044_new_community_defaults.sql') then
+    raise notice 'already applied: 0044_new_community_defaults.sql';
+    return;
+  end if;
+  execute $migration$
+-- What a new community starts with (DECISIONS.md, 2026-10-08): New York's time, the founder's
+-- choice. The quiet hours, the golden hour, the default sending hour and the Monday report are
+-- read in it until the team picks another zone in the settings. It replaces UTC, and the zone of
+-- the creator's browser the app used to report on the first visit (0011). Communities already
+-- there keep theirs: only the default changes. (Test mode stays off: a new community starts in
+-- manual mode, where nothing is sent until the team approves it.)
+alter table stayput.companies alter column timezone set default 'America/New_York';
+$migration$;
+  insert into stayput.schema_migrations (name) values ('0044_new_community_defaults.sql');
 end $install$;
 
 commit;

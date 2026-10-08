@@ -121,14 +121,20 @@ StayPut même : **Réglages › État**, dans ta communauté.
 
 ## 5. Vérifier en vrai
 
-1. L'app encore en **Hidden**, l'installer dans ta propre communauté Whop et l'ouvrir des trois
-   côtés : le tableau de bord (la synchronisation démarre, l'accueil s'affiche), l'espace membre
-   (avec un second compte, membre de la communauté) et la page Discover. Passer l'app en **Live**
+1. L'app en **Non répertoriée** (Paramètres de l'app ; une app répertoriée ou non doit avoir une
+   description), l'installer dans ta propre communauté par le lien
+   `https://whop.com/apps/<app_…>/install` : choisir la communauté, approuver les permissions.
+   L'installation passe par le **produit de l'app** (onglet **Produits** de l'app) : ne jamais le
+   supprimer. S'il manque, Whop répond « This AccessPass was not found » ; en créer un dans cet
+   onglet (gratuit, masqué) suffit (constaté le 07/10/2026). Puis ouvrir StayPut des trois côtés :
+   le tableau de bord (la synchronisation démarre, l'accueil s'affiche), l'espace membre (avec un
+   second compte, membre de la communauté) et la page Discover. Passer l'app en **Live**
    seulement quand les trois s'affichent.
 2. **Réglages › État** : les tâches passent (toutes les 10 minutes, chaque heure), aucun envoi de
    Whop en échec.
-3. Une nouvelle communauté démarre en **mode test** : StayPut calcule tout et n'envoie rien aux
-   membres tant que le créateur ne l'a pas désactivé.
+3. Une nouvelle communauté démarre en **mode manuel** (rien ne part sans l'accord de l'équipe),
+   le mode test désactivé, et à l'**heure de New York** (migration 0044) ; l'équipe change l'un
+   et l'autre dans Settings.
 4. Compléter l'éditeur dans `apps/worker/src/legal.ts` (`OPERATOR` : raison sociale, adresse,
    e-mail, droit applicable) et faire relire les textes avant d'ouvrir l'app au public.
 

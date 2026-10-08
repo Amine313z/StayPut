@@ -7021,25 +7021,19 @@ describe('the actions (SPEC Phase 4)', () => {
     expect(await screen.findByText('Saved.')).toBeTruthy();
   });
 
-  it('tells the browser’s time zone for a company that has none, once', async () => {
+  it('never sends the browser’s time zone: a new community keeps New York’s', async () => {
     const calls = mockApi({
       ...dashboard(),
       '/api/creator/biz_A1/session': [
         { status: 200, body: { ...creatorSession.body, timezoneSet: false } },
       ],
-      'POST /api/creator/biz_A1/timezone': [{ status: 200, body: { timezone: 'UTC' } }],
     });
     renderAt('/dashboard/biz_A1');
-    await vi.waitFor(() => expect(calls).toContain('POST /api/creator/biz_A1/timezone'));
-    expect(bodies.get('POST /api/creator/biz_A1/timezone')).toEqual({
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
-    expect(headersOf.get('POST /api/creator/biz_A1/timezone')?.get('x-stayput-csrf')).toBe('1');
     expect(await screen.findByText('Revenue saved · This month')).toBeTruthy();
-    expect(calls.filter((call) => call.endsWith('/timezone'))).toHaveLength(1);
+    expect(calls.filter((call) => call.endsWith('/timezone'))).toEqual([]);
   });
 
-  it('changes the time zone of the hours, by hand or to the browser’s', async () => {
+  it('changes the time zone of the hours by hand, without suggesting the browser’s', async () => {
     const calls = mockApi({
       ...dashboard(),
       '/api/creator/biz_A1/settings/risk': [
@@ -7057,7 +7051,6 @@ describe('the actions (SPEC Phase 4)', () => {
       '/api/creator/biz_A1/settings/actions': [{ status: 200, body: ACTION_SETTINGS }],
       'PUT /api/creator/biz_A1/settings/actions': [
         { status: 200, body: { ...ACTION_SETTINGS, timezone: 'Asia/Tokyo' } },
-        { status: 200, body: { ...ACTION_SETTINGS, timezone: 'UTC' } },
       ],
     });
     renderAt('/dashboard/biz_A1/settings/actions');
@@ -7084,15 +7077,6 @@ describe('the actions (SPEC Phase 4)', () => {
       timezone: 'Asia/Tokyo',
     });
     expect(await screen.findByText('Saved.')).toBeTruthy();
-    // The browser here says UTC: one click takes it.
-    fireEvent.click(screen.getByRole('button', { name: 'Use this browser’s: UTC' }));
-    expect(zone.value).toBe('UTC');
-    expect(screen.queryByRole('button', { name: /Use this browser’s/ })).toBeNull();
-    fireEvent.click(save());
-    await vi.waitFor(() =>
-      expect(bodies.get('PUT /api/creator/biz_A1/settings/actions')).toMatchObject({
-        timezone: 'UTC',
-      }),
-    );
+    expect(screen.queryByRole('button', { name: /browser/i })).toBeNull();
   });
 });

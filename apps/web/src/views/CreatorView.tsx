@@ -7,7 +7,6 @@ import { ErrorPanel } from '../components/Status';
 import { DemoMode } from '../demoMode';
 import { useI18n } from '../i18n';
 import { useSync, type SyncState } from '../sync';
-import { shareTimeZone } from '../timezone';
 import { StayPutMark } from '../ui/BrandIcons';
 import { Page } from '../ui/Motion';
 import { sectionOf } from './creator/sections';
@@ -113,11 +112,6 @@ function Dashboard({ session, demo }: { session: CreatorSession; demo: boolean }
     testMode: { on: testMode, set: setTestMode },
     operator: !demo && session.operator === true,
   };
-  // A company StayPut does not know the zone of yet: the creator's browser tells it.
-  const timezoneSet = session.timezoneSet;
-  useEffect(() => {
-    if (!timezoneSet && !demo) shareTimeZone(api);
-  }, [api, timezoneSet, demo]);
   const section = sectionOf(pathname, root);
 
   return (

@@ -2343,7 +2343,8 @@ describe('the actions (SPEC Phase 4)', () => {
     locale: 'en',
     dryRun: false,
     killSwitch: false,
-    timezone: 'UTC',
+    // A new community's (migration 0044).
+    timezone: 'America/New_York',
     quietHoursStart: 22,
     quietHoursEnd: 8,
     defaultSendHour: 19,
@@ -2625,23 +2626,23 @@ describe('the actions (SPEC Phase 4)', () => {
     expect((await request(reviewed, { ...eve, method: 'POST' })).status).toBe(403);
   });
 
-  it('takes the zone from the creator’s browser once, then only from the settings', async () => {
+  it('starts a new community on New York’s time, then takes the zone from the settings', async () => {
     const { request, init } = await withProposal('biz_ActQ5', 'user_eli');
-    const detected = (timezone: unknown, as = init) =>
-      request('/api/creator/biz_ActQ5/timezone', json(as, 'POST', { timezone }));
-    expect(await (await detected('Europe/Paris')).json()).toEqual({ timezone: 'Europe/Paris' });
-    // Another browser, elsewhere: the first one's zone stays.
-    expect(await (await detected('Asia/Tokyo')).json()).toEqual({ timezone: 'Europe/Paris' });
-    expect((await detected('Mars/Olympus')).status).toBe(400);
-    expect((await detected(42)).status).toBe(400);
-    expect((await detected('Asia/Tokyo', await asUser('user_eve'))).status).toBe(403);
+    // The browser no longer tells a zone (migration 0044).
+    const detected = await request(
+      '/api/creator/biz_ActQ5/timezone',
+      json(init, 'POST', { timezone: 'Europe/Paris' }),
+    );
+    expect(detected.status).toBe(404);
 
     const path = '/api/creator/biz_ActQ5/settings/actions';
-    expect(await (await request(path, init)).json()).toMatchObject({ timezone: 'Europe/Paris' });
+    expect(await (await request(path, init)).json()).toMatchObject({
+      timezone: 'America/New_York',
+    });
     // Saved without a zone (the creator did not touch it), the zone stays; with one, it changes.
     const { timezone: _unchanged, ...withoutZone } = DEFAULTS;
     expect(await (await request(path, json(init, 'PUT', withoutZone))).json()).toMatchObject({
-      timezone: 'Europe/Paris',
+      timezone: 'America/New_York',
     });
     const moved = await request(
       path,

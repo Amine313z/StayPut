@@ -1,6 +1,4 @@
-import { timeZoneName, type TimezoneAnswer } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
-import { postJson } from './api';
 
 /**
  * The zones offered first, before the full list (the founder's choice): the United States, the
@@ -15,33 +13,12 @@ export const SUGGESTED_TIME_ZONES: readonly { zone: string; label: MessageKey }[
   { zone: 'Europe/Paris', label: 'actionSettings.timezone.paris' },
 ];
 
-/** The browser's time zone (an IANA name such as Europe/Paris), or null when it tells none. */
-export function browserTimeZone(): string | null {
-  try {
-    return timeZoneName(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Tells the Worker the creator's time zone, for a company that has none yet: the quiet hours and
- * the golden hour are the creator's local hours. The Worker keeps the first one it hears; the
- * creator changes it in the action settings. Nothing to show for it, so a failure stays silent
- * (the next visit tells it again).
- */
-export function shareTimeZone(api: string): void {
-  const timezone = browserTimeZone();
-  if (!timezone) return;
-  postJson<TimezoneAnswer>(`${api}/timezone`, { timezone }).catch(() => undefined);
-}
-
 const REGION =
   /^(Africa|America|Antarctica|Arctic|Asia|Atlantic|Australia|Europe|Indian|Pacific)\//;
 
 /**
  * The zones to choose from, by region (Europe, America…), the others (UTC) apart: the browser's
- * list, with the zone in effect and the browser's own even if the list lacks them.
+ * list, with the zone in effect even if the list lacks it.
  */
 export function timeZoneGroups(
   ...wanted: (string | null)[]

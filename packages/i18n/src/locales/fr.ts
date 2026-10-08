@@ -1252,7 +1252,6 @@ export const fr: Messages = {
   'actionSettings.timezone.losAngeles': 'États-Unis · Los Angeles (heure du Pacifique)',
   'actionSettings.timezone.london': 'Royaume-Uni · Londres',
   'actionSettings.timezone.paris': 'France · Paris',
-  'actionSettings.timezone.useBrowser': 'Utiliser celui de ce navigateur : {zone}',
   'actionSettings.quietFrom': 'Silence de',
   'actionSettings.quietTo': 'à',
   'actionSettings.quiet.hint': 'Aucun message pendant ces heures, dans votre fuseau horaire.',

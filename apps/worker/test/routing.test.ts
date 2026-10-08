@@ -31,8 +31,6 @@ const NOT_IN_THE_JOURNAL: Readonly<Record<string, string>> = {
     'the setup pill notes that the members at risk were opened',
   'POST /api/creator/:companyId/getting-started/welcomed':
     'the setup pill notes that the welcome was gone through',
-  'POST /api/creator/:companyId/timezone':
-    'the browser’s time zone, kept only while the community has none (the settings change it)',
   'POST /api/creator/:companyId/data/delete':
     'the journal is deleted with everything else, as the privacy policy says; the Worker’s log keeps who asked',
 };
