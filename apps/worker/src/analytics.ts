@@ -38,6 +38,7 @@ export const REACHING_ACTIONS = [
   'extend_offer',
   'high_risk_message',
   'creator_message',
+  'creator_note',
   'creator_offer',
 ] as const;
 

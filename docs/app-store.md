@@ -41,7 +41,7 @@ Then it acts, within the limits you set:
 • Members who cancel: a one-tap departure survey, with the offer that answers their reason (a discount, a pause, free days, your help). Their membership is only kept with their consent.
 • Former members: a free Alumni offer keeps them in touch, with a unique comeback code 7, 30 and 60 days after they left.
 
-Automatic or manual: let StayPut send on its own, or approve each message from a queue, one click at a time or all at once. Quiet hours, frequency limits, a do-not-contact list and a global stop apply to every message. A new community starts in manual mode: nothing is sent until you approve it. Test mode, one switch away, computes everything and sends nothing.
+Automatic or manual: let StayPut send on its own, or approve each message from a queue, one click at a time or all at once. Quiet hours, frequency limits, a do-not-contact list and a global stop apply to every message. A new community starts in manual mode: nothing is sent until you approve it. Test mode, one switch away, computes everything and sends nothing. And when you want to say it yourself, write to any member in your own words: it goes out as a Whop notification with your picture.
 
 Every save is counted with its proof (the payment recovered, the cancellation withdrawn, the member who came back), so your dashboard shows revenue saved, not guesses. Every Monday, a Whop notification sums up your week.
 

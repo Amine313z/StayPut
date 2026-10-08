@@ -59,7 +59,7 @@ export async function dashboardOf(
             exists (select 1 from stayput.actions a
                      where a.company_id = c.id
                        and (a.approved_by like 'user_%'
-                            or a.type in ('creator_message', 'creator_offer'))) as acted
+                            or a.type in ('creator_message', 'creator_note', 'creator_offer'))) as acted
        from stayput.companies c
        left join stayput.company_settings s on s.company_id = c.id
       where c.id = $1`,

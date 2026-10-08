@@ -8,7 +8,10 @@ import {
   isMemberId,
   isExperienceId,
   retentionBadgeSvg,
+  CREATOR_NOTE_LIMITS,
+  creatorNote,
   isCreatorOfferKind,
+  outOfQuietHours,
   isRuleId,
   isExitReason,
   isNiche,
@@ -24,6 +27,7 @@ import {
   type AccessLevel,
   type AffiliateLinkView,
   type CreatorMessagesResult,
+  type CreatorNoteSent,
   type CreatorOfferMade,
   type CreatorOffersResult,
   type CreatorRetryResult,
@@ -1769,6 +1773,56 @@ export function createApp(deps: AppDeps) {
       c.set('audit', { members: new Set(ids as string[]).size, queued: row?.queued ?? 0 });
       runActionsInBackground(c, companyId, now);
       return c.json({ queued: row?.queued ?? 0 } satisfies CreatorMessagesResult);
+    },
+  );
+
+  /**
+   * « Message » on one member: words the creator wrote themselves (a title and a text), sent word
+   * for word as a Whop notification with their picture, now or at the end of the quiet hours. No
+   * follow-up cap holds it back; « never contact », the stops and test mode do (create_creator_note,
+   * migration 0045). The journal keeps who wrote to whom, never the words.
+   */
+  app.post(
+    '/api/creator/:companyId/members/:memberId/note',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('member.note'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const note = creatorNote(await c.req.json().catch(() => null));
+      const memberId = c.req.param('memberId');
+      if (!note || !MEMBER_ID.test(memberId)) {
+        return apiError(
+          'invalid_request',
+          `expected { title (${CREATOR_NOTE_LIMITS.title} at most), body (${CREATOR_NOTE_LIMITS.body} at most) }`,
+        );
+      }
+      const companyId = c.get('companyId');
+      const now = deps.now();
+      const [row] = await db.query<{ made: Record<string, unknown> }>(
+        'select stayput.create_creator_note($1, $2, $3, $4, $5, $6::timestamptz) as made',
+        [companyId, memberId, note.title, note.body, c.get('userId'), now.toISOString()],
+      );
+      const made = row?.made;
+      if (!made || typeof made.error === 'string' || typeof made.actionId !== 'string') {
+        return made?.error === 'not_a_member'
+          ? apiError('not_found', 'no such member here')
+          : apiError('conflict', typeof made?.error === 'string' ? made.error : 'not sent');
+      }
+      c.set('audit', { member: memberId });
+      runActionsInBackground(c, companyId, now);
+      const sendAt = outOfQuietHours(now.getTime(), {
+        timezone: typeof made.timezone === 'string' ? made.timezone : 'UTC',
+        quietHoursStart: Number(made.quietHoursStart ?? 22),
+        quietHoursEnd: Number(made.quietHoursEnd ?? 8),
+      });
+      return c.json({
+        actionId: made.actionId,
+        sendAt: new Date(sendAt).toISOString(),
+        simulated: made.dryRun === true,
+      } satisfies CreatorNoteSent);
     },
   );
 

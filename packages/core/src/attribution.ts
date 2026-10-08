@@ -112,7 +112,11 @@ const OFFER_ACTIONS: ReadonlySet<ActionType> = new Set([
 const WINBACK_ACTIONS: ReadonlySet<ActionType> = new Set(['alumni_followup', 'promo_offer']);
 
 /** A message to a member at risk: StayPut's at the golden hour, or the creator's own word. */
-const REACHING_OUT: ReadonlySet<ActionType> = new Set(['high_risk_message', 'creator_message']);
+const REACHING_OUT: ReadonlySet<ActionType> = new Set([
+  'high_risk_message',
+  'creator_message',
+  'creator_note',
+]);
 
 /**
  * Every save the facts prove. A payment is claimed once, by the first rule that holds, in the

@@ -408,6 +408,8 @@ export interface DemoWorld {
   settings: ActionSettingsView;
   /** « Message » on the dashboard: queued for the members not on the never-contact list. */
   message: (memberIds: readonly string[]) => number;
+  /** « Message » on one member: the creator's own words, sent now (simulated in test mode). */
+  note: (memberId: string) => { error: string } | { simulated: boolean };
   /** « Retry now »: the failed payments StayPut may retry, charged again (simulated here). */
   retry: () => number;
   /** « Getting started »: a step done (the members reviewed, the guardrails saved). */
@@ -1373,6 +1375,13 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
         queued += 1;
       }
       return queued;
+    },
+    note: (id) => {
+      const member = memberOf(id);
+      if (!member) return { error: 'not_a_member' };
+      if (member.doNotContact) return { error: 'do_not_contact' };
+      reached.set(id, clock());
+      return { simulated: settings.dryRun };
     },
     retry: () => {
       const due = failedNow().filter((m) => !m.doNotContact && !retried.has(m.id));

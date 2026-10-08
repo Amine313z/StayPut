@@ -3920,3 +3920,38 @@ le premier envoi qu'un créateur approuve, qui aurait cru à une panne.
   n'existe plus (404), un enregistrement sans fuseau le garde, avec un fuseau il change.
 - `app.test.tsx` (web) : aucun fuseau envoyé à l'ouverture, aucun bouton de navigateur dans les
   réglages, le fuseau changé à la main part avec l'enregistrement.
+
+## 2026-10-08 — « Message » : le créateur écrit lui-même
+
+### Pourquoi
+
+« Message » sur un membre envoyait le texte de StayPut (`creator_message`), compté comme une
+relance : une tous les 5 jours, à l'heure d'or du membre. Le fondateur cliquait et voyait « En
+file », sans pouvoir écrire ni envoyer. Il veut écrire lui-même et que ça parte.
+
+### Ce qui change
+
+- « Message » sur un membre (sa fiche, la liste, « Needs attention ») ouvre une fenêtre : un
+  titre (proposé : « A message for you », 80 caractères au plus) et le texte du créateur (300 au
+  plus, les limites des modèles), puis « Send ».
+- Nouveau type d'action `creator_note` (migration 0045, `create_creator_note`) : approuvé par le
+  clic, `send_at` = maintenant, `message_kind` 'service'. Aucun plafond de relance ne le retient
+  (c'est le créateur qui écrit) ; il compte dans l'historique du membre, donc aucune relance de
+  StayPut ne tombe juste après. Restent : les arrêts, « ne jamais contacter », les heures calmes
+  (il part à leur fin, et la réponse le dit), le mode test (simulé). Trois par membre et par
+  24 heures au plus, contre un double envoi ou une erreur.
+- Envoyé mot pour mot en notification Whop, avec la photo du créateur (`icon_user_id`). Le
+  journal de l'équipe garde qui a écrit à qui, jamais les mots.
+- L'envoi groupé de la page d'accueil (« Message 3 high-risk members… ») garde le texte de
+  StayPut et ses plafonds : c'est StayPut qui écrit.
+- Compté comme « atteindre un membre à risque » pour les sauvetages et les analyses, comme
+  `creator_message`.
+
+### Testé
+
+- `app.test.ts` (Worker) : titre ou texte vide ou trop long refusés ; un membre n'écrit à
+  personne ; envoyé mot pour mot, au seul membre, avec la photo du créateur ; un second le même
+  jour part aussi ; pendant les heures calmes, la réponse donne l'heure de départ ; un quatrième
+  refusé ; « ne jamais contacter » refusé ; un membre inconnu, 404.
+- `app.test.tsx` (web) : la fenêtre, le titre proposé, « Send » inactif sans texte, le compteur,
+  « Sent to … », l'heure de départ dans les heures calmes, le refus du quatrième dit en clair.

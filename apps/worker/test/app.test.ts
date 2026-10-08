@@ -33,7 +33,7 @@ import type {
   MemberDataExport,
   OperatorStatus,
 } from '@stayput/core';
-import { DEFAULT_PLATFORM_SIGNALS } from '@stayput/core';
+import { DEFAULT_PLATFORM_SIGNALS, localHour } from '@stayput/core';
 import { USER_TOKEN_ISSUER, WhopApiError, signWebhook, type WhopClient } from '@stayput/whop';
 import { createHash } from 'node:crypto';
 import { SignJWT, generateKeyPair, type CryptoKey } from 'jose';
@@ -136,6 +136,8 @@ function fakeWhop(
       if (method !== 'GET') {
         writes.push({ method, path, body: options?.body, key: options?.idempotencyKey });
       }
+      // A notification to a member: Whop takes it.
+      if (method === 'POST' && path === '/notifications') return Promise.resolve({ success: true });
       // What creating the Alumni offer asks of Whop.
       if (method === 'POST' && path === '/products') return Promise.resolve({ id: 'prod_Alu1' });
       if (method === 'POST' && path === '/variants') {
@@ -2768,6 +2770,90 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     ).json()) as FeedView;
     expect(feed.items.some((i) => i.event === 'cancellation_scheduled')).toBe(true);
     expect((await env.request(`/api/creator/${env.company}/dashboard`, env.ana)).status).toBe(403);
+  });
+
+  it('sends one member the creator’s own words, as written, within the guardrails', async () => {
+    const env = await departing(15);
+    const boss = await env.boss();
+    // Ana opened StayPut once: the community's experience is known, notifications can go.
+    await env.read();
+    const write = (body: unknown, as = boss) =>
+      env.request(`/api/creator/${env.company}/members/mber_Ret15/note`, json(as, 'POST', body));
+    const quiet = (start: number, end: number) =>
+      t.db.query(
+        `update stayput.company_settings set quiet_hours_start = $2, quiet_hours_end = $3
+          where company_id = $1`,
+        [env.company, start, end],
+      );
+    await quiet(0, 0);
+    expect((await write({ title: 'Hi', body: '   ' })).status).toBe(400);
+    expect((await write({ title: 'x'.repeat(81), body: 'Hello' })).status).toBe(400);
+    expect((await write({ title: 'Hi', body: 'x'.repeat(301) })).status).toBe(400);
+    expect((await write({ title: 'Hi', body: 'Hello' }, env.ana)).status).toBe(403);
+
+    const sent = await write({
+      title: '  A word from me ',
+      body: 'Ana, how is it going?\nTell me.',
+    });
+    expect(sent.status).toBe(200);
+    expect(await sent.json()).toMatchObject({ sendAt: NOW.toISOString(), simulated: false });
+    await settle();
+    const [row] = await t.db.query<Record<string, unknown>>(
+      `select status, message_kind, trigger, content, approved_by, error_log from stayput.actions
+        where company_id = $1 and type = 'creator_note'`,
+      [env.company],
+    );
+    expect(row).toMatchObject({
+      status: 'sent',
+      message_kind: 'service',
+      trigger: 'creator',
+      content: {
+        title: 'A word from me',
+        body: 'Ana, how is it going?\nTell me.',
+        from: 'user_boss15',
+      },
+      approved_by: 'user_boss15',
+    });
+    // Word for word, to Ana alone, with the creator's picture (her departure survey goes too).
+    expect(
+      env.whop.writes.find(
+        (w) =>
+          w.path === '/notifications' && (w.body as { title?: string }).title === 'A word from me',
+      )?.body,
+    ).toEqual({
+      experience_id: 'exp_Ret15',
+      user_ids: ['user_ana15'],
+      title: 'A word from me',
+      content: 'Ana, how is it going?\nTell me.',
+      icon_user_id: 'user_boss15',
+    });
+    // No follow-up cap holds it back: a second one the same day goes too.
+    expect((await write({ title: 'Again', body: 'A second word.' })).status).toBe(200);
+    // During the quiet hours, it waits for their end.
+    const hour = localHour(NOW.getTime(), 'America/New_York');
+    await quiet(hour, (hour + 1) % 24);
+    const later = (await (await write({ title: 'Late', body: 'A third word.' })).json()) as {
+      sendAt: string;
+    };
+    expect(Date.parse(later.sendAt)).toBeGreaterThan(NOW.getTime());
+    // Three a day at most.
+    expect((await write({ title: 'More', body: 'A fourth word.' })).status).toBe(409);
+    // Never to a member on the « never contact » list.
+    await t.db.query(
+      `update stayput.members set do_not_contact = true where company_id = $1 and id = $2`,
+      [env.company, 'mber_Ret15'],
+    );
+    const refused = await write({ title: 'Hi', body: 'Hello' });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ error: { message: 'do_not_contact' } });
+    expect(
+      (
+        await env.request(
+          `/api/creator/${env.company}/members/mber_Nobody/note`,
+          json(boss, 'POST', { title: 'Hi', body: 'Hello' }),
+        )
+      ).status,
+    ).toBe(404);
   });
 
   it('offers a pause to the members leaving, and retries the failed payments now', async () => {

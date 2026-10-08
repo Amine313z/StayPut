@@ -184,8 +184,12 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   the run stayed green (`wrangler | tee` without pipefail): fixed by the one-trigger design above,
   pipefail, and the read-back. Redeployed the same evening, sandbox (run 37672711550) then
   production (run 37673301225): both on `*/5 * * * *`, 2 cron triggers on the account, relay ok,
-  the production Discord redirect declared. Still to do: install the hidden app in « StayPut
-  Community » and check its views, Inspect production.
+  the production Discord redirect declared. 2026-10-08: installed in « StayPut Community » (the
+  install link needs a product in the app's Produits tab: never delete it; DECISIONS.md); the
+  app is unlisted. New communities start on New York's time (0044, no browser zone any more) in
+  manual mode, test mode off. « Message » on one member is the creator's own words
+  (`creator_note`, 0045: no follow-up cap, quiet hours and « never contact » hold, 3 a day).
+  Still to do: check the views and the status page, Inspect production.
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;
   Whop's side: `GET /webhooks/{id}/deliveries` and `POST /webhooks/{id}/test` with

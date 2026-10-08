@@ -749,24 +749,69 @@ describe('creator view', () => {
     expect(screen.queryByRole('heading', { name: 'New members who have not started' })).toBeNull();
   });
 
-  it('writes to a member in one click, and says it is queued', async () => {
+  it('lets the creator write to a member in their own words, and says when it leaves', async () => {
+    const now = Date.now();
     mockApi({
       ...dashboard(),
-      'POST /api/creator/biz_A1/members/message': [{ status: 200, body: { queued: 1 } }],
+      'POST /api/creator/biz_A1/members/mber_3/note': [
+        {
+          status: 200,
+          body: { actionId: 'a1', sendAt: new Date(now).toISOString(), simulated: false },
+        },
+        {
+          status: 200,
+          body: {
+            actionId: 'a2',
+            sendAt: new Date(now + 9 * 3_600_000).toISOString(),
+            simulated: false,
+          },
+        },
+        { status: 409, body: { error: { code: 'conflict', message: 'too_many_notes' } } },
+      ],
     });
     renderAt('/dashboard/biz_A1');
-    fireEvent.click(await screen.findByRole('button', { name: 'Message Bruno Petit' }));
-    expect(await screen.findByText('1 message queued')).toBeTruthy();
-    expect(
-      screen.getByText('Each one passes your limits, then leaves at the member’s best hour.'),
-    ).toBeTruthy();
-    expect(bodies.get('POST /api/creator/biz_A1/members/message')).toEqual({
-      memberIds: ['mber_3'],
+    const open = async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Message Bruno Petit' }));
+      return screen.findByRole('dialog', { name: 'Write to Bruno Petit' });
+    };
+    let dialog = await open();
+    const send = () => within(dialog).getByRole('button', { name: 'Send' });
+    // A title is offered; nothing leaves without the creator's words.
+    expect(within(dialog).getByRole<HTMLInputElement>('textbox', { name: 'Title' }).value).toBe(
+      'A message for you',
+    );
+    expect(send().hasAttribute('disabled')).toBe(true);
+    expect(dialog.textContent).toContain('word for word as a Whop notification with your picture');
+    const body = within(dialog).getByRole('textbox', { name: 'Your message' });
+    fireEvent.change(body, { target: { value: 'Bruno, how is the course going?' } });
+    expect(within(dialog).getByText('31/300')).toBeTruthy();
+    fireEvent.click(send());
+    expect(await screen.findByText('Sent to Bruno Petit')).toBeTruthy();
+    expect(bodies.get('POST /api/creator/biz_A1/members/mber_3/note')).toEqual({
+      title: 'A message for you',
+      body: 'Bruno, how is the course going?',
     });
-    // Done stays done: the row says it.
+    expect(screen.queryByRole('dialog', { name: 'Write to Bruno Petit' })).toBeNull();
+
+    // In the quiet hours: when it leaves.
+    dialog = await open();
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Your message' }), {
+      target: { value: 'See you tomorrow.' },
+    });
+    fireEvent.click(send());
+    expect(await screen.findByText('Bruno Petit gets it in 9 hours')).toBeTruthy();
+    expect(screen.getByText('When your quiet hours end.')).toBeTruthy();
+
+    // Three a day at most: said as such, the words stay to try again.
+    dialog = await open();
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Your message' }), {
+      target: { value: 'One more.' },
+    });
+    fireEvent.click(send());
     expect(
-      (await screen.findByRole('button', { name: 'Message Bruno Petit' })).textContent,
-    ).toContain('Queued');
+      await screen.findByText('Three messages to this member today already: write again tomorrow.'),
+    ).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Write to Bruno Petit' })).toBeTruthy();
   });
 
   it('offers a pause after saying what the member gets, and says when one is open', async () => {

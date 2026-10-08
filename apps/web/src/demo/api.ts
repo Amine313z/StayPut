@@ -1,13 +1,20 @@
 import type {
   ActionSettingsView,
   CreatorMessagesResult,
+  CreatorNoteSent,
   CreatorOffersResult,
   CreatorRetryResult,
   MemberDataExport,
   RiskSettingsView,
   SyncRun,
 } from '@stayput/core';
-import { ACTION_VIEWS, isCreatorOfferKind, isRuleId, parsePlatformSignals } from '@stayput/core';
+import {
+  ACTION_VIEWS,
+  creatorNote,
+  isCreatorOfferKind,
+  isRuleId,
+  parsePlatformSignals,
+} from '@stayput/core';
 import { ApiError, DEMO_API } from '../api';
 import { createWorld, type DemoWorld } from './world';
 
@@ -23,6 +30,8 @@ export const DEMO_READ_MS = 250;
 export const DEMO_WRITE_MS = 600;
 
 let world: DemoWorld | null = null;
+/** The creator's own messages sent in this demo, for their ids. */
+let noted = 0;
 
 /** The demo community's time zone: New York's, as every new community's (migration 0044). */
 const DEMO_ZONE = 'America/New_York';
@@ -136,6 +145,21 @@ export async function answerDemo(method: string, path: string, body: unknown): P
     const ids = (body as { memberIds?: unknown } | null)?.memberIds;
     const list = Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
     return { queued: demo.message(list) } satisfies CreatorMessagesResult;
+  }
+  const noteFor = /^members\/([^/]+)\/note$/.exec(route);
+  if (method === 'POST' && noteFor) {
+    if (!creatorNote(body)) throw new ApiError('invalid_request', 'expected { title, body }');
+    const sent = demo.note(decodeURIComponent(noteFor[1]!));
+    if ('error' in sent) {
+      if (sent.error === 'not_a_member') throw new ApiError('not_found', 'no such member here');
+      throw new ApiError('conflict', sent.error);
+    }
+    noted += 1;
+    return {
+      actionId: `demo-note-${noted}`,
+      sendAt: new Date().toISOString(),
+      simulated: sent.simulated,
+    } satisfies CreatorNoteSent;
   }
   if (method === 'POST' && route === 'payments/retry') {
     return { queued: demo.retry() } satisfies CreatorRetryResult;

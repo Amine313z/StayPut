@@ -5,6 +5,7 @@ import {
   MESSAGE_ACTIONS,
   OFFER_LIMITS,
   actionOutcome,
+  creatorNote,
   isActionType,
   isFailedPayment,
   isExitReason,
@@ -157,32 +158,36 @@ export async function readActions(
     );
     const actions: ActionRow[] = rows.flatMap((row): ActionRow[] => {
       if (!isActionType(row.type)) return [];
-      const preview = !row.message_values
-        ? null
-        : row.type === 'alumni_followup'
-          ? // The return code is the action's own: the preview shows the one that will go.
-            followupMessage(
-              company.locale,
-              company.templates,
-              row.message_values,
-              followupOffer(row.id, {
-                percentOff: company.promo_percent,
-                months: company.promo_months,
-              }),
-            )
-          : (MESSAGE_ACTIONS as readonly string[]).includes(row.type)
-            ? renderActionMessage(
-                row.type as MessageAction,
-                company.locale,
-                company.templates,
-                messageValues(
-                  row.type as MessageAction,
+      // The creator's own words: the preview is the message as they wrote it.
+      const preview =
+        row.type === 'creator_note'
+          ? creatorNote(row.content)
+          : !row.message_values
+            ? null
+            : row.type === 'alumni_followup'
+              ? // The return code is the action's own: the preview shows the one that will go.
+                followupMessage(
                   company.locale,
+                  company.templates,
                   row.message_values,
-                  row.content,
-                ),
-              )
-            : null;
+                  followupOffer(row.id, {
+                    percentOff: company.promo_percent,
+                    months: company.promo_months,
+                  }),
+                )
+              : (MESSAGE_ACTIONS as readonly string[]).includes(row.type)
+                ? renderActionMessage(
+                    row.type as MessageAction,
+                    company.locale,
+                    company.templates,
+                    messageValues(
+                      row.type as MessageAction,
+                      company.locale,
+                      row.message_values,
+                      row.content,
+                    ),
+                  )
+                : null;
       // An announcement: where it goes, and its words (the member's first name, as members'
       // messages write it).
       const announcement =

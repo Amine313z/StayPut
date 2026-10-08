@@ -8,6 +8,7 @@ import {
   creatorOfferText,
   goldenHour,
   isActionType,
+  creatorNote,
   isCreatorOfferKind,
   isAnnouncePlatform,
   nextLocalHour,
@@ -385,7 +386,13 @@ export async function runAction(
   if (MESSAGE_KINDS[type] === 'none') {
     return { status: 'failed', error: `${type} is not run by StayPut`, retry: false };
   }
-  const message = actionMessage(action, type as MessageAction);
+  // The creator's own words leave as written, with their picture: no template, no values.
+  const note = type === 'creator_note' ? creatorNote(action.content) : null;
+  if (type === 'creator_note' && !note) {
+    return { status: 'failed', error: 'the message has no title or text', retry: false };
+  }
+  const message = note ?? actionMessage(action, type as MessageAction);
+  const author = note && typeof action.content.from === 'string' ? action.content.from : null;
   if (action.dryRun) return { status: 'simulated', result: { message } };
   if (!whop) return { status: 'failed', error: 'the Whop API key is not set', retry: false };
   const experienceId = action.experienceId;
@@ -404,6 +411,7 @@ export async function runAction(
         user_ids: [action.member.userId],
         title: message.title,
         content: message.body,
+        ...(author ? { icon_user_id: author } : {}),
       },
       idempotencyKey: `stayput-action-${action.id}`,
     }),

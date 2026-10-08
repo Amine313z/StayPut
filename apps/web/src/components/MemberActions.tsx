@@ -1,13 +1,15 @@
-import type {
-  ActionSettingsView,
-  CreatorMessagesResult,
-  CreatorOfferKind,
-  CreatorOfferMade,
-  MemberRow,
+import {
+  CREATOR_NOTE_LIMITS,
+  creatorNote,
+  type ActionSettingsView,
+  type CreatorNoteSent,
+  type CreatorOfferKind,
+  type CreatorOfferMade,
+  type MemberRow,
 } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
-import { BellOff, Check, Gift, MessageSquareText, PauseCircle } from 'lucide-react';
-import { useState } from 'react';
+import { BellOff, Check, Gift, MessageSquareText, PauseCircle, Send } from 'lucide-react';
+import { useId, useState } from 'react';
 import { ApiError, postJson, useApi } from '../api';
 import { useI18n } from '../i18n';
 import { ActionButton } from '../ui/ActionButton';
@@ -17,12 +19,14 @@ import { Dialog } from '../ui/Dialog';
 import { IconTip } from '../ui/IconTip';
 import { Skeleton } from '../ui/Skeleton';
 import { useToast } from '../ui/Toast';
+import { FIELD } from './SettingsParts';
 
 /** Why the Worker refused an offer (create_creator_offer), in the creator's words. */
 const REFUSALS: Readonly<Record<string, MessageKey>> = {
   do_not_contact: 'dash.act.neverContact',
   no_membership: 'dash.act.noMembership',
   offer_open: 'error.conflict',
+  too_many_notes: 'dash.note.tooMany',
 };
 
 /** What went wrong, in words the creator can act on. */
@@ -34,11 +38,11 @@ export function failureText(error: unknown, t: (key: MessageKey) => string): str
 }
 
 /**
- * What the creator can do for one member from the dashboard: write to them (one click, through
- * the guardrails), offer them a pause or a discount (confirmed first: it gives something). Each
- * says how it went in a toast; what is done stays marked on the row. A member on the « never
- * contact » list gets nothing, said as such; a member without a paid membership can only be
- * written to.
+ * What the creator can do for one member from the dashboard: write to them in their own words
+ * (sent word for word, now or after the quiet hours), offer them a pause or a discount
+ * (confirmed first: it gives something). Each says how it went in a toast; an offer stays marked
+ * on the row. A member on the « never contact » list gets nothing, said as such; a member without
+ * a paid membership can only be written to.
  */
 export function MemberActions({
   member,
@@ -61,8 +65,9 @@ export function MemberActions({
   /** Something was queued: the figures and the feed may have changed. */
   onDone: () => void;
 }) {
-  const { t, plural } = useI18n();
+  const { t, relative } = useI18n();
   const toast = useToast();
+  const [writing, setWriting] = useState(false);
   const [asking, setAsking] = useState<CreatorOfferKind | null>(null);
   const [offered, setOffered] = useState<CreatorOfferKind | null>(null);
   const name = member.name ?? t('members.unnamed');
@@ -86,20 +91,30 @@ export function MemberActions({
     );
   }
   const paying = offers && (member.membership?.price ?? 0) > 0;
-  const message = async () => {
-    const result = await postJson<CreatorMessagesResult>(`${api}/members/message`, {
-      memberIds: [member.id],
-    });
-    toast(
-      result.queued > 0
-        ? {
-            title: plural('dash.toast.messaged', result.queued),
-            body: t(testMode ? 'dash.toast.simulated' : 'dash.toast.messaged.body'),
-          }
-        : { title: t('dash.toast.nothingNew') },
-    );
-    onDone();
-  };
+  const note = writing ? (
+    <NoteDialog
+      name={name}
+      api={api}
+      memberId={member.id}
+      testMode={testMode}
+      onClose={() => setWriting(false)}
+      onSent={(sent) => {
+        setWriting(false);
+        const sendAt = new Date(sent.sendAt);
+        toast(
+          sent.simulated
+            ? { title: t('dash.note.sent.test', { name }), body: t('dash.note.how.test') }
+            : sendAt.getTime() > Date.now() + 60_000
+              ? {
+                  title: t('dash.note.sent.later', { name, when: relative(sendAt) }),
+                  body: t('dash.note.sent.laterBody'),
+                }
+              : { title: t('dash.note.sent.now', { name }) },
+        );
+        onDone();
+      }}
+    />
+  ) : null;
   const dialog = asking ? (
     <OfferDialog
       kind={asking}
@@ -127,19 +142,14 @@ export function MemberActions({
     return (
       <div className="flex items-center gap-1">
         <IconTip label={t('dash.act.message')}>
-          <ActionButton
+          <Button
             variant="ghost"
             size="sm"
             className={square}
-            stayDone
-            run={message}
-            onError={(error) => toast({ tone: 'error', title: failureText(error, t) })}
-            icon={<MessageSquareText aria-hidden="true" className="size-4" />}
-            doneLabel={<span className="sr-only">{t('dash.act.queued')}</span>}
+            onClick={() => setWriting(true)}
             aria-label={t('dash.act.messageLabel', { name })}
-          >
-            <span className="sr-only">{t('dash.act.message')}</span>
-          </ActionButton>
+            icon={<MessageSquareText aria-hidden="true" className="size-4" />}
+          />
         </IconTip>
         {!paying ? null : offered ? (
           <IconTip
@@ -176,24 +186,22 @@ export function MemberActions({
             </IconTip>
           </>
         )}
+        {note}
         {dialog}
       </div>
     );
   }
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <ActionButton
+      <Button
         variant="secondary"
         size="sm"
-        stayDone
-        run={message}
-        onError={(error) => toast({ tone: 'error', title: failureText(error, t) })}
-        icon={<MessageSquareText aria-hidden="true" className="size-4" />}
-        doneLabel={t('dash.act.queued')}
+        onClick={() => setWriting(true)}
         aria-label={t('dash.act.messageLabel', { name })}
+        icon={<MessageSquareText aria-hidden="true" className="size-4" />}
       >
         {t('dash.act.message')}
-      </ActionButton>
+      </Button>
       {!paying ? null : offered ? (
         <Badge tone="accent" icon={<Check aria-hidden="true" className="size-3" />}>
           {t(offered === 'pause_offer' ? 'dash.act.pauseOffered' : 'dash.act.offerMade')}
@@ -227,8 +235,94 @@ export function MemberActions({
           </Button>
         </>
       )}
+      {note}
       {dialog}
     </div>
+  );
+}
+
+/**
+ * The creator's own message to one member: a title and a text, within Whop's limits, sent word
+ * for word as a notification with their picture (create_creator_note). Test mode keeps it in the
+ * history without sending it, and says so before it is written.
+ */
+function NoteDialog({
+  name,
+  api,
+  memberId,
+  testMode,
+  onClose,
+  onSent,
+}: {
+  name: string;
+  api: string;
+  memberId: string;
+  testMode: boolean;
+  onClose: () => void;
+  onSent: (sent: CreatorNoteSent) => void;
+}) {
+  const { t } = useI18n();
+  const toast = useToast();
+  const ids = useId();
+  const [title, setTitle] = useState(() => t('dash.note.titleDefault'));
+  const [body, setBody] = useState('');
+  const note = creatorNote({ title, body });
+  return (
+    <Dialog title={t('dash.note.title', { name })} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <label htmlFor={`${ids}-title`} className="text-sm font-medium">
+            {t('dash.note.subject')}
+          </label>
+          <input
+            id={`${ids}-title`}
+            type="text"
+            maxLength={CREATOR_NOTE_LIMITS.title}
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            className={`${FIELD} w-full`}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor={`${ids}-body`} className="text-sm font-medium">
+            {t('dash.note.body')}
+          </label>
+          <textarea
+            id={`${ids}-body`}
+            rows={5}
+            maxLength={CREATOR_NOTE_LIMITS.body}
+            value={body}
+            placeholder={t('dash.note.placeholder')}
+            onChange={(event) => setBody(event.target.value)}
+            className={`${FIELD} w-full resize-y`}
+          />
+          <p className="text-right text-xs text-subtle tabular-nums">
+            {t('dash.note.count', { count: body.length, max: CREATOR_NOTE_LIMITS.body })}
+          </p>
+        </div>
+        <p className="text-sm text-muted">{t(testMode ? 'dash.note.how.test' : 'dash.note.how')}</p>
+        <div className="flex flex-wrap justify-end gap-2 pt-1">
+          <Button variant="secondary" onClick={onClose}>
+            {t('common.cancel')}
+          </Button>
+          <ActionButton
+            disabled={!note}
+            run={async () => {
+              onSent(
+                await postJson<CreatorNoteSent>(
+                  `${api}/members/${encodeURIComponent(memberId)}/note`,
+                  note,
+                ),
+              );
+            }}
+            onError={(error) => toast({ tone: 'error', title: failureText(error, t) })}
+            icon={<Send aria-hidden="true" className="size-4" />}
+          >
+            {t('dash.note.send')}
+          </ActionButton>
+        </div>
+      </div>
+    </Dialog>
   );
 }
 

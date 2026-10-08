@@ -35,8 +35,10 @@ export type ActionType =
   | 'buddy_intro'
   /** …and the veteran meets the newcomer. */
   | 'mentor_intro'
-  /** A word the creator sent from the dashboard (« Message »), StayPut's wording. */
+  /** A word the creator sent from the dashboard to several members at once, StayPut's wording. */
   | 'creator_message'
+  /** « Message » on one member: words the creator wrote themselves, sent word for word. */
+  | 'creator_note'
   /** An offer the creator made from the dashboard (« Pause », « Offer »): accept it in the space. */
   | 'creator_offer';
 
@@ -57,6 +59,7 @@ export const ACTION_TYPES: readonly ActionType[] = [
   'buddy_intro',
   'mentor_intro',
   'creator_message',
+  'creator_note',
   'creator_offer',
 ];
 
@@ -94,8 +97,30 @@ export const MESSAGE_KINDS: Readonly<Record<ActionType, MessageKind>> = {
   mentor_intro: 'relance',
   // The creator's own initiative: capped like StayPut's, the member is the same person.
   creator_message: 'relance',
+  // The creator's own words, sent when they choose: no follow-up cap holds them back (the creator
+  // writes, StayPut only carries), but they count, so that no follow-up comes on their heels.
+  creator_note: 'service',
   creator_offer: 'relance',
 };
+
+/** What a creator's own message may hold: Whop's notification, a title and a short text. */
+export const CREATOR_NOTE_LIMITS = { title: 80, body: 300 } as const;
+
+/**
+ * A creator's own message, trimmed, or null: a title and a text, each within its limit. The
+ * text keeps its line breaks.
+ */
+export function creatorNote(value: unknown): { title: string; body: string } | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { title, body } = value as Record<string, unknown>;
+  if (typeof title !== 'string' || typeof body !== 'string') return null;
+  const t = title.trim();
+  const b = body.trim();
+  if (!t || !b || t.length > CREATOR_NOTE_LIMITS.title || b.length > CREATOR_NOTE_LIMITS.body) {
+    return null;
+  }
+  return { title: t, body: b };
+}
 
 /** The creator's guardrails (company_settings), and the company's time zone. */
 export interface GuardrailSettings {

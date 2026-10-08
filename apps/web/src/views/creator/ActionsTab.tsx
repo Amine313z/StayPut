@@ -37,6 +37,7 @@ import {
   UserRoundPlus,
   X,
   type LucideIcon,
+  PenLine,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -87,6 +88,7 @@ const TYPES: Readonly<Record<ActionType, { label: MessageKey; Icon: LucideIcon }
   buddy_intro: { label: 'actions.type.buddy_intro', Icon: Handshake },
   mentor_intro: { label: 'actions.type.mentor_intro', Icon: UserRoundPlus },
   creator_message: { label: 'actions.type.creator_message', Icon: MessageSquareText },
+  creator_note: { label: 'actions.type.creator_note', Icon: PenLine },
   creator_offer: { label: 'actions.type.creator_offer', Icon: Gift },
 };
 

@@ -790,6 +790,16 @@ export interface CreatorOffersResult {
 }
 
 /** POST /api/creator/:companyId/members/:memberId/offer */
+/**
+ * POST /api/creator/:companyId/members/:memberId/note: the creator's own message, on its way.
+ * `sendAt` is now, or the end of the quiet hours; `simulated` when test mode is on.
+ */
+export interface CreatorNoteSent {
+  actionId: string;
+  sendAt: string;
+  simulated: boolean;
+}
+
 export interface CreatorOfferMade {
   offerId: string;
   kind: CreatorOfferKind;
