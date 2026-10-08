@@ -139,9 +139,11 @@ jobs:
           echo "StayPut: $url"
           echo "WORKER_URL=$url" >> "$GITHUB_ENV"
           body_file="$RUNNER_TEMP/health.json"
+          headers_file="$RUNNER_TEMP/health.headers"
           for attempt in $(seq 1 18); do
-            rm -f "$body_file"
-            code=$(curl -sS -o "$body_file" -w '%{http_code}' --max-time 15 "$url/health") || true
+            rm -f "$body_file" "$headers_file"
+            code=$(curl -sS -D "$headers_file" -o "$body_file" -w '%{http_code}' --max-time 15 \
+              "$url/health") || true
             body=$(cat "$body_file" 2>/dev/null || true)
             echo "Attempt $attempt: HTTP $code $body"
             if grep -q '"status":"ok"' "$body_file" 2>/dev/null; then
@@ -151,11 +153,16 @@ jobs:
               sleep 10
             fi
           done
+          # Where Cloudflare ran the Worker (wrangler.toml, [placement]): « remote-… » when it
+          # was moved next to the database, « local-… » when it ran where the request came in.
+          placement=$(grep -i '^cf-placement:' "$headers_file" 2>/dev/null | tr -d '\r' || true)
+          echo "Placement: ${placement:-no cf-placement header}"
           {
             echo "### StayPut"
             echo ""
             echo "- URL: $url"
             echo "- /health: HTTP $code \`$body\`"
+            echo "- Placement: ${placement:-no cf-placement header}"
           } >> "$GITHUB_STEP_SUMMARY"
           grep -q '"status":"ok"' "$body_file"
 

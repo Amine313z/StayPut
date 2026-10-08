@@ -42,8 +42,8 @@ export function hyperdriveOrigin(databaseUrl: string): string {
 
 /**
  * The AWS region of a Supabase database, read from its pooler's address
- * (`aws-0-eu-west-2.pooler.supabase.com`): where the Worker had better run (wrangler.toml,
- * [placement]). Null for any other address.
+ * (`aws-0-eu-west-2.pooler.supabase.com`): where the Worker had better run (withPlacement).
+ * Null for any other address.
  */
 export function supabaseRegion(databaseUrl: string): string | null {
   try {
@@ -55,6 +55,20 @@ export function supabaseRegion(databaseUrl: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * wrangler.toml with the Worker pinned to the database's AWS region (targeted placement) instead
+ * of Smart Placement: a screen of the dashboard reads the database several times while the
+ * browser waits once, and Smart Placement moves a Worker only after it has seen steady traffic,
+ * which a community in testing never sends (/health measured 486 ms for one transaction from
+ * Seattle, 2026-10-08).
+ */
+export function withPlacement(toml: string, region: string): string {
+  if (!/^[a-z]{2}-[a-z]+-\d$/.test(region)) throw new Error(`unexpected AWS region "${region}"`);
+  const table = /^\[placement\]\n(?:[a-z_]+ *=[^\n]*\n)*/m;
+  if (!table.test(toml)) throw new Error('wrangler.toml has no [placement] table');
+  return toml.replace(table, `[placement]\nmode = "targeted"\nregion = "aws:${region}"\n`);
 }
 
 /** wrangler.toml with the HYPERDRIVE binding added, unless an active one is already there. */
@@ -153,10 +167,16 @@ async function main() {
         : `Hyperdrive ${name}: connection checked and refreshed.`,
     );
   }
-  writeFileSync(tomlPath, withHyperdriveBinding(readFileSync(tomlPath, 'utf8'), config.id));
+  let toml = withHyperdriveBinding(readFileSync(tomlPath, 'utf8'), config.id);
   console.info(`Hyperdrive ${name}: ${config.id}`);
   const region = supabaseRegion(databaseUrl);
-  if (region) console.info(`The database is in AWS ${region} (its pooler's address).`);
+  if (region) {
+    toml = withPlacement(toml, region);
+    console.info(`The database is in AWS ${region} (its pooler's address): the Worker runs there.`);
+  } else {
+    console.info("The database's address names no region: Smart Placement places the Worker.");
+  }
+  writeFileSync(tomlPath, toml);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -35,10 +35,12 @@ OPERATOR_COMPANY_ID = "biz_2whAzkbCRpcGqQ"
 # binding = "HYPERDRIVE"
 # id = "<id printed by npx wrangler hyperdrive create>"
 
-# Cloudflare runs the Worker where a request is answered fastest (Smart Placement): a screen
-# of the dashboard reads the database several times while the browser waits once, so near
-# the database (Europe) rather than near whoever called, Whop's relay included. Static files
-# are served from the nearest data center whatever this says. /health tells where it ran.
+# Where the Worker runs: next to the database rather than near whoever called, Whop's relay
+# included, since a screen of the dashboard reads the database several times while the browser
+# waits once. The deployment pins it to the database's AWS region (scripts/deploy/hyperdrive.ts,
+# withPlacement); Smart Placement stays for a database whose address names no region. Static
+# files are served from the nearest data center whatever this says. /health gives the time of
+# one database transaction from where the Worker ran.
 [placement]
 mode = "smart"
 

@@ -4058,3 +4058,20 @@ meilleur dessign » (la page Dashboard).
   centrée sous lui. Les autres sections gardent leur titre à gauche, au-dessus de leurs onglets.
 - Le « S » reste là où il présente StayPut à quelqu'un qui ne le connaît pas : l'accueil hors
   de Whop, la page de découverte, le guide.
+
+## 2026-10-08 — Le Worker tourne à côté de la base (placement ciblé)
+
+Mesure : `/health` (une transaction à travers Hyperdrive) prenait **486 ms** depuis le centre
+de Seattle, où le Worker tournait encore après le passage à Smart Placement. Smart Placement ne
+déplace un Worker qu'après avoir vu un trafic régulier de plusieurs endroits : une communauté en
+test n'en envoie jamais assez. Chaque écran du tableau de bord fait plusieurs allers-retours avec
+la base pour une seule attente du navigateur : c'est là que partait le temps.
+
+- **Le déploiement fixe la région** (`scripts/deploy/hyperdrive.ts`, `withPlacement`) : la
+  région AWS de la base est lue dans l'adresse de son pooler Supabase
+  (`aws-0-<région>.pooler.supabase.com`) et écrite dans le `wrangler.toml` déployé
+  (`mode = "targeted"`, `region = "aws:<région>"`), pour le sandbox comme pour la production,
+  chacun avec sa base. Une adresse qui ne dit pas sa région garde Smart Placement.
+- Le fichier commité garde `mode = "smart"` (développement local, adresse inconnue).
+- Le déploiement affiche l'en-tête `cf-placement` de `/health` (où Cloudflare a fait tourner le
+  Worker) à côté du temps de la sonde : la preuve se lit dans chaque déploiement.

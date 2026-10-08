@@ -28,6 +28,7 @@ import {
   sameOrigin,
   supabaseRegion,
   withHyperdriveBinding,
+  withPlacement,
 } from '../../../scripts/deploy/hyperdrive';
 import {
   cloudflareAccountId,
@@ -68,6 +69,24 @@ describe('withHyperdriveBinding', () => {
     const toml = `[[hyperdrive]]\nbinding = "HYPERDRIVE"\nid = "${ID}"\n`;
     expect(withHyperdriveBinding(toml, ID)).toBe(toml);
     expect(() => withHyperdriveBinding('', 'x"\n[evil]')).toThrow(/unexpected Hyperdrive id/);
+  });
+});
+
+describe('withPlacement', () => {
+  it("pins the committed wrangler.toml's Worker to the database's region, nothing else", () => {
+    const pinned = withPlacement(WRANGLER_TOML, 'eu-west-3');
+    expect(pinned).toContain('[placement]\nmode = "targeted"\nregion = "aws:eu-west-3"\n');
+    expect(pinned).not.toContain('mode = "smart"');
+    // Every other line is kept: the comments, the next table and its own comments.
+    expect(pinned.replace('mode = "targeted"\nregion = "aws:eu-west-3"', 'mode = "smart"')).toBe(
+      WRANGLER_TOML,
+    );
+    expect(withPlacement(pinned, 'eu-west-2')).toBe(pinned.replace('eu-west-3', 'eu-west-2'));
+  });
+
+  it('refuses an odd region and a wrangler.toml without [placement]', () => {
+    expect(() => withPlacement(WRANGLER_TOML, 'eu-west-3"\n[evil]')).toThrow(/unexpected AWS/);
+    expect(() => withPlacement('[vars]\nA = "1"\n', 'eu-west-3')).toThrow(/no \[placement\]/);
   });
 });
 
