@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
-import { StayPutMark } from './BrandIcons';
 
 /**
- * Nothing to show yet (brief v3 §7): the logo, one sentence, and the one thing to do about it,
- * never default text. `inset` inside a block: no frame of its own (page → section → row, never a
+ * Nothing to show yet (brief v3 §7): one sentence, and the one thing to do about it, never
+ * default text; an icon only when it says something (the founder took StayPut's mark out of
+ * them on 2026-10-08). `inset` inside a block: no frame of its own (page → section → row, never a
  * box in a box).
  */
 export function EmptyState({
@@ -29,9 +29,7 @@ export function EmptyState({
         <span className="mb-4 flex size-10 items-center justify-center rounded-xl bg-surface-2 text-muted">
           {icon}
         </span>
-      ) : (
-        <StayPutMark size={40} className="mb-4" />
-      )}
+      ) : null}
       {title ? <p className="title-section">{title}</p> : null}
       <p className="mt-1 max-w-md text-sm">{body}</p>
       {action ? <div className="mt-5">{action}</div> : null}

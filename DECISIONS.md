@@ -4041,3 +4041,20 @@ JavaScript (333 Ko compressés) contenait toutes les pages.
   de bord inchangés avec les vagues.
 - Web : les lectures en avance prises par leur écran, jamais redemandées ; redemandées après un
   échec ou après 10 secondes ; rien hors d'un tableau de bord ; les pages chargées à la demande.
+
+## 2026-10-08 — Le tableau de bord sans le logo StayPut, son titre centré
+
+Demande du fondateur : « suprime les logo a cette page et le titre centre le mieux avec un
+meilleur dessign » (la page Dashboard).
+
+- **Plus de « S » en haut à gauche** (`CreatorShell.tsx`) : le cadre de Whop dit déjà StayPut ;
+  la barre commence par la communauté (son logo et son nom, le lien vers l'accueil). Le
+  squelette de chargement suit (un carré gris à la place du « S »).
+- **Plus de « S » dans les états vides** (`EmptyState.tsx`) : une icône seulement quand elle dit
+  quelque chose. « Rien ne demande ton attention » montre une coche turquoise (tout va bien),
+  pas la marque.
+- **« Dashboard » centré** (`SectionLayout.tsx`, classe `title-home`) : Satoshi 700, 30 px,
+  interlettrage serré, un court trait turquoise dessous ; la pastille « Pour commencer » est
+  centrée sous lui. Les autres sections gardent leur titre à gauche, au-dessus de leurs onglets.
+- Le « S » reste là où il présente StayPut à quelqu'un qui ne le connaît pas : l'accueil hors
+  de Whop, la page de découverte, le guide.

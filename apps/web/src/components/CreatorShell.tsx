@@ -17,7 +17,6 @@ import { matchesSearch } from '../members';
 import { ease } from '../motion';
 import { readPreference, writePreference } from '../storage';
 import { ActionButton } from '../ui/ActionButton';
-import { StayPutMark } from '../ui/BrandIcons';
 import { Button, buttonClass } from '../ui/Button';
 import { CommunityMark } from '../ui/CommunityMark';
 import { Dialog } from '../ui/Dialog';
@@ -236,14 +235,8 @@ function TopBar({
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur">
       <div className="flex h-16 items-center gap-3 ps-3 pe-4 sm:pe-6">
-        <Link
-          to={root}
-          aria-label={t('app.name')}
-          className="shrink-0 rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          <StayPutMark size={32} />
-        </Link>
-        <span aria-hidden="true" className="h-6 w-px shrink-0 bg-line" />
+        {/* The community alone at the top left: Whop's frame already says StayPut (the founder
+            took the mark out on 2026-10-08). */}
         <Link
           to={root}
           className="flex min-w-0 items-center gap-2.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -673,7 +666,7 @@ export function ShellSkeleton() {
   return (
     <div className="min-h-dvh" role="status" aria-label={t('common.loading')}>
       <div className="flex h-16 items-center gap-3 border-b border-line ps-3 pe-6">
-        <StayPutMark size={32} />
+        <Skeleton className="size-7 rounded-lg" />
         <Skeleton className="h-4 w-36" />
       </div>
       <div className="md:flex">

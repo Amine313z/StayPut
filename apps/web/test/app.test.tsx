@@ -556,13 +556,17 @@ describe('creator view', () => {
     expect(within(menu).getByRole('link', { name: 'Dashboard' }).getAttribute('aria-current')).toBe(
       'page',
     );
-    // The top bar: StayPut's « S », the community by its name (never its id), the member search
-    // (⌘K) and the guide; the language is in Settings only, and there is no theme to choose
-    // (dark is the only one).
-    expect(screen.getByRole('link', { name: 'StayPut' }).getAttribute('href')).toBe(
+    // The top bar: the community by its name (never its id), no StayPut mark (Whop's frame
+    // already says it), the member search (⌘K) and the guide; the language is in Settings only,
+    // and there is no theme to choose (dark is the only one).
+    expect(screen.getByRole('link', { name: 'Le Club' }).getAttribute('href')).toBe(
       '/dashboard/biz_A1',
     );
-    expect(screen.getByText('Le Club')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'StayPut' })).toBeNull();
+    // The dashboard's title, centred over its figures.
+    expect(screen.getByRole('heading', { name: 'Dashboard', level: 1 }).className).toBe(
+      'title-home',
+    );
     expect(screen.queryByText('biz_A1')).toBeNull();
     expect(
       screen.getByRole('combobox', { name: 'Find a member' }).getAttribute('aria-keyshortcuts'),

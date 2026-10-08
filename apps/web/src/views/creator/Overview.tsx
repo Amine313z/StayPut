@@ -119,7 +119,7 @@ export function Overview() {
         />
       ) : null}
       {view && !setupDone(view.gettingStarted) ? (
-        <div className="-mt-3 mb-8">
+        <div className="-mt-2 mb-8 flex justify-center">
           <Setup steps={view.gettingStarted} root={root} />
         </div>
       ) : null}
@@ -796,7 +796,11 @@ function NeedsAttention({
             <RowsSkeleton rows={5} />
           </div>
         ) : flagged.length === 0 ? (
-          <EmptyState inset body={t('attention.none')} />
+          <EmptyState
+            inset
+            icon={<CircleCheck aria-hidden="true" className="size-5 text-accent" />}
+            body={t('attention.none')}
+          />
         ) : (
           <Stagger as="ul" className="@container/list divide-y divide-line">
             {/* The first rows come in with the page; one that shows up later comes in with a
