@@ -194,10 +194,14 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   `prod_6S7xpEfw0hPwc` « StayPut »: never delete or archive it), unlisted, installed in
   « StayPut Community »; the old app is hidden, to delete. Whop delivers a notification only to
   users of the app's space in the community: « Message » refuses (`no_space`) until StayPut has
-  one, and checks the member's access first. Load time (2026-10-08): Smart Placement, the
+  one, and checks the member's access first. Load time (2026-10-08): the deployment pins the
+  Worker to the database's AWS region (targeted placement, `withPlacement` in
+  `scripts/deploy/hyperdrive.ts`; production `remote-LHR`, probe 83 ms instead of ~500 ms), the
   dashboard's reads in 3 concurrent waves, one Whop access check per screen, the first readings
   asked before React draws (`prefetch.ts`), every screen but the dashboard home loaded on first
-  use; `/health` says where the Worker ran (`colo`) and the database probe's time.
+  use; `/health` gives where the request came in (`colo`) and the database probe's time, the
+  deployment prints the `cf-placement` header. The dashboard has no StayPut mark (top bar, empty
+  states) and a centred title (founder, 2026-10-08).
   Still to do: check the views and the status page, Inspect production.
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;

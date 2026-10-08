@@ -4078,3 +4078,5 @@ la base pour une seule attente du navigateur : c'est là que partait le temps.
 - **Mesuré sur le sandbox** : `cf-placement: remote-FRA`, sonde **58 ms** au lieu de 494 ms
   (requête entrée à Los Angeles). Le champ `colo` de `/health` dit donc où la requête est
   entrée, pas où le Worker a tourné : le message du déploiement le dit ainsi.
+- **Mesuré en production** : `cf-placement: remote-LHR` (la base de production est à Londres),
+  sonde **83 ms** au lieu de 486–513 ms, par le relais de Whop comme en direct.
