@@ -264,13 +264,13 @@ export async function checkRelay(
         answer: relayAnswer(body, env),
       };
       if (last.answer.kind === 'stayput') {
-        // Where the Worker ran when Whop's relay called it, and the database's answer time from
-        // there: what every screen of the dashboard waits for, query after query.
+        // Where Whop's relay came in at Cloudflare, and the database's answer time from where the
+        // Worker ran (next to the database): what every screen waits for, query after query.
         const { colo, databaseMs } = last.answer;
         const where =
           colo === null
             ? ''
-            : ` (run in Cloudflare's ${colo} data center` +
+            : ` (came in at Cloudflare's ${colo} data center` +
               (databaseMs === null ? ')' : `, database probe ${databaseMs} ms)`);
         return {
           level: 'ok',

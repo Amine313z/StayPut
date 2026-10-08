@@ -1039,7 +1039,7 @@ describe('checkRelay', () => {
     );
     expect(await checkRelay(origin, 'production', url, { fetch: placed, sleep: noSleep })).toEqual({
       level: 'ok',
-      text: `Whop's relay (${origin}) reaches StayPut: /health ok (run in Cloudflare's CDG data center, database probe 9 ms).`,
+      text: `Whop's relay (${origin}) reaches StayPut: /health ok (came in at Cloudflare's CDG data center, database probe 9 ms).`,
     });
   });
 

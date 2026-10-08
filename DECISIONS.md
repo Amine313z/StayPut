@@ -4075,3 +4075,6 @@ la base pour une seule attente du navigateur : c'est là que partait le temps.
 - Le fichier commité garde `mode = "smart"` (développement local, adresse inconnue).
 - Le déploiement affiche l'en-tête `cf-placement` de `/health` (où Cloudflare a fait tourner le
   Worker) à côté du temps de la sonde : la preuve se lit dans chaque déploiement.
+- **Mesuré sur le sandbox** : `cf-placement: remote-FRA`, sonde **58 ms** au lieu de 494 ms
+  (requête entrée à Los Angeles). Le champ `colo` de `/health` dit donc où la requête est
+  entrée, pas où le Worker a tourné : le message du déploiement le dit ainsi.

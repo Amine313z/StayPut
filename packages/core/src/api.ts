@@ -1616,8 +1616,9 @@ export interface HealthReport {
   /** `timeout`: no answer within 5 s (HEALTH_DB_TIMEOUT_MS in apps/worker). */
   database: 'ok' | 'unreachable' | 'timeout' | 'outdated' | 'not_configured';
   /**
-   * Where it was measured, to see what the screens wait for: Cloudflare's data center that ran
-   * the Worker (`CDG`, `IAD`…, null when unknown), and how long the database probe took.
+   * What the screens wait for: Cloudflare's data center the request came in at (`CDG`, `IAD`…,
+   * null when unknown; with the Worker placed next to the database it runs elsewhere, as the
+   * response's `cf-placement` header says), and how long the database probe took.
    */
   colo: string | null;
   databaseMs: number | null;
