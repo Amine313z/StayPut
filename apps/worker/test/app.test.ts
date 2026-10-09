@@ -2976,8 +2976,8 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     ).json()) as CreatorNoteSent;
     expect(later.status).toBe('scheduled');
     expect(Date.parse(later.sendAt)).toBeGreaterThan(NOW.getTime());
-    // Three a day at most.
-    expect((await write({ title: 'More', body: 'A fourth word.' })).status).toBe(409);
+    // No cap per day: the creator writes as often as they choose.
+    expect((await write({ title: 'More', body: 'A fourth word.' })).status).toBe(200);
     // Never to a member on the « never contact » list.
     await t.db.query(
       `update stayput.members set do_not_contact = true where company_id = $1 and id = $2`,

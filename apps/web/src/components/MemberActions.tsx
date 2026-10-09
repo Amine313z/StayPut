@@ -26,7 +26,6 @@ const REFUSALS: Readonly<Record<string, MessageKey>> = {
   do_not_contact: 'dash.act.neverContact',
   no_membership: 'dash.act.noMembership',
   offer_open: 'dash.offer.open',
-  too_many_notes: 'dash.note.tooMany',
   already_decided: 'dash.pause.alreadyApplied',
   expired: 'dash.pause.expired',
 };

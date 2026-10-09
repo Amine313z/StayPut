@@ -4135,3 +4135,17 @@ délai : une réponse de Whop qui ne vient pas tenait la requête, et la page av
 - **L'équipe qui ouvre StayPut dans sa communauté arrive sur son tableau de bord**
   (`GET /api/member/:experienceId/home`) ; un membre lit « Rien à faire ici », dans la langue de
   la communauté. Avant : « Nothing to do here » pour tout le monde, en anglais.
+
+## 2026-10-09 — « Message » : plus de limite par jour
+
+Le fondateur : « qui t'a dit de mettre une limite ». Personne : les trois messages par membre et
+par 24 heures de 0045 venaient de moi (« contre un double envoi »), pas de SPEC.md, dont les
+plafonds (5.8) visent les relances de StayPut, pas les mots du créateur. Ils l'ont bloqué en plein
+test.
+
+- Migration 0047 : `create_creator_note` sans plafond. Restent les garde-fous qui protègent le
+  membre : les arrêts, « ne jamais contacter », les heures calmes (il part à leur fin), le mode
+  test (simulé).
+- Le double clic reste couvert sans limite : « Send » est inactif pendant l'envoi, et la réponse
+  arrive en 20 s au plus.
+- Clé `dash.note.tooMany` retirée (EN/FR).

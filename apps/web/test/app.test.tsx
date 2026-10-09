@@ -769,7 +769,7 @@ describe('creator view', () => {
           status: 200,
           body: { actionId: 'a4', status: 'failed', sendAt: at(0), reason: 'permission' },
         },
-        { status: 409, body: { error: { code: 'conflict', message: 'too_many_notes' } } },
+        { status: 409, body: { error: { code: 'conflict', message: 'do_not_contact' } } },
       ],
     });
     renderAt('/dashboard/biz_A1');
@@ -826,14 +826,16 @@ describe('creator view', () => {
       ),
     ).toBeTruthy();
 
-    // Three a day at most: said as such, the words stay to try again.
+    // A refusal is said as such, and the words stay to try again.
     dialog = await open();
     fireEvent.change(within(dialog).getByRole('textbox', { name: 'Your message' }), {
       target: { value: 'One more.' },
     });
     fireEvent.click(send());
     expect(
-      await screen.findByText('Three messages to this member today already: write again tomorrow.'),
+      await screen.findByText(
+        'On the do-not-contact list: StayPut takes no action for this member.',
+      ),
     ).toBeTruthy();
     expect(screen.getByRole('dialog', { name: 'Write to Bruno Petit' })).toBeTruthy();
   });
