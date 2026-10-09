@@ -31,12 +31,20 @@ export interface AccessCheck {
   accessLevel: AccessLevel;
 }
 
+/** How long one call waits for Whop by default: the slowest list answers in a few seconds. */
+export const WHOP_TIMEOUT_MS = 15_000;
+
 export interface WhopClientOptions {
   /** The app API key: it acts on every account that installed the app. Server side only. */
   apiKey: string;
   env: WhopEnv;
   apiVersionDate?: string;
   retry?: Partial<RetryPolicy>;
+  /**
+   * How long one call waits for Whop's answer (WHOP_TIMEOUT_MS by default): past it, it is a
+   * network error, tried again like one. A Worker never waits on Whop without end.
+   */
+  timeoutMs?: number;
   /** Injected in tests; the global fetch otherwise. */
   fetch?: (input: string, init: RequestInit) => Promise<Response>;
   sleep?: (ms: number) => Promise<void>;
@@ -92,6 +100,7 @@ export function createWhopClient(options: WhopClientOptions): WhopClient {
   const random = options.random ?? Math.random;
   const now = options.now ?? Date.now;
   const apiVersionDate = options.apiVersionDate ?? WHOP_API_VERSION_DATE;
+  const timeoutMs = options.timeoutMs ?? WHOP_TIMEOUT_MS;
 
   /** The body of a successful response, as text; retries what is safe to retry. */
   async function call(
@@ -116,9 +125,20 @@ export function createWhopClient(options: WhopClientOptions): WhopClient {
     for (let attempt = 0; ; attempt += 1) {
       let response: Response;
       try {
-        response = await send(url, { method, headers, body: payload });
+        response = await send(url, {
+          method,
+          headers,
+          body: payload,
+          signal: AbortSignal.timeout(timeoutMs),
+        });
       } catch (cause) {
-        const error = new WhopApiError(0, 'network_error', describe(cause), { method, path });
+        const timedOut = cause instanceof Error && cause.name === 'TimeoutError';
+        const error = new WhopApiError(
+          0,
+          timedOut ? 'timeout' : 'network_error',
+          timedOut ? `no answer from Whop within ${timeoutMs / 1000} s` : describe(cause),
+          { method, path },
+        );
         if (!retryable || attempt >= policy.maxRetries) throw error;
         await sleep(backoffDelay(attempt, policy, random));
         continue;

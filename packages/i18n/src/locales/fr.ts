@@ -1495,6 +1495,9 @@ export const fr: Messages = {
   'dash.note.sent.laterBody': 'À la fin de vos heures calmes.',
   'dash.note.sent.test': 'Simulé pour {name}',
   'dash.note.tooMany': 'Déjà trois messages à ce membre aujourd’hui : réécrivez demain.',
+  'dash.note.sending': 'Envoi en cours à {name}',
+  'dash.note.sendingBody':
+    'Whop tarde à répondre. L’envoi continue : Automatisations › File d’attente montre quand il part. Inutile de réécrire.',
   'dash.note.retrying': 'Pas encore envoyé à {name}',
   'dash.note.retryingBody': 'Whop ne l’a pas pris. StayPut réessaie {when}.',
   'dash.note.permission':

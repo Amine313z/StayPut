@@ -114,19 +114,26 @@ export function MemberActions({
                     title: t('dash.note.sent.later', { name, when }),
                     body: t('dash.note.sent.laterBody'),
                   }
-                : sent.status === 'retrying'
+                : sent.status === 'sending'
                   ? {
-                      tone: 'error',
-                      title: t('dash.note.retrying', { name }),
-                      body: t('dash.note.retryingBody', { when }),
+                      title: t('dash.note.sending', { name }),
+                      body: t('dash.note.sendingBody'),
                     }
-                  : {
-                      tone: 'error',
-                      title: t(
-                        sent.reason === 'permission' ? 'dash.note.permission' : 'dash.note.refused',
-                        { name },
-                      ),
-                    },
+                  : sent.status === 'retrying'
+                    ? {
+                        tone: 'error',
+                        title: t('dash.note.retrying', { name }),
+                        body: t('dash.note.retryingBody', { when }),
+                      }
+                    : {
+                        tone: 'error',
+                        title: t(
+                          sent.reason === 'permission'
+                            ? 'dash.note.permission'
+                            : 'dash.note.refused',
+                          { name },
+                        ),
+                      },
         );
         onDone();
       }}

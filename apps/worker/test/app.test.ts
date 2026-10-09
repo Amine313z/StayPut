@@ -32,6 +32,7 @@ import type {
   TeamView,
   DataExport,
   MemberDataExport,
+  MemberHome,
   OperatorStatus,
 } from '@stayput/core';
 import { DEFAULT_PLATFORM_SIGNALS, localHour } from '@stayput/core';
@@ -125,10 +126,22 @@ function fakeWhop(
   const writes: { method: string; path: string; body: unknown; key?: string }[] = [];
   /** Whop refuses these (`POST /experiences`…) with this error, once each. */
   const refusals: Record<string, WhopApiError> = {};
+  /** Whop does not answer these (`POST /messages`…) until `release`: the call hangs. */
+  const silent = new Set<string>();
+  const held: (() => void)[] = [];
+  /** The calls left hanging end, as their time limit would end them. */
+  const release = () => {
+    for (const end of held.splice(0)) end();
+  };
   const client = {
     env: 'sandbox',
     request(method: string, path: string, options?: { body?: unknown; idempotencyKey?: string }) {
       calls.push(`${method} ${path}`);
+      if (silent.has(`${method} ${path}`)) {
+        return new Promise<never>((_resolve, reject) => {
+          held.push(() => reject(new WhopApiError(0, 'timeout', 'no answer', { method, path })));
+        });
+      }
       const refused = refusals[`${method} ${path}`];
       if (refused) {
         delete refusals[`${method} ${path}`];
@@ -217,7 +230,7 @@ function fakeWhop(
       return Promise.resolve({ items: page.data, nextCursor: null });
     },
   } as unknown as WhopClient;
-  return { client, calls, listed, writes, refusals };
+  return { client, calls, listed, writes, refusals, silent, release };
 }
 
 function setup(
@@ -233,6 +246,8 @@ function setup(
     fetchImage?: (url: string) => Promise<Response>;
     /** How long a reading waits for Discord or Telegram. */
     outsideWaitMs?: number;
+    /** How long « Message » waits for its sending. */
+    noteWaitMs?: number;
   } = {},
 ) {
   const db = options.db === undefined ? t.db : options.db;
@@ -257,6 +272,7 @@ function setup(
     accessCache: new AccessCache(),
     ...(options.fetchImage ? { fetchImage: options.fetchImage } : {}),
     ...(options.outsideWaitMs === undefined ? {} : { outsideWaitMs: options.outsideWaitMs }),
+    ...(options.noteWaitMs === undefined ? {} : { noteWaitMs: options.noteWaitMs }),
   };
   const app = createApp(deps);
   const request = (path: string, init: RequestInit = {}, env: Env = ENV) =>
@@ -2699,7 +2715,10 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
   });
 
   /** A community whose member Ana scheduled her cancellation; `boss` is of the team. */
-  async function departing(n: number, over: { mode?: 'auto' | 'manual'; dryRun?: boolean } = {}) {
+  async function departing(
+    n: number,
+    over: { mode?: 'auto' | 'manual'; dryRun?: boolean; noteWaitMs?: number } = {},
+  ) {
     const [company, experience] = [`biz_Ret${n}`, `exp_Ret${n}`];
     const env = setup(
       {
@@ -2707,7 +2726,10 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
         [`user_boss${n}:${experience}`]: 'admin',
         [`user_boss${n}:${company}`]: 'admin',
       },
-      { experiences: { [experience]: company } },
+      {
+        experiences: { [experience]: company },
+        ...(over.noteWaitMs === undefined ? {} : { noteWaitMs: over.noteWaitMs }),
+      },
     );
     await env.request(`/api/creator/${company}/session`, await asUser(`user_boss${n}`));
     await settle();
@@ -2741,6 +2763,47 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     const decide = (body: unknown) => env.request(`${base}/offer`, json(ana, 'POST', body));
     return { ...env, company, ana, read, answer, decide, boss: () => asUser(`user_boss${n}`) };
   }
+
+  it('leads the team from the community to its dashboard, and a member to nothing to do', async () => {
+    const env = await departing(18);
+    const home = async (as: RequestInit) =>
+      (await (await env.request('/api/member/exp_Ret18/home', as)).json()) as MemberHome;
+    await t.db.query(`update stayput.companies set locale = 'fr' where id = $1`, [env.company]);
+    expect(await home(await env.boss())).toEqual({
+      dashboard: '/dashboard/biz_Ret18',
+      locale: 'fr',
+    });
+    expect(await home(env.ana)).toEqual({ dashboard: null, locale: 'fr' });
+    // Nobody outside the community.
+    expect((await env.request('/api/member/exp_Ret18/home')).status).toBe(401);
+  });
+
+  it('answers within its wait when Whop never answers: the message is said on its way', async () => {
+    const env = await departing(17, { noteWaitMs: 50 });
+    const boss = await env.boss();
+    await t.db.query(
+      `update stayput.company_settings set quiet_hours_start = 0, quiet_hours_end = 0
+        where company_id = $1`,
+      [env.company],
+    );
+    env.whop.silent.add('POST /messages');
+    const sent = await env.request(
+      `/api/creator/${env.company}/members/mber_Ret17/note`,
+      json(boss, 'POST', { title: 'Hello', body: 'Still there?' }),
+    );
+    expect(sent.status).toBe(200);
+    // Neither sent nor waiting for the quiet hours: on its way, the creator told so.
+    expect(await sent.json()).toMatchObject({ status: 'sending' });
+    // Its time limit ends the call: tried again in an hour, never lost.
+    env.whop.release();
+    await settle();
+    const [row] = await t.db.query<{ status: string; attempts: number }>(
+      `select status, attempts from stayput.actions
+        where company_id = $1 and type = 'creator_note'`,
+      [env.company],
+    );
+    expect(row).toEqual({ status: 'scheduled', attempts: 1 });
+  });
 
   it('proposes a pause in the support chat, applied when the creator says the member agreed', async () => {
     const env = await departing(9);

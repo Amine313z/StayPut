@@ -1,8 +1,13 @@
-import type { MemberRetentionView, MemberSession, MemberTelegramStatus } from '@stayput/core';
+import type {
+  MemberHome,
+  MemberRetentionView,
+  MemberSession,
+  MemberTelegramStatus,
+} from '@stayput/core';
 import type { Locale } from '@stayput/i18n';
 import { CircleCheck, Unlink } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 import { deleteJson, useApi, useReloadOnReturn } from '../api';
 import { ConfirmButton } from '../components/ConfirmButton';
 import { PrivacyLink } from '../components/Legal';
@@ -28,8 +33,24 @@ export function MemberView() {
   return memberSpaceEnabled() ? <SpaceView /> : <NothingHere />;
 }
 
-/** No space: nothing to read, nothing to answer, no call to the Worker. */
+/**
+ * No space: the team, who open StayPut in their community, land on their dashboard; a member
+ * reads that there is nothing to do here, in the community's language, nothing to answer.
+ */
 function NothingHere() {
+  const { experienceId = '' } = useParams();
+  const { state } = useApi<MemberHome>(`/api/member/${encodeURIComponent(experienceId)}/home`);
+  if (state.status === 'loading') return <Loading />;
+  const home = state.status === 'ready' ? state.data : null;
+  if (home?.dashboard) return <Navigate to={home.dashboard} replace />;
+  return (
+    <SpokenIn locale={home?.locale ?? null}>
+      <Nothing />
+    </SpokenIn>
+  );
+}
+
+function Nothing() {
   const { t } = useI18n();
   return (
     <div className="mx-auto max-w-md py-16 text-center">

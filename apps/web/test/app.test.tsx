@@ -3887,16 +3887,30 @@ describe('the member space in the dashboard', () => {
 });
 
 describe('member view, without a member space (2026-10-08)', () => {
-  it('tells a member there is nothing to do here, and asks StayPut nothing', async () => {
-    const calls = mockApi({});
+  it('tells a member there is nothing to do here, in the community’s language', async () => {
+    const calls = mockApi({
+      '/api/member/exp_E1/home': [{ status: 200, body: { dashboard: null, locale: 'fr' } }],
+    });
     renderAt('/experiences/exp_E1');
-    expect(await screen.findByText('Nothing to do here')).toBeTruthy();
+    expect(await screen.findByText('Rien à faire ici')).toBeTruthy();
     expect(
-      screen.getByText('Messages from your community reach you in its support chat.'),
+      screen.getByText('Les messages de votre communauté vous arrivent dans son chat de support.'),
     ).toBeTruthy();
     // No survey, no offer, no payment, no Telegram: nothing of a space.
     expect(screen.queryByRole('button')).toBeNull();
-    expect(calls).toEqual([]);
+    expect(calls).toEqual(['/api/member/exp_E1/home']);
+  });
+
+  it('takes the team from their community straight to their dashboard', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/member/exp_E1/home': [
+        { status: 200, body: { dashboard: '/dashboard/biz_A1', locale: 'en' } },
+      ],
+    });
+    renderAt('/experiences/exp_E1');
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
+    expect(screen.queryByText('Nothing to do here')).toBeNull();
   });
 });
 

@@ -37,6 +37,7 @@ import {
   type WebhookReplay,
   type AlumniView,
   type MemberRetentionView,
+  type MemberHome,
   type MemberSession,
   type AnnouncementsView,
   type ResultAnswer,
@@ -209,7 +210,10 @@ export interface AppDeps {
    * The Whop API with the app key, or null when the key is not configured. The sync asks for
    * `maxRetries: 0`: each call is then one subrequest of its budget.
    */
-  whopClient(config: Config, options?: { maxRetries?: number }): WhopClient | null;
+  whopClient(
+    config: Config,
+    options?: { maxRetries?: number; timeoutMs?: number },
+  ): WhopClient | null;
   /** Whop's public keys for the iframe token. */
   userTokenKeys(config: Config): JWTVerifyGetKey | CryptoKey;
   /** "Sign in with Whop" outside the iframe (sandbox), or null without an app id. */
@@ -223,6 +227,8 @@ export interface AppDeps {
   fetchImage?(url: string): Promise<Response>;
   /** How long a reading waits for Discord or Telegram: OUTSIDE_WAIT_MS unless a test says. */
   outsideWaitMs?: number;
+  /** How long « Message » waits for its sending: NOTE_WAIT_MS unless a test says. */
+  noteWaitMs?: number;
 }
 
 export function productionDeps(): AppDeps {
@@ -240,6 +246,7 @@ export function productionDeps(): AppDeps {
             ...(options.maxRetries === undefined
               ? {}
               : { retry: { maxRetries: options.maxRetries } }),
+            ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
           })
         : null,
     userTokenKeys: (config) => whopUserTokenKeys(config.whopEnv),
@@ -321,6 +328,10 @@ export const MANUAL_DISCORD_REFRESH_SECONDS = 10 * 60;
 export const OUTSIDE_WAIT_MS = 2_500;
 /** Actions run right after the creator approves some (the hourly cron runs the rest). */
 const REQUEST_ACTION_BATCH = 5;
+/** How long « Message » waits for its sending before answering what it came to so far. */
+export const NOTE_WAIT_MS = 20_000;
+/** Each Whop call of that sending: two of them fit in the wait. */
+const NOTE_WHOP_TIMEOUT_MS = 8_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MEMBER_ID = /^mber_[A-Za-z0-9]+$/;
 const REQUEST_SYNC_BUDGET = SYNC_REQUEST_BUDGET - 2;
@@ -1834,13 +1845,34 @@ export function createApp(deps: AppDeps) {
           : apiError('conflict', typeof made?.error === 'string' ? made.error : 'not sent');
       }
       c.set('audit', { member: memberId });
-      try {
-        await prepareActions(db, companyId, now, { memberSpace: c.get('config').memberSpace });
-        await executeAction(db, deps.whopClient(c.get('config')), made.actionId, now);
-      } catch (error) {
-        // Kept scheduled: the next pass sends it, and the answer below says it waits.
-        console.error('Creator message not run:', describe(error));
-      }
+      const actionId = made.actionId;
+      // Sent now, within NOTE_WAIT_MS whatever Whop does: one try, each call bounded; past the
+      // wait, it finishes in the background (on its own connection, which may outlive the
+      // answer) and the answer reads what it came to so far.
+      const own = deps.openDb(c.env);
+      const work = own ?? db;
+      const sending = (async () => {
+        try {
+          await prepareActions(work, companyId, now, { memberSpace: c.get('config').memberSpace });
+          const whop = deps.whopClient(c.get('config'), {
+            maxRetries: 0,
+            timeoutMs: NOTE_WHOP_TIMEOUT_MS,
+          });
+          await executeAction(work, whop, actionId, now);
+        } catch (error) {
+          // Kept scheduled: the next pass sends it, and the answer below says it waits.
+          console.error('Creator message not run:', describe(error));
+        }
+      })();
+      defer(c, own ? sending.finally(() => own.close()) : sending);
+      let waited: ReturnType<typeof setTimeout> | undefined;
+      const late = await Promise.race([
+        sending.then(() => false),
+        new Promise<boolean>((resolve) => {
+          waited = setTimeout(() => resolve(true), deps.noteWaitMs ?? NOTE_WAIT_MS);
+        }),
+      ]);
+      clearTimeout(waited);
       const [action] = await db.query<{
         status: string;
         send_at: Date | string;
@@ -1855,19 +1887,22 @@ export function createApp(deps: AppDeps) {
       const answer: CreatorNoteSent =
         action?.status === 'sent' || action?.status === 'simulated'
           ? { actionId: made.actionId, status: action.status, sendAt }
-          : action?.status === 'scheduled' || action?.status === 'approved'
-            ? {
-                actionId: made.actionId,
-                status: (action.attempts ?? 0) > 0 ? 'retrying' : 'scheduled',
-                sendAt,
-              }
-            : {
-                actionId: made.actionId,
-                status: 'failed',
-                sendAt,
-                // A 403: StayPut may not write in the support chat yet (its permissions).
-                reason: action?.last_error?.startsWith('403 ') ? 'permission' : 'refused',
-              };
+          : late && (action?.status === 'scheduled' || action?.status === 'approved')
+            ? // Whop has not answered yet: it is still on its way, never said sent nor waiting.
+              { actionId: made.actionId, status: 'sending', sendAt }
+            : action?.status === 'scheduled' || action?.status === 'approved'
+              ? {
+                  actionId: made.actionId,
+                  status: (action.attempts ?? 0) > 0 ? 'retrying' : 'scheduled',
+                  sendAt,
+                }
+              : {
+                  actionId: made.actionId,
+                  status: 'failed',
+                  sendAt,
+                  // A 403: StayPut may not write in the support chat yet (its permissions).
+                  reason: action?.last_error?.startsWith('403 ') ? 'permission' : 'refused',
+                };
       return c.json(answer);
     },
   );
@@ -2595,6 +2630,25 @@ export function createApp(deps: AppDeps) {
       via: c.get('via'),
     };
     return c.json(session);
+  });
+
+  /** Where StayPut's place in the community leads (MemberHome): the team to its dashboard. */
+  app.get('/api/member/:experienceId/home', authenticate, withDb, requireMember, async (c) => {
+    const companyId = await memberCompany(c);
+    if (companyId instanceof Response) return companyId;
+    const db = c.get('db');
+    const [company] = db
+      ? await db.query<{ locale: string | null }>(
+          'select locale from stayput.companies where id = $1',
+          [companyId],
+        )
+      : [];
+    const home: MemberHome = {
+      dashboard:
+        c.get('accessLevel') === 'admin' ? `/dashboard/${encodeURIComponent(companyId)}` : null,
+      locale: company?.locale === 'fr' ? 'fr' : 'en',
+    };
+    return c.json(home);
   });
 
   /** The company of the route's experience, or the error response to send. */

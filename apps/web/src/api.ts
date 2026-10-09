@@ -100,6 +100,11 @@ async function requestJson<T>(
     const { answerDemo } = await import('./demo/api');
     return (await answerDemo(method, path, body)) as T;
   }
+  // An action waits at most ACTION_GIVE_UP_MS: the Worker answers well within it, so a button
+  // never spins without end when the network or Whop's relay drops the answer.
+  const own = method === 'GET' || signal ? null : new AbortController();
+  const giveUp = own ? setTimeout(() => own.abort(), ACTION_GIVE_UP_MS) : undefined;
+  const abortWith = signal ?? own?.signal;
   let response: Response;
   try {
     response = await fetch(path, {
@@ -111,11 +116,16 @@ async function requestJson<T>(
       },
       credentials: 'same-origin',
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      ...(signal ? { signal } : {}),
+      ...(abortWith ? { signal: abortWith } : {}),
     });
   } catch (error) {
     if (signal?.aborted) throw error;
+    if (own?.signal.aborted) {
+      throw new ApiError('timeout', `no answer in ${ACTION_GIVE_UP_MS / 1000} seconds`);
+    }
     throw new ApiError('network', error instanceof Error ? error.message : String(error));
+  } finally {
+    clearTimeout(giveUp);
   }
   if (response.ok) return (await response.json()) as T;
   const failure = (await response.json().catch(() => null)) as Partial<ApiErrorBody> | null;
@@ -145,6 +155,8 @@ export const SLOW_MS = 5_000;
 
 /** A reading with no answer after this long is given up: the next one can start. */
 export const GIVE_UP_MS = 20_000;
+/** How long an action (POST, PUT, DELETE) waits for its answer before saying so. */
+export const ACTION_GIVE_UP_MS = 45_000;
 
 /**
  * Loads `path` (read with GET, or POST for a read that refreshes first), with `retry()` to start

@@ -90,6 +90,17 @@ export interface MemberSession {
   via: SignInMethod;
 }
 
+/**
+ * GET /api/member/:experienceId/home: where StayPut's place in the community leads. Members have
+ * no StayPut space (2026-10-08): the team goes to its dashboard, a member reads that there is
+ * nothing to do, in the community's language.
+ */
+export interface MemberHome {
+  /** The dashboard's address, for the team only. */
+  dashboard: string | null;
+  locale: 'en' | 'fr';
+}
+
 /** GET /api/creator/:companyId/sync: how far StayPut has read the company's Whop data. */
 export interface SyncStatus {
   /** Every list was read once: the 90-day history is in (the backfill). */
@@ -803,7 +814,8 @@ export interface CreatorOffersResult {
  */
 export interface CreatorNoteSent {
   actionId: string;
-  status: 'sent' | 'scheduled' | 'simulated' | 'retrying' | 'failed';
+  /** `sending`: Whop had not answered when the creator's wait ended; it goes on. */
+  status: 'sent' | 'scheduled' | 'sending' | 'simulated' | 'retrying' | 'failed';
   sendAt: string;
   /** `permission`: StayPut may not write in the community's support chat yet (Whop said 403). */
   reason?: 'permission' | 'refused';

@@ -131,6 +131,35 @@ describe('retries', () => {
     expect(whop.sleeps).toEqual([250, 500, 1000]);
   });
 
+  it('never waits on Whop without end: a call past its time is a network error, tried again', async () => {
+    let asked = 0;
+    const silent = createWhopClient({
+      apiKey: 'test_key',
+      env: 'sandbox',
+      timeoutMs: 20,
+      retry: { maxRetries: 1 },
+      sleep: () => Promise.resolve(),
+      // Whop never answers: only the call's own time limit ends it.
+      fetch: (_input, init) => {
+        asked += 1;
+        return new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => {
+            // The time limit's own error, as fetch rejects with it.
+            const reason: unknown = init.signal?.reason;
+            reject(reason instanceof Error ? reason : new Error(String(reason)));
+          });
+        });
+      },
+    });
+    const error = await silent
+      .request('POST', '/support_channels', { body: {}, idempotencyKey: 'k' })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(WhopApiError);
+    expect(error).toMatchObject({ status: 0, type: 'timeout' });
+    expect((error as Error).message).toContain('no answer from Whop within 0.02 s');
+    expect(asked).toBe(2);
+  });
+
   it('never retries a client error', async () => {
     const whop = fakeWhop(whopError(404, 'not_found', 'no such membership'));
     await expect(createWhopClient(whop.options).request('GET', '/x')).rejects.toMatchObject({

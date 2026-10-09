@@ -1451,6 +1451,9 @@ export const en = {
   'dash.note.sent.laterBody': 'When your quiet hours end.',
   'dash.note.sent.test': 'Simulated for {name}',
   'dash.note.tooMany': 'Three messages to this member today already: write again tomorrow.',
+  'dash.note.sending': 'Being sent to {name}',
+  'dash.note.sendingBody':
+    'Whop is slow to answer. It keeps going: Automations › Queue shows when it leaves. No need to write again.',
   'dash.note.retrying': 'Not sent to {name} yet',
   'dash.note.retryingBody': 'Whop did not take it. StayPut tries again {when}.',
   'dash.note.permission':

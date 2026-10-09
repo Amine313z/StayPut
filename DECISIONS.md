@@ -4118,3 +4118,20 @@ les messages passaient par là, StayPut devait être visible chez les membres. C
 Restent à trancher : l'offre Alumni crée encore un espace StayPut dans son produit gratuit (les
 relances, elles, passent déjà par le chat) ; le lien Telegram d'un membre se faisait depuis sa
 vue (Telegram est éteint en production).
+
+## 2026-10-09 — StayPut n'attend plus Whop sans fin ; l'équipe arrive sur son tableau de bord
+
+Constaté en production : « Send » tournait sans fin, et les trois messages étaient pourtant
+enregistrés (la limite de trois par jour l'a dit au quatrième). Le client Whop n'avait aucun
+délai : une réponse de Whop qui ne vient pas tenait la requête, et la page avec elle.
+
+- **Chaque appel à Whop a un délai** (`WHOP_TIMEOUT_MS`, 15 s ; `packages/whop/src/client.ts`) :
+  passé, c'est une erreur réseau (`timeout`), retentée comme elle.
+- **« Message » répond toujours en 20 s au plus** (`NOTE_WAIT_MS`) : un seul essai, chaque appel
+  borné à 8 s, sur sa propre connexion ; s'il n'a pas fini, il continue en arrière-plan et la
+  réponse dit `sending` (« Envoi en cours à … : l'envoi continue, inutile de réécrire »).
+- **Côté navigateur, une action attend 45 s au plus** (`ACTION_GIVE_UP_MS`) puis le dit : un
+  bouton ne tourne plus jamais sans fin.
+- **L'équipe qui ouvre StayPut dans sa communauté arrive sur son tableau de bord**
+  (`GET /api/member/:experienceId/home`) ; un membre lit « Rien à faire ici », dans la langue de
+  la communauté. Avant : « Nothing to do here » pour tout le monde, en anglais.
