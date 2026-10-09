@@ -395,12 +395,18 @@ html[data-scroll-lock] {
 }
 
 /*
- * StayPut's loading screen (index.html #boot, src/boot.tsx): the app's mark in a thin turquoise
- * ring that turns, « Loading StayPut… » under it, on the page's black, over everything, from the
- * first paint until the screen opened is ready; then it fades out. The text is the system's
- * until the fonts arrive.
+ * StayPut's loading screen (index.html #boot, src/boot.tsx), from the first paint until the
+ * screen opened is ready, then faded out. The mark, round, lit from behind by a halo that
+ * breathes, a light passing over it; around it a ring whose turquoise tail ends in a glowing
+ * head; « Loading StayPut… » under it, the light running through its letters. The light on the
+ * page and the mark's tilt follow the pointer (boot.tsx). Less motion asked for: only the ring
+ * turns, slower. The words are the system's until the fonts arrive.
  */
 #boot {
+  --boot-x: 50%;
+  --boot-y: 44%;
+  --boot-tilt-x: 0deg;
+  --boot-tilt-y: 0deg;
   position: fixed;
   inset: 0;
   z-index: 2147483647;
@@ -408,10 +414,17 @@ html[data-scroll-lock] {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: 1.375rem;
   padding-bottom: 6vh;
-  background-color: var(--black-900);
-  transition: opacity 220ms var(--ease-brand);
+  background:
+    radial-gradient(
+      520px circle at var(--boot-x) var(--boot-y),
+      rgb(94 234 212 / 0.07),
+      transparent 65%
+    ),
+    var(--black-900);
+  perspective: 600px;
+  transition: opacity 260ms var(--ease-brand);
 }
 
 #boot.boot-out {
@@ -419,55 +432,136 @@ html[data-scroll-lock] {
   pointer-events: none;
 }
 
-.boot-spinner {
+.boot-stage {
   position: relative;
   display: grid;
-  width: 72px;
-  height: 72px;
+  width: 84px;
+  height: 84px;
   place-items: center;
+  transform: rotateX(var(--boot-tilt-x)) rotateY(var(--boot-tilt-y));
+  transition: transform 300ms var(--ease-brand);
+  animation: boot-enter 600ms var(--ease-brand) both;
 }
 
+/* The ring's track, barely there. */
+.boot-stage::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.06);
+}
+
+.boot-halo {
+  position: absolute;
+  inset: -40px;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    rgb(94 234 212 / 0.24),
+    rgb(94 234 212 / 0.06) 55%,
+    transparent
+  );
+  filter: blur(6px);
+  animation: boot-breathe 2.4s ease-in-out infinite;
+}
+
+/* A turquoise tail fading behind its head, cut to a 2 px ring. */
 .boot-ring {
   position: absolute;
   inset: 0;
-  width: 72px;
-  height: 72px;
-  animation: boot-spin 0.9s linear infinite;
+  border-radius: 50%;
+  background: conic-gradient(
+    transparent 0turn,
+    rgb(94 234 212 / 0.06) 0.4turn,
+    rgb(94 234 212 / 0.55) 0.82turn,
+    var(--turq-100) 1turn
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 2px),
+    var(--black-900) calc(100% - 1.5px)
+  );
+  animation: boot-spin 1.1s linear infinite;
 }
 
-.boot-ring-track,
-.boot-ring-arc {
-  fill: none;
-  stroke-width: 2;
+/* Its head, glowing, at the tail's bright end. */
+.boot-comet {
+  position: absolute;
+  inset: 0;
+  animation: boot-spin 1.1s linear infinite;
 }
 
-.boot-ring-track {
-  stroke: var(--black-600);
+.boot-comet::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background-color: var(--turq-100);
+  box-shadow:
+    0 0 8px 2px rgb(94 234 212 / 0.7),
+    0 0 18px 5px rgb(94 234 212 / 0.3);
 }
 
-/* A quarter of the ring (its length is 2π × 34 ≈ 214). */
-.boot-ring-arc {
-  stroke: var(--turq-300);
-  stroke-linecap: round;
-  stroke-dasharray: 54 214;
+.boot-logo {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    0 10px 30px -6px rgb(94 234 212 / 0.35);
+}
+
+/* A light passing over the mark. */
+.boot-logo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    rgb(255 255 255 / 0.28) 50%,
+    transparent 65%
+  );
+  transform: translateX(-120%);
+  animation: boot-shine 2.6s var(--ease-brand) infinite;
 }
 
 .boot-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  display: block;
+  width: 48px;
+  height: 48px;
 }
 
+/* The words, a light running through them. */
 .boot-label {
   margin: 0;
   color: var(--white-500);
+  background-image: linear-gradient(
+    90deg,
+    var(--white-500) 35%,
+    var(--white-100) 50%,
+    var(--white-500) 65%
+  );
+  background-size: 250% 100%;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
   font:
     500 13px/1.4 'Geist Variable',
     system-ui,
     -apple-system,
     'Segoe UI',
     sans-serif;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
+  animation:
+    boot-shimmer 2.4s linear infinite,
+    boot-enter 600ms 120ms var(--ease-brand) both;
 }
 
 @keyframes boot-spin {
@@ -476,9 +570,54 @@ html[data-scroll-lock] {
   }
 }
 
-/* Less motion asked for: the ring stays still, its arc says it is loading. */
+@keyframes boot-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    scale: 0.92;
+  }
+  50% {
+    opacity: 1;
+    scale: 1.06;
+  }
+}
+
+@keyframes boot-shine {
+  55%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes boot-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+@keyframes boot-enter {
+  from {
+    opacity: 0;
+    scale: 0.94;
+  }
+}
+
+/* Less motion asked for: the ring alone turns, slower; nothing else moves. */
 @media (prefers-reduced-motion: reduce) {
-  .boot-ring {
+  .boot-ring,
+  .boot-comet {
+    animation-duration: 2.4s;
+  }
+  .boot-stage,
+  .boot-halo,
+  .boot-logo::after,
+  .boot-label {
     animation: none;
+  }
+  .boot-stage {
+    transform: none;
   }
 }

@@ -37,11 +37,31 @@ export function bootShowing(): boolean {
 
 /** Called once by main.tsx: the loading screen waits for the first frame (or the give-up). */
 export function startBoot(): void {
-  if (!bootShowing()) return;
+  const boot = element();
+  if (!boot || gone) return;
+  followPointer(boot);
   window.setTimeout(() => {
     firstFrame = true;
     hide();
   }, BOOT_GIVE_UP_MS);
+}
+
+/**
+ * The light on the loading screen and the mark's tilt follow the pointer (styles.css, #boot);
+ * nothing moves when less motion is asked for.
+ */
+function followPointer(boot: HTMLElement): void {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  boot.addEventListener('pointermove', (event) => {
+    const box = boot.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return;
+    const x = (event.clientX - box.left) / box.width;
+    const y = (event.clientY - box.top) / box.height;
+    boot.style.setProperty('--boot-x', `${(x * 100).toFixed(1)}%`);
+    boot.style.setProperty('--boot-y', `${(y * 100).toFixed(1)}%`);
+    boot.style.setProperty('--boot-tilt-x', `${((0.5 - y) * 16).toFixed(2)}deg`);
+    boot.style.setProperty('--boot-tilt-y', `${((x - 0.5) * 16).toFixed(2)}deg`);
+  });
 }
 
 function hide(): void {

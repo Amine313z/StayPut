@@ -4159,9 +4159,13 @@ StayPut attendait ensuite, l'une après l'autre : le code de la page membre (ave
 
 - **Écran de chargement StayPut** (`index.html` #boot) : le logo (WebP de 2,8 Ko écrit dans la
   page par `boot-mark.ts`, aucune requête de plus ; la CSP autorise `data:` pour les images), rond,
-  dans un fin anneau turquoise qui tourne, et « Loading StayPut… » dessous (le fondateur a montré
-  l'écran d'une autre app de Whop comme modèle : une barre seule faisait brouillon), dès le premier
-  affichage, avant tout JavaScript. Il reste jusqu'à
+  éclairé par un halo turquoise qui respire, un reflet qui passe dessus ; autour, un anneau dont
+  la traînée turquoise finit par une tête lumineuse ; « Loading StayPut… » dessous, une lumière
+  qui traverse les lettres ; la lumière de la page et l'inclinaison du logo suivent le pointeur
+  (`boot.tsx`, `followPointer`). Le fondateur a montré l'écran d'une autre app de Whop comme
+  modèle, puis demandé plus de lumière et d'effets, validés sur un aperçu avant le déploiement.
+  Moins d'animations demandées : seul l'anneau tourne, plus lentement. Dès le premier affichage,
+  avant tout JavaScript. Il reste jusqu'à
   ce que l'écran ouvert ait sa première réponse (`BootHold`, `useBootReady` dans `src/boot.tsx`),
   puis s'efface (220 ms) : jamais de cadre vide ni de squelette entre les deux. Au-delà de 8 s il
   s'efface quand même, et l'écran montre sa propre attente ou son erreur.
