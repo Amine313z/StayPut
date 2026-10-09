@@ -4173,3 +4173,18 @@ StayPut attendait ensuite, l'une après l'autre : le code de la page membre (ave
 - La page membre ne charge plus l'espace membre (fichier à part, chargé seulement s'il est
   allumé). Une erreur de `/home` montre « Réessayer », jamais « Rien à faire ici » à l'équipe.
 - Le logo (`/logo-*.png`) est gardé un jour par le navigateur.
+
+## 2026-10-09 — L'agent de StayPut ne peut pas porter le nom de la communauté (Whop ne le permet pas)
+
+Dans le chat de support, les membres voient « StayPut's agent » et un rond « SA ». Le fondateur
+voulait qu'ils voient le nom et le logo de leur communauté. Vérifié sur le sandbox
+(`scripts/ops/agent-profile.ts`, workflow « Agent profile ») : une clé d'app peut écrire le profil
+de l'agent propre à une communauté (`PATCH /users/{agent}` avec `account_id`), mais Whop exige
+`user:profile:update`, et cette permission **n'est pas proposée aux apps** dans leurs réglages
+(capture du fondateur, 09/10/2026 : seule `company:authorized_user:email:read` sort pour
+« user »). L'API de l'app (`PATCH /apps/{id}`) n'a rien pour l'agent non plus ; son icône est en
+place depuis le 08/10 et l'agent garde « SA ».
+
+Rien n'est livré : pas de code mort. Le script de vérification reste, pour réessayer si Whop ouvre
+la permission. `company:authorized_user:read`, ajoutée en chemin, n'est pas utilisée : à retirer
+de l'app (SPEC 8.2, rien de plus que ce qui sert).
