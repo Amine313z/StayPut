@@ -82,13 +82,31 @@ async function main() {
   // 3. Who the agent is: « me » for the key, and the team's agent.
   const me = await call('GET', '/users/me');
   say(`users/me: HTTP ${me.status} ${refusal(me.json)} id ${text(record(me.json).id)}`);
-  const team = await call('GET', `/team_members?company_id=${company}&first=50`);
+  const team = await call('GET', `/team_members?account_id=${company}&first=50`);
   const members = (record(team.json).data as unknown[] | undefined) ?? [];
   const agent = members.map(record).find((m) => m.is_agent === true);
-  const agentId = text(record(agent?.user).id);
+  let agentId = text(record(agent?.user).id);
   say(
     `team_members: HTTP ${team.status} ${refusal(team.json)} ${members.length} listed, agent ${agentId || 'not found'}`,
   );
+  // Else the author of a message StayPut sent in a support chat (support_chat:read).
+  const channels = await call('GET', `/support_channels?company_id=${company}&first=20`);
+  const ids = ((record(channels.json).data as unknown[] | undefined) ?? [])
+    .map((c) => text(record(c).id))
+    .filter(Boolean);
+  say(`support_channels: HTTP ${channels.status} ${refusal(channels.json)} ${ids.length} listed`);
+  for (const channel of ids) {
+    if (agentId) break;
+    const messages = await call('GET', `/messages?channel_id=${channel}&first=50`);
+    for (const message of (record(messages.json).data as unknown[] | undefined) ?? []) {
+      const user = record(record(message).user);
+      if (/agent/i.test(text(user.name)) || /agent/i.test(text(user.username))) {
+        agentId = text(user.id);
+        say(`agent found in a support chat: ${agentId} (${text(user.username)})`);
+        break;
+      }
+    }
+  }
   const target = agentId || text(record(me.json).id);
   if (!/^user_[A-Za-z0-9]+$/.test(target)) {
     say('No agent to update: stop.');
