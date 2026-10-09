@@ -1,0 +1,38 @@
+name: Agent profile (sandbox)
+
+# Started by Claude through the API, or by hand (GitHub -> Actions -> Agent profile -> Run
+# workflow): what Whop lets StayPut do with its agent in a sandbox community, its name and
+# picture there set to the community's own (scripts/ops/agent-profile.ts). Sandbox only; never
+# prints the key. The founder's choice of 2026-10-09: members see their community, not StayPut.
+on:
+  workflow_dispatch:
+    inputs:
+      company:
+        description: The sandbox company (biz_…)
+        default: biz_2whAzkbCRpcGqQ
+      picture:
+        description: Also set the picture to the community's logo
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: sandbox
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: StayPut's agent in the community
+        env:
+          WHOP_API_KEY: ${{ secrets.WHOP_API_KEY }}
+          COMPANY: ${{ inputs.company }}
+          PICTURE: ${{ inputs.picture && '1' || '0' }}
+        run: npx tsx scripts/ops/agent-profile.ts
