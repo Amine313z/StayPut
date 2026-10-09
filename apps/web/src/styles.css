@@ -395,9 +395,10 @@ html[data-scroll-lock] {
 }
 
 /*
- * StayPut's loading screen (index.html #boot, src/boot.tsx): the mark, breathing, and a thin
- * turquoise light passing under it, on the page's black, over everything, from the first paint
- * until the screen opened is ready; then it fades out.
+ * StayPut's loading screen (index.html #boot, src/boot.tsx): the app's mark in a thin turquoise
+ * ring that turns, « Loading StayPut… » under it, on the page's black, over everything, from the
+ * first paint until the screen opened is ready; then it fades out. The text is the system's
+ * until the fonts arrive.
  */
 #boot {
   position: fixed;
@@ -407,7 +408,8 @@ html[data-scroll-lock] {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1.25rem;
+  gap: 1rem;
+  padding-bottom: 6vh;
   background-color: var(--black-900);
   transition: opacity 220ms var(--ease-brand);
 }
@@ -417,41 +419,66 @@ html[data-scroll-lock] {
   pointer-events: none;
 }
 
-.boot-mark {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  animation: boot-breathe 1.8s ease-in-out infinite;
-}
-
-.boot-light {
+.boot-spinner {
   position: relative;
-  width: 88px;
-  height: 2px;
-  overflow: hidden;
-  border-radius: 1px;
-  background-color: var(--black-600);
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
 }
 
-.boot-light::after {
-  content: '';
+.boot-ring {
   position: absolute;
   inset: 0;
-  transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, var(--turq-300), transparent);
-  animation: shimmer 1.1s var(--ease-brand) infinite;
+  width: 72px;
+  height: 72px;
+  animation: boot-spin 0.9s linear infinite;
 }
 
-@keyframes boot-breathe {
-  50% {
-    opacity: 0.72;
-    transform: scale(0.96);
+.boot-ring-track,
+.boot-ring-arc {
+  fill: none;
+  stroke-width: 2;
+}
+
+.boot-ring-track {
+  stroke: var(--black-600);
+}
+
+/* A quarter of the ring (its length is 2π × 34 ≈ 214). */
+.boot-ring-arc {
+  stroke: var(--turq-300);
+  stroke-linecap: round;
+  stroke-dasharray: 54 214;
+}
+
+.boot-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.boot-label {
+  margin: 0;
+  color: var(--white-500);
+  font:
+    500 13px/1.4 'Geist Variable',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  letter-spacing: 0.01em;
+}
+
+@keyframes boot-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
+/* Less motion asked for: the ring stays still, its arc says it is loading. */
 @media (prefers-reduced-motion: reduce) {
-  .boot-mark,
-  .boot-light::after {
+  .boot-ring {
     animation: none;
   }
 }

@@ -47,6 +47,9 @@ describe('StayPut’s loading screen', () => {
     // The mark needs no request of its own (the policy allows data: images, no inline style).
     expect(boot).toMatch(/src="data:image\/webp;base64,[A-Za-z0-9+/=]+"/);
     expect(boot).not.toMatch(/style=/);
+    // What it says while the page loads, read out by screen readers (role="status").
+    expect(html).toMatch(/<div id="boot" role="status">/);
+    expect(html).toContain('<p class="boot-label">Loading StayPut…</p>');
     expect(html.indexOf('id="boot"')).toBeLessThan(html.indexOf('id="root"'));
     expect(readFileSync(BOOT_MARK).length).toBeLessThan(4_000);
     const headers = readFileSync(path.join(web, 'public/_headers'), 'utf8');

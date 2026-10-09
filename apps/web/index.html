@@ -12,9 +12,15 @@
   </head>
   <body>
     <!-- StayPut's loading screen, drawn before any JavaScript (src/boot.tsx takes it away). -->
-    <div id="boot" role="status" aria-label="StayPut">
-      <img class="boot-mark" src="/logo-boot.webp" width="64" height="64" alt="" />
-      <span class="boot-light" aria-hidden="true"></span>
+    <div id="boot" role="status">
+      <div class="boot-spinner">
+        <svg class="boot-ring" viewBox="0 0 72 72" aria-hidden="true">
+          <circle class="boot-ring-track" cx="36" cy="36" r="34" />
+          <circle class="boot-ring-arc" cx="36" cy="36" r="34" />
+        </svg>
+        <img class="boot-mark" src="/logo-boot.webp" width="44" height="44" alt="" />
+      </div>
+      <p class="boot-label">Loading StayPut…</p>
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
