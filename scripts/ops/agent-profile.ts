@@ -109,6 +109,12 @@ async function main() {
   }
   const target = agentId || text(record(me.json).id);
   if (!/^user_[A-Za-z0-9]+$/.test(target)) {
+    // Which scope Whop asks for, on a user who does not exist: nothing can change.
+    const nobody = await call('PATCH', '/users/user_ProbeNobody0001', {
+      account_id: company,
+      name: 'Probe',
+    });
+    say(`scope check (no such user): HTTP ${nobody.status} ${refusal(nobody.json)}`);
     say('No agent to update: stop.');
     return;
   }
