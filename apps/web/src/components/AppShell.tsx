@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router';
+import { useBootReady } from '../boot';
 import { useI18n } from '../i18n';
 import { StayPutMark } from '../ui/BrandIcons';
 
@@ -11,6 +12,7 @@ import { StayPutMark } from '../ui/BrandIcons';
  */
 export function AppShell() {
   const { t } = useI18n();
+  useBootReady();
   return (
     <div className="min-h-dvh">
       <header className="sticky top-0 z-20 border-b border-line bg-bg/80 backdrop-blur">

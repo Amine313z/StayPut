@@ -2,6 +2,7 @@ import type { CreatorSession, IntegrationsStatus, MembersPage } from '@stayput/c
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useOutletContext, useParams, useSearchParams } from 'react-router';
 import { DEMO_COMPANY_ID, postJson, useApi, useReloadOnReturn, type Loadable } from '../api';
+import { BootHold, useBootReady } from '../boot';
 import { CreatorShell, ShellSkeleton, rememberDemoExit } from '../components/CreatorShell';
 import { ErrorPanel } from '../components/Status';
 import { DemoMode } from '../demoMode';
@@ -59,8 +60,11 @@ export function CreatorView({ demo = false }: { demo?: boolean }) {
   // The language of this app: the community's own choice, the demo always in English.
   const { enterCommunity } = useI18n();
   useEffect(() => enterCommunity(demo ? null : companyId), [enterCommunity, demo, companyId]);
+  useBootReady();
 
-  if (state.status === 'loading') return <ShellSkeleton />;
+  // On opening, StayPut's loading screen stays until the session is read: the dashboard then
+  // shows with its name and its menu, never an empty frame first.
+  if (state.status === 'loading') return <BootHold fallback={<ShellSkeleton />} />;
   if (state.status === 'error') {
     return (
       <div className="mx-auto max-w-lg px-4 py-16">

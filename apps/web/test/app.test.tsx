@@ -3914,6 +3914,20 @@ describe('member view, without a member space (2026-10-08)', () => {
     expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
     expect(screen.queryByText('Nothing to do here')).toBeNull();
   });
+
+  it('says when Whop could not answer, with « Retry », never « nothing to do » to the team', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/member/exp_E1/home': [
+        { status: 503, body: { error: { code: 'whop_unavailable', message: 'down' } } },
+        { status: 200, body: { dashboard: '/dashboard/biz_A1', locale: 'en' } },
+      ],
+    });
+    renderAt('/experiences/exp_E1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(screen.queryByText('Nothing to do here')).toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Dashboard', level: 1 })).toBeTruthy();
+  });
 });
 
 describe('member view (with the member space)', () => {

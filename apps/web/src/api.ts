@@ -67,11 +67,19 @@ const EARLY_MS = 10_000;
 
 /** Asks for `path` now, for the screen about to read it (GET, never the demo's). */
 export function prefetch(path: string): void {
-  if (path.startsWith(DEMO_API) || early.has(path)) return;
+  prefetchAnswer(path)?.catch(() => {});
+}
+
+/** `prefetch`, giving the answer under way (null for the demo's). */
+export function prefetchAnswer(path: string): Promise<unknown> | null {
+  if (path.startsWith(DEMO_API)) return null;
+  const asked = early.get(path);
+  if (asked) return asked.answer;
   const answer = requestJson<unknown>('GET', path);
   // A failure is left to the screen's own reading, which asks again.
   answer.catch(() => {});
   early.set(path, { at: Date.now(), answer });
+  return answer;
 }
 
 function takeEarly(path: string): Promise<unknown> | null {

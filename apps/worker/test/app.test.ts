@@ -2778,6 +2778,23 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     expect((await env.request('/api/member/exp_Ret18/home')).status).toBe(401);
   });
 
+  it('asks Whop for the dashboard’s access while the team is on its way to it', async () => {
+    await departing(19);
+    // Another instance of the Worker, which has kept no answer of Whop's yet.
+    const { request, whop } = setup(
+      { 'user_boss19:exp_Ret19': 'admin', 'user_boss19:biz_Ret19': 'admin' },
+      { experiences: { exp_Ret19: 'biz_Ret19' } },
+    );
+    const boss = await asUser('user_boss19');
+    const checks = () => whop.calls.filter((call) => !/^[A-Z]+ \//.test(call));
+    await request('/api/member/exp_Ret19/home', boss);
+    await settle();
+    expect(checks()).toEqual(['user_boss19:exp_Ret19', 'user_boss19:biz_Ret19']);
+    // The dashboard opens on the answer already kept: Whop is not asked again.
+    expect((await request('/api/creator/biz_Ret19/session', boss)).status).toBe(200);
+    expect(checks()).toHaveLength(2);
+  });
+
   it('answers within its wait when Whop never answers: the message is said on its way', async () => {
     const env = await departing(17, { noteWaitMs: 50 });
     const boss = await env.boss();

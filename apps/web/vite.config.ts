@@ -4,6 +4,7 @@ import { createReadStream, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
+import { bootMark } from './boot-mark';
 import { OCR_DIR, OCR_FILES, OCR_VERSIONS } from './src/ocr-files';
 
 // In development, the Worker runs next to Vite (`npm run dev:worker`, port 8787): the paths it
@@ -54,7 +55,7 @@ function ocrFiles(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), ocrFiles()],
+  plugins: [react(), tailwindcss(), ocrFiles(), bootMark()],
   server: {
     port: 5173,
     proxy: {

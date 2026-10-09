@@ -2,10 +2,10 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 
 /**
  * The key paths, in a real browser (SPEC Phase 8.6): installing StayPut (the welcome), the audit
- * (who may leave, and why), an action StayPut takes (proposed, approved, then scheduled), the
- * member's own page (the departure survey and its offer), and a save attributed (the money kept,
- * in the history and on the dashboard). The creator's paths run on the demo, answered in the
- * browser; the member's on answers given here, shaped as the Worker gives them. The Worker's side
+ * (who may leave, and why), an action StayPut takes (proposed, approved, then scheduled), StayPut
+ * opened from the community (a member, the team), and a save attributed (the money kept, in the
+ * history and on the dashboard). The creator's paths run on the demo, answered in the browser;
+ * the community's entry on answers given here, shaped as the Worker gives them. The Worker's side
  * of the same paths, from Whop's deliveries to the money saved, is apps/worker/test/journey.test.ts.
  */
 
@@ -114,87 +114,55 @@ test('a save attributed: the money a retry recovered, in the history and on the 
   await expect(figure).toContainText(/\$[1-9][\d,]*\.\d{2}/);
 });
 
-/** The member's page, answered as the Worker answers it: a cancellation, then the survey. */
-async function memberApi(page: Page) {
-  const retention = (departure: Record<string, unknown>) => ({
-    creatorName: 'Atlas Trading Club',
-    locale: 'en',
-    whopAppId: null,
-    alumniUrl: null,
-    preview: null,
-    payment: null,
-    departure: {
-      endsAt: '2026-11-01T00:00:00.000Z',
-      reason: null,
-      offer: null,
-      outcome: 'pending',
-      result: null,
-      ...departure,
-    },
-    alumni: null,
-    creatorOffer: null,
-  });
-  const offer = { type: 'promo_offer', percentOff: 20, months: 3, keep: 'required' };
-  const posted: Record<string, unknown> = {};
+/**
+ * StayPut opened from the community (Whop's experience view), answered as the Worker answers
+ * `/home`. Members have no StayPut space (2026-10-08): the departure survey and the offers reach
+ * them in the community's support chat (apps/worker/test/journey.test.ts), never on a page.
+ */
+async function entryApi(page: Page, home: { dashboard: string | null; locale: 'en' | 'fr' }) {
+  const asked: string[] = [];
   await page.route('**/api/member/exp_Journey/**', async (route: Route) => {
-    const url = new URL(route.request().url());
-    const path = url.pathname.replace('/api/member/exp_Journey/', '');
-    const json = (body: unknown) =>
-      route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
-    if (route.request().method() === 'POST') {
-      posted[path] = route.request().postDataJSON() as unknown;
-    }
-    if (path === 'session') {
-      return json({
-        experienceId: 'exp_Journey',
-        userId: 'user_Journey',
-        accessLevel: 'customer',
-        via: 'iframe',
-      });
-    }
-    if (path === 'telegram') {
-      return json({ available: false, linked: false, link: null, whopAppId: null });
-    }
-    if (path === 'retention') return json(retention({}));
-    if (path === 'retention/survey') {
-      return json(retention({ reason: 'too_expensive', offer }));
-    }
-    if (path === 'retention/offer') {
-      return json(
-        retention({
-          reason: 'too_expensive',
-          offer,
-          outcome: 'accepted',
-          result: { status: 'applied', kept: true, promoApplied: true },
-        }),
-      );
+    const path = new URL(route.request().url()).pathname;
+    asked.push(path);
+    if (path === '/api/member/exp_Journey/home') {
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify(home) });
     }
     return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
   });
-  return posted;
+  return asked;
 }
 
-test('the member’s page: why they leave, the offer for it, and their membership kept', async ({
+test('a member who opens StayPut: StayPut’s loading screen, then nothing to do, in French', async ({
   page,
 }) => {
-  const posted = await memberApi(page);
+  const asked = await entryApi(page, { dashboard: null, locale: 'fr' });
   await page.goto('/experiences/exp_Journey');
-  await expect(page.getByRole('heading', { name: 'Your membership is ending' })).toBeVisible();
-  // Never a risk score on the member's side (SPEC 5.3).
-  await expect(page.getByText(/risk/i)).toHaveCount(0);
-  await page.getByRole('button', { name: 'It’s too expensive' }).click();
-  expect(posted['retention/survey']).toEqual({ reason: 'too_expensive' });
-  // The offer for that reason: 20% off for 3 months, the membership kept with consent.
-  await expect(page.getByText('20% off for 3 months')).toBeVisible();
-  const accept = page.getByRole('button', { name: 'Take the discount' });
-  await expect(accept).toBeDisabled();
-  await page.getByLabel('I keep my membership: my cancellation is withdrawn.').check();
-  await accept.click();
-  expect(posted['retention/offer']).toEqual({ accept: true, keep: true });
-  // What came of it, in the member's words: the discount on their next payments, the
-  // membership going on.
-  await expect(page.getByText('Done: 20% off your next 3 payments.')).toBeVisible();
-  await expect(
-    page.getByText('Your membership continues: your cancellation is withdrawn.'),
-  ).toBeVisible();
+  await expect(page.getByText('Rien à faire ici')).toBeVisible();
+  // The loading screen has gone; nothing of a space, never a risk score (SPEC 5.3).
+  await expect(page.locator('#boot')).toHaveCount(0);
+  await expect(page.getByRole('main').getByRole('button')).toHaveCount(0);
+  await expect(page.getByText(/risk|risque/i)).toHaveCount(0);
+  expect(asked).toEqual(['/api/member/exp_Journey/home']);
+});
+
+test('the team who opens StayPut in its community lands on its dashboard, nothing between', async ({
+  page,
+}) => {
+  await entryApi(page, { dashboard: '/demo', locale: 'en' });
+  // Every frame the page draws until the dashboard: StayPut's loading screen, never the
+  // member page's « Nothing to do here ».
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { seen: string[] }).seen = seen;
+    const look = () => {
+      if (document.body?.innerText.includes('Nothing to do here')) seen.push('nothing');
+      requestAnimationFrame(look);
+    };
+    requestAnimationFrame(look);
+  });
+  await page.goto('/experiences/exp_Journey');
+  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
+  await expect(page).toHaveURL(/\/demo$/);
+  await expect(page.locator('#boot')).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as { seen: string[] }).seen)).toEqual([]);
 });

@@ -2643,11 +2643,18 @@ export function createApp(deps: AppDeps) {
           [companyId],
         )
       : [];
+    const team = c.get('accessLevel') === 'admin';
     const home: MemberHome = {
-      dashboard:
-        c.get('accessLevel') === 'admin' ? `/dashboard/${encodeURIComponent(companyId)}` : null,
+      dashboard: team ? `/dashboard/${encodeURIComponent(companyId)}` : null,
       locale: company?.locale === 'fr' ? 'fr' : 'en',
     };
+    // The dashboard's calls follow at once: Whop is asked now whether this user may open it,
+    // so that they find the answer kept instead of each waiting for it (still Whop's answer).
+    if (team)
+      defer(
+        c,
+        accessTo(c, companyId).catch(() => {}),
+      );
     return c.json(home);
   });
 

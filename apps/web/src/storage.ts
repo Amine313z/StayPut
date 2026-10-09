@@ -17,3 +17,11 @@ export function writePreference(key: string, value: string): void {
     // Not kept: the default applies next time.
   }
 }
+
+export function forgetPreference(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Nothing kept to forget.
+  }
+}

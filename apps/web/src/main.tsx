@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider, createBrowserRouter } from 'react-router';
 import { routes } from './App';
+import { startBoot } from './boot';
 import { I18nProvider, detectLocale } from './i18n';
 import { prefetchScreen } from './prefetch';
 import { ToastProvider } from './ui/Toast';
@@ -17,6 +18,8 @@ const locale = detectLocale();
 document.documentElement.lang = locale;
 // The dashboard's first readings leave now, all at once, while the page is still loading.
 prefetchScreen(window.location.pathname, locale);
+// StayPut's loading screen stays until the screen opened is ready (boot.tsx).
+startBoot();
 
 createRoot(root).render(
   <StrictMode>

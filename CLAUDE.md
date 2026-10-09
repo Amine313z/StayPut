@@ -205,7 +205,12 @@ aria-disabled>` that opens nothing, with the « Disabled in the demo » tip (hov
   asked before React draws (`prefetch.ts`), every screen but the dashboard home loaded on first
   use; `/health` gives where the request came in (`colo`) and the database probe's time, the
   deployment prints the `cf-placement` header. The dashboard has no StayPut mark (top bar, empty
-  states) and a centred title (founder, 2026-10-08).
+  states) and a centred title (founder, 2026-10-08). Opening (2026-10-09): StayPut's loading
+  screen (`index.html` #boot, mark written in by `boot-mark.ts`, `src/boot.tsx`) shows from the
+  first paint until the screen's first answer (`BootHold` / `useBootReady`, gives up after 8 s);
+  from the community, `/home` is asked at once and the dashboard's readings leave as soon as it
+  answers (at once on a device that opened it before, `stayput.entry.<exp>`), and `/home` asks
+  Whop for the dashboard's access in the background.
   Still to do: check the views and the status page, Inspect production.
 - **Checking production from a session**: `*.workers.dev` and the database are out of reach, so
   run the « Inspect » workflow (`actions_run_trigger`, `inspect.yml`) and read its job log;

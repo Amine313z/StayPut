@@ -4149,3 +4149,27 @@ test.
 - Le double clic reste couvert sans limite : « Send » est inactif pendant l'envoi, et la réponse
   arrive en 20 s au plus.
 - Clé `dash.note.tooMany` retirée (EN/FR).
+
+## 2026-10-09 — StayPut s'ouvre sur son écran de chargement, sans attente en chaîne
+
+Le fondateur : un rond gris tournait longtemps à l'ouverture, sans rien de StayPut ; « tout doit
+être fluide ». Le rond est celui de Whop (son cadre attend la page). Depuis la communauté,
+StayPut attendait ensuite, l'une après l'autre : le code de la page membre (avec l'espace membre,
+85 Ko, éteint), la réponse « où aller » (`/home`), puis seulement les lectures du tableau de bord.
+
+- **Écran de chargement StayPut** (`index.html` #boot) : le logo (WebP de 2,8 Ko écrit dans la
+  page par `boot-mark.ts`, aucune requête de plus ; la CSP autorise `data:` pour les images) et
+  une fine lumière turquoise, dès le premier affichage, avant tout JavaScript. Il reste jusqu'à
+  ce que l'écran ouvert ait sa première réponse (`BootHold`, `useBootReady` dans `src/boot.tsx`),
+  puis s'efface (220 ms) : jamais de cadre vide ni de squelette entre les deux. Au-delà de 8 s il
+  s'efface quand même, et l'écran montre sa propre attente ou son erreur.
+- **Depuis la communauté** : `/home` part dès l'ouverture (`prefetch.ts`) ; dès qu'il répond, les
+  lectures du tableau de bord partent, avant même que la page soit dessinée. Un appareil qui a
+  déjà ouvert StayPut s'en souvient (`stayput.entry.<exp>`) et les lance tout de suite, en
+  parallèle ; c'est quand même la réponse qui décide où aller (un membre ne s'en souvient jamais,
+  une équipe qui n'en est plus une reçoit un refus et l'oublie).
+- **Le serveur** demande à Whop l'accès au tableau de bord pendant qu'il répond à `/home` (en
+  arrière-plan) : les lectures qui suivent trouvent la réponse gardée.
+- La page membre ne charge plus l'espace membre (fichier à part, chargé seulement s'il est
+  allumé). Une erreur de `/home` montre « Réessayer », jamais « Rien à faire ici » à l'équipe.
+- Le logo (`/logo-*.png`) est gardé un jour par le navigateur.

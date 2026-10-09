@@ -11,6 +11,11 @@
     <title>StayPut</title>
   </head>
   <body>
+    <!-- StayPut's loading screen, drawn before any JavaScript (src/boot.tsx takes it away). -->
+    <div id="boot" role="status" aria-label="StayPut">
+      <img class="boot-mark" src="/logo-boot.webp" width="64" height="64" alt="" />
+      <span class="boot-light" aria-hidden="true"></span>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

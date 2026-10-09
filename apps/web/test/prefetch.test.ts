@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getJson, prefetch } from '../src/api';
-import { prefetchScreen } from '../src/prefetch';
+import { entryKey, prefetchScreen } from '../src/prefetch';
 
 /**
  * The dashboard's first readings leave at once, as the page opens (main.tsx), instead of each
@@ -24,6 +24,7 @@ const json =
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  localStorage.clear();
 });
 
 describe('prefetch', () => {
@@ -59,9 +60,59 @@ describe('prefetch', () => {
       '/api/creator/biz_Pre2/dashboard',
     );
     fetchMock.mockClear();
-    prefetchScreen('/experiences/exp_1', 'en');
     prefetchScreen('/demo', 'en');
+    prefetchScreen('/discover', 'en');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('opened from the community: where it leads first, then that dashboard’s readings', async () => {
+    const api = '/api/creator/biz_Ent1';
+    const fetchMock = server({
+      '/api/member/exp_Ent1/home': json({ dashboard: '/dashboard/biz_Ent1', locale: 'en' }),
+    });
+    prefetchScreen('/experiences/exp_Ent1', 'fr');
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/member/exp_Ent1/home']);
+    // The answer, as the page reads it, and the dashboard's readings already on their way.
+    expect(await getJson('/api/member/exp_Ent1/home')).toEqual({
+      dashboard: '/dashboard/biz_Ent1',
+      locale: 'en',
+    });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/member/exp_Ent1/home',
+      `${api}/session`,
+      `${api}/members`,
+      `${api}/integrations?lang=fr`,
+      `${api}/sync`,
+      `${api}/dashboard`,
+    ]);
+    expect(localStorage.getItem(entryKey('exp_Ent1'))).toBe('/dashboard/biz_Ent1');
+  });
+
+  it('on a device that opened it before, asks the dashboard’s readings at once, alongside', () => {
+    localStorage.setItem(entryKey('exp_Ent2'), '/dashboard/biz_Ent2');
+    const fetchMock = server({});
+    prefetchScreen('/experiences/exp_Ent2', 'en');
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/creator/biz_Ent2/session',
+      '/api/creator/biz_Ent2/members',
+      '/api/creator/biz_Ent2/integrations?lang=en',
+      '/api/creator/biz_Ent2/sync',
+      '/api/creator/biz_Ent2/dashboard',
+      '/api/member/exp_Ent2/home',
+    ]);
+  });
+
+  it('a member: nothing more asked, and a dashboard this device remembered is forgotten', async () => {
+    localStorage.setItem(entryKey('exp_Ent3'), '/dashboard/biz_Ent3');
+    const fetchMock = server({
+      '/api/member/exp_Ent3/home': json({ dashboard: null, locale: 'fr' }),
+    });
+    prefetchScreen('/experiences/exp_Ent3', 'en');
+    const asked = fetchMock.mock.calls.length;
+    await getJson('/api/member/exp_Ent3/home');
+    // The remembered dashboard's readings, the server will refuse; nothing after the answer.
+    expect(fetchMock).toHaveBeenCalledTimes(asked);
+    expect(localStorage.getItem(entryKey('exp_Ent3'))).toBeNull();
   });
 
   it('asks again when the early answer failed, or came too long before', async () => {

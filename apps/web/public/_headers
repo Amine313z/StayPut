@@ -15,3 +15,14 @@
 # Tesseract's files (apps/web/src/ocr-files.ts): their folder names their version.
 /ocr/*
   Cache-Control: public, max-age=31536000, immutable
+
+# StayPut's mark, drawn by the loading screen before anything else (index.html #boot): kept a
+# day, so that it shows at once, without asking Whop's relay again (not fingerprinted).
+/logo-64.png
+  Cache-Control: public, max-age=86400
+
+/logo-128.png
+  Cache-Control: public, max-age=86400
+
+/logo-256.png
+  Cache-Control: public, max-age=86400
