@@ -218,27 +218,16 @@ body {
 }
 
 /*
- * The dashboard home's title, centred over its figures (2026-10-08): Satoshi 700, 30 px, tight,
- * with a short accent rule under it.
+ * The dashboard home's title (2026-10-09): on the content's left edge like every figure under it,
+ * a step above a page's title: Satoshi 700, 28 px, tight.
  */
 .title-home {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.875rem;
-  line-height: 1.15;
-  letter-spacing: -0.025em;
+  font-size: 1.75rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   color: var(--text);
-}
-
-.title-home::after {
-  content: '';
-  display: block;
-  width: 2.5rem;
-  height: 2px;
-  margin: 0.75rem auto 0;
-  border-radius: 9999px;
-  background: var(--accent);
-  opacity: 0.6;
 }
 
 /* A section's title: Satoshi 700, 15 px. */

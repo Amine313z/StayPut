@@ -119,7 +119,7 @@ export function Overview() {
         />
       ) : null}
       {view && !setupDone(view.gettingStarted) ? (
-        <div className="-mt-2 mb-8 flex justify-center">
+        <div className="-mt-3 mb-8">
           <Setup steps={view.gettingStarted} root={root} />
         </div>
       ) : null}

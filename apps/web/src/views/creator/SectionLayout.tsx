@@ -33,8 +33,8 @@ export function SectionLayout({ id }: { id: SectionId }) {
   const location = useLocation();
   const [arrival] = useState(location.key);
   const home = sectionHref(data.root, section);
-  // The dashboard's home: its title centred over the figures (the founder, 2026-10-08).
-  const centred = section.id === 'dashboard';
+  // The dashboard's home: its title a step larger (the founder, 2026-10-09).
+  const isHome = section.id === 'dashboard';
   const tab = location.pathname.startsWith(home)
     ? (location.pathname.slice(home.length).split('/').find(Boolean) ?? '')
     : location.pathname;
@@ -43,10 +43,9 @@ export function SectionLayout({ id }: { id: SectionId }) {
   if (section.memberSpace && !memberSpaceEnabled()) return <Navigate to={data.root} replace />;
   return (
     <div className="space-y-6">
-      {/* The home's title stands centred over its figures; a section with tabs keeps its title
-          over them, on their left. */}
-      <header className={centred ? 'pt-2 text-center' : undefined}>
-        <h1 className={centred ? 'title-home' : 'title-page'}>{t(section.label)}</h1>
+      {/* Every title on the content's left edge, over its tabs or its figures. */}
+      <header>
+        <h1 className={isHome ? 'title-home' : 'title-page'}>{t(section.label)}</h1>
         {section.description ? (
           <p className="mt-1 text-sm text-muted">{t(section.description)}</p>
         ) : null}

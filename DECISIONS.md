@@ -4194,3 +4194,16 @@ place depuis le 08/10 et l'agent garde « SA ».
 Rien n'est livré : pas de code mort. Le script de vérification reste, pour réessayer si Whop ouvre
 la permission. `company:authorized_user:read`, ajoutée en chemin, n'est pas utilisée : à retirer
 de l'app (SPEC 8.2, rien de plus que ce qui sert).
+
+## 2026-10-09 — Le titre « Dashboard » sur le bord gauche des chiffres
+
+Retour du fondateur sur le titre centré du 2026-10-08 : « l'esthétique et le positionnement du
+titre n'est pas pro ». Centré, il flottait seul au milieu d'une page dont tout le reste (« Revenue
+saved », le montant, le graphique, l'action prioritaire) part du bord gauche.
+
+- **Sur le bord gauche** (`SectionLayout.tsx`), comme le titre de chaque autre section et comme
+  les chiffres dessous : une seule ligne de départ pour l'œil.
+- **Plus de trait turquoise** dessous ; Satoshi 700, 28 px, interlettrage -0,02 em (`.title-home`),
+  un cran au-dessus du titre d'une page (22 px).
+- **« Getting started » sous le titre, à gauche** (`Overview.tsx`), ses étapes ouvertes dans le
+  même alignement.

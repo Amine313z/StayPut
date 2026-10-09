@@ -566,7 +566,7 @@ describe('creator view', () => {
       '/dashboard/biz_A1',
     );
     expect(screen.queryByRole('link', { name: 'StayPut' })).toBeNull();
-    // The dashboard's title, centred over its figures.
+    // The dashboard's title, on the left edge of its figures, a step above a page's title.
     expect(screen.getByRole('heading', { name: 'Dashboard', level: 1 }).className).toBe(
       'title-home',
     );
