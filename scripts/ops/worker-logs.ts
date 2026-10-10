@@ -21,8 +21,6 @@ type Fetch = (input: string, init: RequestInit) => Promise<Response>;
 const API = 'https://api.cloudflare.com/client/v4';
 /** A request that took longer than this is listed one by one. */
 export const SLOW_MS = 5_000;
-/** At most this many events are read (Cloudflare's own cap per query). */
-const EVENTS_LIMIT = 2_000;
 
 /** Ids, e-mail addresses, long numbers and tokens of `text` masked: nothing private stays. */
 export function mask(text: string): string {
@@ -192,7 +190,44 @@ export function report(
   return out.join('\n');
 }
 
-/** Cloudflare's events for `worker` over the last `hours`, or why there are none. */
+type Filter = Record<string, unknown>;
+
+/** The Worker's invocations (its HTTP requests), then its warnings and errors. */
+const QUERIES: readonly { name: string; filters: (worker: string) => Filter[] }[] = [
+  {
+    name: 'requests',
+    filters: (worker) => [
+      { key: '$metadata.service', operation: 'eq', type: 'string', value: worker },
+      { key: '$workers.eventType', operation: 'eq', type: 'string', value: 'fetch' },
+    ],
+  },
+  {
+    name: 'warnings',
+    filters: (worker) => [
+      { key: '$metadata.service', operation: 'eq', type: 'string', value: worker },
+      {
+        kind: 'group',
+        filterCombination: 'or',
+        filters: ['error', 'warn'].map((level) => ({
+          key: '$metadata.level',
+          operation: 'eq',
+          type: 'string',
+          value: level,
+        })),
+      },
+    ],
+  },
+];
+
+/** Events per page, and pages read at most per query. */
+export const PAGE_SIZE = 100;
+export const MAX_PAGES = 20;
+
+/**
+ * Cloudflare's events for `worker` over the last `hours` (its requests, its warnings and
+ * errors, page by page), or why there are none. `truncated` when a query had more than
+ * MAX_PAGES pages.
+ */
 export async function readLogs(
   account: string,
   token: string,
@@ -200,19 +235,43 @@ export async function readLogs(
   hours: number,
   now: Date,
   inject: { fetch?: Fetch } = {},
-): Promise<{ events: RawEvent[] } | { error: string }> {
+): Promise<{ events: RawEvent[]; truncated: boolean } | { error: string }> {
   const send: Fetch = inject.fetch ?? ((url, init) => fetch(url, init));
   const to = now.getTime();
-  const body = {
-    queryId: 'stayput-inspect-logs',
-    timeframe: { from: to - hours * 3_600_000, to },
-    view: 'events',
-    limit: EVENTS_LIMIT,
-    parameters: {
-      datasets: ['cloudflare-workers'],
-      filters: [{ key: '$metadata.service', operation: 'eq', type: 'string', value: worker }],
-    },
-  };
+  const events: RawEvent[] = [];
+  let truncated = false;
+  for (const query of QUERIES) {
+    let offset: string | undefined;
+    for (let page = 0; ; page += 1) {
+      if (page === MAX_PAGES) {
+        truncated = true;
+        break;
+      }
+      const body = {
+        queryId: `stayput-inspect-${query.name}`,
+        timeframe: { from: to - hours * 3_600_000, to },
+        view: 'events',
+        limit: PAGE_SIZE,
+        ...(offset ? { offset, offsetDirection: 'next' } : {}),
+        parameters: { datasets: ['cloudflare-workers'], filters: query.filters(worker) },
+      };
+      const answer = await askCloudflare(send, account, token, body);
+      if ('error' in answer) return answer;
+      events.push(...answer.events);
+      const last = answer.events.at(-1)?.$metadata?.id;
+      if (answer.events.length < PAGE_SIZE || typeof last !== 'string') break;
+      offset = last;
+    }
+  }
+  return { events, truncated };
+}
+
+async function askCloudflare(
+  send: Fetch,
+  account: string,
+  token: string,
+  body: unknown,
+): Promise<{ events: RawEvent[] } | { error: string }> {
   try {
     const response = await send(
       `${API}/accounts/${account}/workers/observability/telemetry/query`,
@@ -259,7 +318,10 @@ async function main(): Promise<void> {
     'error' in read
       ? `### What ${worker} logged\n\nNot read: ${read.error}. The token may lack the ` +
         '« Workers Observability: Read » permission (Cloudflare → My Profile → API Tokens).'
-      : report(worker, hours, readEvents(read.events));
+      : report(worker, hours, readEvents(read.events)) +
+        (read.truncated
+          ? `\n\nOnly the latest ${PAGE_SIZE * MAX_PAGES} events of each kind were read.`
+          : '');
   console.info(text);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`);
   if ('error' in read) process.exitCode = 1;

@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { mask, readEvents, readLogs, report, routeOf } from '../../../scripts/ops/worker-logs';
+import {
+  PAGE_SIZE,
+  mask,
+  readEvents,
+  readLogs,
+  report,
+  routeOf,
+} from '../../../scripts/ops/worker-logs';
 
 /**
  * scripts/ops/worker-logs.ts (Inspect): the Worker's logs as Cloudflare keeps them, read into a
@@ -99,12 +106,36 @@ describe('the Worker’s logs, masked', () => {
     };
     expect(body.timeframe).toEqual({ from: AT - 48 * 3_600_000, to: AT });
     expect(body.parameters.filters[0]?.value).toBe('stayput-app');
+  });
+
+  it('reads the requests page by page, then the warnings', async () => {
+    const bodies: { queryId: string; offset?: string }[] = [];
+    const full = Array.from({ length: PAGE_SIZE }, (_, i) => ({
+      ...request('https://w.dev/health', 200, 'ok', 5),
+      $metadata: { id: `e${i}` },
+    }));
     const read = await readLogs('acc', 't', 'stayput-app', 1, new Date(AT), {
-      fetch: () =>
-        Promise.resolve(
-          new Response(JSON.stringify({ success: true, result: { events: { events: [] } } })),
-        ),
+      fetch: (_url, init) => {
+        const body = JSON.parse(init.body as string) as { queryId: string; offset?: string };
+        bodies.push(body);
+        // The first page of requests is full, the second has one more; one warning.
+        const events =
+          body.queryId === 'stayput-inspect-requests'
+            ? body.offset
+              ? [request('https://w.dev/health', 200, 'ok', 5)]
+              : full
+            : [{ timestamp: AT, $metadata: { id: 'w1', level: 'warn', message: 'slow' } }];
+        return Promise.resolve(
+          new Response(JSON.stringify({ success: true, result: { events: { events } } })),
+        );
+      },
     });
-    expect(read).toEqual({ events: [] });
+    expect(bodies.map((b) => [b.queryId, b.offset ?? null])).toEqual([
+      ['stayput-inspect-requests', null],
+      ['stayput-inspect-requests', `e${PAGE_SIZE - 1}`],
+      ['stayput-inspect-warnings', null],
+    ]);
+    expect('events' in read && read.events.length).toBe(PAGE_SIZE + 2);
+    expect('truncated' in read && read.truncated).toBe(false);
   });
 });
