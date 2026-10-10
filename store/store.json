@@ -1,0 +1,45 @@
+{
+  "shots": [
+    {
+      "file": "1-dashboard.png",
+      "caption": "Revenue saved, revenue at risk, and the one thing to do today",
+      "fonts": [
+        "Geist Variable",
+        "Satoshi"
+      ]
+    },
+    {
+      "file": "2-members.png",
+      "caption": "Every member’s churn risk, the most likely to leave first",
+      "fonts": [
+        "Geist Variable",
+        "Satoshi"
+      ]
+    },
+    {
+      "file": "3-queue.png",
+      "caption": "Approve each message, or let StayPut act within your limits",
+      "fonts": [
+        "Geist Variable",
+        "Satoshi"
+      ]
+    },
+    {
+      "file": "4-failed-payments.png",
+      "caption": "Failed payments retried and recovered, each one counted",
+      "fonts": [
+        "Geist Variable",
+        "Satoshi"
+      ]
+    },
+    {
+      "file": "5-win-back.png",
+      "caption": "Win back former members with the free Alumni offer",
+      "fonts": [
+        "Geist Variable",
+        "Satoshi"
+      ]
+    }
+  ],
+  "problems": []
+}

@@ -1,0 +1,651 @@
+{
+  "fonts": {
+    "satoshi": true,
+    "geist": true,
+    "numbersInSatoshi": true,
+    "textInGeist": true,
+    "numbers": {
+      "heroAmount": [
+        "Satoshi",
+        "Satoshi"
+      ],
+      "secondaryAmounts": [
+        "Satoshi",
+        "Satoshi",
+        "Satoshi",
+        "Satoshi"
+      ],
+      "figures": [
+        "Satoshi",
+        "Satoshi",
+        "Satoshi",
+        "Satoshi"
+      ],
+      "axis": [
+        "Satoshi",
+        "Satoshi",
+        "Satoshi",
+        "Satoshi"
+      ]
+    },
+    "text": {
+      "body": [
+        "Geist Variable"
+      ],
+      "labels": [
+        "Geist Variable",
+        "Geist Variable"
+      ],
+      "menu": [
+        "Geist Variable",
+        "Geist Variable",
+        "Geist Variable",
+        "Geist Variable"
+      ]
+    },
+    "language": "en"
+  },
+  "chart": {
+    "days": 30,
+    "nonZeroSaved": 24,
+    "atRiskDays": 30,
+    "linesDrawn": 2
+  },
+  "hero": [
+    "$296.00",
+    "$731.17",
+    "9"
+  ],
+  "amountsWithCents": true,
+  "balance": {
+    "amount": "$296.00",
+    "chartEnds": "$296.00",
+    "periodClimbs": true,
+    "monthMark": "Oct 1",
+    "monthStart": "Oct 1",
+    "delta": "+$98.00 vs last month",
+    "periods": [
+      "7D",
+      "30D",
+      "90D"
+    ]
+  },
+  "firstNeedingAttention": "Margaux Picard",
+  "attentionRow": {
+    "atRest": "0",
+    "hovered": "1"
+  },
+  "platforms": {
+    "discord": {
+      "loadingAfter5s": 0,
+      "slow": 0,
+      "skeletons": 0,
+      "connection": "live",
+      "figures": [
+        "16",
+        "10",
+        "437"
+      ],
+      "chartDrawn": true,
+      "cells": 168,
+      "lit": 127,
+      "places": 4,
+      "active": 10,
+      "silent": 10,
+      "signals": 3,
+      "checks": [
+        "ok",
+        "ok",
+        "ok"
+      ]
+    },
+    "telegram": {
+      "loadingAfter5s": 0,
+      "slow": 0,
+      "skeletons": 0,
+      "connection": "live",
+      "figures": [
+        "6",
+        "4",
+        "94"
+      ],
+      "chartDrawn": true,
+      "cells": 168,
+      "lit": 61,
+      "places": 3,
+      "active": 6,
+      "silent": 4,
+      "signals": 3,
+      "checks": [
+        "ok",
+        "ok",
+        "ok",
+        "ok"
+      ]
+    }
+  },
+  "platformPick": {
+    "day": "2026-10-09",
+    "dayPlaces": 4,
+    "slotMembers": 5,
+    "preview": "High risk: 6 → 8 · Medium risk: 8 → 6"
+  },
+  "guide": {
+    "width": 420,
+    "cards": [
+      "Who is about to leave",
+      "Keep them, automatically",
+      "See the money you kept",
+      "You stay in control",
+      "Connect Discord and Telegram"
+    ],
+    "pictures": 5,
+    "playing": 3,
+    "showMe": 5
+  },
+  "tour": [
+    {
+      "place": "hero-amount",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "right",
+      "title": "Revenue saved · This month"
+    },
+    {
+      "place": "priority-action",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Priority action today"
+    },
+    {
+      "place": "risk-ring",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Risk score"
+    },
+    {
+      "place": "rule-payment-retry",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "right",
+      "title": "Automations"
+    },
+    {
+      "place": "connect-discord",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Integrations"
+    }
+  ],
+  "tourEnd": {
+    "path": "/demo",
+    "scrollY": 0
+  },
+  "showMe": [
+    {
+      "place": "attention-row",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Who is about to leave"
+    },
+    {
+      "place": "rule-payment-retry",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "right",
+      "title": "Keep them, automatically"
+    },
+    {
+      "place": "hero-amount",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "right",
+      "title": "See the money you kept"
+    },
+    {
+      "place": "limits",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "You stay in control"
+    },
+    {
+      "place": "connect-discord",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Connect Discord and Telegram"
+    }
+  ],
+  "welcome": [
+    "Welcome to StayPut",
+    "Connect Discord or Telegram",
+    "Automatic or manual?",
+    "Your first audit"
+  ],
+  "members": {
+    "columns": [
+      "Member",
+      "Risk",
+      "Status",
+      "MRR",
+      "Last activity",
+      "Next renewal",
+      "Do not contact"
+    ],
+    "rows": 39,
+    "first": "Hugo Bernard",
+    "heights": [
+      53,
+      53,
+      53,
+      53,
+      53,
+      53,
+      53,
+      53,
+      53,
+      53
+    ],
+    "cutHeaders": 0,
+    "redWords": 0,
+    "urgentDots": 6,
+    "chipsTop": 64,
+    "search": {
+      "value": "hugo",
+      "rows": [
+        "HBHugo BernardLeaving$149.00/mo"
+      ],
+      "address": "hugo"
+    },
+    "high": 6,
+    "byMrr": [
+      149,
+      149,
+      149,
+      149,
+      149
+    ],
+    "sortedByMrr": true,
+    "drawer": {
+      "width": 420,
+      "left": 1005,
+      "right": 1425,
+      "window": 1440,
+      "pageLocked": true,
+      "sections": [
+        "Why",
+        "Quick actions",
+        "Risk over 30 days",
+        "Subscription",
+        "Payments",
+        "Activity over 30 days",
+        "Their data"
+      ],
+      "scoreDrawn": true,
+      "doNotContact": "false"
+    },
+    "phoneOverflow": -15
+  },
+  "story": {
+    "juliette": [
+      "JCJuliette CaronPaused · resumes Nov 9$149.00/mo",
+      "49",
+      "Paused · resumes Nov 9",
+      "$149.00/mo",
+      "6 days ago",
+      "Nov 9",
+      "",
+      ""
+    ],
+    "hugo": [
+      "HBHugo BernardLeaving$149.00/mo",
+      "100",
+      "Leaving",
+      "$149.00/mo",
+      "last week",
+      "Ends Nov 5",
+      "",
+      ""
+    ],
+    "kevin": [
+      "KNKevin NguyenLeaving$39.17/mo",
+      "100",
+      "Leaving",
+      "$39.17/mo",
+      "6 days ago",
+      "Ends May 20, 2027",
+      "",
+      ""
+    ],
+    "sarah": [
+      "SCSarah CohenUrgentPayment failed$149.00/mo",
+      "88",
+      "UrgentPayment failed",
+      "$149.00/mo",
+      "last week",
+      "Unpaid since Oct 10",
+      "",
+      ""
+    ],
+    "paul": [
+      "PHPaul HenryGone$49.00/mo",
+      "–",
+      "Gone",
+      "$49.00/mo",
+      "last week",
+      "–",
+      "",
+      ""
+    ],
+    "julietteDrawer": [
+      "Paused · resumes Nov 9·$149.00/mo",
+      "Paused · $149.00 per month · resumes on Nov 9, 2026"
+    ]
+  },
+  "automations": {
+    "tabs": [
+      "Rules",
+      "Queue"
+    ],
+    "rules": 5,
+    "switches": 5,
+    "on": 5,
+    "mode": "Manual",
+    "limits": [
+      "1 per member every 5 days, 4 a month at most",
+      "22:00 to 08:00",
+      "10 a month at most",
+      "0 members"
+    ],
+    "tags": [
+      "EN",
+      "EN",
+      "EN",
+      "EN"
+    ],
+    "preview": "We miss you, Alex",
+    "primaries": 0,
+    "empty": {
+      "ready": [
+        "payment_retry",
+        "payment_notice",
+        "exit_survey"
+      ],
+      "primaries": 1,
+      "title": 1
+    },
+    "turnedOn": [
+      "payment_retry",
+      "payment_notice",
+      "exit_survey"
+    ],
+    "queue": {
+      "filters": [
+        "To approve6",
+        "Scheduled3",
+        "History32",
+        "Alumni offer"
+      ],
+      "primaries": [
+        "Approve all (6)"
+      ],
+      "rowButtons": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    }
+  },
+  "analytics": {
+    "tabs": [
+      "Overview",
+      "Cohorts",
+      "Lessons",
+      "Reports"
+    ],
+    "reasons": [
+      "No time3 answers50%",
+      "Another reason2 answers33%",
+      "Too expensive1 answer17%"
+    ],
+    "bars": 30,
+    "gridlines": 5,
+    "benchmarks": 3,
+    "gain": "+$333.02",
+    "gainAtHalf": "+$166.51",
+    "cohorts": {
+      "flagged": [
+        "July 2026"
+      ],
+      "edge": [
+        "rgb(94, 234, 212)"
+      ],
+      "highlighted": 1
+    },
+    "lessons": {
+      "bars": 6,
+      "flagged": 2
+    },
+    "reports": {
+      "weeks": 6,
+      "sent": true,
+      "switchOn": true
+    }
+  },
+  "badge": {
+    "alt": "Verified retention: 78% at 90 days",
+    "code": true,
+    "greyed": 1
+  },
+  "team": {
+    "rows": 3,
+    "greyed": 1
+  },
+  "legal": {
+    "card": 0,
+    "page": 404
+  },
+  "alumni": [
+    "9",
+    "17%",
+    "$147.00"
+  ],
+  "pages": {
+    "settings": true,
+    "settings/risk": true,
+    "settings/actions": true,
+    "members/never-contact": true
+  },
+  "history": [
+    {
+      "member": "Lou Marchand",
+      "outcome": "No reply yet"
+    },
+    {
+      "member": "Clara Faure",
+      "outcome": "Recovered $49.00"
+    },
+    {
+      "member": "Sarah Cohen",
+      "outcome": "Still failing"
+    },
+    {
+      "member": "Elena Novak",
+      "outcome": "Still failing"
+    },
+    {
+      "member": "Juliette Caron",
+      "outcome": "Paused until Nov 9"
+    },
+    {
+      "member": "Pauline Giraud",
+      "outcome": "Came back"
+    },
+    {
+      "member": "Rose Gauthier",
+      "outcome": "No reply yet"
+    },
+    {
+      "member": "Victor Leclerc",
+      "outcome": "Came back"
+    },
+    {
+      "member": "Arthur Lemoine",
+      "outcome": "Recovered $49.00"
+    },
+    {
+      "member": "Tom Barbier",
+      "outcome": "No reply yet"
+    },
+    {
+      "member": "Benoît Lacroix",
+      "outcome": "No reply yet"
+    },
+    {
+      "member": "Laura Weber",
+      "outcome": "Came back"
+    }
+  ],
+  "queue": {
+    "before": [
+      "6",
+      "6"
+    ],
+    "after": [
+      "5",
+      "5"
+    ]
+  },
+  "words": {
+    "skip": 5,
+    "approve": 5,
+    "golden": [],
+    "frenchQuotes": [],
+    "languages": [
+      "English",
+      "French"
+    ]
+  },
+  "demoSafety": {
+    "links": [],
+    "buttons": [
+      {
+        "path": "actions/queue/alumni",
+        "label": "Open",
+        "disabled": "true",
+        "tip": "Disabled in the demo",
+        "tipShown": "1"
+      },
+      {
+        "path": "sources/discord",
+        "label": "Reconnect",
+        "disabled": "true",
+        "tip": "Disabled in the demo",
+        "tipShown": "1"
+      },
+      {
+        "path": "sources/telegram",
+        "label": "Reconnect",
+        "disabled": "true",
+        "tip": "Disabled in the demo",
+        "tipShown": "1"
+      }
+    ],
+    "alumniUrl": "https://whop.com/your-community/alumni"
+  },
+  "phoneTour": [
+    {
+      "place": "hero-amount",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Revenue saved · This month"
+    },
+    {
+      "place": "priority-action",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "top",
+      "title": "Priority action today"
+    },
+    {
+      "place": "risk-ring",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "top",
+      "title": "Risk score"
+    },
+    {
+      "place": "rule-payment-retry",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Automations"
+    },
+    {
+      "place": "connect-discord",
+      "found": true,
+      "inside": true,
+      "clear": true,
+      "side": "bottom",
+      "title": "Integrations"
+    }
+  ],
+  "platformPhoneOverflow": -15,
+  "problems": [
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration",
+    "console warning: No `HydrateFallback` element provided to render during initial hydration"
+  ]
+}
