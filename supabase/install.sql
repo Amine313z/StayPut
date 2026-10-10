@@ -1,5 +1,5 @@
 -- StayPut: the whole database schema, for a new Supabase project or to update one.
--- Generated from supabase/migrations (0001_foundation.sql to 0049_whop_dashboard.sql) by `npm run db:bundle`:
+-- Generated from supabase/migrations (0001_foundation.sql to 0050_sports_betting_niche.sql) by `npm run db:bundle`:
 -- do not edit.
 --
 -- Supabase -> SQL Editor -> New query -> paste this whole file -> Run. Only the migrations not
@@ -11185,6 +11185,33 @@ revoke all on function stayput.note_whop_places(text, text, jsonb, timestamptz) 
 revoke execute on all functions in schema stayput from public;
 $migration$;
   insert into stayput.schema_migrations (name) values ('0049_whop_dashboard.sql');
+end $install$;
+
+-- ==========================================================================================
+-- 0050_sports_betting_niche.sql
+-- ==========================================================================================
+
+do $install$
+begin
+  if exists (select 1 from stayput.schema_migrations where name = '0050_sports_betting_niche.sql') then
+    raise notice 'already applied: 0050_sports_betting_niche.sql';
+    return;
+  end if;
+  execute $migration$
+-- A niche of its own for sports betting communities, many on Whop (the founder, 2026-10-10):
+-- the two lists of niches the schema keeps take it. Its risk presets and its goals live in
+-- packages/core (NICHE_PRESETS, NICHE_GOALS).
+alter table stayput.companies drop constraint companies_niche_check;
+alter table stayput.companies add constraint companies_niche_check check (niche in (
+  'trading', 'sports_betting', 'fitness', 'online_business', 'coaching', 'ecommerce',
+  'personal_development', 'other'));
+
+alter table stayput.benchmarks drop constraint benchmarks_niche_check;
+alter table stayput.benchmarks add constraint benchmarks_niche_check check (niche in (
+  'trading', 'sports_betting', 'fitness', 'online_business', 'coaching', 'ecommerce',
+  'personal_development', 'other'));
+$migration$;
+  insert into stayput.schema_migrations (name) values ('0050_sports_betting_niche.sql');
 end $install$;
 
 commit;

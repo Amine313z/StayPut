@@ -931,6 +931,7 @@ export const fr: Messages = {
   'riskSettings.saved': 'Enregistré. Les scores sont en cours de recalcul.',
   'riskSettings.reset': 'Revenir aux valeurs de la niche',
   'niche.trading': 'Trading',
+  'niche.sports_betting': 'Paris sportifs',
   'niche.fitness': 'Fitness',
   'niche.online_business': 'Business en ligne',
   'niche.coaching': 'Coaching',

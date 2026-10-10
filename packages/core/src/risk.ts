@@ -41,6 +41,7 @@ export const DEFAULT_HIGH_FROM = 70;
 
 export type Niche =
   | 'trading'
+  | 'sports_betting'
   | 'fitness'
   | 'online_business'
   | 'coaching'
@@ -50,6 +51,7 @@ export type Niche =
 
 export const NICHES: readonly Niche[] = [
   'trading',
+  'sports_betting',
   'fitness',
   'online_business',
   'coaching',
@@ -68,6 +70,13 @@ export const NICHE_PRESETS: Readonly<
 > = {
   trading: {
     weights: { recency: 0.35, frequency: 0.3, progress: 0.1, payment: 0.15, friction: 0.1 },
+    recencyThresholdDays: 7,
+  },
+  // Members follow the day's picks: a week without a sign is already far (as in trading); few
+  // courses to progress in; a losing run shows at the renewal, so payment weighs more
+  // (the founder, 2026-10-10).
+  sports_betting: {
+    weights: { recency: 0.35, frequency: 0.3, progress: 0.05, payment: 0.2, friction: 0.1 },
     recencyThresholdDays: 7,
   },
   fitness: {

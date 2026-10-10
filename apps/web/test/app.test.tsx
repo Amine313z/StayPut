@@ -5993,6 +5993,21 @@ describe('the guide (brief v4 §10)', () => {
     // What the community is about: its niche's weights and inactivity threshold, applied on
     // « Get started », its risk thresholds kept.
     const niches = within(welcome).getByRole('radiogroup', { name: 'Your community is about' });
+    // Sports betting next to trading: many such communities on Whop (the founder, 2026-10-10).
+    expect(
+      within(niches)
+        .getAllByRole('radio')
+        .map((radio) => radio.textContent),
+    ).toEqual([
+      'Trading',
+      'Sports betting',
+      'Fitness',
+      'Online business',
+      'Coaching',
+      'E-commerce',
+      'Personal development',
+      'Other',
+    ]);
     fireEvent.click(within(niches).getByRole('radio', { name: 'Fitness' }));
     expect(
       within(niches).getByRole('radio', { name: 'Fitness' }).getAttribute('aria-checked'),

@@ -900,6 +900,7 @@ export const en = {
   'riskSettings.saved': 'Saved. The scores are being recomputed.',
   'riskSettings.reset': "Back to the niche's values",
   'niche.trading': 'Trading',
+  'niche.sports_betting': 'Sports betting',
   'niche.fitness': 'Fitness',
   'niche.online_business': 'Online business',
   'niche.coaching': 'Coaching',

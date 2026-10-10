@@ -389,7 +389,7 @@ describe('normalizeWeights', () => {
 
 describe('niche presets', () => {
   it('has the weights of the SPEC for each niche, summing to 1', () => {
-    expect(NICHES).toHaveLength(7);
+    expect(NICHES).toHaveLength(8);
     for (const niche of NICHES) {
       const { weights, recencyThresholdDays } = NICHE_PRESETS[niche];
       const sum = RISK_FACTORS.reduce((total, f) => total + weights[f], 0);
@@ -400,8 +400,13 @@ describe('niche presets', () => {
       weights: { recency: 0.35, frequency: 0.3, progress: 0.1, payment: 0.15, friction: 0.1 },
       recencyThresholdDays: 7,
     });
+    expect(NICHE_PRESETS.sports_betting).toEqual({
+      weights: { recency: 0.35, frequency: 0.3, progress: 0.05, payment: 0.2, friction: 0.1 },
+      recencyThresholdDays: 7,
+    });
     expect(NICHE_PRESETS.other.weights).toEqual(DEFAULT_WEIGHTS);
     expect(isNiche('fitness')).toBe(true);
+    expect(isNiche('sports_betting')).toBe(true);
     expect(isNiche('poker')).toBe(false);
   });
 });

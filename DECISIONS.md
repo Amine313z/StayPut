@@ -4291,3 +4291,17 @@ de bord que Discord et Telegram (migration **0049**).
 - **La démo** a son propre journal Whop (deux chats, un forum, les annonces) : la part des
   messages de chaque membre qui n'est ni sur Discord ni sur Telegram, plus ses publications ; ce
   que la démo montrait de Discord et Telegram ne change pas.
+
+## 2026-10-10 — Une niche « Paris sportifs »
+
+Demande du fondateur : les communautés de paris sportifs sont nombreuses sur Whop. Elles ont leur
+niche (`sports_betting`, « Sports betting » / « Paris sportifs »), juste après le trading dans
+l'accueil et les réglages (migration **0050** : les deux listes de niches du schéma la prennent).
+
+- **Préréglages du score** : récence 0,35 · fréquence 0,30 · progression 0,05 · paiement 0,20 ·
+  friction 0,10, seuil de récence 7 jours. Les membres suivent les pronostics du jour : une
+  semaine sans signe est déjà loin, comme en trading ; peu de cours où progresser ; une série
+  perdante se voit au renouvellement, d'où le paiement plus lourd. Modifiables comme les autres.
+- **Objectifs proposés** (espace membre, éteint en V1) : atteindre mon bénéfice (en unités),
+  améliorer mon ROI (%), respecter ma gestion de bankroll (semaines).
+- Les benchmarks anonymes comptent la niche à part, avec le même seuil de 5 communautés.

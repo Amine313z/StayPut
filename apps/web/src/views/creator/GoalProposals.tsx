@@ -33,6 +33,7 @@ import { useCreatorData } from '../CreatorView';
 
 const NICHE_LABELS: Readonly<Record<Niche, MessageKey>> = {
   trading: 'niche.trading',
+  sports_betting: 'niche.sports_betting',
   fitness: 'niche.fitness',
   online_business: 'niche.online_business',
   coaching: 'niche.coaching',

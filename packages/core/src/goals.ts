@@ -136,6 +136,32 @@ export const NICHE_GOALS: Readonly<Record<Niche, readonly NicheGoal[]>> = {
       },
     },
   ],
+  sports_betting: [
+    {
+      category: 'performance',
+      entry: 'total',
+      text: {
+        fr: { title: 'Atteindre mon bénéfice', unit: 'unités' },
+        en: { title: 'Reach my profit', unit: 'units' },
+      },
+    },
+    {
+      category: 'performance',
+      entry: 'total',
+      text: {
+        fr: { title: 'Améliorer mon ROI', unit: '%' },
+        en: { title: 'Improve my ROI', unit: '%' },
+      },
+    },
+    {
+      category: 'practice',
+      entry: 'add',
+      text: {
+        fr: { title: 'Respecter ma gestion de bankroll', unit: 'semaines' },
+        en: { title: 'Stick to my bankroll plan', unit: 'weeks' },
+      },
+    },
+  ],
   fitness: [
     {
       category: 'body',
