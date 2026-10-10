@@ -370,6 +370,8 @@ export const en = {
   'telegram.step.members':
     'Members link their Telegram from StayPut, in your Whop community ("Link my Telegram").',
   'telegram.linkHow':
+    'Whop does not share members’ Telegram accounts: StayPut recognizes a member by name, and you tie the others under “Who is who”. Messages of accounts not tied yet wait 30 days. A message sent anonymously (an anonymous admin) or in a channel’s name does not count: Telegram does not say who wrote it.',
+  'telegram.linkHow.space':
     'Whop does not share members’ Telegram accounts: StayPut recognizes a member by name, you tie the others under “Who is who”, or the member links theirs from StayPut. Messages of accounts not tied yet wait 30 days. A message sent anonymously (an anonymous admin) or in a channel’s name does not count: Telegram does not say who wrote it.',
   'telegram.unnamed': 'Telegram group',
   'telegram.lastMessage': 'Last message {when}',

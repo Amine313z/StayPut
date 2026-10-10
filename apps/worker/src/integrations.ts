@@ -15,6 +15,7 @@ import { DISCORD_INSTALL_TTL_SECONDS, sign } from './session';
 import {
   TELEGRAM_LINK_TTL_SECONDS,
   botText,
+  botTextFor,
   type BotLanguage,
   readTelegramMemberToken,
   readTelegramStartToken,
@@ -392,8 +393,12 @@ export async function fileTelegramUpdate(
   botToken: string,
   update: unknown,
   now: Date,
+  {
+    botUsername = null,
+    memberSpace = false,
+  }: { botUsername?: string | null; memberSpace?: boolean } = {},
 ): Promise<TelegramFollowUp> {
-  const action = telegramAction(update);
+  const action = telegramAction(update, { botUsername });
   const nowSeconds = Math.floor(now.getTime() / 1000);
   switch (action.kind) {
     case 'message':
@@ -442,7 +447,9 @@ export async function fileTelegramUpdate(
         action.title,
         now.toISOString(),
       ]);
-      return { reply: { chatId: action.chatId, text: botText('groupLinked', language) } };
+      return {
+        reply: { chatId: action.chatId, text: botTextFor('groupLinked', language, memberSpace) },
+      };
     }
     case 'people':
       await db.query(
@@ -475,7 +482,10 @@ export async function fileTelegramUpdate(
       const language = read?.language ?? action.language;
       const member = read?.member ?? null;
       if (!member) {
-        const text = botText(action.token ? 'memberLinkInvalid' : 'help', language);
+        const text =
+          action.token && memberSpace
+            ? botText('memberLinkInvalid', language)
+            : botTextFor('help', language, memberSpace);
         return { reply: { chatId: action.chatId, text } };
       }
       const [row] = await db.query<{ status: string }>(

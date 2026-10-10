@@ -2,6 +2,7 @@ import type { TelegramGroupStatus, TelegramStatus } from '@stayput/core';
 import { CircleCheck, Megaphone, TriangleAlert, Unplug } from 'lucide-react';
 import { deleteJson } from '../api';
 import { useDemo } from '../demoMode';
+import { memberSpaceEnabled } from '../features';
 import { useI18n } from '../i18n';
 import { Badge, Notice } from '../ui/Badge';
 import { TelegramIcon } from '../ui/BrandIcons';
@@ -57,7 +58,12 @@ export function TelegramCard({
         ) : null}
         {status.available && status.groups.length === 0 ? (
           <Steps
-            steps={[t('telegram.step.add'), t('telegram.step.confirm'), t('telegram.step.members')]}
+            steps={[
+              t('telegram.step.add'),
+              t('telegram.step.confirm'),
+              // How members link their account: from their StayPut space, while there is one.
+              ...(memberSpaceEnabled() ? [t('telegram.step.members')] : []),
+            ]}
           />
         ) : null}
         {status.groups.length > 0 ? (
@@ -78,7 +84,7 @@ export function TelegramCard({
         <LinkedMembers
           linked={status.linkedMembers}
           unlinked={status.unlinkedAuthors}
-          how={t('telegram.linkHow')}
+          how={t(memberSpaceEnabled() ? 'telegram.linkHow.space' : 'telegram.linkHow')}
         />
       ) : null}
     </Card>

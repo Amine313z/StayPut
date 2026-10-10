@@ -2588,7 +2588,18 @@ export function createApp(deps: AppDeps) {
     const db = deps.openDb(c.env);
     if (!db) return apiError('not_configured', 'the database is not configured');
     try {
-      const next = await fileTelegramUpdate(db, config.telegram.botToken, update, deps.now());
+      // This bot's name, so that a command meant for another bot in the same group is not
+      // taken for its own (read once per isolate; unknown, every /start is taken as before).
+      const botUsername = await Promise.resolve()
+        .then(() => telegram.bot())
+        .then(
+          (bot) => bot.username,
+          () => null,
+        );
+      const next = await fileTelegramUpdate(db, config.telegram.botToken, update, deps.now(), {
+        botUsername,
+        memberSpace: config.memberSpace,
+      });
       const { reply, leave } = next;
       if (reply || leave) {
         defer(

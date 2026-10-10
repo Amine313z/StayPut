@@ -4230,3 +4230,20 @@ prêts à revenir le jour où un créateur les demande ou si StayPut vise de gra
 européennes (le RGPD demande alors de dire ce qui est collecté et pourquoi) : compléter
 `OPERATOR`, puis allumer les deux interrupteurs ensemble. Inspect et `look.mjs` vérifient
 désormais leur absence (404, aucune carte).
+
+## 2026-10-10 — Le bot Telegram n'obéit qu'aux commandes qui lui sont adressées
+
+Constaté en production le 10/10/2026 dans le groupe de test du fondateur, où étaient le bot du
+sandbox et celui de la production (@StayPutHQBot), tous deux nommés « StayPut » : Telegram envoie
+`/start@StayPutHQBot <jeton>` en ajoutant le bot de production ; celui-ci relie le groupe, mais le
+bot du sandbox (mode confidentialité désactivé, il lit tout) prend la commande pour lui, ne
+reconnaît pas le jeton (signé par l'autre bot), répond « This link has expired » et quitte le
+groupe.
+
+- **`telegramAction(update, { botUsername })`** : un `/start@AutreBot …` dans un groupe est le
+  message d'une personne, jamais un lien pour ce bot. Le nom du bot vient de `getMe` (lu une fois
+  par isolat) ; inconnu, chaque `/start` est pris comme avant.
+- **Plus de « Link my Telegram »** dans ce que dit le bot tant que les membres n'ont pas d'espace
+  StayPut (`botTextFor`, selon `MEMBER_SPACE_ENABLED`) : le bouton n'existe pas. Même chose dans
+  l'onglet Telegram du créateur (`telegram.linkHow` / `telegram.linkHow.space`, l'étape « Les
+  membres relient leur Telegram » seulement avec l'espace membre).

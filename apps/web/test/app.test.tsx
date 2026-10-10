@@ -2782,7 +2782,8 @@ describe('activity sources', () => {
     expect(
       (await screen.findByRole('link', { name: /Add the bot to a group/ })).getAttribute('href'),
     ).toBe(INTEGRATIONS.telegram.addToGroup!.url);
-    expect(screen.getByText(/Members link their Telegram from StayPut/)).toBeTruthy();
+    // Members have no StayPut space (V1): no step sends them to a « Link my Telegram » there.
+    expect(screen.queryByText(/Members link their Telegram from StayPut/)).toBeNull();
   });
 
   it('says when the bot cannot see the messages of its groups', async () => {

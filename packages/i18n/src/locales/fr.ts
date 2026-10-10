@@ -383,6 +383,8 @@ export const fr: Messages = {
   'telegram.step.members':
     'Les membres relient leur Telegram depuis StayPut, dans votre communauté Whop (« Relier mon Telegram »).',
   'telegram.linkHow':
+    'Whop ne partage pas le compte Telegram des membres : StayPut reconnaît le membre à son nom, et vous reliez les autres dans « Qui est qui ». Les messages des comptes pas encore reliés attendent 30 jours. Un message envoyé anonymement (administrateur anonyme) ou au nom d’un canal ne compte pas : Telegram ne dit pas qui l’a écrit.',
+  'telegram.linkHow.space':
     'Whop ne partage pas le compte Telegram des membres : StayPut reconnaît le membre à son nom, vous reliez les autres dans « Qui est qui », ou le membre relie le sien depuis StayPut. Les messages des comptes pas encore reliés attendent 30 jours. Un message envoyé anonymement (administrateur anonyme) ou au nom d’un canal ne compte pas : Telegram ne dit pas qui l’a écrit.',
   'telegram.unnamed': 'Groupe Telegram',
   'telegram.lastMessage': 'Dernier message {when}',

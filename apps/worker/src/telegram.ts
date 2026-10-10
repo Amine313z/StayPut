@@ -381,8 +381,15 @@ const CONTENT_FIELDS = [
   'dice',
 ];
 
-/** Reads a Telegram update (Bot API `Update`). */
-export function telegramAction(update: unknown): TelegramAction {
+/**
+ * Reads a Telegram update (Bot API `Update`). `botUsername`, when known, is this bot's: a
+ * `/start@OtherBot …` in a group is meant for another bot (the sandbox's and production's sit in
+ * the same test group), so it is a person's message there, never a link for this one.
+ */
+export function telegramAction(
+  update: unknown,
+  { botUsername = null }: { botUsername?: string | null } = {},
+): TelegramAction {
   const record = (value: unknown) =>
     typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
   const id = (value: unknown) =>
@@ -431,23 +438,25 @@ export function telegramAction(update: unknown): TelegramAction {
   const fromId = id(from?.id);
   const language = typeof from?.language_code === 'string' ? from.language_code : null;
   const text = typeof message.text === 'string' ? message.text : '';
-  const start = /^\/start(?:@\w+)?(?:\s+([A-Za-z0-9_-]{1,64}))?\s*$/.exec(text);
+  const start = /^\/start(?:@(\w+))?(?:\s+([A-Za-z0-9_-]{1,64}))?\s*$/.exec(text);
+  const forThisBot =
+    !start?.[1] || botUsername === null || start[1].toLowerCase() === botUsername.toLowerCase();
 
   if (chat?.type === 'private') {
     if (!start || !fromId || from?.is_bot === true) return { kind: 'ignore' };
-    return { kind: 'private_start', chatId, fromId, token: start[1] ?? null, language };
+    return { kind: 'private_start', chatId, fromId, token: start[2] ?? null, language };
   }
   if (!isGroup(chat?.type)) return { kind: 'ignore' };
 
   const migratedTo = id(message.migrate_to_chat_id);
   if (migratedTo) return { kind: 'migrate', fromChatId: chatId, toChatId: migratedTo };
 
-  if (start?.[1]) {
+  if (start?.[2] && forThisBot) {
     return {
       kind: 'link',
       chatId,
       title: typeof chat?.title === 'string' ? chat.title : null,
-      token: start[1],
+      token: start[2],
       language,
     };
   }
@@ -533,8 +542,13 @@ function inGroup(member: Record<string, unknown> | null): boolean {
 /** What the bot says, in French for a French-speaking Telegram user, in English otherwise. */
 export const BOT_TEXTS = {
   groupLinked: {
-    fr: '✅ Ce groupe est relié à StayPut. Seuls l’auteur, le lieu et l’heure des messages sont comptés, jamais leur contenu. Pour que votre activité compte, ouvrez StayPut dans la communauté Whop et touchez « Relier mon Telegram ».',
-    en: '✅ This group is now linked to StayPut. Only who wrote, where and when is counted, never what was written. For your activity to count, open StayPut in the Whop community and tap “Link my Telegram”.',
+    fr: '✅ Ce groupe est relié à StayPut. Seuls l’auteur, le lieu et l’heure des messages sont comptés, jamais leur contenu.',
+    en: '✅ This group is now linked to StayPut. Only who wrote, where and when is counted, never what was written.',
+  },
+  /** Added to the two above while members have a StayPut space to link their account from. */
+  memberLinkHint: {
+    fr: 'Pour que votre activité compte, ouvrez StayPut dans la communauté Whop et touchez « Relier mon Telegram ».',
+    en: 'For your activity to count, open StayPut in the Whop community and tap “Link my Telegram”.',
   },
   groupLinkExpired: {
     fr: 'Ce lien a expiré : demandez-en un nouveau dans StayPut (Sources d’activité → Telegram).',
@@ -553,11 +567,25 @@ export const BOT_TEXTS = {
     en: 'This link has expired or is not valid: open StayPut in the Whop community and tap “Link my Telegram”.',
   },
   help: {
-    fr: 'Je compte l’activité des groupes Telegram reliés à StayPut (l’auteur, le lieu et l’heure, jamais le contenu). Pour relier votre compte, ouvrez StayPut dans votre communauté Whop.',
-    en: 'I count activity in the Telegram groups linked to StayPut (who, where and when, never the content). To link your account, open StayPut in your Whop community.',
+    fr: 'Je compte l’activité des groupes Telegram reliés à StayPut (l’auteur, le lieu et l’heure, jamais le contenu).',
+    en: 'I count activity in the Telegram groups linked to StayPut (who, where and when, never the content).',
   },
 } as const;
 
 export function botText(name: keyof typeof BOT_TEXTS, language: string | null): string {
   return BOT_TEXTS[name][language?.toLowerCase().startsWith('fr') ? 'fr' : 'en'];
+}
+
+/**
+ * What the bot says, followed by how a member links their account while they have a StayPut
+ * space to do it from (the member space, off in V1: then nothing points to a button that is not
+ * there).
+ */
+export function botTextFor(
+  name: 'groupLinked' | 'help',
+  language: string | null,
+  memberSpace: boolean,
+): string {
+  const text = botText(name, language);
+  return memberSpace ? `${text} ${botText('memberLinkHint', language)}` : text;
 }

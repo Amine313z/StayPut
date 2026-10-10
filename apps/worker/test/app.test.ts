@@ -1398,6 +1398,8 @@ describe('Discord and Telegram', () => {
     expect(telegram.sent).toEqual([
       { chatId: '-1009000000001', text: expect.stringContaining('relié à StayPut') as string },
     ]);
+    // The member space is on in these tests: the bot says where members link their account.
+    expect(telegram.sent[0]?.text).toContain('Relier mon Telegram');
     await telegramUpdate(request, {
       update_id: 2,
       message: { message_id: 2, date: NOW_S, chat: group, from, text: 'salut' },
@@ -1413,6 +1415,22 @@ describe('Discord and Telegram', () => {
       },
     ]);
     expect(after.telegram.unlinkedAuthors).toBe(1);
+
+    // The link was for another bot in the same group (the sandbox's, production's): this one
+    // neither answers nor leaves, and counts the message as the person's.
+    await telegramUpdate(request, {
+      update_id: 4,
+      message: {
+        message_id: 4,
+        date: NOW_S,
+        chat: group,
+        from,
+        text: '/start@StayPutHQBot abc_1_aaaaaaaaaaaaaaaaaaaaaa',
+      },
+    });
+    await settle();
+    expect(telegram.sent).toHaveLength(1);
+    expect(telegram.left).toEqual([]);
 
     // A stale link: the bot says so and leaves.
     await telegramUpdate(request, {

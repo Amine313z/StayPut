@@ -2,15 +2,16 @@ import { describe, expect, it } from 'vitest';
 import {
   BOT_TEXTS,
   botText,
+  botTextFor,
   createTelegramClient,
-  readTelegramMemberToken,
-  readTelegramStartToken,
   telegramAction,
   telegramMemberLink,
   telegramMemberToken,
   telegramStartLink,
   telegramStartToken,
   telegramWebhookSecret,
+  readTelegramMemberToken,
+  readTelegramStartToken,
 } from '../src/telegram';
 
 const TOKEN = '123456:secret-bot-token';
@@ -371,6 +372,24 @@ describe('telegramAction', () => {
     });
   });
 
+  it('takes a /start meant for another bot for a person’s message, never a link', () => {
+    // The sandbox's bot and production's sit in the same test group: each reads the other's.
+    const forOther = message({ text: '/start@StayPutHQBot abc_123-x' });
+    expect(telegramAction(forOther, { botUsername: 'StayPutTestBot' })).toMatchObject({
+      kind: 'message',
+      fromId: '42',
+    });
+    // Its own, whatever the case; and every /start while its name is not known.
+    expect(telegramAction(forOther, { botUsername: 'stayputhqbot' })).toMatchObject({
+      kind: 'link',
+      token: 'abc_123-x',
+    });
+    expect(telegramAction(forOther)).toMatchObject({ kind: 'link' });
+    expect(
+      telegramAction(message({ text: '/start abc_123-x' }), { botUsername: 'StayPutTestBot' }),
+    ).toMatchObject({ kind: 'link' });
+  });
+
   it('follows the bot in and out of groups, and groups that become supergroups', () => {
     const change = (status: string) => ({
       update_id: 3,
@@ -407,6 +426,16 @@ describe('what the bot says', () => {
     expect(botText('help', 'fr-CA')).toBe(BOT_TEXTS.help.fr);
     expect(botText('help', 'de')).toBe(BOT_TEXTS.help.en);
     expect(botText('help', null)).toBe(BOT_TEXTS.help.en);
+  });
+
+  it('points members to « Link my Telegram » only while they have a StayPut space', () => {
+    expect(botTextFor('groupLinked', 'fr', false)).toBe(BOT_TEXTS.groupLinked.fr);
+    expect(botTextFor('groupLinked', 'en', false)).not.toContain('Link my Telegram');
+    expect(botTextFor('help', 'en', false)).not.toContain('link your account');
+    expect(botTextFor('groupLinked', 'en', true)).toBe(
+      `${BOT_TEXTS.groupLinked.en} ${BOT_TEXTS.memberLinkHint.en}`,
+    );
+    expect(botTextFor('help', 'fr', true)).toContain('Relier mon Telegram');
   });
 
   it('keeps every reply to one short paragraph', () => {
