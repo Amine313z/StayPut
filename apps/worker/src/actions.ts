@@ -142,16 +142,29 @@ export async function prepareActions(
   db: Db,
   companyId: string,
   now: Date,
-  /** The member space is on: its buddies are paired too (Config.memberSpace). */
-  options: { memberSpace: boolean } = { memberSpace: false },
+  /**
+   * The member space is on: its buddies are paired too (Config.memberSpace). Without
+   * `automations` (Free), StayPut plans nothing of its own and only the creator's actions go
+   * through the guardrails; without `winback` (below Scale), no Alumni follow-up is planned.
+   */
+  options: { memberSpace: boolean; automations?: boolean; winback?: boolean } = {
+    memberSpace: false,
+  },
 ): Promise<{ planned: number; scheduled: number; blocked: number }> {
   const at = now.toISOString();
+  const automations = options.automations ?? true;
   const [plan] = await db.query<{ planned: number }>(
-    `select stayput.plan_actions($1, $2::timestamptz)
-              + stayput.plan_alumni_followups($1, $2::timestamptz)
+    `select case when $4 then stayput.plan_actions($1, $2::timestamptz) else 0 end
+              + case when $5 then stayput.plan_alumni_followups($1, $2::timestamptz) else 0 end
               + case when $3 then stayput.plan_buddies($1, $2::timestamptz) else 0 end
               as planned`,
-    [companyId, at, options.memberSpace],
+    [
+      companyId,
+      at,
+      options.memberSpace && automations,
+      automations,
+      automations && (options.winback ?? true),
+    ],
   );
   const [row] = await db.query<{ context: ScheduleContext | null }>(
     'select stayput.actions_to_schedule($1, $2::timestamptz, $3) as context',

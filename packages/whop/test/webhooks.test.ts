@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { signWebhook, verifyWebhook } from '../src';
 
 const SECRET = 'ws_test_7f3c9a1e5b2d';
@@ -13,6 +13,13 @@ async function headersFor(body = BODY, { secret = SECRET, id = 'msg_1', ts = TS 
     'webhook-signature': await signWebhook(body, secret, id, ts),
   });
 }
+
+// Whop's SDK checks the delivery's time against the clock: the clock reads NOW.
+beforeAll(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
+});
+afterAll(() => vi.useRealTimers());
 
 describe('verifyWebhook', () => {
   it('accepts a delivery signed with our secret', async () => {

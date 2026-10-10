@@ -43,6 +43,36 @@ export interface Env {
    * (SPEC Phase 8.5). Not a secret: a community's id.
    */
   OPERATOR_COMPANY_ID?: string;
+  /**
+   * StayPut's plans (decision of 2026-10-10), all set on Whop: the products of the app (Pro,
+   * Scale), the founders' hidden plan, the visible plans' checkout links. Not secrets. Without
+   * the two products, plans are off and every community has everything (as before plans).
+   */
+  WHOP_PROD_PRO?: string;
+  WHOP_PROD_SCALE?: string;
+  WHOP_PLAN_SCALE_FOUNDER?: string;
+  CHECKOUT_URL_PRO?: string;
+  CHECKOUT_URL_SCALE?: string;
+  /** The founder's Whop user (`user_…`): the only one who sees the admin page. */
+  ADMIN_USER_ID?: string;
+  /**
+   * The founders' plan B, if Whop refuses a 44-day trial: "on" gives Scale to the registry's
+   * communities until BETA_END (an ISO date). Set in Cloudflare's dashboard, it applies without
+   * a deployment (wrangler.toml keeps the dashboard's variables).
+   */
+  FOUNDER_FALLBACK_MODE?: string;
+  BETA_END?: string;
+}
+
+/** StayPut's plans as configured; `enabled` once both products are set. */
+export interface PlansConfig {
+  enabled: boolean;
+  proProduct: string | null;
+  scaleProduct: string | null;
+  founderPlan: string | null;
+  checkout: { pro: string | null; scale: string | null };
+  adminUserId: string | null;
+  founderFallback: { on: boolean; betaEnd: Date | null };
 }
 
 export interface Config {
@@ -71,6 +101,48 @@ export interface Config {
   legalPages: boolean;
   /** The community whose team sees the internal status page; null: nobody's. */
   operatorCompanyId: string | null;
+  plans: PlansConfig;
+}
+
+const PRODUCT_ID = /^prod_[A-Za-z0-9]+$/;
+const PLAN_ID = /^plan_[A-Za-z0-9]+$/;
+
+/** A checkout link on Whop (https, whop.com), else null: never a link elsewhere. */
+function checkoutUrl(raw: string | undefined): string | null {
+  try {
+    const url = new URL(raw ?? '');
+    const host = url.hostname;
+    return url.protocol === 'https:' && (host === 'whop.com' || host.endsWith('.whop.com'))
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function readPlansConfig(env: Env): PlansConfig {
+  const pro = env.WHOP_PROD_PRO?.trim() ?? '';
+  const scale = env.WHOP_PROD_SCALE?.trim() ?? '';
+  const founder = env.WHOP_PLAN_SCALE_FOUNDER?.trim() ?? '';
+  const admin = env.ADMIN_USER_ID?.trim();
+  const betaEnd = env.BETA_END?.trim() ? new Date(env.BETA_END.trim()) : null;
+  const proProduct = PRODUCT_ID.test(pro) ? pro : null;
+  const scaleProduct = PRODUCT_ID.test(scale) ? scale : null;
+  return {
+    enabled: proProduct !== null && scaleProduct !== null,
+    proProduct,
+    scaleProduct,
+    founderPlan: PLAN_ID.test(founder) ? founder : null,
+    checkout: {
+      pro: checkoutUrl(env.CHECKOUT_URL_PRO),
+      scale: checkoutUrl(env.CHECKOUT_URL_SCALE),
+    },
+    adminUserId: isUserId(admin) ? admin : null,
+    founderFallback: {
+      on: env.FOUNDER_FALLBACK_MODE?.trim().toLowerCase() === 'on',
+      betaEnd: betaEnd && !Number.isNaN(betaEnd.getTime()) ? betaEnd : null,
+    },
+  };
 }
 
 export function readConfig(env: Env): Config {
@@ -94,5 +166,6 @@ export function readConfig(env: Env): Config {
     memberSpace: env.MEMBER_SPACE_ENABLED === 'true',
     legalPages: env.LEGAL_PAGES_ENABLED === 'true',
     operatorCompanyId: isCompanyId(env.OPERATOR_COMPANY_ID) ? env.OPERATOR_COMPANY_ID : null,
+    plans: readPlansConfig(env),
   };
 }

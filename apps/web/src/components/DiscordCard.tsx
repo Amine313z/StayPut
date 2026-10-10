@@ -12,12 +12,14 @@ import { useState } from 'react';
 import { deleteJson, putJson, useApi } from '../api';
 import { useDemo } from '../demoMode';
 import { useI18n } from '../i18n';
+import { usePlan } from '../plans';
 import { Badge, Notice } from '../ui/Badge';
 import { DiscordIcon } from '../ui/BrandIcons';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ExternalButton } from '../ui/ExternalLink';
 import { ConfirmButton } from './ConfirmButton';
+import { useServerLock } from './Plans';
 import { LinkedMembers, Steps } from './SourceParts';
 import { ErrorPanel } from './Status';
 
@@ -31,6 +33,7 @@ export function DiscordCard({
   api,
   onChange,
   tour = 'connect-discord',
+  telegramGroups = 0,
 }: {
   status: DiscordStatus;
   whopAppId: string | null;
@@ -38,14 +41,30 @@ export function DiscordCard({
   onChange: () => void;
   /** Where the guide lights up the connect button; none when another button has it. */
   tour?: string | null;
+  /** Telegram groups connected: with the servers, what the plan counts. */
+  telegramGroups?: number;
 }) {
   const { t } = useI18n();
   // The demo connects nothing: the button shows there, said disabled (ExternalButton).
   const demo = useDemo();
   const variant = status.servers.length > 0 ? 'secondary' : 'primary';
   const label = t(status.servers.length > 0 ? 'discord.addAnother' : 'discord.add');
+  const { ask } = usePlan();
+  const locked = useServerLock('discord', {
+    discord: status.servers.length,
+    telegram: telegramGroups,
+  });
   const install =
-    demo || status.install ? (
+    locked && status.install ? (
+      <Button
+        variant={variant}
+        size="sm"
+        icon={<Lock aria-hidden="true" className="size-4" />}
+        onClick={() => ask(locked)}
+      >
+        {label}
+      </Button>
+    ) : demo || status.install ? (
       <ExternalButton
         href={status.install?.url ?? null}
         whopAppId={whopAppId}

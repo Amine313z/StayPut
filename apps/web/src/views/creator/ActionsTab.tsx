@@ -55,6 +55,8 @@ import { Button } from '../../ui/Button';
 import { EmptyState } from '../../ui/EmptyState';
 import { useCreatorData, type CreatorData, type TabCounts } from '../CreatorView';
 import { RulesTab } from './RulesTab';
+import { LockTag } from '../../components/Plans';
+import { usePlan } from '../../plans';
 
 /** The Worker passes approved actions through the guardrails after answering: read again then. */
 const RELOAD_AFTER_MS = 3_000;
@@ -396,13 +398,21 @@ export function AlumniTab() {
 function ApproveAll({ api, count, onDone }: { api: string; count: number; onDone: () => void }) {
   const { t, number } = useI18n();
   const [step, setStep] = useState<'idle' | 'running' | 'failed'>('idle');
+  // The prepared actions and « Approve all » are Pro's (plans.ts).
+  const { lockedTo, ask } = usePlan();
+  const locked = lockedTo('prepared_actions');
   return (
     <span className="inline-flex flex-col items-end gap-1">
+      {locked ? <LockTag tier={locked} /> : null}
       <Button
         size="sm"
         icon={<CheckCheck aria-hidden="true" className="size-4" />}
         loading={step === 'running'}
         onClick={() => {
+          if (locked) {
+            ask(locked);
+            return;
+          }
           setStep('running');
           postJson(`${api}/actions/approve`, {}).then(
             () => {
@@ -436,6 +446,8 @@ function ActionItem({
 }) {
   const { t, relative, dateTime, percent } = useI18n();
   const [step, setStep] = useState<'idle' | 'running' | 'failed'>('idle');
+  const { lockedTo, ask } = usePlan();
+  const approveLocked = lockedTo('prepared_actions');
   const { label, Icon } = TYPES[action.type];
   // An offer is not sent: it is applied to the membership.
   const applied = action.offer !== null && action.status === 'sent';
@@ -536,6 +548,10 @@ function ActionItem({
                 icon={<Check aria-hidden="true" className="size-4" />}
                 loading={step === 'running'}
                 onClick={() => {
+                  if (approveLocked) {
+                    ask(approveLocked);
+                    return;
+                  }
                   setStep('running');
                   postJson(`${api}/actions/approve`, { ids: [action.id] }).then(
                     () => {

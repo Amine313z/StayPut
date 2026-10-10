@@ -1,4 +1,11 @@
-import { CSRF_HEADER, type ApiErrorBody, type ApiErrorCode } from '@stayput/core';
+import {
+  CSRF_HEADER,
+  isTier,
+  type ApiErrorBody,
+  type ApiErrorCode,
+  type PaymentRequiredBody,
+  type Tier,
+} from '@stayput/core';
 import { useEffect, useRef, useState } from 'react';
 
 /**
@@ -14,10 +21,21 @@ export class ApiError extends Error {
     message: string,
     /** With `unauthenticated` in the sandbox: where to sign in with Whop outside the iframe. */
     readonly login: string | null = null,
+    /** With `payment_required` (402): the plan that opens it, and where to subscribe. */
+    readonly upgrade: UpgradeAsk | null = null,
   ) {
     super(message);
   }
 }
+
+/** What a 402 asks for: a plan, and its checkout (plans.tsx shows it). */
+export interface UpgradeAsk {
+  tier: Tier;
+  checkoutUrl: string | null;
+}
+
+/** Sent on the window at each 402, for the plan's dialog (plans.tsx). */
+export const UPGRADE_EVENT = 'stayput:upgrade';
 
 /**
  * GET on the Worker. Same origin, relative path: Whop's proxy adds the user token to these
@@ -148,17 +166,32 @@ async function requestJson<T>(
     clearTimeout(giveUp);
   }
   if (response.ok) return (await response.json()) as T;
-  const failure = (await response.json().catch(() => null)) as Partial<ApiErrorBody> | null;
+  const failure = (await response.json().catch(() => null)) as
+    | (Partial<ApiErrorBody> & Partial<Pick<PaymentRequiredBody, 'requiredTier' | 'checkoutUrl'>>)
+    | null;
   const login = failure?.error?.login;
+  const upgrade: UpgradeAsk | null =
+    response.status === 402 && isTier(failure?.requiredTier)
+      ? {
+          tier: failure.requiredTier,
+          checkoutUrl: typeof failure.checkoutUrl === 'string' ? failure.checkoutUrl : null,
+        }
+      : null;
+  // The plan does not open this: the page offers the plan that does, wherever it was asked.
+  if (upgrade && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<UpgradeAsk>(UPGRADE_EVENT, { detail: upgrade }));
+  }
   throw new ApiError(
     failure?.error?.code ?? codeForStatus(response.status),
     failure?.error?.message ?? response.statusText,
     typeof login === 'string' && login.startsWith('/') ? login : null,
+    upgrade,
   );
 }
 
 function codeForStatus(status: number): ApiErrorCode {
   if (status === 401) return 'unauthenticated';
+  if (status === 402) return 'payment_required';
   if (status === 403) return 'forbidden';
   if (status === 404) return 'not_found';
   return 'internal';

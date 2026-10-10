@@ -29,10 +29,49 @@ describe('readConfig', () => {
       memberSpace: false,
       legalPages: false,
       operatorCompanyId: null,
+      // Plans are off until both products are set: every community has everything.
+      plans: {
+        enabled: false,
+        proProduct: null,
+        scaleProduct: null,
+        founderPlan: null,
+        checkout: { pro: null, scale: null },
+        adminUserId: null,
+        founderFallback: { on: false, betaEnd: null },
+      },
     });
     expect(readConfig({ MEMBER_SPACE_ENABLED: 'true' }).memberSpace).toBe(true);
     expect(readConfig({ MEMBER_SPACE_ENABLED: 'yes' }).memberSpace).toBe(false);
     expect(readConfig({ LEGAL_PAGES_ENABLED: 'true' }).legalPages).toBe(true);
+  });
+
+  it('reads the plans from Whop’s ids, its checkout links only, plan B by its switch', () => {
+    const plans = readConfig({
+      WHOP_PROD_PRO: 'prod_Pro1',
+      WHOP_PROD_SCALE: ' prod_Scale1 ',
+      WHOP_PLAN_SCALE_FOUNDER: 'plan_Founder1',
+      CHECKOUT_URL_PRO: 'https://whop.com/checkout/plan_Pro1',
+      CHECKOUT_URL_SCALE: 'https://evil.example/checkout',
+      ADMIN_USER_ID: 'user_Founder',
+      FOUNDER_FALLBACK_MODE: 'ON',
+      BETA_END: '2026-12-01',
+    }).plans;
+    expect(plans).toEqual({
+      enabled: true,
+      proProduct: 'prod_Pro1',
+      scaleProduct: 'prod_Scale1',
+      founderPlan: 'plan_Founder1',
+      checkout: { pro: 'https://whop.com/checkout/plan_Pro1', scale: null },
+      adminUserId: 'user_Founder',
+      founderFallback: { on: true, betaEnd: new Date('2026-12-01T00:00:00Z') },
+    });
+    expect(readConfig({ WHOP_PROD_PRO: 'prod_Pro1' }).plans.enabled).toBe(false);
+    expect(
+      readConfig({ FOUNDER_FALLBACK_MODE: 'off', BETA_END: 'soon' }).plans.founderFallback,
+    ).toEqual({
+      on: false,
+      betaEnd: null,
+    });
   });
 
   it('turns "Sign in with Whop" on in the sandbox only, once the app id and key exist', () => {

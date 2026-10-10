@@ -550,6 +550,11 @@ export const BOT_TEXTS = {
     fr: 'Pour que votre activité compte, ouvrez StayPut dans la communauté Whop et touchez « Relier mon Telegram ».',
     en: 'For your activity to count, open StayPut in the Whop community and tap “Link my Telegram”.',
   },
+  /** The community's plan holds no more groups (plans.ts, serverAllowed). */
+  groupPlanFull: {
+    fr: 'Le forfait StayPut de cette communauté ne compte pas un groupe de plus : passez à un forfait supérieur dans StayPut, puis ajoutez de nouveau le bot.',
+    en: 'This community’s StayPut plan counts no more groups: upgrade in StayPut, then add the bot again.',
+  },
   groupLinkExpired: {
     fr: 'Ce lien a expiré : demandez-en un nouveau dans StayPut (Sources d’activité → Telegram).',
     en: 'This link has expired: get a new one in StayPut (Activity sources → Telegram).',

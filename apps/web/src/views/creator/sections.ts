@@ -37,6 +37,10 @@ export interface Tab {
   memberSpace?: boolean;
   /** StayPut's internal status page: shown to the operator's own community only. */
   operator?: boolean;
+  /** Plans and founders: shown to the founder (ADMIN_USER_ID) only. */
+  admin?: boolean;
+  /** The community's plan: shown once plans are set up (StayPut's products configured). */
+  plans?: boolean;
 }
 
 export type SectionId =
@@ -109,8 +113,10 @@ export const SECTIONS: readonly Section[] = [
       { path: '', label: 'tab.general' },
       { path: 'risk', label: 'tab.riskScore' },
       { path: 'actions', label: 'nav.actions' },
+      { path: 'plan', label: 'tab.plan', plans: true },
       { path: 'space', label: 'nav.space', memberSpace: true },
       { path: 'status', label: 'tab.status', operator: true },
+      { path: 'admin', label: 'tab.admin', admin: true },
     ],
   },
   {
@@ -137,9 +143,16 @@ export function visibleSections(): readonly Section[] {
  * A section's tabs as shown: the member space's only while it is on, the status page only to
  * the operator's own community.
  */
-export function visibleTabs(section: Section, { operator = false } = {}): readonly Tab[] {
+export function visibleTabs(
+  section: Section,
+  { operator = false, admin = false, plans = false } = {},
+): readonly Tab[] {
   return section.tabs.filter(
-    (tab) => (!tab.memberSpace || memberSpaceEnabled()) && (!tab.operator || operator),
+    (tab) =>
+      (!tab.memberSpace || memberSpaceEnabled()) &&
+      (!tab.operator || operator) &&
+      (!tab.admin || admin) &&
+      (!tab.plans || plans),
   );
 }
 

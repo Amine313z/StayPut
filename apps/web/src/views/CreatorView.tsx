@@ -1,4 +1,4 @@
-import type { CreatorSession, IntegrationsStatus, MembersPage } from '@stayput/core';
+import type { CreatorSession, IntegrationsStatus, MembersPage, PlanView } from '@stayput/core';
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useOutletContext, useParams, useSearchParams } from 'react-router';
 import { DEMO_COMPANY_ID, postJson, useApi, useReloadOnReturn, type Loadable } from '../api';
@@ -6,6 +6,7 @@ import { BootHold, useBootReady } from '../boot';
 import { CreatorShell, ShellSkeleton, rememberDemoExit } from '../components/CreatorShell';
 import { ErrorPanel } from '../components/Status';
 import { DemoMode } from '../demoMode';
+import { PlanProvider } from '../plans';
 import { useI18n } from '../i18n';
 import { useSync, type SyncState } from '../sync';
 import { StayPutMark } from '../ui/BrandIcons';
@@ -33,6 +34,8 @@ export interface CreatorData {
   testMode: { on: boolean; set: (on: boolean) => void };
   /** The operator's own community: Settings › Status, StayPut's internal status page. */
   operator: boolean;
+  /** The founder (ADMIN_USER_ID): Settings › Admin. */
+  admin: boolean;
   /** Inside a section: says how many things its tabs hold (SectionLayout). */
   tabCounts?: (counts: TabCounts) => void;
 }
@@ -82,9 +85,38 @@ export function CreatorView({ demo = false }: { demo?: boolean }) {
  * are read again each time a synchronization brings something new, the sources also each time
  * the creator comes back to the page (after connecting one in another tab).
  */
+/**
+ * The demo's plan: everything open, or the plan named by `?plan=` (free, pro, founder, scale),
+ * to see what a community on it sees (nothing is real in the demo, nothing is bought).
+ */
+function demoPlan(asked: string | null, session: CreatorSession): PlanView {
+  const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+  const shown = { ...session.plan, source: 'whop' as const, checkout: { pro: null, scale: null } };
+  switch (asked) {
+    case 'free':
+      return { ...shown, tier: 'free', manualActions: { used: 3, limit: 5 } };
+    case 'pro':
+      return { ...shown, tier: 'pro', trialEndsAt: inDays(5) };
+    case 'founder':
+      return {
+        ...shown,
+        tier: 'scale',
+        trialEndsAt: inDays(30),
+        founder: { trialEndsAt: inDays(30), price: { amount: 39.5, currency: 'usd' } },
+      };
+    case 'scale':
+      return { ...shown, tier: 'scale' };
+    default:
+      return session.plan;
+  }
+}
+
 function Dashboard({ session, demo }: { session: CreatorSession; demo: boolean }) {
   const { locale } = useI18n();
   const { pathname } = useLocation();
+  const [search] = useSearchParams();
+  // The demo keeps the plan it opened with, from section to section.
+  const [plan] = useState(() => (demo ? demoPlan(search.get('plan'), session) : session.plan));
   const companyId = session.companyId;
   const api = `/api/creator/${encodeURIComponent(companyId)}`;
   const root = demo ? '/demo' : `/dashboard/${encodeURIComponent(companyId)}`;
@@ -115,28 +147,31 @@ function Dashboard({ session, demo }: { session: CreatorSession; demo: boolean }
     integrations,
     testMode: { on: testMode, set: setTestMode },
     operator: !demo && session.operator === true,
+    admin: !demo && session.admin === true,
   };
   const section = sectionOf(pathname, root);
 
   return (
     // In the demo, no button leads outside StayPut (demoMode.tsx).
     <DemoMode on={demo}>
-      <CreatorShell
-        session={session}
-        root={root}
-        demo={demo}
-        testMode={testMode}
-        onTurnOffTestMode={turnOffTestMode}
-        members={members.state.status === 'ready' ? members.state.data.members : []}
-      >
-        {/* Each section comes in (MOTION.md); the frame around it never moves. */}
-        <Page key={section.id}>
-          {/* A container: the sections lay out by the room left beside the menu, not the window's. */}
-          <div className="@container min-w-0">
-            <Outlet context={data} />
-          </div>
-        </Page>
-      </CreatorShell>
+      <PlanProvider plan={plan} planPage={`${root}/settings/plan`}>
+        <CreatorShell
+          session={session}
+          root={root}
+          demo={demo}
+          testMode={testMode}
+          onTurnOffTestMode={turnOffTestMode}
+          members={members.state.status === 'ready' ? members.state.data.members : []}
+        >
+          {/* Each section comes in (MOTION.md); the frame around it never moves. */}
+          <Page key={section.id}>
+            {/* A container: the sections lay out by the room left beside the menu, not the window's. */}
+            <div className="@container min-w-0">
+              <Outlet context={data} />
+            </div>
+          </Page>
+        </CreatorShell>
+      </PlanProvider>
     </DemoMode>
   );
 }

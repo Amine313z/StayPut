@@ -4,6 +4,9 @@ name = "stayput"
 main = "src/index.ts"
 compatibility_date = "2026-09-01"
 compatibility_flags = ["nodejs_compat"]
+# Variables set in Cloudflare's dashboard stay through deployments: FOUNDER_FALLBACK_MODE and
+# BETA_END, the founders' plan B (decision of 2026-10-10), switched there without a deployment.
+keep_vars = true
 
 [assets]
 directory = "../web/dist"

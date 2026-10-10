@@ -1,4 +1,5 @@
 import { EXECUTE_BATCH, executeDueActions, prepareActions } from './actions';
+import { companyPlan, planningAt } from './plans';
 import { planRescues } from './space';
 import type { CronJob } from './cron';
 import { scoreDueCompanies } from './risk';
@@ -82,6 +83,8 @@ export const scoreMembers: CronJob = {
 /**
  * SPEC Phase 4: after the scores, each company's actions are planned from its state and passed
  * through the guardrails; then the actions whose time has come are run (simulated in test mode).
+ * Each company's plan is read again first: what StayPut plans by itself is Pro's, its Alumni
+ * follow-ups Scale's (plans.ts).
  */
 export const runActions: CronJob = {
   name: 'actions',
@@ -92,7 +95,10 @@ export const runActions: CronJob = {
     );
     const memberSpace = config.memberSpace;
     for (const { id } of companies) {
-      const prepared = await prepareActions(db, id, now, { memberSpace });
+      // The level read again first (from Whop once stale): a community back on Free plans
+      // nothing of its own, and its scheduled follow-ups wait (stayput.due_actions).
+      const { tier } = await companyPlan(db, whop, config.plans, id, now);
+      const prepared = await prepareActions(db, id, now, { memberSpace, ...planningAt(tier) });
       if (prepared.planned + prepared.scheduled + prepared.blocked > 0) {
         console.info(
           `Actions ${id}: ${prepared.planned} planned, ${prepared.scheduled} scheduled, ${prepared.blocked} blocked.`,

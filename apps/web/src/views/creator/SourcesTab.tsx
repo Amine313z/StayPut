@@ -74,6 +74,7 @@ function PlatformTab({ platform }: { platform: AccountPlatform }) {
             {platform === 'discord' ? (
               <DiscordCard
                 status={status.discord}
+                telegramGroups={status.telegram.groups.length}
                 whopAppId={status.whopAppId}
                 api={api}
                 onChange={integrations.reload}
@@ -81,6 +82,7 @@ function PlatformTab({ platform }: { platform: AccountPlatform }) {
             ) : (
               <TelegramCard
                 status={status.telegram}
+                discordServers={status.discord.servers.length}
                 whopAppId={status.whopAppId}
                 api={api}
                 onChange={integrations.reload}

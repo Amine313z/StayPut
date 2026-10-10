@@ -1,14 +1,17 @@
 import type { TelegramGroupStatus, TelegramStatus } from '@stayput/core';
-import { CircleCheck, Megaphone, TriangleAlert, Unplug } from 'lucide-react';
+import { CircleCheck, Lock, Megaphone, TriangleAlert, Unplug } from 'lucide-react';
 import { deleteJson } from '../api';
 import { useDemo } from '../demoMode';
 import { memberSpaceEnabled } from '../features';
 import { useI18n } from '../i18n';
+import { usePlan } from '../plans';
 import { Badge, Notice } from '../ui/Badge';
 import { TelegramIcon } from '../ui/BrandIcons';
+import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ExternalButton } from '../ui/ExternalLink';
 import { ConfirmButton } from './ConfirmButton';
+import { useServerLock } from './Plans';
 import { LinkedMembers, Steps } from './SourceParts';
 
 /**
@@ -21,17 +24,34 @@ export function TelegramCard({
   whopAppId,
   api,
   onChange,
+  discordServers = 0,
 }: {
   status: TelegramStatus;
   whopAppId: string | null;
   api: string;
   onChange: () => void;
+  /** Discord servers connected: with the groups, what the plan counts. */
+  discordServers?: number;
 }) {
   const { t } = useI18n();
   // The demo connects nothing: the button shows there, said disabled (ExternalButton).
   const demo = useDemo();
+  const { ask } = usePlan();
+  const locked = useServerLock('telegram', {
+    discord: discordServers,
+    telegram: status.groups.length,
+  });
   const add =
-    demo || status.addToGroup ? (
+    locked && status.addToGroup ? (
+      <Button
+        variant={status.groups.length > 0 ? 'secondary' : 'primary'}
+        size="sm"
+        icon={<Lock aria-hidden="true" className="size-4" />}
+        onClick={() => ask(locked)}
+      >
+        {t(status.groups.length > 0 ? 'telegram.addAnother' : 'telegram.add')}
+      </Button>
+    ) : demo || status.addToGroup ? (
       <ExternalButton
         href={status.addToGroup?.url ?? null}
         whopAppId={whopAppId}

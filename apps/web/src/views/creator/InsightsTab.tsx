@@ -25,6 +25,8 @@ import { LessonBars } from '../../ui/charts/LessonBars';
 import { RetentionChart } from '../../ui/charts/RetentionChart';
 import { useCreatorData } from '../CreatorView';
 import { Benchmarks } from './Benchmarks';
+import { LockTag, LockedBlock, Locked } from '../../components/Plans';
+import { usePlan } from '../../plans';
 
 /** Lessons shown before « Show all »; bars drawn above the table. */
 const LESSON_PREVIEW = 8;
@@ -97,6 +99,48 @@ function Forecast({ view }: { view: InsightsOverview | null }) {
   // The community's today: the last day of its 30 days of activity.
   const today = view?.activity.at(-1)?.day ?? null;
   const own = view ? view.calibrated.length + (view.saveRateObserved ? 1 : 0) : 0;
+  // What the plan opens of it (plans.ts): Free its one figure, Pro the whole forecast, Scale
+  // its scenarios (the slider) too.
+  const { lockedTo } = usePlan();
+  const scenariosLocked = lockedTo('forecast_scenarios');
+  // The Worker says it; the demo's answers do not, the plan shown then does.
+  const access =
+    view?.forecastAccess ??
+    (lockedTo('forecast') ? 'preview' : scenariosLocked ? 'full' : 'scenarios');
+
+  if (view && access === 'preview') {
+    return (
+      <section aria-labelledby={titleId} className="relative isolate space-y-6">
+        <span aria-hidden="true" className="hero-glow -z-10" style={{ left: -260, top: -300 }} />
+        <h2 id={titleId} className="title-section">
+          {t('forecast.title')}
+        </h2>
+        {view.currency === null ? (
+          <EmptyState
+            icon={<ChartColumn aria-hidden="true" className="size-5" />}
+            body={t('forecast.empty')}
+          />
+        ) : (
+          <MetricHero
+            better="up"
+            label={t('plan.forecast.preview')}
+            tip={t('forecast.gain.info')}
+            value={
+              view.forecastPreview ??
+              forecastRevenue({
+                revenue: view.revenue,
+                stay: view.stay,
+                saveRate: view.saveRate,
+                reached: 1,
+              }).gain
+            }
+            format={(value) => (value > 0 ? `+${money(value)}` : money(value))}
+          />
+        )}
+        <LockedBlock tier="pro" title={t('plan.forecast.locked')} />
+      </section>
+    );
+  }
 
   return (
     <section aria-labelledby={titleId} className="relative isolate space-y-6">
@@ -189,32 +233,39 @@ function Forecast({ view }: { view: InsightsOverview | null }) {
               {t('forecast.gain')}
             </span>
           </div>
-          <label className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-5 text-sm">
-            <span className="text-muted">{t('forecast.reach')}</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={10}
-              value={reach}
-              disabled={!view}
-              onChange={(event) => setReach(Number(event.target.value))}
-              aria-valuetext={t('forecast.reach.value', { percent: percent(reach / 100) })}
-              className="w-48 cursor-pointer accent-turq-300 disabled:cursor-default"
-            />
-            <span className="text-fg">
-              {t('forecast.reach.value', { percent: percent(reach / 100) })}
-              {atRisk !== null ? (
-                <span className="text-subtle">
-                  {' · '}
-                  {t('forecast.reach.count', {
-                    count: number(Math.round((atRisk * reach) / 100)),
-                    total: number(atRisk),
-                  })}
-                </span>
-              ) : null}
-            </span>
-          </label>
+          {access !== 'scenarios' || scenariosLocked ? (
+            <p className="flex flex-wrap items-center gap-3 border-t border-line pt-5 text-sm text-muted">
+              {t('plan.scenarios.locked')}
+              <LockTag tier="scale" />
+            </p>
+          ) : (
+            <label className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-5 text-sm">
+              <span className="text-muted">{t('forecast.reach')}</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={10}
+                value={reach}
+                disabled={!view}
+                onChange={(event) => setReach(Number(event.target.value))}
+                aria-valuetext={t('forecast.reach.value', { percent: percent(reach / 100) })}
+                className="w-48 cursor-pointer accent-turq-300 disabled:cursor-default"
+              />
+              <span className="text-fg">
+                {t('forecast.reach.value', { percent: percent(reach / 100) })}
+                {atRisk !== null ? (
+                  <span className="text-subtle">
+                    {' · '}
+                    {t('forecast.reach.count', {
+                      count: number(Math.round((atRisk * reach) / 100)),
+                      total: number(atRisk),
+                    })}
+                  </span>
+                ) : null}
+              </span>
+            </label>
+          )}
           {view ? (
             <p className="max-w-3xl text-xs text-subtle">
               {t('forecast.how', {
@@ -343,12 +394,22 @@ function WithReport({ children }: { children: (report: InsightsReport) => ReactN
 
 /** Analytics › Cohorts: the months of arrival whose members leave faster. */
 export function CohortsTab() {
-  return <WithReport>{(report) => <Cohorts report={report} />}</WithReport>;
+  // Cohorts are Pro's (plans.ts): the Worker sends none below it.
+  return (
+    <Locked feature="cohorts">
+      <WithReport>{(report) => <Cohorts report={report} />}</WithReport>
+    </Locked>
+  );
 }
 
 /** Analytics › Lessons: the lessons members stall after. */
 export function LessonsTab() {
-  return <WithReport>{(report) => <Lessons lessons={report.lessons} />}</WithReport>;
+  // Lessons and recommendations are Scale's (plans.ts): the Worker sends none below it.
+  return (
+    <Locked feature="lessons">
+      <WithReport>{(report) => <Lessons lessons={report.lessons} />}</WithReport>
+    </Locked>
+  );
 }
 
 /** A departure rate; « — » while no member of the month is old enough. */

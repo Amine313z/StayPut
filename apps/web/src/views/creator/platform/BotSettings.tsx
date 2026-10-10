@@ -91,6 +91,7 @@ export function BotSettings({
       {platform === 'discord' ? (
         <DiscordCard
           status={status.discord}
+          telegramGroups={status.telegram.groups.length}
           whopAppId={status.whopAppId}
           api={api}
           onChange={integrations.reload}
@@ -99,6 +100,7 @@ export function BotSettings({
       ) : (
         <TelegramCard
           status={status.telegram}
+          discordServers={status.discord.servers.length}
           whopAppId={status.whopAppId}
           api={api}
           onChange={integrations.reload}

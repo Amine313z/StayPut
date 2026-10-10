@@ -1,11 +1,11 @@
+import { WebhookVerificationError, unwrapWebhook } from '@whop/sdk/helpers';
+
 /**
  * Whop signs webhooks the Standard Webhooks way: base64(HMAC-SHA256(secret,
  * "<webhook-id>.<webhook-timestamp>.<raw body>")) in `webhook-signature` as `v1,<signature>`
- * (several, space-separated, during a secret rotation). The HMAC key is the literal bytes of
- * the `ws_…` secret, prefix included, exactly as Whop's own `unwrapWebhook` does.
- *
- * WebCrypto only: it runs unchanged in the Worker, and `crypto.subtle.verify` compares in
- * constant time.
+ * (several, space-separated, during a secret rotation). The signature is checked by Whop's own
+ * SDK (`unwrapWebhook`, @whop/sdk/helpers, on the `ws_…` secret as Whop shows it), never by
+ * hand (decision of 2026-10-10); what is around it here only says why a delivery is refused.
  */
 
 /** Deliveries older or newer than this are refused (replay protection). */
@@ -23,12 +23,22 @@ export type WebhookVerification =
         | 'invalid_signature';
     };
 
-export async function verifyWebhook(
+/** A delivery checked: its id and time when Whop signed it, else why it is refused. */
+export function verifyWebhook(
   rawBody: string,
   headers: Headers,
   secret: string | undefined,
   now: Date,
 ): Promise<WebhookVerification> {
+  return Promise.resolve(verify(rawBody, headers, secret, now));
+}
+
+function verify(
+  rawBody: string,
+  headers: Headers,
+  secret: string | undefined,
+  now: Date,
+): WebhookVerification {
   if (!secret) return { ok: false, reason: 'missing_secret' };
   const id = headers.get('webhook-id');
   const timestampHeader = headers.get('webhook-timestamp');
@@ -41,17 +51,27 @@ export async function verifyWebhook(
     return { ok: false, reason: 'timestamp_out_of_range' };
   }
 
-  const key = await hmacKey(secret, 'verify');
-  const signed = new TextEncoder().encode(`${id}.${timestampHeader}.${rawBody}`);
-  for (const entry of signatures.split(' ')) {
-    const [version, signature] = entry.split(',', 2);
-    if (version !== 'v1' || !signature) continue;
-    const bytes = decodeBase64(signature);
-    if (bytes && (await crypto.subtle.verify('HMAC', key, bytes, signed))) {
-      return { ok: true, id, timestamp };
+  try {
+    unwrapWebhook(rawBody, {
+      headers: {
+        'webhook-id': id,
+        'webhook-timestamp': timestampHeader,
+        'webhook-signature': signatures,
+      },
+      key: secret,
+    });
+  } catch (error) {
+    // The SDK parses the body once the signature holds: a body that is not JSON is signed, and
+    // refused later as a bad request, never as a forgery.
+    if (!(error instanceof WebhookVerificationError)) {
+      if (error instanceof SyntaxError) return { ok: true, id, timestamp };
+      return { ok: false, reason: 'invalid_signature' };
     }
+    // It checks the time too, against the clock: a delivery too old is no signature error.
+    if (/timestamp/i.test(error.message)) return { ok: false, reason: 'timestamp_out_of_range' };
+    return { ok: false, reason: 'invalid_signature' };
   }
-  return { ok: false, reason: 'invalid_signature' };
+  return { ok: true, id, timestamp };
 }
 
 /** The `webhook-signature` value Whop would send: for tests and local replays. */
@@ -75,15 +95,4 @@ function hmacKey(secret: string, usage: 'sign' | 'verify') {
     false,
     [usage],
   );
-}
-
-function decodeBase64(value: string): Uint8Array<ArrayBuffer> | null {
-  try {
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    return bytes;
-  } catch {
-    return null;
-  }
 }

@@ -51,6 +51,7 @@ import { RouterProvider, createMemoryRouter, matchRoutes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '../src/App';
 import { DEMO_COMPANY_ID } from '../src/api';
+import { OPEN_PLAN } from '../src/plans';
 import { AlumniCard } from '../src/components/AlumniCard';
 import { resetDemo } from '../src/demo/api';
 import { DemoMode } from '../src/demoMode';
@@ -128,6 +129,8 @@ const creatorSession = {
     timezoneSet: true,
     companyName: 'Le Club',
     testMode: false,
+    plan: OPEN_PLAN,
+    admin: false,
   },
 };
 

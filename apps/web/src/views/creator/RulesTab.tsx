@@ -5,6 +5,8 @@ import {
   type MessageAction,
   type RuleId,
   type TemplateValues,
+  RULE_FEATURES,
+  type Tier,
 } from '@stayput/core';
 import type { MessageKey } from '@stayput/i18n';
 import {
@@ -33,6 +35,8 @@ import { Skeleton } from '../../ui/Skeleton';
 import { Switch } from '../../ui/Switch';
 import { useToast } from '../../ui/Toast';
 import { useCreatorData } from '../CreatorView';
+import { LockTag } from '../../components/Plans';
+import { usePlan } from '../../plans';
 
 interface Rule {
   id: RuleId;
@@ -87,6 +91,7 @@ export function RulesTab() {
   const [busy, setBusy] = useState<ReadonlySet<RuleId | 'mode'>>(new Set());
   const [allShown, setAllShown] = useState(false);
   const modeLabel = useId();
+  const { lockedTo, ask } = usePlan();
 
   if (settings.state.status === 'error') {
     return (
@@ -98,6 +103,7 @@ export function RulesTab() {
     );
   }
   const view = changed ?? (settings.state.status === 'ready' ? settings.state.data : null);
+  const autopilotLocked = lockedTo('autopilot');
   const working = (what: RuleId | 'mode', on: boolean) =>
     setBusy((current) => {
       const next = new Set(current);
@@ -107,6 +113,12 @@ export function RulesTab() {
     });
 
   const setRule = async (base: ActionSettingsView, rule: RuleId, on: boolean) => {
+    // Turning a rule on is its plan's (plans.ts): below it, the plan that opens it is offered.
+    const locked = on ? lockedTo(RULE_FEATURES[rule]) : null;
+    if (locked) {
+      ask(locked);
+      return;
+    }
     setChanged((current) => withRule(current ?? base, rule, on));
     working(rule, true);
     try {
@@ -125,6 +137,10 @@ export function RulesTab() {
 
   const setMode = async (base: ActionSettingsView, mode: Mode) => {
     if (mode === base.mode) return;
+    if (mode === 'auto' && autopilotLocked) {
+      ask(autopilotLocked);
+      return;
+    }
     setChanged((current) => ({ ...(current ?? base), mode }));
     working('mode', true);
     try {
@@ -167,6 +183,7 @@ export function RulesTab() {
                 if (!busy.has('mode')) void setMode(view, mode);
               }}
             />
+            {autopilotLocked ? <LockTag tier={autopilotLocked} /> : null}
             <p className="text-sm text-muted">
               {t(
                 view.mode === 'auto'
@@ -202,6 +219,7 @@ export function RulesTab() {
                 <StaggerItem key={rule.id} as="li">
                   <RuleCard
                     rule={rule}
+                    locked={lockedTo(RULE_FEATURES[rule.id])}
                     on={!view.rulesOff.includes(rule.id)}
                     busy={busy.has(rule.id)}
                     onChange={(on) => void setRule(view, rule.id, on)}
@@ -292,12 +310,15 @@ function rulesOf(view: ActionSettingsView, t: (key: MessageKey) => string): Rule
 /** A rule: its name and switch, then when → if → then, one line each, and its message. */
 function RuleCard({
   rule,
+  locked,
   on,
   busy,
   onChange,
   preview,
 }: {
   rule: Rule;
+  /** The plan that opens it, when this one does not. */
+  locked: Tier | null;
   on: boolean;
   busy: boolean;
   onChange: (on: boolean) => void;
@@ -331,7 +352,10 @@ function RuleCard({
           </span>
           <span className="truncate">{t(rule.title)}</span>
         </h3>
-        <Switch checked={on} onChange={onChange} labelledBy={title} busy={busy} />
+        <span className="flex shrink-0 items-center gap-2">
+          {locked ? <LockTag tier={locked} /> : null}
+          <Switch checked={on} onChange={onChange} labelledBy={title} busy={busy} />
+        </span>
       </header>
       <ol
         className={`mt-3 space-y-1.5 text-[0.8125rem] transition-opacity duration-200 ${

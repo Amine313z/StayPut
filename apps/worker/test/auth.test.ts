@@ -8,6 +8,7 @@ import { AccessCache } from '../src/access';
 import { CSRF_HEADER, createApp, type AppDeps } from '../src/app';
 import type { Env } from '../src/env';
 import { LOGIN_COOKIE, SESSION_COOKIE } from '../src/session';
+import { OPEN_PLAN_VIEW } from './helpers/plans';
 
 const SANDBOX: Env = { WHOP_ENV: 'sandbox', WHOP_APP_ID: 'app_stayput', WHOP_API_KEY: 'apik_one' };
 
@@ -138,6 +139,8 @@ describe('signing in with Whop outside the iframe (sandbox)', () => {
       companyLogo: false,
       testMode: false,
       operator: false,
+      plan: OPEN_PLAN_VIEW,
+      admin: false,
     });
   });
 

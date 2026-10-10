@@ -13,6 +13,7 @@ import {
   Check,
   GraduationCap,
   Hand,
+  Lock,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -25,6 +26,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { getJson, postJson, putJson, useApi } from '../../api';
 import { useI18n } from '../../i18n';
 import { SPRING, ease } from '../../motion';
+import { usePlan } from '../../plans';
 import { Badge } from '../../ui/Badge';
 import { DiscordIcon, StayPutMark, TelegramIcon } from '../../ui/BrandIcons';
 import { Button } from '../../ui/Button';
@@ -474,6 +476,9 @@ function ModeChoice({
   onChoose: (mode: Mode) => void;
 }) {
   const { t } = useI18n();
+  // The automatic mode is Scale's (decision of 2026-10-10): below, it shows, closed, with the
+  // plan that opens it (Settings › Plan offers it, not a dialog over this one).
+  const autopilot = usePlan().lockedTo('autopilot');
   const options = [
     {
       mode: 'auto' as const,
@@ -497,18 +502,21 @@ function ModeChoice({
       <div role="radiogroup" aria-labelledby={titleId} className="mt-6 grid gap-3 sm:grid-cols-2">
         {options.map(({ mode, Icon, label, hint }) => {
           const on = chosen === mode;
+          const locked = mode === 'auto' ? autopilot : null;
           return (
             <label
               key={mode}
-              className={`relative flex cursor-pointer flex-col gap-2 rounded-xl border p-4 transition-colors duration-200 ${
-                on ? 'border-accent bg-surface-2' : 'border-line hover:border-line-strong'
-              }`}
+              data-plan-locked={locked ?? undefined}
+              className={`relative flex flex-col gap-2 rounded-xl border p-4 transition-colors duration-200 ${
+                locked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+              } ${on ? 'border-accent bg-surface-2' : 'border-line hover:border-line-strong'}`}
             >
               <input
                 type="radio"
                 name={`${titleId}-mode`}
                 value={mode}
                 checked={on}
+                disabled={locked !== null}
                 onChange={() => onChoose(mode)}
                 className="peer sr-only"
               />
@@ -526,7 +534,15 @@ function ModeChoice({
                   {on ? <Check className="size-3" /> : null}
                 </span>
               </span>
-              <span className="text-sm font-medium text-fg">{label}</span>
+              <span className="flex items-center gap-2 text-sm font-medium text-fg">
+                {label}
+                {locked ? (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-line-strong px-2 py-px text-[0.6875rem] font-medium text-accent">
+                    <Lock aria-hidden="true" className="size-3" />
+                    {t('plan.locked', { tier: t(`plan.tier.${locked}`) })}
+                  </span>
+                ) : null}
+              </span>
               <span className="text-[0.8125rem] leading-5">{hint}</span>
               <span
                 aria-hidden="true"

@@ -96,7 +96,10 @@ jobs:
 
       # WHOP_ENV, WHOP_APP_ID and OPERATOR_COMPANY_ID come from wrangler.toml (the sandbox) unless
       # the variables are set (always for production, checked above). Production is its own
-      # Worker, « stayput-app », beside the sandbox's « stayput ».
+      # Worker, « stayput-app », beside the sandbox's « stayput ». The plans' settings (decision
+      # of 2026-10-10: StayPut's products, the founders' plan, the checkout links, the admin) are
+      # repository variables, none set leaving plans off; FOUNDER_FALLBACK_MODE and BETA_END are
+      # set in Cloudflare's dashboard, kept by deployments (keep_vars).
       - name: Publish the Worker
         id: publish
         working-directory: apps/worker
@@ -104,6 +107,12 @@ jobs:
           WHOP_APP_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_APP_ID' || 'WHOP_APP_ID'] }}
           WHOP_ENV: ${{ inputs.target == 'production' && 'production' || vars.WHOP_ENV }}
           OPERATOR_COMPANY_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_OPERATOR_COMPANY_ID' || 'OPERATOR_COMPANY_ID'] }}
+          WHOP_PROD_PRO: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_PROD_PRO' || 'WHOP_PROD_PRO'] }}
+          WHOP_PROD_SCALE: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_PROD_SCALE' || 'WHOP_PROD_SCALE'] }}
+          WHOP_PLAN_SCALE_FOUNDER: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_PLAN_SCALE_FOUNDER' || 'WHOP_PLAN_SCALE_FOUNDER'] }}
+          CHECKOUT_URL_PRO: ${{ vars[inputs.target == 'production' && 'PRODUCTION_CHECKOUT_URL_PRO' || 'CHECKOUT_URL_PRO'] }}
+          CHECKOUT_URL_SCALE: ${{ vars[inputs.target == 'production' && 'PRODUCTION_CHECKOUT_URL_SCALE' || 'CHECKOUT_URL_SCALE'] }}
+          ADMIN_USER_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_ADMIN_USER_ID' || 'ADMIN_USER_ID'] }}
         run: |
           # wrangler's failure stops the deployment: through tee alone, its refused cron triggers
           # passed unseen (2026-10-07). The Worker's secrets leave the runner however it ends.
@@ -115,6 +124,13 @@ jobs:
           if [ -n "$OPERATOR_COMPANY_ID" ]; then
             overrides+=(--var "OPERATOR_COMPANY_ID:$OPERATOR_COMPANY_ID")
           fi
+          # The plans: each setting given goes along (wrangler prints its variables: the admin's
+          # id stays out of the public log).
+          if [ -n "$ADMIN_USER_ID" ]; then echo "::add-mask::$ADMIN_USER_ID"; fi
+          for name in WHOP_PROD_PRO WHOP_PROD_SCALE WHOP_PLAN_SCALE_FOUNDER CHECKOUT_URL_PRO \
+            CHECKOUT_URL_SCALE ADMIN_USER_ID; do
+            if [ -n "${!name}" ]; then overrides+=(--var "$name:${!name}"); fi
+          done
           if [ "$STAYPUT_TARGET" = production ]; then overrides+=(--name stayput-app); fi
           npx wrangler deploy --secrets-file "$RUNNER_TEMP/secrets.json" "${overrides[@]}" |
             tee "$RUNNER_TEMP/deploy.log"

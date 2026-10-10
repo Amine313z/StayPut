@@ -21,6 +21,7 @@ import type {
   SignalPlatform,
 } from './risk';
 import type { MessageAction, MessageTemplate, TemplateLocale } from './templates';
+import type { PlanView } from './plans';
 
 /**
  * The shapes the Worker's API returns and the frontend reads. Both sides import them from here,
@@ -57,6 +58,8 @@ export type ApiErrorCode =
   /** The request clashes with the current state (an offer already open for this member). */
   | 'conflict'
   | 'payload_too_large'
+  /** The community's plan does not open this (HTTP 402): the body says which level does. */
+  | 'payment_required'
   | 'whop_unavailable'
   | 'not_configured'
   | 'internal';
@@ -80,6 +83,10 @@ export interface CreatorSession {
    * page (SPEC Phase 8.5).
    */
   operator: boolean;
+  /** The community's plan: its level, its trial, Free's count, where to subscribe. */
+  plan: PlanView;
+  /** The founder (ADMIN_USER_ID): the admin page shows. */
+  admin: boolean;
 }
 
 /** GET /api/member/:experienceId/session */
@@ -554,6 +561,13 @@ export interface InsightsOverview {
   reasons: { reason: ExitReason; count: number }[];
   /** The last 30 days in the community's calendar, the oldest first. */
   activity: ActivityDay[];
+  /**
+   * What the plan opens of the forecast (plans.ts): its one figure (Free: `forecastPreview`, the
+   * figures above left empty), the whole forecast (Pro), its scenarios too (Scale).
+   */
+  forecastAccess?: 'preview' | 'full' | 'scenarios';
+  /** Free: what acting adds over 90 days, at full reach; null otherwise. */
+  forecastPreview?: number | null;
 }
 
 /** A day of the members' activity: what they did (messages, reactions, posts, lessons). */

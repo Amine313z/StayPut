@@ -58,6 +58,7 @@ import type { Env } from '../src/env';
 import { telegramWebhookSecret, type TelegramClient } from '../src/telegram';
 import { member, membership, message, page, payment, variant } from './fixtures/whop';
 import { createTestDb, type TestDb } from './helpers/db';
+import { OPEN_PLAN_VIEW } from './helpers/plans';
 
 // The real time (to the second): RLS checks a creator's access against the database's own
 // clock (is_company_admin), so a fixed date would make these tests expire.
@@ -439,6 +440,8 @@ describe('GET /api/creator/:companyId/session', () => {
       testMode: false,
       // Not the operator's own community: no status page.
       operator: false,
+      plan: OPEN_PLAN_VIEW,
+      admin: false,
     });
     const companies = await withUser(t.db, 'user_alice', (tx) =>
       tx.query<{ id: string; status: string }>('select id, status from stayput.companies'),

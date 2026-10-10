@@ -45,6 +45,15 @@ import {
   type ShareAnswer,
   type SignInMethod,
   type SyncRun,
+  allows,
+  automationChanged,
+  FOUNDER_PLACES,
+  FOUNDER_STATUSES,
+  type FounderStatus,
+  requiredTier,
+  RULE_FEATURES,
+  type Feature,
+  type Tier,
 } from '@stayput/core';
 import {
   USER_TOKEN_HEADER,
@@ -90,13 +99,31 @@ import { readDashboard, readFeed } from './dashboard';
 import { createPostgresDb, type ClosableDb, type Db, type TransactionalDb } from './db';
 import { createDiscordClient, type DiscordClient } from './discord';
 import { readConfig, type Config, type Env } from './env';
-import { API_HEADERS, apiError, readBytesCapped, readCapped } from './http';
+import { API_HEADERS, apiError, paymentRequired, readBytesCapped, readCapped } from './http';
+import {
+  OPEN_PLAN,
+  companyPlan,
+  giveBackManualActions,
+  dashboardAt,
+  dayWithin,
+  readAdmin,
+  insightsAt,
+  onMembershipEvent,
+  overviewAt,
+  planView,
+  platformAt,
+  planningAt,
+  storedTier,
+  takeManualActions,
+  type CompanyPlan,
+} from './plans';
 import {
   DISCORD_CALLBACK_PATH,
   TELEGRAM_WEBHOOK_PATH,
   chooseDiscordChannels,
   companyOfExperience,
   connectDiscordServer,
+  serverRoom,
   disconnectDiscordServer,
   disconnectTelegramGroup,
   discordAvailable,
@@ -293,6 +320,8 @@ type AppEnv = {
     experienceId: string;
     /** Set by an audited route's handler: what the change was about (ids, counts, settings). */
     audit: Record<string, unknown> | undefined;
+    /** The community's plan, read once per request (planOf). */
+    plan: CompanyPlan | undefined;
   };
 };
 
@@ -502,6 +531,72 @@ export function createApp(deps: AppDeps) {
     await next();
     return undefined;
   });
+
+  /**
+   * The community's plan (plans.ts), read once per request: from the database while fresh, from
+   * Whop past 5 minutes; the last level known when Whop does not answer.
+   */
+  async function planOf(c: Context<AppEnv>): Promise<CompanyPlan> {
+    const known = c.get('plan');
+    if (known) return known;
+    const db = c.get('db');
+    const config = c.get('config');
+    const plan = db
+      ? await companyPlan(db, deps.whopClient(config), config.plans, c.get('companyId'), deps.now())
+      : OPEN_PLAN;
+    c.set('plan', plan);
+    return plan;
+  }
+
+  /** Where to subscribe to `tier`: its visible plan's checkout link (never the founders'). */
+  function checkoutFor(config: Config, tier: Tier): string | null {
+    return tier === 'scale'
+      ? config.plans.checkout.scale
+      : tier === 'pro'
+        ? config.plans.checkout.pro
+        : null;
+  }
+
+  /** 402 for what the plan does not open, with the level that does and where to get it. */
+  function refusedFor(c: Context<AppEnv>, tier: Tier, message?: string): Response {
+    return paymentRequired(tier, checkoutFor(c.get('config'), tier), message);
+  }
+
+  /** The route is the plan's: 402 below the level that opens `feature`. */
+  function requireFeature(feature: Feature) {
+    return createMiddleware<AppEnv>(async (c, next) => {
+      const plan = await planOf(c);
+      if (!allows(plan.tier, feature)) return refusedFor(c, requiredTier(feature));
+      await next();
+      return undefined;
+    });
+  }
+
+  /**
+   * Free's manual actions (Message, Pause, Offer): `count` taken from the month's, all or none,
+   * else a 402 that says Pro opens more. Answers what to give back when fewer were made.
+   */
+  async function takeActions(
+    c: Context<AppEnv>,
+    db: Db,
+    count: number,
+  ): Promise<Response | ((made: number) => Promise<void>)> {
+    const plan = await planOf(c);
+    const companyId = c.get('companyId');
+    const now = deps.now();
+    const taken =
+      plan.source === 'off' ? null : await takeManualActions(db, companyId, plan.tier, count, now);
+    if (taken && !taken.ok) {
+      return refusedFor(
+        c,
+        'pro',
+        `${taken.used} of ${taken.limit} manual actions used this month: Pro has no limit`,
+      );
+    }
+    return async (made) => {
+      if (taken && made < count) await giveBackManualActions(db, companyId, count - made, now);
+    };
+  }
 
   /**
    * The community's journal (SPEC 3, `audit_log`: every sensitive action, who, what, when),
@@ -781,12 +876,94 @@ export function createApp(deps: AppDeps) {
       defer(c, db.close());
       throw error;
     }
+    // A membership of StayPut's own plans: the owner's communities read their level again at
+    // once (plans.ts). Never in the way of filing the delivery.
+    try {
+      await onMembershipEvent(db, config.plans, event, now);
+    } catch (error) {
+      console.error('Plan webhook not applied:', describe(error));
+    }
     // Filed after the answer (SPEC Phase 2, 1); the cron retries a delivery that fails.
     defer(
       c,
       fileWebhook(db, verification.id, now).finally(() => db.close()),
     );
     return c.json({ received: true, duplicate: stored.length === 0 });
+  });
+
+  /** The admin page (decision of 2026-10-10): the founder alone, ADMIN_USER_ID. */
+  const requireAdmin = createMiddleware<AppEnv>(async (c, next) => {
+    const admin = c.get('config').plans.adminUserId;
+    if (!admin || c.get('userId') !== admin) return apiError('not_found', 'no such page');
+    await next();
+    return undefined;
+  });
+
+  app.get('/api/admin/companies', authenticate, requireAdmin, withDb, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    return c.json(await readAdmin(db, c.get('config').plans));
+  });
+
+  /** A community invited to the founders' plan, while places are left. */
+  app.post('/api/admin/founders', authenticate, requireAdmin, withDb, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const body = (await c.req.json<unknown>().catch(() => null)) as {
+      companyId?: unknown;
+      note?: unknown;
+    } | null;
+    if (
+      !isCompanyId(body?.companyId) ||
+      (body.note !== undefined && typeof body.note !== 'string')
+    ) {
+      return apiError('invalid_request', 'expected { companyId: biz_…, note? }');
+    }
+    const [row] = await db.query<{ made: { ok: boolean; error?: string } }>(
+      'select stayput.invite_founder($1, $2, $3, $4::timestamptz) as made',
+      [body.companyId, body.note ?? null, FOUNDER_PLACES, deps.now().toISOString()],
+    );
+    if (!row?.made.ok) {
+      return apiError('conflict', row?.made.error === 'full' ? 'no place left' : 'already there');
+    }
+    return c.json(await readAdmin(db, c.get('config').plans));
+  });
+
+  /** A founder's status or note changed, or the founder taken out of the registry. */
+  app.put('/api/admin/founders/:companyId', authenticate, requireAdmin, withDb, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const companyId = c.req.param('companyId');
+    const body = (await c.req.json<unknown>().catch(() => null)) as {
+      status?: unknown;
+      note?: unknown;
+    } | null;
+    const status = body?.status;
+    if (
+      !isCompanyId(companyId) ||
+      (status !== undefined && !FOUNDER_STATUSES.includes(status as FounderStatus)) ||
+      (body?.note !== undefined && body.note !== null && typeof body.note !== 'string')
+    ) {
+      return apiError('invalid_request', 'expected { status?, note? }');
+    }
+    const rows = await db.query(
+      `update stayput.founders
+          set status = coalesce($2, status),
+              note = case when $3 then nullif(btrim(left($4, 500)), '') else note end
+        where company_id = $1 returning company_id`,
+      [companyId, status ?? null, body?.note !== undefined, (body?.note as string | null) ?? null],
+    );
+    if (rows.length === 0) return apiError('not_found', 'not in the registry');
+    return c.json(await readAdmin(db, c.get('config').plans));
+  });
+
+  app.delete('/api/admin/founders/:companyId', authenticate, requireAdmin, withDb, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const companyId = c.req.param('companyId');
+    if (!isCompanyId(companyId)) return apiError('invalid_request', 'expected a biz_… id');
+    await db.query('delete from stayput.founders where company_id = $1', [companyId]);
+    return c.json(await readAdmin(db, c.get('config').plans));
   });
 
   app.get('/api/creator/:companyId/session', authenticate, withDb, requireCreator, async (c) => {
@@ -815,6 +992,22 @@ export function createApp(deps: AppDeps) {
       companyLogo: company.logo,
       testMode: company.testMode,
       operator: companyId === c.get('config').operatorCompanyId,
+      plan: db
+        ? await planView(db, c.get('config').plans, companyId, await planOf(c), deps.now(), {
+            whop: deps.whopClient(c.get('config')),
+            whopAppId: c.get('config').appId,
+          })
+        : {
+            tier: OPEN_PLAN.tier,
+            source: OPEN_PLAN.source,
+            trialEndsAt: null,
+            founder: null,
+            manualActions: null,
+            checkout: c.get('config').plans.checkout,
+            whopAppId: c.get('config').appId,
+            stale: false,
+          },
+      admin: userId === c.get('config').plans.adminUserId,
     };
     return c.json(session);
   });
@@ -929,7 +1122,7 @@ export function createApp(deps: AppDeps) {
     if (!db) return apiError('not_configured', 'the database is not configured');
     const view = await readDashboard(db, c.get('userId'), c.get('companyId'), deps.now());
     if (!view) return apiError('not_found', 'no such company');
-    return c.json(view);
+    return c.json(dashboardAt(view, (await planOf(c)).tier));
   });
 
   /** What just happened in the community, and what StayPut did: the live feed. */
@@ -957,7 +1150,12 @@ export function createApp(deps: AppDeps) {
   app.get('/api/creator/:companyId/insights', authenticate, withDb, requireCreator, async (c) => {
     const db = c.get('db');
     if (!db) return apiError('not_configured', 'the database is not configured');
-    return c.json(await readInsights(db, c.get('userId'), c.get('companyId')));
+    return c.json(
+      insightsAt(
+        await readInsights(db, c.get('userId'), c.get('companyId')),
+        (await planOf(c)).tier,
+      ),
+    );
   });
 
   /**
@@ -978,7 +1176,9 @@ export function createApp(deps: AppDeps) {
         c.get('companyId'),
         deps.now(),
       );
-      return overview ? c.json(overview) : apiError('not_found', 'no such company');
+      return overview
+        ? c.json(overviewAt(overview, (await planOf(c)).tier))
+        : apiError('not_found', 'no such company');
     },
   );
 
@@ -1182,6 +1382,9 @@ export function createApp(deps: AppDeps) {
       const body = await c.req.json<unknown>().catch(() => null);
       const enabled = (body as { enabled?: unknown } | null)?.enabled;
       if (typeof enabled !== 'boolean') return apiError('invalid_request', 'expected { enabled }');
+      if (enabled && !allows((await planOf(c)).tier, 'weekly_report')) {
+        return refusedFor(c, requiredTier('weekly_report'));
+      }
       await saveWeeklyReportSetting(db, c.get('companyId'), enabled);
       c.set('audit', { enabled });
       const view = await readWeeklyReports(db, c.get('userId'), c.get('companyId'), deps.now());
@@ -1506,6 +1709,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    requireFeature('prepared_actions'),
     audited('actions.approve'),
     async (c) => {
       const db = c.get('db');
@@ -1582,6 +1786,18 @@ export function createApp(deps: AppDeps) {
       const settings = validActionSettings(await c.req.json<unknown>().catch(() => null));
       if (!settings) return apiError('invalid_request', 'expected the action settings');
       const companyId = c.get('companyId');
+      // The follow-up automation's settings are Pro's, the autopilot Scale's; the language, the
+      // time zone, test mode and the stop are everyone's.
+      const plan = await planOf(c);
+      if (settings.mode === 'auto' && !allows(plan.tier, 'autopilot')) {
+        return refusedFor(c, requiredTier('autopilot'));
+      }
+      if (!allows(plan.tier, 'automations')) {
+        const current = await readActionSettings(db, c.get('userId'), companyId);
+        if (current && automationChanged(current, settings)) {
+          return refusedFor(c, requiredTier('automations'));
+        }
+      }
       if (settings.timezone) {
         const zone = await setTimezone(db, companyId, settings.timezone, false);
         if (!zone) return apiError('invalid_request', 'unknown time zone');
@@ -1631,6 +1847,10 @@ export function createApp(deps: AppDeps) {
       const on = (await c.req.json<unknown>().catch(() => null)) as { on?: unknown } | null;
       if (typeof on?.on !== 'boolean')
         return apiError('invalid_request', 'expected { on: boolean }');
+      // Turning a rule on is its plan's; turning one off, everyone's.
+      if (on.on && !allows((await planOf(c)).tier, RULE_FEATURES[rule])) {
+        return refusedFor(c, requiredTier(RULE_FEATURES[rule]));
+      }
       const companyId = c.get('companyId');
       await db.query('select stayput.set_rule($1, $2, $3)', [companyId, rule, on.on]);
       c.set('audit', { rule, on: on.on });
@@ -1721,6 +1941,9 @@ export function createApp(deps: AppDeps) {
       if (mode !== 'auto' && mode !== 'manual') {
         return apiError('invalid_request', 'expected { mode: "auto" | "manual" }');
       }
+      if (mode === 'auto' && !allows((await planOf(c)).tier, 'autopilot')) {
+        return refusedFor(c, requiredTier('autopilot'));
+      }
       const companyId = c.get('companyId');
       const current = await readActionSettings(db, c.get('userId'), companyId);
       if (!current) return apiError('not_found', 'no settings for this company');
@@ -1799,11 +2022,15 @@ export function createApp(deps: AppDeps) {
       }
       const companyId = c.get('companyId');
       const now = deps.now();
+      const asked = new Set(ids as string[]).size;
+      const settle = await takeActions(c, db, asked);
+      if (settle instanceof Response) return settle;
       const [row] = await db.query<{ queued: number }>(
         'select stayput.creator_messages($1, $2, $3, $4::timestamptz) as queued',
         [companyId, (ids as string[]).join(','), c.get('userId'), now.toISOString()],
       );
-      c.set('audit', { members: new Set(ids as string[]).size, queued: row?.queued ?? 0 });
+      await settle(row?.queued ?? 0);
+      c.set('audit', { members: asked, queued: row?.queued ?? 0 });
       runActionsInBackground(c, companyId, now);
       return c.json({ queued: row?.queued ?? 0 } satisfies CreatorMessagesResult);
     },
@@ -1835,11 +2062,14 @@ export function createApp(deps: AppDeps) {
       }
       const companyId = c.get('companyId');
       const now = deps.now();
+      const settle = await takeActions(c, db, 1);
+      if (settle instanceof Response) return settle;
       const [row] = await db.query<{ made: Record<string, unknown> }>(
         'select stayput.create_creator_note($1, $2, $3, $4, $5, $6::timestamptz) as made',
         [companyId, memberId, note.title, note.body, c.get('userId'), now.toISOString()],
       );
       const made = row?.made;
+      await settle(made && typeof made.actionId === 'string' ? 1 : 0);
       if (!made || typeof made.error === 'string' || typeof made.actionId !== 'string') {
         return made?.error === 'not_a_member'
           ? apiError('not_found', 'no such member here')
@@ -1854,7 +2084,12 @@ export function createApp(deps: AppDeps) {
       const work = own ?? db;
       const sending = (async () => {
         try {
-          await prepareActions(work, companyId, now, { memberSpace: c.get('config').memberSpace });
+          const tier = c.get('plan')?.tier ?? 'scale';
+          await prepareActions(work, companyId, now, {
+            memberSpace: c.get('config').memberSpace,
+            automations: allows(tier, 'automations'),
+            winback: allows(tier, 'winback'),
+          });
           const whop = deps.whopClient(c.get('config'), {
             maxRetries: 0,
             timeoutMs: NOTE_WHOP_TIMEOUT_MS,
@@ -1931,11 +2166,14 @@ export function createApp(deps: AppDeps) {
       }
       const companyId = c.get('companyId');
       const now = deps.now();
+      const settle = await takeActions(c, db, 1);
+      if (settle instanceof Response) return settle;
       const [row] = await db.query<{ made: { error?: string } & Partial<CreatorOfferMade> }>(
         'select stayput.create_creator_offer($1, $2, $3, $4, $5::timestamptz) as made',
         [companyId, memberId, kind, c.get('userId'), now.toISOString()],
       );
       const made = row?.made;
+      await settle(made && !made.error ? 1 : 0);
       if (!made || made.error) {
         return made?.error === 'not_a_member'
           ? apiError('not_found', 'no such member here')
@@ -2015,6 +2253,8 @@ export function createApp(deps: AppDeps) {
       }
       const companyId = c.get('companyId');
       const now = deps.now();
+      const settle = await takeActions(c, db, new Set(ids as string[]).size);
+      if (settle instanceof Response) return settle;
       let made = 0;
       for (const memberId of new Set(ids as string[])) {
         const [row] = await db.query<{ made: { error?: string } | null }>(
@@ -2023,6 +2263,7 @@ export function createApp(deps: AppDeps) {
         );
         if (row?.made && !row.made.error) made += 1;
       }
+      await settle(made);
       c.set('audit', { kind, made, refused: new Set(ids as string[]).size - made });
       if (made > 0) runActionsInBackground(c, companyId, now);
       return c.json({
@@ -2043,6 +2284,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    requireFeature('payment_recovery'),
     audited('payments.retry'),
     async (c) => {
       const db = c.get('db');
@@ -2066,8 +2308,16 @@ export function createApp(deps: AppDeps) {
    */
   function runActionsInBackground(c: Context<AppEnv>, companyId: string, now: Date): void {
     const whop = deps.whopClient(c.get('config'));
+    // The plan read before the request answers: the background has its own connection.
+    const tier = c.get('plan')?.tier;
     inBackground(c, 'Actions', async (work) => {
-      await prepareActions(work, companyId, now, { memberSpace: c.get('config').memberSpace });
+      const plan =
+        tier ?? (await companyPlan(work, whop, c.get('config').plans, companyId, now)).tier;
+      await prepareActions(work, companyId, now, {
+        memberSpace: c.get('config').memberSpace,
+        automations: allows(plan, 'automations'),
+        winback: allows(plan, 'winback'),
+      });
       await executeDueActions(work, whop, now, REQUEST_ACTION_BATCH);
     });
   }
@@ -2279,7 +2529,9 @@ export function createApp(deps: AppDeps) {
         platform,
         deps.now(),
       );
-      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+      return view
+        ? c.json(platformAt(view, (await planOf(c)).tier))
+        : apiError('forbidden', 'not a team member of this company');
     },
   );
 
@@ -2296,6 +2548,11 @@ export function createApp(deps: AppDeps) {
       const day = c.req.param('day');
       if (!isDashboardPlatform(platform)) return apiError('not_found', 'no such platform');
       if (!isDay(day)) return apiError('invalid_request', 'expected a day, yyyy-mm-dd');
+      // A day older than the plan's history (Free: 7 days) is Pro's.
+      const plan = await planOf(c);
+      if (!dayWithin(day, deps.now().toISOString().slice(0, 10), plan.tier)) {
+        return refusedFor(c, 'pro', 'this day is older than the history of this plan');
+      }
       const view = await readPlatformDay(
         db,
         c.get('userId'),
@@ -2403,6 +2660,7 @@ export function createApp(deps: AppDeps) {
     authenticate,
     withDb,
     requireCreator,
+    requireFeature('winback'),
     audited('alumni.create'),
     async (c) => {
       const db = c.get('db');
@@ -2520,6 +2778,16 @@ export function createApp(deps: AppDeps) {
     const db = deps.openDb(c.env);
     if (!code || !db) return done({ status: 'failed', reason: 'error' });
     try {
+      // The plan's count of servers (Free one, Pro one per platform, Scale as many as it likes).
+      const guild = c.req.query('guild_id');
+      const full = await serverRoom(
+        db,
+        await storedTier(db, config.plans, install.companyId),
+        install.companyId,
+        'discord',
+        guild && /^[0-9]{5,25}$/.test(guild) ? guild : null,
+      );
+      if (full) return done({ status: 'failed', reason: 'plan' });
       const server = await connectDiscordServer(db, discord, {
         companyId: install.companyId,
         userId: install.userId,
@@ -2596,6 +2864,14 @@ export function createApp(deps: AppDeps) {
           () => null,
         );
       const next = await fileTelegramUpdate(db, config.telegram.botToken, update, deps.now(), {
+        mayConnect: async (companyId, chatId) =>
+          (await serverRoom(
+            db,
+            await storedTier(db, config.plans, companyId),
+            companyId,
+            'telegram',
+            chatId,
+          )) === null,
         botUsername,
         memberSpace: config.memberSpace,
       });
@@ -2761,7 +3037,10 @@ export function createApp(deps: AppDeps) {
       }
       if (!decided) return apiError('not_found', 'no offer waiting for an answer');
       if (decided.actionId) {
-        await prepareActions(db, companyId, now, { memberSpace: c.get('config').memberSpace });
+        await prepareActions(db, companyId, now, {
+          memberSpace: c.get('config').memberSpace,
+          ...planningAt(await storedTier(db, c.get('config').plans, companyId)),
+        });
         await executeAction(db, deps.whopClient(c.get('config')), decided.actionId, now);
       }
       return c.json(await retentionFor(c, db, companyId, now));
@@ -2798,7 +3077,10 @@ export function createApp(deps: AppDeps) {
       );
       if (!decided) return apiError('not_found', 'no offer waiting for an answer');
       if (decided.actionId) {
-        await prepareActions(db, companyId, now, { memberSpace: c.get('config').memberSpace });
+        await prepareActions(db, companyId, now, {
+          memberSpace: c.get('config').memberSpace,
+          ...planningAt(await storedTier(db, c.get('config').plans, companyId)),
+        });
         await executeAction(db, deps.whopClient(c.get('config')), decided.actionId, now);
       }
       return c.json(await retentionFor(c, db, companyId, now));
@@ -2947,7 +3229,10 @@ export function createApp(deps: AppDeps) {
         now,
       );
       if (earned.length > 0) {
-        await prepareActions(db, companyId, now, { memberSpace: c.get('config').memberSpace });
+        await prepareActions(db, companyId, now, {
+          memberSpace: c.get('config').memberSpace,
+          ...planningAt(await storedTier(db, c.get('config').plans, companyId)),
+        });
         const whop = deps.whopClient(c.get('config'));
         for (const action of earned) {
           if ((await executeAction(db, whop, action.id, now)) === 'sent') earnedDays += action.days;
@@ -2990,7 +3275,10 @@ export function createApp(deps: AppDeps) {
       const shared = await shareMilestone(db, companyId, c.get('userId'), share, now);
       if (!shared) return apiError('not_found', 'nothing to share there');
       if (shared === 'duplicate') return c.json({ status: 'duplicate' } satisfies ShareAnswer);
-      await prepareActions(db, companyId, now, { memberSpace: c.get('config').memberSpace });
+      await prepareActions(db, companyId, now, {
+        memberSpace: c.get('config').memberSpace,
+        ...planningAt(await storedTier(db, c.get('config').plans, companyId)),
+      });
       const [row] = await db.query<{ status: string }>(
         'select status from stayput.actions where id = $1',
         [shared.id],

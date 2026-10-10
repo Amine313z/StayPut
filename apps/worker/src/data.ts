@@ -53,10 +53,13 @@ export const EXPORTED_TABLES = [
 /** The tables with a `company_id` the export leaves out, and why. */
 export const NOT_EXPORTED: Readonly<Record<string, string>> = {
   company_admins: 'who on the team opened StayPut: in the export as `team`',
+  company_plans: 'the community’s StayPut plan, as Whop tells it: StayPut’s own billing state',
   company_sync: 'the Worker’s own bookkeeping of its passes',
   erased_people: 'fingerprints of the people deleted at the community’s request: nothing readable',
+  founders: 'StayPut’s operator’s registry of founders, not the community’s data',
   error_log:
     'StayPut’s own errors (no person, no secret), kept 30 days for its operator: deleted with the community',
+  manual_action_counts: 'how many manual actions Free used this month: a counter, nothing personal',
   pending_activity: 'messages waiting a few minutes for their member, never kept',
   webhook_events: 'Whop’s deliveries without their personal fields, kept 7 days for replays',
 };

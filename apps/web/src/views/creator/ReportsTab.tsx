@@ -13,6 +13,7 @@ import { Skeleton } from '../../ui/Skeleton';
 import { Switch } from '../../ui/Switch';
 import { useToast } from '../../ui/Toast';
 import { useCreatorData } from '../CreatorView';
+import { Locked } from '../../components/Plans';
 
 /**
  * Analytics › Reports (SPEC Phase 6.9): the Monday report, every Monday at 8:00 in the community's
@@ -21,6 +22,15 @@ import { useCreatorData } from '../CreatorView';
  * members left, the week's priority.
  */
 export function ReportsTab() {
+  // The Monday report is Pro's (plans.ts).
+  return (
+    <Locked feature="weekly_report">
+      <Reports />
+    </Locked>
+  );
+}
+
+function Reports() {
   const { t } = useI18n();
   const { api } = useCreatorData();
   const { state, retry } = useApi<WeeklyReportsView>(`${api}/reports`);

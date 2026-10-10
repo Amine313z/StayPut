@@ -7,12 +7,14 @@ import type {
   MemberRow,
   MembersPage,
   PriorityAction,
+  Tier,
 } from '@stayput/core';
 import {
   ArrowRight,
   CheckCheck,
   CircleCheck,
   LoaderCircle,
+  Lock,
   PauseCircle,
   RotateCw,
   Send,
@@ -32,10 +34,12 @@ import { useGuide } from '../../components/guide/context';
 import { Welcome } from '../../components/guide/Welcome';
 import { MemberActions, failureText } from '../../components/MemberActions';
 import { MemberListRow } from '../../components/MemberListRow';
+import { useActionsSpent } from '../../components/Plans';
 import { attentionReasons } from '../../components/MemberRows';
 import { LEVELS } from '../../components/Risk';
 import { ErrorPanel } from '../../components/Status';
 import { useI18n } from '../../i18n';
+import { usePlan } from '../../plans';
 import { URGENT_MS, monthlyOf, unpaidSince } from '../../members';
 import { STAGGER, ease, itemVariants } from '../../motion';
 import { reasonText } from '../../risk-text';
@@ -280,7 +284,10 @@ function useFollowingGlow() {
 function BalanceHero({ view }: { view: DashboardView | null }) {
   const { t, plural, number } = useI18n();
   const titleId = useId();
-  const [period, setPeriod] = useState<Period>('30');
+  // Free's history is its last 7 days (plans.ts): 30 and 90 offer Pro.
+  const { on, plan, ask } = usePlan();
+  const short = on && plan.tier === 'free';
+  const [period, setPeriod] = useState<Period>(short ? '7' : '30');
   const money = useMoney(view?.currency ?? null);
   const { glow, onPointerMove, onPointerLeave } = useFollowingGlow();
   const monthTotal = view?.currency ? view.saved.thisMonth.direct : null;
@@ -329,7 +336,7 @@ function BalanceHero({ view }: { view: DashboardView | null }) {
           look="pills"
           label={t('dash.chart.period')}
           value={period}
-          onChange={setPeriod}
+          onChange={(next) => (short && next !== '7' ? ask('pro') : setPeriod(next))}
           options={PERIODS.map((value) => ({
             value,
             label: plural('dash.chart.days', Number(value)),
@@ -518,8 +525,25 @@ function Priority({
   const toast = useToast();
   const titleId = useId();
   const money = useMoney(view?.currency ?? null);
+  const { lockedTo, ask, countAction } = usePlan();
+  const spent = useActionsSpent();
   if (!view) return <Skeleton className="h-24 w-full rounded-xl" />;
   const priority = view.priority;
+  // What the plan does not open shows the same button, with a lock: pressed, it offers the plan.
+  const gated = (tier: Tier | null, label: string, node: ReactNode) =>
+    tier ? (
+      <button
+        type="button"
+        data-plan-lock={tier}
+        onClick={() => ask(tier)}
+        className={buttonClass('primary', 'md')}
+      >
+        <Lock aria-hidden="true" className="size-4" />
+        {label}
+      </button>
+    ) : (
+      node
+    );
   const sent = (title: string, body: string) =>
     toast({ title, body: testMode ? t('dash.toast.simulated') : body });
   const fail = (error: unknown) => toast({ tone: 'error', title: failureText(error, t) });
@@ -541,7 +565,9 @@ function Priority({
             {t('dash.priority.reviewFirst')}
           </Link>
         );
-        button = (
+        button = gated(
+          lockedTo('prepared_actions'),
+          t('dash.priority.approve.button'),
           <ActionButton
             stayDone
             icon={<CheckCheck aria-hidden="true" className="size-4" />}
@@ -553,12 +579,14 @@ function Priority({
             onError={fail}
           >
             {t('dash.priority.approve.button')}
-          </ActionButton>
+          </ActionButton>,
         );
         break;
       case 'retry':
         sentence = plural('dash.priority.retry.sentence', priority.payments, { amount });
-        button = (
+        button = gated(
+          lockedTo('payment_recovery'),
+          t('dash.priority.retry.button'),
           <ActionButton
             stayDone
             icon={<RotateCw aria-hidden="true" className="size-4" />}
@@ -572,12 +600,14 @@ function Priority({
             onError={fail}
           >
             {t('dash.priority.retry.button')}
-          </ActionButton>
+          </ActionButton>,
         );
         break;
       case 'pause':
         sentence = plural('dash.priority.pause.sentence', priority.memberIds.length, { amount });
-        button = (
+        button = gated(
+          spent ? 'pro' : null,
+          t('dash.priority.pause.button'),
           <ActionButton
             stayDone
             icon={<PauseCircle aria-hidden="true" className="size-4" />}
@@ -587,6 +617,7 @@ function Priority({
                 kind: 'pause_offer',
               });
               if (result.made > 0) {
+                countAction(result.made);
                 sent(plural('dash.toast.paused', result.made), t('dash.toast.paused.body'));
               } else toast({ title: t('dash.toast.noPause') });
               onDone();
@@ -594,14 +625,16 @@ function Priority({
             onError={fail}
           >
             {t('dash.priority.pause.button')}
-          </ActionButton>
+          </ActionButton>,
         );
         break;
       case 'message':
         sentence = plural('dash.priority.message.sentence', priority.memberIds.length, {
           amount,
         });
-        button = (
+        button = gated(
+          spent ? 'pro' : null,
+          t('dash.priority.message.button'),
           <ActionButton
             stayDone
             icon={<Send aria-hidden="true" className="size-4" />}
@@ -610,6 +643,7 @@ function Priority({
                 memberIds: priority.memberIds,
               });
               if (result.queued > 0) {
+                countAction(result.queued);
                 sent(plural('dash.toast.messaged', result.queued), t('dash.toast.messaged.body'));
               } else toast({ title: t('dash.toast.nothingNew') });
               onDone();
@@ -617,7 +651,7 @@ function Priority({
             onError={fail}
           >
             {t('dash.priority.message.button')}
-          </ActionButton>
+          </ActionButton>,
         );
         break;
       case 'review':

@@ -109,6 +109,15 @@ function creatorSections(): RouteObject[] {
         path: 'status',
         ...screen(() => import('./views/creator/OperatorTab').then((m) => <m.OperatorTab />)),
       },
+      // The plans (decision of 2026-10-10), and the founder's admin page (ADMIN_USER_ID).
+      {
+        path: 'plan',
+        ...screen(() => import('./views/creator/PlanTab').then((m) => <m.PlanTab />)),
+      },
+      {
+        path: 'admin',
+        ...screen(() => import('./views/creator/AdminTab').then((m) => <m.AdminTab />)),
+      },
     ]),
     // The member space: kept, shown only while it is on (features.ts).
     section('space', 'space', [

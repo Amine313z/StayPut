@@ -13,6 +13,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { Link, useLocation, useNavigate } from 'react-router';
 import { TOUR, pageHref, type GuideCard, type Targets } from '../guide';
 import { useI18n } from '../i18n';
+import { ActionsLeft, PlanBadge, PlanBanner, UpgradeDialog } from './Plans';
 import { matchesSearch } from '../members';
 import { ease } from '../motion';
 import { readPreference, writePreference } from '../storage';
@@ -152,6 +153,7 @@ export function CreatorShell({
               {testMode && onTurnOffTestMode ? (
                 <TestModeBanner onTurnOff={onTurnOffTestMode} />
               ) : null}
+              <PlanBanner />
               {children}
             </main>
           </div>
@@ -168,6 +170,7 @@ export function CreatorShell({
       {spot?.kind === 'flash' ? (
         <Flash key={spot.at} targets={spot.targets} onDone={() => setSpot(null)} />
       ) : null}
+      <UpgradeDialog />
     </GuideContext.Provider>
   );
 }
@@ -262,6 +265,9 @@ function TopBar({
             </span>
           ) : null}
         </Link>
+        <PlanBadge />
+        {/* Free's manual actions this month, in sight on every screen (wide screens). */}
+        <ActionsLeft className="hidden shrink-0 lg:block" />
         <div className="ms-auto flex items-center gap-2">
           <MemberSearch root={root} members={members} />
           <button type="button" onClick={onGuide} className={buttonClass('secondary', 'sm')}>

@@ -1291,6 +1291,18 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
       companyLogo: false,
       testMode: false,
       operator: false,
+      // Plans off: the demo opens everything (CreatorView's `?plan=` shows a plan).
+      plan: {
+        tier: 'scale',
+        source: 'off',
+        trialEndsAt: null,
+        founder: null,
+        manualActions: null,
+        checkout: { pro: null, scale: null },
+        whopAppId: null,
+        stale: false,
+      },
+      admin: false,
     },
     members,
     saves: savesMade.map((save) => ({

@@ -9,6 +9,7 @@ import { ButtonLink } from '../ui/Button';
 const REASONS: Record<string, MessageKey> = {
   denied: 'connected.reason.denied',
   expired: 'connected.reason.expired',
+  plan: 'connected.reason.plan',
   unavailable: 'connected.reason.unavailable',
 };
 

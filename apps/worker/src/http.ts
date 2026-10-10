@@ -1,4 +1,4 @@
-import type { ApiErrorBody, ApiErrorCode } from '@stayput/core';
+import type { ApiErrorBody, ApiErrorCode, PaymentRequiredBody, Tier } from '@stayput/core';
 
 const STATUS: Record<ApiErrorCode, number> = {
   unauthenticated: 401,
@@ -7,6 +7,7 @@ const STATUS: Record<ApiErrorCode, number> = {
   not_found: 404,
   conflict: 409,
   payload_too_large: 413,
+  payment_required: 402,
   whop_unavailable: 503,
   not_configured: 503,
   internal: 500,
@@ -20,6 +21,23 @@ export function apiError(
 ): Response {
   const body: ApiErrorBody = { error: { code, message, ...extra } };
   return Response.json(body, { status: STATUS[code] });
+}
+
+/**
+ * What the community's plan does not open: 402, the level that opens it and where to subscribe
+ * to it (decision of 2026-10-10).
+ */
+export function paymentRequired(
+  requiredTier: Tier,
+  checkoutUrl: string | null,
+  message = `the ${requiredTier} plan opens this`,
+): Response {
+  const body: PaymentRequiredBody = {
+    error: { code: 'payment_required', message },
+    requiredTier,
+    checkoutUrl,
+  };
+  return Response.json(body, { status: 402 });
 }
 
 /**

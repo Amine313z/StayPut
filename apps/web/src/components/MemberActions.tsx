@@ -11,6 +11,7 @@ import type { MessageKey } from '@stayput/i18n';
 import { BellOff, Check, Gift, MessageSquareText, PauseCircle, Send } from 'lucide-react';
 import { useId, useState } from 'react';
 import { ApiError, postJson, useApi } from '../api';
+import { usePlan } from '../plans';
 import { useI18n } from '../i18n';
 import { ActionButton } from '../ui/ActionButton';
 import { Badge } from '../ui/Badge';
@@ -19,6 +20,7 @@ import { Dialog } from '../ui/Dialog';
 import { IconTip } from '../ui/IconTip';
 import { Skeleton } from '../ui/Skeleton';
 import { useToast } from '../ui/Toast';
+import { ActionsLeft, useActionsSpent } from './Plans';
 import { FIELD } from './SettingsParts';
 
 /** Why the Worker refused an offer (create_creator_offer), in the creator's words. */
@@ -71,6 +73,10 @@ export function MemberActions({
   const [writing, setWriting] = useState(false);
   const [asking, setAsking] = useState<CreatorOfferKind | null>(null);
   const [offered, setOffered] = useState<CreatorOfferKind | null>(null);
+  // Free's manual actions (plans.tsx): spent, each button offers Pro instead.
+  const { countAction, ask } = usePlan();
+  const spent = useActionsSpent();
+  const guard = (open: () => void) => () => (spent ? ask('pro') : open());
   const name = member.name ?? t('members.unnamed');
   if (member.doNotContact && compact) {
     return (
@@ -101,6 +107,7 @@ export function MemberActions({
       onClose={() => setWriting(false)}
       onSent={(sent) => {
         setWriting(false);
+        if (sent.status !== 'failed') countAction();
         // What Whop did with it, as the Worker read it back: never « sent » before Whop took it.
         const when = relative(new Date(sent.sendAt));
         toast(
@@ -148,6 +155,7 @@ export function MemberActions({
       onMade={(made) => {
         setAsking(null);
         setOffered(made.kind);
+        countAction();
         toast({
           title: t(
             made.kind === 'pause_offer' ? 'dash.toast.offered.pause' : 'dash.toast.offered.promo',
@@ -173,7 +181,7 @@ export function MemberActions({
             variant="ghost"
             size="sm"
             className={square}
-            onClick={() => setWriting(true)}
+            onClick={guard(() => setWriting(true))}
             aria-label={t('dash.act.messageLabel', { name })}
             icon={<MessageSquareText aria-hidden="true" className="size-4" />}
           />
@@ -196,7 +204,7 @@ export function MemberActions({
                 variant="ghost"
                 size="sm"
                 className={square}
-                onClick={() => setAsking('pause_offer')}
+                onClick={guard(() => setAsking('pause_offer'))}
                 aria-label={t('dash.act.pauseLabel', { name })}
                 icon={<PauseCircle aria-hidden="true" className="size-4" />}
               />
@@ -206,7 +214,7 @@ export function MemberActions({
                 variant="ghost"
                 size="sm"
                 className={square}
-                onClick={() => setAsking('promo_offer')}
+                onClick={guard(() => setAsking('promo_offer'))}
                 aria-label={t('dash.act.offerLabel', { name })}
                 icon={<Gift aria-hidden="true" className="size-4" />}
               />
@@ -223,7 +231,7 @@ export function MemberActions({
       <Button
         variant="secondary"
         size="sm"
-        onClick={() => setWriting(true)}
+        onClick={guard(() => setWriting(true))}
         aria-label={t('dash.act.messageLabel', { name })}
         icon={<MessageSquareText aria-hidden="true" className="size-4" />}
       >
@@ -239,7 +247,7 @@ export function MemberActions({
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => setAsking('pause_offer')}
+            onClick={guard(() => setAsking('pause_offer'))}
             aria-label={t('dash.act.pauseLabel', { name })}
             title={t('dash.act.pauseLabel', { name })}
             icon={<PauseCircle aria-hidden="true" className="size-4" />}
@@ -251,7 +259,7 @@ export function MemberActions({
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => setAsking('promo_offer')}
+            onClick={guard(() => setAsking('promo_offer'))}
             aria-label={t('dash.act.offerLabel', { name })}
             title={t('dash.act.offerLabel', { name })}
             icon={<Gift aria-hidden="true" className="size-4" />}
@@ -262,6 +270,7 @@ export function MemberActions({
           </Button>
         </>
       )}
+      {wide ? <ActionsLeft className="basis-full" /> : null}
       {note}
       {dialog}
     </div>

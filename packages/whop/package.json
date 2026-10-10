@@ -11,9 +11,7 @@
   },
   "dependencies": {
     "@stayput/core": "*",
+    "@whop/sdk": "2.0.0",
     "jose": "6.2.12"
-  },
-  "devDependencies": {
-    "@whop/sdk": "2.0.0"
   }
 }

@@ -20,3 +20,4 @@ export * from './weekly';
 export * from './badge';
 export * from './alumni';
 export * from './operations';
+export * from './plans';

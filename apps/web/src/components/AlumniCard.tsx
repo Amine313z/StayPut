@@ -5,11 +5,13 @@ import { useId, useState } from 'react';
 import { ApiError, postJson, useApi } from '../api';
 import { useDemo } from '../demoMode';
 import { useI18n } from '../i18n';
+import { usePlan } from '../plans';
 import { Badge, Notice } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { ExternalButton } from '../ui/ExternalLink';
 import { SecondaryMetric } from '../ui/Metric';
+import { LockTag } from './Plans';
 import { FIELD } from './SettingsParts';
 import { ErrorPanel, Loading } from './Status';
 
@@ -67,8 +69,12 @@ function Alumni({
   const [failed, setFailed] = useState<ApiError | null>(null);
   const offer = view.offer;
   const ready = Boolean(offer?.completedAt && offer.url);
+  // Win-back is Scale's (decision of 2026-10-10): below it, the button offers Scale.
+  const { lockedTo, ask } = usePlan();
+  const locked = lockedTo('winback');
 
   const create = async () => {
+    if (locked) return ask(locked);
     setBusy(true);
     setFailed(null);
     try {
@@ -137,6 +143,7 @@ function Alumni({
         >
           {t(offer ? 'alumni.finish' : 'alumni.create')}
         </Button>
+        {locked ? <LockTag tier={locked} /> : null}
         {failed ? (
           <p role="alert" className="flex items-center gap-1.5 text-sm text-danger">
             <CircleAlert aria-hidden="true" className="size-4 shrink-0" />

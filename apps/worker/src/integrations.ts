@@ -1,10 +1,13 @@
-import type {
-  DiscordChannelChoice,
-  DiscordServerStatus,
-  ExpiringLink,
-  IntegrationsStatus,
-  MemberTelegramStatus,
-  TelegramGroupStatus,
+import {
+  serverAllowed,
+  type DiscordChannelChoice,
+  type DiscordServerStatus,
+  type ExpiringLink,
+  type IntegrationsStatus,
+  type MemberTelegramStatus,
+  type ServerPlatform,
+  type TelegramGroupStatus,
+  type Tier,
 } from '@stayput/core';
 import type { WhopClient } from '@stayput/whop';
 import type { CryptoKey } from 'jose';
@@ -396,7 +399,13 @@ export async function fileTelegramUpdate(
   {
     botUsername = null,
     memberSpace = false,
-  }: { botUsername?: string | null; memberSpace?: boolean } = {},
+    mayConnect = () => Promise.resolve(true),
+  }: {
+    botUsername?: string | null;
+    memberSpace?: boolean;
+    /** Whether the community's plan holds this group (plans.ts): true without plans. */
+    mayConnect?: (companyId: string, chatId: string) => Promise<boolean>;
+  } = {},
 ): Promise<TelegramFollowUp> {
   const action = telegramAction(update, { botUsername });
   const nowSeconds = Math.floor(now.getTime() / 1000);
@@ -438,6 +447,12 @@ export async function fileTelegramUpdate(
       if (!link.companyId) {
         return {
           reply: { chatId: action.chatId, text: botText('groupLinkExpired', language) },
+          leave: action.chatId,
+        };
+      }
+      if (!(await mayConnect(link.companyId, action.chatId))) {
+        return {
+          reply: { chatId: action.chatId, text: botText('groupPlanFull', language) },
           leave: action.chatId,
         };
       }
@@ -582,4 +597,30 @@ function iso(value: Date | string | null): string | null {
 
 function describe(error: unknown): string {
   return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+}
+
+/**
+ * Whether a community at `tier` may connect this Discord server or Telegram group (one it has
+ * already counts once): null when it may, else the level that would let it (serverAllowed).
+ */
+export async function serverRoom(
+  db: Db,
+  tier: Tier,
+  companyId: string,
+  platform: ServerPlatform,
+  serverId: string | null,
+): Promise<Tier | null> {
+  const [row] = await db.query<{ discord: number; telegram: number }>(
+    `select (select count(*)::int from stayput.discord_guilds
+              where company_id = $1 and guild_id is distinct from $2) as discord,
+            (select count(*)::int from stayput.telegram_chats
+              where company_id = $1 and left_at is null and chat_id is distinct from $2)
+              as telegram`,
+    [companyId, serverId],
+  );
+  return serverAllowed(
+    tier,
+    { discord: row?.discord ?? 0, telegram: row?.telegram ?? 0 },
+    platform,
+  );
 }

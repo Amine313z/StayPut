@@ -4305,3 +4305,49 @@ l'accueil et les réglages (migration **0050** : les deux listes de niches du sc
 - **Objectifs proposés** (espace membre, éteint en V1) : atteindre mon bénéfice (en unités),
   améliorer mon ROI (%), respecter ma gestion de bankroll (semaines).
 - Les benchmarks anonymes comptent la niche à part, avec le même seuil de 5 communautés.
+
+## 2026-10-10 — Les forfaits : Free, Pro, Scale et 20 fondateurs
+
+Demande du fondateur (§0–§10). Ce que chaque niveau ouvre tient dans **un seul fichier**,
+`packages/core/src/plans.ts` (`FEATURES`, `LIMITS`) ; le Worker refuse le reste (HTTP **402**
+`{ requiredTier, checkoutUrl }`), la page ne fait que le montrer. Aucun prix ni aucune durée
+dans le code : Whop les porte (plans, essais, paiement).
+
+- **Le niveau est celui du propriétaire de la communauté.** Whop dit qui la possède
+  (`GET /companies/{id}` → `owner_user`, gardé dans `companies.owner_user_id`) ; StayPut demande
+  ensuite à Whop si **ce propriétaire** a accès au produit Scale, sinon Pro (`checkAccess`, un
+  essai en cours compte). Toute l'équipe en hérite : un modérateur n'a rien à payer, et on ne
+  demande jamais son accès à lui. L'équipe reste vérifiée comme avant (`checkAccess` sur `biz_`).
+- **Pro couvre un whop, Scale plusieurs.** Un propriétaire Pro qui installe StayPut sur un
+  deuxième whop : le premier installé garde Pro, le second est Free. Écart à la demande, qui ne
+  le disait pas : sinon Pro ouvrirait gratuitement « plusieurs whops », réservé à Scale.
+- **Cache dans Postgres, pas dans KV** (écart). `company_plans` garde le niveau 5 minutes
+  (`fresh_until`), le dernier niveau connu, et l'échec de Whop (`failed_at`, nouvel essai après
+  1 minute). KV aurait été une deuxième base, sans transaction, et ses écritures sont limitées à
+  1 000/jour sur l'offre gratuite ; les tâches SQL (`due_actions`, rapport du lundi) lisent le
+  niveau là où il est. Un webhook d'abonnement vide `fresh_until` : relu à la requête suivante.
+- **Whop injoignable : le dernier niveau connu reste**, jamais moins ; une communauté jamais lue
+  est Free. Le bandeau le dit (« Whop ne répond pas… »).
+- **Free retient les automatismes, rien n'est effacé.** Les relances que StayPut a planifiées
+  (`approved_by = 'auto'`) attendent dans `actions` (`due_actions` les saute), aucune nouvelle
+  n'est planifiée, pas de rapport du lundi ; celles du créateur partent. Le pilote automatique
+  est à Scale : en dessous, le mode passe en manuel et `autopilot_paused` le note ; de retour
+  sur Scale, il repart. Les données restent entières ; seul l'historique affiché est réduit
+  (7 jours).
+- **5 actions manuelles par mois en Free** (Message, Pause, Offre), comptées par communauté et
+  par mois dans son fuseau (`take_manual_actions` : tout ou rien, jamais au-delà à deux clics
+  simultanés) ; rendues quand l'action n'a pas pu se faire.
+- **Fondateurs : un registre de 20 places** (`founders`), qui n'ouvre rien (le plan Fondateur
+  de Whop ouvre Scale). Invité → abonné à l'achat ; un achat sans invitation (lien qui a fuité)
+  est **signalé** et ne prend pas de place. Le fondateur décide ensuite ; StayPut ne retire
+  jamais un accès que Whop a donné. Plan B : `FOUNDER_FALLBACK_MODE=on` + `BETA_END` donnent
+  Scale au registre ; réglés dans le tableau de bord Cloudflare (`keep_vars = true` : les
+  déploiements les gardent), donc sans redéploiement.
+- **Bandeau fondateur** : « Fondateur · gratuit jusqu'au [date], puis [prix]/mois à vie », la
+  date étant la fin de l'essai du plan Fondateur, le prix lu chez Whop (`GET /plans/{id}`) ;
+  rappels à 7 jours et la veille. Jamais de lien vers le plan Fondateur dans l'écran des forfaits.
+- **Webhook vérifié par le SDK de Whop** (`@whop/sdk` 2.0.0, `unwrapWebhook`), plus le
+  contrôle à la main. Les abonnements à StayPut arrivent par le webhook de l'app (la communauté
+  du développeur a StayPut installé).
+- **Forfaits éteints tant que les deux produits ne sont pas configurés** : tout reste ouvert et
+  rien ne s'affiche, comme avant. Les sept cas d'acceptation : `apps/worker/test/plans.test.ts`.

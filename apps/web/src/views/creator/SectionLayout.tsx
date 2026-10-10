@@ -4,6 +4,7 @@ import { Navigate, Outlet, useLocation } from 'react-router';
 import { memberSpaceEnabled } from '../../features';
 import { useI18n } from '../../i18n';
 import { pageVariants } from '../../motion';
+import { usePlan } from '../../plans';
 import { NavTabs } from '../../ui/Tabs';
 import { useCreatorData, type CreatorData, type TabCounts } from '../CreatorView';
 import { SECTIONS, sectionHref, visibleTabs, type SectionId } from './sections';
@@ -38,7 +39,8 @@ export function SectionLayout({ id }: { id: SectionId }) {
   const tab = location.pathname.startsWith(home)
     ? (location.pathname.slice(home.length).split('/').find(Boolean) ?? '')
     : location.pathname;
-  const tabs = visibleTabs(section, { operator: data.operator });
+  const { on: plans } = usePlan();
+  const tabs = visibleTabs(section, { operator: data.operator, admin: data.admin, plans });
   // The member space's section, while the member space is off: the dashboard instead.
   if (section.memberSpace && !memberSpaceEnabled()) return <Navigate to={data.root} replace />;
   return (

@@ -17,11 +17,13 @@ import type { MessageKey } from '@stayput/i18n';
 import { CircleAlert, CircleCheck, OctagonX, Save, ShieldCheck } from 'lucide-react';
 import { useId, useMemo, useState, type FormEvent } from 'react';
 import { putJson, useApi } from '../../api';
+import { LockTag } from '../../components/Plans';
 import { FIELD, NumberField, Row } from '../../components/SettingsParts';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { REASON_LABELS } from '../../exit-reasons';
 import { memberSpaceEnabled } from '../../features';
 import { useI18n } from '../../i18n';
+import { usePlan } from '../../plans';
 import { SUGGESTED_TIME_ZONES, timeZoneGroups, zoneLabel } from '../../timezone';
 import { Notice } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
@@ -186,6 +188,11 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
   // The departure survey's offers live in the member space; without it, the creator's own.
   const space = memberSpaceEnabled();
   const { api, testMode } = useCreatorData();
+  // The limits, hours and messages are Pro's, the automatic mode Scale's (decision of
+  // 2026-10-10): the Worker refuses them below; the form says so before.
+  const { lockedTo, ask } = usePlan();
+  const automationsLocked = lockedTo('automations');
+  const autopilotLocked = lockedTo('autopilot');
   const [draft, setDraft] = useState(() => toDraft(initial));
   const [saved, setSaved] = useState(() => canonical(initial));
   // The zone goes along only when the creator changed it: the one their browser told may have
@@ -286,6 +293,12 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
       description={t('actionSettings.description')}
     >
       <form onSubmit={(event) => void submit(event)} className="divide-y divide-line" noValidate>
+        {automationsLocked ? (
+          <div className="flex flex-wrap items-center gap-2 px-5 py-4 text-sm text-muted">
+            <span className="flex-1">{t('plan.automations.locked')}</span>
+            <LockTag tier={automationsLocked} />
+          </div>
+        ) : null}
         <Row label={t('actionSettings.mode')} labelId={`${ids}-mode`}>
           <div
             role="radiogroup"
@@ -304,14 +317,19 @@ function ActionSettingsForm({ initial }: { initial: ActionSettingsView }) {
                   name={`${ids}-mode`}
                   value={mode}
                   checked={draft.mode === mode}
-                  onChange={() => edit((current) => ({ ...current, mode }))}
+                  onChange={() =>
+                    mode === 'auto' && autopilotLocked
+                      ? ask(autopilotLocked)
+                      : edit((current) => ({ ...current, mode }))
+                  }
                   className="mt-1 accent-accent"
                 />
                 <span>
-                  <span className="block text-sm font-medium">
+                  <span className="flex items-center gap-2 text-sm font-medium">
                     {t(
                       mode === 'manual' ? 'actionSettings.mode.manual' : 'actionSettings.mode.auto',
                     )}
+                    {mode === 'auto' && autopilotLocked ? <LockTag tier={autopilotLocked} /> : null}
                   </span>
                   <span className="block text-sm text-muted">
                     {t(

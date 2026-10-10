@@ -5,6 +5,7 @@ import { useI18n } from '../i18n';
 import { DiscordIcon, TelegramIcon } from '../ui/BrandIcons';
 import { buttonClass, type ButtonVariant } from '../ui/Button';
 import { ExternalButton } from '../ui/ExternalLink';
+import { useServerLock } from './Plans';
 
 /**
  * « Connect Discord » / « Connect Telegram »: straight to adding StayPut's bot (Whop opens the
@@ -22,8 +23,16 @@ export function ConnectButton({
   variant?: ButtonVariant;
 }) {
   const { t } = useI18n();
-  const url =
-    platform === 'discord' ? status.discord.install?.url : status.telegram.addToGroup?.url;
+  // One more than the plan counts: to the platform's tab, which says which plan opens it.
+  const locked = useServerLock(platform, {
+    discord: status.discord.servers.length,
+    telegram: status.telegram.groups.length,
+  });
+  const url = locked
+    ? null
+    : platform === 'discord'
+      ? status.discord.install?.url
+      : status.telegram.addToGroup?.url;
   const Icon = platform === 'discord' ? DiscordIcon : TelegramIcon;
   const label = t(platform === 'discord' ? 'connect.discord' : 'connect.telegram');
   return url ? (
