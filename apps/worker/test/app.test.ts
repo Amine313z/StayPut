@@ -167,10 +167,6 @@ function fakeWhop(
           purchase_url: 'https://sandbox.whop.com/checkout/plan_Alu1',
         });
       }
-      if (method === 'POST' && path === '/experiences') return Promise.resolve({ id: 'exp_Alu1' });
-      if (method === 'POST' && /^\/experiences\/exp_[A-Za-z0-9]+\/attach$/.test(path)) {
-        return Promise.resolve({ id: 'exp_Alu1' });
-      }
       // A member's membership, and what an accepted offer asks of Whop.
       const membership = /^\/memberships\/(mem_[A-Za-z0-9]+)/.exec(path)?.[1];
       if (method === 'GET' && membership) {
@@ -1690,7 +1686,7 @@ describe('the Alumni offer (SPEC 5.9)', () => {
     body: JSON.stringify(body),
   });
 
-  it('creates it on Whop step by step, and finishes it once a refused permission is granted', async () => {
+  it('creates it on Whop, a hidden product and its free price, and finishes it once a refused permission is granted', async () => {
     const { request, whop } = setup({
       'user_owner71:biz_Alu1': 'admin',
       'user_eve:biz_Alu1': 'customer',
@@ -1709,35 +1705,33 @@ describe('the Alumni offer (SPEC 5.9)', () => {
     });
     expect((await request(path, json(owner, 'POST', { name: ' ' }))).status).toBe(400);
 
-    // The app may not create experiences yet: the first two steps hold, the answer says why.
-    whop.refusals['POST /experiences'] = new WhopApiError(403, 'forbidden', 'missing permission', {
+    // The app may not create prices yet: the product holds, the answer says why.
+    whop.refusals['POST /variants'] = new WhopApiError(403, 'forbidden', 'missing permission', {
       method: 'POST',
-      path: '/experiences',
+      path: '/variants',
     });
     const stopped = (await (
       await request(path, json(owner, 'POST', { name: 'Alumni du Club' }))
     ).json()) as AlumniView;
     expect(stopped).toMatchObject({
-      offer: {
-        name: 'Alumni du Club',
-        url: 'https://sandbox.whop.com/checkout/plan_Alu1',
-        completedAt: null,
-      },
-      problem: { step: 'experience', permission: 'experience:create' },
+      offer: { name: 'Alumni du Club', url: null, completedAt: null },
+      problem: { step: 'variant', permission: 'plan:create' },
     });
     // Granted: trying again finishes the rest, without a second product or variant.
     const ready = (await (
       await request(path, json(owner, 'POST', { name: 'Alumni du Club' }))
     ).json()) as AlumniView;
     expect(ready).toMatchObject({
-      offer: { completedAt: expect.any(String) as string },
+      offer: {
+        url: 'https://sandbox.whop.com/checkout/plan_Alu1',
+        completedAt: expect.any(String) as string,
+      },
       problem: null,
     });
+    // No StayPut experience in it: members have no StayPut space (2026-10-10).
     expect(whop.writes.map((w) => `${w.method} ${w.path}`)).toEqual([
       'POST /products',
       'POST /variants',
-      'POST /experiences',
-      'POST /experiences/exp_Alu1/attach',
     ]);
     expect(whop.writes[0]).toMatchObject({
       body: { account_id: 'biz_Alu1', title: 'Alumni du Club', visibility: 'hidden' },
@@ -1749,15 +1743,9 @@ describe('the Alumni offer (SPEC 5.9)', () => {
       initial_price: 0,
       visibility: 'hidden',
     });
-    expect(whop.writes[2]?.body).toEqual({
-      account_id: 'biz_Alu1',
-      app_id: APP_ID,
-      name: 'Alumni du Club',
-    });
-    expect(whop.writes[3]?.body).toEqual({ product_id: 'prod_Alu1' });
     // Ready: nothing more to ask of Whop.
     await request(path, json(owner, 'POST', { name: 'Alumni du Club' }));
-    expect(whop.writes).toHaveLength(4);
+    expect(whop.writes).toHaveLength(2);
     // A member of the community sees nothing of it.
     expect((await request(path, await asUser('user_eve'))).status).toBe(403);
   });

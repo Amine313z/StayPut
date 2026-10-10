@@ -11,17 +11,16 @@ import { withUser, type Db, type TransactionalDb } from './db';
 /**
  * The Alumni offer (SPEC 5.9): a former member stays in touch for free, in a hidden product whose
  * free hidden variant they enter by its link (Whop's invitation answers 403 to this account:
- * docs/whop-api-verification.md, section 8), with a StayPut experience through which the
- * follow-ups go. StayPut creates it for the creator, step by step; each step has its own
- * idempotency key, and what is done is kept, so trying again finishes the rest.
+ * docs/whop-api-verification.md, section 8). No StayPut experience in it (2026-10-10): members
+ * have no StayPut space, and the follow-ups go in the support chat like every message. StayPut
+ * creates it for the creator, step by step; each step has its own idempotency key, and what is
+ * done is kept, so trying again finishes the rest. An offer made before keeps its experience.
  */
 
 /** The permission each step needs (docs/whop-api-verification.md, section 10). */
 const PERMISSIONS: Readonly<Record<AlumniStep, string>> = {
   product: 'access_pass:create',
   variant: 'plan:create',
-  experience: 'experience:create',
-  attach: 'experience:attach',
 };
 
 /** What the product says on Whop's checkout page, in the members' language. */
@@ -94,14 +93,14 @@ export async function readAlumni(
 }
 
 /**
- * Creates the company's Alumni offer on Whop, or finishes creating it: a hidden product, its free
- * hidden variant (one-time, price 0), a StayPut experience, attached to the product. Returns the
- * step that stopped, with the permission Whop lacked; null once the offer is ready.
+ * Creates the company's Alumni offer on Whop, or finishes creating it: a hidden product and its
+ * free hidden variant (one-time, price 0), whose link is the way in. Returns the step that
+ * stopped, with the permission Whop lacked; null once the offer is ready.
  */
 export async function createAlumniOffer(
   db: Db,
   whop: WhopClient,
-  input: { companyId: string; userId: string; appId: string; name: string },
+  input: { companyId: string; userId: string; name: string },
   now: Date,
 ): Promise<AlumniProblem | null> {
   const { companyId } = input;
@@ -156,23 +155,9 @@ export async function createAlumniOffer(
       if (!url.startsWith('https://')) throw new Error('Whop gave the variant no link');
       await save({ planId: idOf(variant.id, 'plan_'), url });
     }
-    step = 'experience';
-    if (!offer?.experience_id) {
-      const experience = await whop.request<{ id?: unknown }>('POST', '/experiences', {
-        body: { account_id: companyId, app_id: input.appId, name },
-        idempotencyKey: key(step),
-      });
-      await save({ experienceId: idOf(experience.id, 'exp_') });
-    }
-    step = 'attach';
-    if (!offer?.completed_at) {
-      await whop.request(
-        'POST',
-        `/experiences/${encodeURIComponent(offer?.experience_id ?? '')}/attach`,
-        { body: { product_id: offer?.product_id }, idempotencyKey: key(step) },
-      );
-      await save({ completed: true });
-    }
+    // Ready once its link exists (an offer stopped before at the experience of the old flow
+    // included).
+    if (!offer?.completed_at) await save({ completed: true });
     return null;
   } catch (error) {
     console.error(`Alumni offer of ${companyId}, step ${step}:`, describe(error));

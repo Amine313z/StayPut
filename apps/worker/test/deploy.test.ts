@@ -807,8 +807,6 @@ function whopApp(over: Record<string, unknown> = {}): Record<string, unknown> {
     'support_chat:message:create',
     'access_pass:create',
     'plan:create',
-    'experience:create',
-    'experience:attach',
   ];
   return {
     id: 'app_Prod1',
@@ -848,7 +846,7 @@ describe('readAppSettings', () => {
         discover_path: '/discover',
       },
     });
-    expect(settingsOf().permissions).toHaveLength(27);
+    expect(settingsOf().permissions).toHaveLength(25);
     expect(settingsOf({ discover_path: null, requested_permissions: [] })).toMatchObject({
       paths: { discover_path: null },
       permissions: null,
@@ -939,10 +937,27 @@ describe('settingsFindings', () => {
     expect(findings.find((f) => f.text.startsWith("The Alumni offer's"))).toEqual({
       level: 'note',
       text:
-        "The Alumni offer's permissions are not asked for (access_pass:create, plan:create," +
-        ' experience:create, experience:attach): the offer stays off.',
+        "The Alumni offer's permissions are not asked for (access_pass:create, plan:create):" +
+        ' the offer stays off.',
     });
     expect(levels(findings)).not.toContain('error');
+    // An app made before 2026-10-10 still asks for the Alumni's experience: no longer used.
+    const before = [
+      ...(whopApp().requested_permissions as Record<string, unknown>[]),
+      ...['experience:create', 'experience:attach'].map((action) => ({
+        permission_action: { action, name: action },
+        is_required: false,
+        justification: 'why',
+      })),
+    ];
+    expect(
+      settingsFindings(settingsOf({ requested_permissions: before }), 'production').find((f) =>
+        f.text.startsWith('The app asks for permissions StayPut does not use'),
+      ),
+    ).toEqual({
+      level: 'warning',
+      text: 'The app asks for permissions StayPut does not use: experience:attach, experience:create.',
+    });
     const none = settingsFindings(settingsOf({ requested_permissions: null }), 'production');
     expect(none.find((f) => f.text.startsWith('Whop lists no permission'))?.level).toBe('error');
   });

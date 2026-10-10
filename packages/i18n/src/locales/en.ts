@@ -731,7 +731,7 @@ export const en = {
     'Every hour, each member gets a churn risk score from 0 to 100 with its reasons: a failed payment, a cancellation scheduled, a member gone quiet on Whop, Discord or Telegram.',
   'discover.act.title': 'Act before they go',
   'discover.act.body':
-    'Failed payments retried and card updates asked for, check-ins at the hour members are online, a departure survey with the offer that answers their reason, comeback codes for former members.',
+    'Failed payments retried and card updates asked for, check-ins at the hour members are online, a discount or a pause offered in their support chat, comeback codes for former members.',
   'discover.prove.title': 'See the money saved',
   'discover.prove.body':
     'Every save is counted with its proof: the payment recovered, the cancellation withdrawn, the member who came back. A Monday report sums up your week.',
@@ -1155,7 +1155,7 @@ export const en = {
   'alumni.description':
     'Your former members stay in touch for free: the community’s news, and an offer to come back.',
   'alumni.createHint':
-    'StayPut creates on Whop a free offer hidden from your store, with a StayPut space for your former members. Its link is how they enter: the departure survey shows it, and Whop’s automatic “User left” message carries it to everyone who leaves. Needs 4 Whop permissions: access_pass:create, plan:create, experience:create and experience:attach.',
+    'StayPut creates on Whop a free offer hidden from your store, for your former members. Its link is how they enter: Whop’s automatic “User left” message carries it to everyone who leaves. Needs 2 Whop permissions: access_pass:create and plan:create.',
   'alumni.name': 'Name of the offer',
   'alumni.defaultName': 'Alumni',
   'alumni.create': 'Create the Alumni offer',
@@ -1163,8 +1163,6 @@ export const en = {
   'alumni.notConfigured': 'The Whop app id or API key is not set on this StayPut.',
   'alumni.step.product': 'the product',
   'alumni.step.variant': 'the free price',
-  'alumni.step.experience': 'the StayPut space',
-  'alumni.step.attach': 'attaching the space',
   'alumni.problem.permission':
     'Whop refused {step}: StayPut does not have the “{permission}” permission. Add it to the app’s permissions, have it approved (Whop → Settings → Authorized apps), then click again.',
   'alumni.problem.other': 'Whop did not answer for {step}. Try again in a moment.',

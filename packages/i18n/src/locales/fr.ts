@@ -759,7 +759,7 @@ export const fr: Messages = {
     'Chaque heure, chaque membre reçoit un score de risque de départ de 0 à 100, avec ses raisons : un paiement échoué, une annulation programmée, un membre devenu silencieux sur Whop, Discord ou Telegram.',
   'discover.act.title': 'Agissez avant qu’ils partent',
   'discover.act.body':
-    'Paiements échoués relancés et mise à jour de la carte demandée, prises de nouvelles à l’heure où les membres sont en ligne, questionnaire de départ avec l’offre qui répond à leur raison, codes de retour pour les anciens membres.',
+    'Paiements échoués relancés et mise à jour de la carte demandée, prises de nouvelles à l’heure où les membres sont en ligne, une réduction ou une pause proposée dans leur chat d’assistance, codes de retour pour les anciens membres.',
   'discover.prove.title': 'Voyez l’argent sauvé',
   'discover.prove.body':
     'Chaque sauvetage est compté avec sa preuve : le paiement récupéré, l’annulation retirée, le membre revenu. Un rapport du lundi résume votre semaine.',
@@ -1190,7 +1190,7 @@ export const fr: Messages = {
   'alumni.description':
     'Vos anciens membres restent en contact gratuitement : les actualités de la communauté, et une offre pour revenir.',
   'alumni.createHint':
-    'StayPut crée sur Whop une offre gratuite cachée de votre boutique, avec un espace StayPut pour vos anciens membres. Son lien est la porte d’entrée : le questionnaire de départ l’affiche, et le message automatique « User left » de Whop le porte à chaque membre qui part. Il faut 4 permissions Whop : access_pass:create, plan:create, experience:create et experience:attach.',
+    'StayPut crée sur Whop une offre gratuite cachée de votre boutique, pour vos anciens membres. Son lien est la porte d’entrée : le message automatique « User left » de Whop le porte à chaque membre qui part. Il faut 2 permissions Whop : access_pass:create et plan:create.',
   'alumni.name': 'Nom de l’offre',
   'alumni.defaultName': 'Alumni',
   'alumni.create': 'Créer l’offre Alumni',
@@ -1198,8 +1198,6 @@ export const fr: Messages = {
   'alumni.notConfigured': 'L’identifiant de l’app Whop ou la clé d’API manque sur ce StayPut.',
   'alumni.step.product': 'le produit',
   'alumni.step.variant': 'le prix gratuit',
-  'alumni.step.experience': 'l’espace StayPut',
-  'alumni.step.attach': 'le rattachement de l’espace',
   'alumni.problem.permission':
     'Whop a refusé {step} : StayPut n’a pas la permission « {permission} ». Ajoutez-la aux permissions de l’app, faites-la approuver (Whop → Settings → Authorized apps), puis cliquez de nouveau.',
   'alumni.problem.other': 'Whop n’a pas répondu pour {step}. Réessayez dans un instant.',

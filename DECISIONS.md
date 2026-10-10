@@ -4247,3 +4247,24 @@ groupe.
   StayPut (`botTextFor`, selon `MEMBER_SPACE_ENABLED`) : le bouton n'existe pas. Même chose dans
   l'onglet Telegram du créateur (`telegram.linkHow` / `telegram.linkHow.space`, l'étape « Les
   membres relient leur Telegram » seulement avec l'espace membre).
+
+## 2026-10-10 — L'offre Alumni sans espace StayPut
+
+Les membres n'ont plus d'espace StayPut (08/10/2026) ; l'offre Alumni y créait encore une
+expérience StayPut, rattachée à son produit gratuit, où un ancien membre n'aurait trouvé que
+« Rien à faire ici ».
+
+- **Deux étapes au lieu de quatre** (`alumni.ts`) : le produit caché et son prix gratuit, dont le
+  lien est la porte d'entrée. Plus de `POST /experiences` ni d'`attach` ; une offre arrêtée avant
+  à l'étape de l'expérience se termine sans appel à Whop.
+- **Les relances suivent** (migration **0048**) : `plan_alumni_followups` exigeait
+  `experience_id is not null` ; une offre faite sans expérience n'aurait jamais eu ses relances
+  J+7, J+30 et J+60. Elles partent dans le chat d'assistance, comme tous les messages.
+- **Deux permissions de moins** (`ALUMNI_PERMISSIONS`) : `access_pass:create` et `plan:create`.
+  `experience:create` et `experience:attach` ne sont plus demandées ; le déploiement les signale
+  si l'app les demande encore (« permissions StayPut does not use »).
+- Une offre faite avant garde son expérience, inutilisée : le créateur peut la retirer de son
+  produit Alumni dans Whop.
+- Textes : la carte Alumni ne parle plus du questionnaire de départ ni d'espace StayPut ; la page
+  Discover dit « une réduction ou une pause proposée dans leur chat d'assistance » au lieu du
+  questionnaire de départ.

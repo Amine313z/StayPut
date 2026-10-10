@@ -2413,14 +2413,12 @@ export function createApp(deps: AppDeps) {
       }
       const config = c.get('config');
       const whop = deps.whopClient(config);
-      if (!whop || !config.appId) {
-        return apiError('not_configured', 'the Whop API key or app id is not set');
-      }
+      if (!whop) return apiError('not_configured', 'the Whop API key is not set');
       const companyId = c.get('companyId');
       const problem = await createAlumniOffer(
         db,
         whop,
-        { companyId, userId: c.get('userId'), appId: config.appId, name },
+        { companyId, userId: c.get('userId'), name },
         deps.now(),
       );
       c.set('audit', { step: problem?.step ?? 'done' });

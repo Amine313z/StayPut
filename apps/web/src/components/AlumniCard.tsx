@@ -16,16 +16,14 @@ import { ErrorPanel, Loading } from './Status';
 const STEPS: Readonly<Record<AlumniStep, MessageKey>> = {
   product: 'alumni.step.product',
   variant: 'alumni.step.variant',
-  experience: 'alumni.step.experience',
-  attach: 'alumni.step.attach',
 };
 
 const NAME_MAX = 80;
 
 /**
- * The Alumni offer (SPEC 5.9): StayPut creates on Whop a free offer hidden from the store, with a
- * StayPut space, where former members stay in touch. Its link is how they enter: the departure
- * survey shows it, and Whop's automatic « User left » message carries it to everyone who leaves.
+ * The Alumni offer (SPEC 5.9): StayPut creates on Whop a free offer hidden from the store, where
+ * former members stay in touch. Its link is how they enter: Whop's automatic « User left »
+ * message carries it to everyone who leaves.
  */
 export function AlumniCard({ api, whopAppId }: { api: string; whopAppId: string | null }) {
   const { t } = useI18n();

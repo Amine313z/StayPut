@@ -21,8 +21,11 @@ afterAll(() => t.close());
 
 let n = 0;
 
-/** A community in automatic mode whose Alumni offer is ready. */
-async function community() {
+/**
+ * A community in automatic mode whose Alumni offer is ready: with the StayPut experience of the
+ * offers made before 2026-10-10, or without one (`space: false`), as they are made since.
+ */
+async function community({ space = true }: { space?: boolean } = {}) {
   n += 1;
   const c = `biz_Fol${n}`;
   await t.db.query(
@@ -39,7 +42,7 @@ async function community() {
         productId: `prod_Alu${n}`,
         planId: `plan_Alu${n}`,
         url: `https://whop.com/checkout/plan_Alu${n}`,
-        experienceId: `exp_Alu${n}`,
+        ...(space ? { experienceId: `exp_Alu${n}` } : {}),
         completed: true,
       }),
       NOW.toISOString(),
@@ -334,7 +337,16 @@ describe('the Alumni follow-ups (0019)', () => {
     });
   });
 
-  it('does nothing in test mode but compute, and nothing for a demo or without the space', async () => {
+  it('plans them for an offer with no StayPut space, as offers are made since 2026-10-10', async () => {
+    const club = await community({ space: false });
+    const ana = await former(club, 'Ana Lopez', '2026-09-23T10:00:00Z');
+    expect(await planFollowups(club.c, NOW.toISOString())).toBe(1);
+    expect((await followups(club.c)).map((a) => a.dedupe_key)).toEqual([
+      `alumni_followup:${ana.id}:2026-09-23:7`,
+    ]);
+  });
+
+  it('does nothing in test mode but compute, and nothing for a demo or an unfinished offer', async () => {
     const club = await community();
     await former(club, 'Ana Lopez', '2026-09-23T10:00:00Z');
     await t.db.query(`update stayput.company_settings set dry_run = true where company_id = $1`, [

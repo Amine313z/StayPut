@@ -7032,7 +7032,7 @@ describe('the actions (SPEC Phase 4)', () => {
     const stopped: AlumniView = {
       offer: {
         name: 'Alumni du Club',
-        url: 'https://whop.com/checkout/plan_Alu1',
+        url: null,
         createdAt: '2026-10-01T10:00:00.000Z',
         completedAt: null,
       },
@@ -7041,11 +7041,15 @@ describe('the actions (SPEC Phase 4)', () => {
       returned: 0,
       returnRate: null,
       recovered: null,
-      problem: { step: 'experience', permission: 'experience:create' },
+      problem: { step: 'variant', permission: 'plan:create' },
     };
     const ready: AlumniView = {
       ...stopped,
-      offer: { ...stopped.offer!, completedAt: '2026-10-01T10:05:00.000Z' },
+      offer: {
+        ...stopped.offer!,
+        url: 'https://whop.com/checkout/plan_Alu1',
+        completedAt: '2026-10-01T10:05:00.000Z',
+      },
       entered: 3,
       returned: 1,
       returnRate: 0.25,
@@ -7068,7 +7072,7 @@ describe('the actions (SPEC Phase 4)', () => {
     fireEvent.change(name, { target: { value: 'Alumni du Club' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create the Alumni offer' }));
     expect(
-      await screen.findByText(/StayPut does not have the “experience:create” permission/),
+      await screen.findByText(/StayPut does not have the “plan:create” permission/),
     ).toBeTruthy();
     expect(bodies.get('POST /api/creator/biz_A1/alumni')).toEqual({ name: 'Alumni du Club' });
     fireEvent.click(screen.getByRole('button', { name: 'Finish creating it' }));

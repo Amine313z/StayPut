@@ -40,13 +40,12 @@ export const PHASE_4_PERMISSIONS = [
   'support_chat:message:create',
 ] as const;
 
-/** The Alumni offer (SPEC 5.9), for the creators who turn it on. */
-export const ALUMNI_PERMISSIONS = [
-  'access_pass:create',
-  'plan:create',
-  'experience:create',
-  'experience:attach',
-] as const;
+/**
+ * The Alumni offer (SPEC 5.9), for the creators who turn it on: a hidden product and its free
+ * variant. No experience since 2026-10-10 (experience:create and experience:attach are no longer
+ * asked for).
+ */
+export const ALUMNI_PERMISSIONS = ['access_pass:create', 'plan:create'] as const;
 
 /**
  * Asked of the sandbox app since Phase 2 and never read (SPEC 8.2): StayPut keeps no e-mail and

@@ -58,8 +58,9 @@ Sur **whop.com** (pas le sandbox) → **Dashboard → Developer → Create app**
    - actions : `member:manage`, `payment:manage`, `promo_code:create`, `notification:create`,
      `support_chat:create`, `support_chat:message:create` (les messages aux membres partent dans
      le chat de support de la communauté : ils n'ont pas d'espace StayPut, 08/10/2026) ;
-   - offre Alumni (facultative) : `access_pass:create`, `plan:create`, `experience:create`,
-     `experience:attach`.
+   - offre Alumni (facultative) : `access_pass:create`, `plan:create` (plus d'expérience
+     StayPut dans l'offre depuis le 10/10/2026 : `experience:create` et `experience:attach` ne
+     sont plus demandées).
 4. **Webhook** de l'app : URL `https://stayput-app.chezbenz18.workers.dev/webhooks/whop`, avec
    les événements `payment.failed`, `payment.succeeded`, `payment.requires_action`,
    `membership.activated`, `membership.deactivated`, `membership.cancel_at_period_end_changed`,

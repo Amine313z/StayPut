@@ -1259,7 +1259,7 @@ export interface AlumniView {
   problem?: AlumniProblem | null;
 }
 
-export type AlumniStep = 'product' | 'variant' | 'experience' | 'attach';
+export type AlumniStep = 'product' | 'variant';
 
 export interface AlumniProblem {
   step: AlumniStep;

@@ -185,6 +185,11 @@ notifications.
 | Départ de l'Alumni                             | `membership.deactivated` sur la membership Alumni                                           | l'ancien membre n'est plus jamais relancé                                                                                                                                                       | `webhook_receive:memberships` | OK                                                                                                                                                                                                      |
 | Retour                                         | `payment.succeeded` avec `promo_code_id` = le code envoyé                                   | sauvetage direct, montant du premier paiement                                                                                                                                                   | `webhook_receive:payments`    | OK                                                                                                                                                                                                      |
 
+**Depuis le 10/10/2026** : plus d'expérience StayPut dans l'offre Alumni (les membres n'ont
+pas d'espace StayPut) : ni `POST /experiences` ni `/attach`. Les relances J+7, J+30 et J+60
+partent dans le chat d'assistance avec l'ancien membre (`POST /support_channels` puis
+`POST /messages`), comme tous les messages (migration 0048).
+
 ## 9. Monétisation de StayPut
 
 | Question                                        | Réponse                                                                                                                                                                                                                                        | Statut                                                                                                                    |
@@ -209,8 +214,9 @@ notifications.
 
 **Facultatives** (la fonction se désactive si le créateur refuse)
 
-- Offre Alumni : `access_pass:create`, `plan:create`, `experience:create`,
-  `experience:attach`. (`membership:create` ne servirait qu'à l'invitation, refusée en sandbox :
+- Offre Alumni : `access_pass:create`, `plan:create` (`experience:create` et
+  `experience:attach` jusqu'au 10/10/2026, quand l'offre a perdu son expérience StayPut : les
+  membres n'ont plus d'espace StayPut). (`membership:create` ne servirait qu'à l'invitation, refusée en sandbox :
   on ne la demande pas en V1.)
 - Activité et tickets : `chat:read`, `forum:read`, `support_chat:read`, `webhook_receive:chat`.
 - Progression : `courses:read`, `course_analytics:read`, `webhook_receive:courses`.
