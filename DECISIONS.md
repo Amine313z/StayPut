@@ -4351,3 +4351,26 @@ dans le code : Whop les porte (plans, essais, paiement).
   du développeur a StayPut installé).
 - **Forfaits éteints tant que les deux produits ne sont pas configurés** : tout reste ouvert et
   rien ne s'affiche, comme avant. Les sept cas d'acceptation : `apps/worker/test/plans.test.ts`.
+
+## 2026-10-10 — Bêta privée : StayPut sur invitation
+
+Demande du fondateur : les 20 testeurs ne doivent pas pouvoir faire profiter quelqu'un d'autre
+du lien d'installation. Whop ne sait pas réserver l'installation d'une app non répertoriée à
+certaines communautés : la porte est donc dans StayPut (`INVITE_ONLY`).
+
+- **Qui entre** : les communautés du registre des fondateurs (invitées ou abonnées, Réglages ›
+  Admin), la communauté de l'opérateur, et le fondateur (`ADMIN_USER_ID`) partout où il est dans
+  l'équipe. Les autres reçoivent `not_invited` (403) sur le tableau de bord comme côté membres,
+  et la page n'affiche qu'une ligne discrète, « sur invitation seulement » : une page
+  entièrement vide passerait pour une panne (comme le chargement infini) et pour un bug aux yeux
+  de Whop.
+- **Rien n'est gardé d'une communauté refusée** : la porte est avant la session, qui enregistre
+  la communauté et lance la synchronisation. Seuls les envois de Whop pour elle (webhooks) sont
+  rangés comme avant, sans action possible (mode manuel par défaut, et personne ne peut ouvrir
+  son tableau de bord).
+- **Les testeurs sont les fondateurs** : le même registre de 20 places sert à la bêta, puis au
+  plan Fondateurs (et au plan B), sans double saisie. L'invitation se fait en collant le lien du
+  tableau de bord Whop du testeur (`whop.com/dashboard/biz_…`), ou d'un clic sur une communauté
+  déjà listée.
+- **En production par défaut** (`deploy.yml`) ; le sandbox reste ouvert. Le lancement public :
+  `PRODUCTION_INVITE_ONLY=false`, puis un déploiement.

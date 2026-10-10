@@ -97,6 +97,8 @@ function fakeWhop() {
   const access: Record<string, AccessLevel> = {};
   const owners: Record<string, string> = {};
   const memberships: AppMembership[] = [];
+  /** The community of each experience (StayPut's place in it), as GET /experiences/{id}. */
+  const experiences: Record<string, string> = {};
   const state = { down: false };
   const client = {
     env: 'sandbox',
@@ -105,6 +107,10 @@ function fakeWhop() {
         return Promise.reject(
           new WhopApiError(503, 'unavailable', 'Whop is down', { method, path }),
         );
+      }
+      const experience = /^\/experiences\/(exp_[A-Za-z0-9]+)$/.exec(path)?.[1];
+      if (method === 'GET' && experience && experiences[experience]) {
+        return Promise.resolve({ id: experience, company: { id: experiences[experience] } });
       }
       const company = /^\/companies\/(biz_[A-Za-z0-9]+)$/.exec(path)?.[1];
       if (method === 'GET' && company) {
@@ -154,10 +160,10 @@ function fakeWhop() {
       return Promise.resolve({ items, nextCursor: null });
     },
   } as unknown as WhopClient;
-  return { client, access, owners, memberships, state };
+  return { client, access, owners, memberships, experiences, state };
 }
 
-function setup() {
+function setup(env: Env = ENV) {
   const whop = fakeWhop();
   const deps: AppDeps = {
     now: () => NOW,
@@ -171,7 +177,7 @@ function setup() {
   };
   const app = createApp(deps);
   const request = (path: string, init: RequestInit = {}) =>
-    app.request(path, init, ENV, executionCtx);
+    app.request(path, init, env, executionCtx);
   return { request, whop };
 }
 
@@ -560,5 +566,68 @@ describe('the plans’ acceptance', () => {
     );
     expect(row).toMatchObject({ tier: 'pro', failed_at: NOW });
     expect(row?.last_error).toMatch(/down/i);
+  });
+});
+
+describe('the private beta (INVITE_ONLY)', () => {
+  it('opens StayPut to the invited, the operator’s community and the founder; shuts the rest', async () => {
+    const env = setup({ ...ENV, INVITE_ONLY: 'true', OPERATOR_COMPANY_ID: 'biz_Operator' });
+    const closed = async (res: Response) => {
+      expect(res.status).toBe(403);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe('not_invited');
+    };
+
+    // A community that installed StayPut through a link passed on: the door shut, and nothing of
+    // it kept (the session that records a community is never reached).
+    env.whop.access['user_StrangerOwner:biz_Stranger'] = 'admin';
+    await closed(
+      await env.request('/api/creator/biz_Stranger/session', await as('user_StrangerOwner')),
+    );
+    expect(await t.db.query(`select id from stayput.companies where id = 'biz_Stranger'`)).toEqual(
+      [],
+    );
+    // Its members, opening StayPut in the community, find the same.
+    env.whop.experiences.exp_Stranger = 'biz_Stranger';
+    env.whop.access['user_StrangerMember:exp_Stranger'] = 'customer';
+    await closed(
+      await env.request('/api/member/exp_Stranger/home', await as('user_StrangerMember')),
+    );
+
+    // The operator's own community opens without an invitation.
+    await community(env, 'biz_Operator', 'user_OperatorOwner');
+    expect(
+      (await env.request('/api/creator/biz_Operator/session', await as('user_OperatorOwner')))
+        .status,
+    ).toBe(200);
+    await settle();
+
+    // The founder invites a tester's community, by the link of its dashboard: it opens.
+    await community(env, 'biz_Tester', 'user_TesterOwner');
+    await closed(
+      await env.request('/api/creator/biz_Tester/session', await as('user_TesterOwner')),
+    );
+    const invite = await env.request(
+      '/api/admin/founders',
+      await as(ADMIN, post({ companyId: 'biz_Tester' })),
+    );
+    expect(invite.status).toBe(200);
+    expect(
+      (await env.request('/api/creator/biz_Tester/session', await as('user_TesterOwner'))).status,
+    ).toBe(200);
+    await settle();
+    // Removed from the registry: shut again.
+    expect(
+      (await env.request('/api/admin/founders/biz_Tester', await as(ADMIN, { method: 'DELETE' })))
+        .status,
+    ).toBe(200);
+    await closed(
+      await env.request('/api/creator/biz_Tester/session', await as('user_TesterOwner')),
+    );
+
+    // The founder opens any community they are on the team of.
+    env.whop.access[`${ADMIN}:biz_Stranger`] = 'admin';
+    expect((await env.request('/api/creator/biz_Stranger/session', await as(ADMIN))).status).toBe(
+      200,
+    );
   });
 });

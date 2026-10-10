@@ -4,7 +4,7 @@ import { Outlet, useLocation, useOutletContext, useParams, useSearchParams } fro
 import { DEMO_COMPANY_ID, postJson, useApi, useReloadOnReturn, type Loadable } from '../api';
 import { BootHold, useBootReady } from '../boot';
 import { CreatorShell, ShellSkeleton, rememberDemoExit } from '../components/CreatorShell';
-import { ErrorPanel } from '../components/Status';
+import { ErrorPanel, InviteOnly } from '../components/Status';
 import { DemoMode } from '../demoMode';
 import { PlanProvider } from '../plans';
 import { useI18n } from '../i18n';
@@ -69,6 +69,7 @@ export function CreatorView({ demo = false }: { demo?: boolean }) {
   // shows with its name and its menu, never an empty frame first.
   if (state.status === 'loading') return <BootHold fallback={<ShellSkeleton />} />;
   if (state.status === 'error') {
+    if (state.error.code === 'not_invited') return <InviteOnly />;
     return (
       <div className="mx-auto max-w-lg px-4 py-16">
         <StayPutMark size={40} className="mx-auto mb-6" />

@@ -60,6 +60,8 @@ export type ApiErrorCode =
   | 'payload_too_large'
   /** The community's plan does not open this (HTTP 402): the body says which level does. */
   | 'payment_required'
+  /** The private beta: StayPut opens for the communities invited (INVITE_ONLY), not this one. */
+  | 'not_invited'
   | 'whop_unavailable'
   | 'not_configured'
   | 'internal';

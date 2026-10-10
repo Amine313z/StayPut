@@ -29,6 +29,7 @@ describe('readConfig', () => {
       memberSpace: false,
       legalPages: false,
       operatorCompanyId: null,
+      inviteOnly: false,
       // Plans are off until both products are set: every community has everything.
       plans: {
         enabled: false,

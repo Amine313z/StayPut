@@ -116,6 +116,19 @@ function Row({
       setBusy(false);
     }
   };
+  // A community already here (StayPut installed before the private beta): invited in one click.
+  const invite = async () => {
+    setBusy(true);
+    try {
+      onChange(
+        await postJson<AdminCompaniesView>('/api/admin/founders', { companyId: row.companyId }),
+      );
+    } catch {
+      // No place left: the count above says so.
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <tr
       data-admin-row={row.companyId}
@@ -154,7 +167,11 @@ function Row({
           <Button variant="ghost" size="sm" loading={busy} onClick={() => void remove()}>
             {t('admin.remove')}
           </Button>
-        ) : null}
+        ) : (
+          <Button variant="secondary" size="sm" loading={busy} onClick={() => void invite()}>
+            {t('admin.invite.add')}
+          </Button>
+        )}
       </td>
     </tr>
   );
@@ -170,12 +187,18 @@ function Invite({ onDone }: { onDone: (view: AdminCompaniesView) => void }) {
   const [message, setMessage] = useState<string | null>(null);
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    // Its id, or the link to its dashboard as the creator copies it (whop.com/dashboard/biz_…).
+    const id = /biz_[A-Za-z0-9]+/.exec(companyId)?.[0];
+    if (!id) {
+      setMessage(t('error.invalid_request'));
+      return;
+    }
     setBusy(true);
     setMessage(null);
     try {
       onDone(
         await postJson<AdminCompaniesView>('/api/admin/founders', {
-          companyId: companyId.trim(),
+          companyId: id,
           ...(note.trim() ? { note: note.trim() } : {}),
         }),
       );
@@ -200,10 +223,9 @@ function Invite({ onDone }: { onDone: (view: AdminCompaniesView) => void }) {
           <input
             id={idField}
             required
-            pattern="biz_[A-Za-z0-9]+"
             value={companyId}
             onChange={(event) => setCompanyId(event.target.value)}
-            className="h-10 rounded-lg border border-line bg-surface px-3 text-sm text-fg"
+            className="h-10 w-96 max-w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg"
           />
         </label>
         <label htmlFor={noteField} className="flex flex-col gap-1 text-xs text-muted">

@@ -62,6 +62,12 @@ export interface Env {
    */
   FOUNDER_FALLBACK_MODE?: string;
   BETA_END?: string;
+  /**
+   * The private beta: "true" opens StayPut only to the communities invited (the founders'
+   * registry, Settings › Admin), the operator's and the founder's own; any other answers
+   * `not_invited`. On in production by default (deploy.yml).
+   */
+  INVITE_ONLY?: string;
 }
 
 /** StayPut's plans as configured; `enabled` once both products are set. */
@@ -101,6 +107,8 @@ export interface Config {
   legalPages: boolean;
   /** The community whose team sees the internal status page; null: nobody's. */
   operatorCompanyId: string | null;
+  /** The private beta (INVITE_ONLY): only invited communities open StayPut. */
+  inviteOnly: boolean;
   plans: PlansConfig;
 }
 
@@ -166,6 +174,7 @@ export function readConfig(env: Env): Config {
     memberSpace: env.MEMBER_SPACE_ENABLED === 'true',
     legalPages: env.LEGAL_PAGES_ENABLED === 'true',
     operatorCompanyId: isCompanyId(env.OPERATOR_COMPANY_ID) ? env.OPERATOR_COMPANY_ID : null,
+    inviteOnly: ['true', 'on'].includes(env.INVITE_ONLY?.trim().toLowerCase() ?? ''),
     plans: readPlansConfig(env),
   };
 }

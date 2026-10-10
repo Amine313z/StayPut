@@ -517,6 +517,28 @@ export function createApp(deps: AppDeps) {
     return level;
   }
 
+  /**
+   * The private beta (INVITE_ONLY, decision of 2026-10-10): StayPut opens for the communities the
+   * founder invited (the founders' registry, Settings › Admin), the operator's own, and the
+   * founder anywhere. Any other community that installs it through a link passed on finds the
+   * door shut: nothing of it is read or kept (the session, which records it, is never reached).
+   */
+  async function invited(c: Context<AppEnv>, companyId: string): Promise<boolean> {
+    const config = c.get('config');
+    if (!config.inviteOnly || companyId === config.operatorCompanyId) return true;
+    if (config.plans.adminUserId !== null && c.get('userId') === config.plans.adminUserId) {
+      return true;
+    }
+    const db = c.get('db');
+    if (!db) return false;
+    const [row] = await db.query<{ invited: boolean }>(
+      `select exists (select 1 from stayput.founders
+                       where company_id = $1 and status in ('invited', 'subscribed')) as invited`,
+      [companyId],
+    );
+    return row?.invited === true;
+  }
+
   /** The routes of the creator view: a company id, and a team member of it (checked with Whop). */
   const requireCreator = createMiddleware<AppEnv>(async (c, next) => {
     const companyId = c.req.param('companyId');
@@ -525,6 +547,9 @@ export function createApp(deps: AppDeps) {
     if (level instanceof Response) return level;
     if (!canOpenCreatorView(level)) {
       return apiError('forbidden', "the creator view is for the account's team");
+    }
+    if (!(await invited(c, companyId))) {
+      return apiError('not_invited', 'StayPut is open by invitation only');
     }
     c.set('companyId', companyId);
     c.set('accessLevel', level);
@@ -2951,6 +2976,9 @@ export function createApp(deps: AppDeps) {
     try {
       const companyId = await companyOfExperience(whop, c.get('experienceId'));
       if (!companyId) return apiError('not_found', 'no community for this experience');
+      if (!(await invited(c, companyId))) {
+        return apiError('not_invited', 'StayPut is open by invitation only');
+      }
       // Whop notifications to the company's members go through this experience (Phase 4).
       const db = c.get('db');
       if (db) {

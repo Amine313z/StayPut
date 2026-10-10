@@ -113,6 +113,9 @@ jobs:
           CHECKOUT_URL_PRO: ${{ vars[inputs.target == 'production' && 'PRODUCTION_CHECKOUT_URL_PRO' || 'CHECKOUT_URL_PRO'] }}
           CHECKOUT_URL_SCALE: ${{ vars[inputs.target == 'production' && 'PRODUCTION_CHECKOUT_URL_SCALE' || 'CHECKOUT_URL_SCALE'] }}
           ADMIN_USER_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_ADMIN_USER_ID' || 'ADMIN_USER_ID'] }}
+          # The private beta: production opens to invited communities only unless
+          # PRODUCTION_INVITE_ONLY says « false » (the public launch).
+          INVITE_ONLY: ${{ inputs.target == 'production' && (vars.PRODUCTION_INVITE_ONLY || 'true') || vars.INVITE_ONLY }}
         run: |
           # wrangler's failure stops the deployment: through tee alone, its refused cron triggers
           # passed unseen (2026-10-07). The Worker's secrets leave the runner however it ends.
@@ -128,7 +131,7 @@ jobs:
           # id stays out of the public log).
           if [ -n "$ADMIN_USER_ID" ]; then echo "::add-mask::$ADMIN_USER_ID"; fi
           for name in WHOP_PROD_PRO WHOP_PROD_SCALE WHOP_PLAN_SCALE_FOUNDER CHECKOUT_URL_PRO \
-            CHECKOUT_URL_SCALE ADMIN_USER_ID; do
+            CHECKOUT_URL_SCALE ADMIN_USER_ID INVITE_ONLY; do
             if [ -n "${!name}" ]; then overrides+=(--var "$name:${!name}"); fi
           done
           if [ "$STAYPUT_TARGET" = production ]; then overrides+=(--name stayput-app); fi

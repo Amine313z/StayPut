@@ -17,6 +17,19 @@ export function Loading() {
 }
 
 /**
+ * The private beta's closed door (INVITE_ONLY): one quiet line on an empty page, nothing else of
+ * StayPut, for a community the founder did not invite.
+ */
+export function InviteOnly() {
+  const { t } = useI18n();
+  return (
+    <p data-invite-only="" className="px-4 py-24 text-center text-sm text-subtle">
+      {t('error.not_invited')}
+    </p>
+  );
+}
+
+/**
  * A failed call, in words the user can act on. `forbiddenKey` says who the screen is for: the
  * same 403 means "team only" on the dashboard and "no access" in the member space. Silver, not
  * red (red is for what is urgent about members). A screen the demo has no data for is not a
@@ -34,6 +47,7 @@ export function ErrorPanel({
   const { t } = useI18n();
   const location = useLocation();
   if (error.code === 'demo') return <EmptyState body={t('error.demo')} />;
+  if (error.code === 'not_invited') return <InviteOnly />;
   // No answer yet after 5 seconds (useApi): said in a line, with « Retry »; the answer still
   // shows when it comes (brief v4 §9.6).
   if (error.code === 'slow') {

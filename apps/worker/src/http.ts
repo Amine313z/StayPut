@@ -8,6 +8,7 @@ const STATUS: Record<ApiErrorCode, number> = {
   conflict: 409,
   payload_too_large: 413,
   payment_required: 402,
+  not_invited: 403,
   whop_unavailable: 503,
   not_configured: 503,
   internal: 500,
