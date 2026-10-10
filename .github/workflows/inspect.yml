@@ -215,3 +215,41 @@ jobs:
             commit -q -m "Screenshots of the deployed demo ($GITHUB_SHA)"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "$BRANCH"
+
+  # Production only: the creator's dashboard as Whop's frame loads it, through the app's origin
+  # on Whop, next to the Worker's own address (scripts/ops/frame.mjs). Signed in nobody, so the
+  # page says « sign in »: nothing private. No secret: the app's origin is public on Whop's API.
+  frame:
+    if: ${{ inputs.target == 'production' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: Open the dashboard through Whop's relay in Chrome
+        env:
+          # Public on Whop: the production app's id, if no variable names it.
+          APP_ID: ${{ vars.PRODUCTION_WHOP_APP_ID || 'app_GimcEN4Jfpn4Ma' }}
+          STAYPUT_URL: ${{ vars.PRODUCTION_STAYPUT_URL || env.DEFAULT_URL }}
+        run: |
+          app=$(curl -sS --max-time 20 "https://api.whop.com/api/v1/apps/${APP_ID}")
+          origin=$(node -e 'const a=JSON.parse(process.argv[1]);console.log(a.origin??"")' "$app")
+          company=$(node -e 'const a=JSON.parse(process.argv[1]);console.log(a.company?.id??"")' "$app")
+          work="$RUNNER_TEMP/frame"
+          mkdir -p "$work/out"
+          cp scripts/ops/frame.mjs "$work/"
+          cd "$work"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund playwright-core@1.63.0 > /dev/null
+          status=0
+          node frame.mjs "$origin" "$STAYPUT_URL" "$company" out || status=$?
+          {
+            echo "### The dashboard through Whop's relay, and on the Worker"
+            echo ""
+            echo '```json'
+            cat out/frame.json 2>/dev/null || echo '{ "error": "no report: see the log" }'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
