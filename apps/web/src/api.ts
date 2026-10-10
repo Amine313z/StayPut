@@ -82,6 +82,16 @@ export function prefetchAnswer(path: string): Promise<unknown> | null {
   return answer;
 }
 
+/** `answer`, or a refusal as soon as `signal` aborts. */
+function untilAborted<T>(answer: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new Error('aborted'));
+  return new Promise<T>((resolve, reject) => {
+    const stop = () => reject(new Error('aborted'));
+    signal.addEventListener('abort', stop, { once: true });
+    answer.then(resolve, reject).finally(() => signal.removeEventListener('abort', stop));
+  });
+}
+
 function takeEarly(path: string): Promise<unknown> | null {
   const entry = early.get(path);
   if (!entry) return null;
@@ -98,9 +108,11 @@ async function requestJson<T>(
   const asked = method === 'GET' ? takeEarly(path) : null;
   if (asked) {
     try {
-      return (await asked) as T;
+      // The screen's give-up (useApi, GIVE_UP_MS) holds for an answer asked ahead too: one the
+      // Worker never sends no longer keeps the screen waiting without end.
+      return (await (signal ? untilAborted(asked, signal) : asked)) as T;
     } catch {
-      // Asked again below.
+      // Asked again below (refused at once when the screen gave up).
     }
   }
   if (path.startsWith(DEMO_API)) {

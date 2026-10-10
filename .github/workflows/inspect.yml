@@ -5,9 +5,9 @@ name: Inspect
 # grants the app's key (scripts/ops/whop-permissions.ts), how Telegram sees the connected
 # groups (scripts/ops/telegram-groups.ts), what a browser gets from the deployed Worker, and
 # how it answers what no browser of a creator or a member sends (scripts/ops/probe.ts).
-# It changes nothing. On production (`target`), only what the browser gets and the attack from
-# outside: this repository is public, and so are its runs' logs, where no creator's community
-# may show.
+# It changes nothing. On production (`target`), only what the browser gets, the attack from
+# outside and the Worker's logs with every id masked (scripts/ops/worker-logs.ts): this
+# repository is public, and so are its runs' logs, where no creator's community may show.
 on:
   workflow_dispatch:
     inputs:
@@ -71,6 +71,17 @@ jobs:
           npx tsx scripts/deploy/check-app.ts reach apps/worker/wrangler.toml "$STAYPUT_URL" ||
             status=1
           exit "$status"
+
+      # What the Worker logged over the last 48 hours, from Cloudflare (scripts/ops/worker-logs.ts):
+      # requests per route, their answers and times, the slow and the unfinished ones, its
+      # warnings and errors. Every id, address and token masked; no body or header read.
+      - name: Read the Worker's logs (last 48 hours, ids masked)
+        if: always()
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          STAYPUT_TARGET: ${{ inputs.target || 'sandbox' }}
+        run: npx tsx scripts/ops/worker-logs.ts apps/worker/wrangler.toml 48
 
       # The deployed Worker attacked from outside (scripts/ops/probe.ts): no token, forged tokens
       # and cookies, forged and replayed webhooks, bodies too large, another site's origin, the

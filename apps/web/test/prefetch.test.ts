@@ -134,4 +134,20 @@ describe('prefetch', () => {
     await getJson('/api/creator/biz_Pre3/dashboard');
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
+
+  it('gives up an early answer that never comes when its screen gives up', async () => {
+    // The Worker never answers the early reading; refused at once once the screen gave up.
+    const fetchMock = vi.fn((_input: string, init?: RequestInit) =>
+      init?.signal?.aborted
+        ? Promise.reject(new DOMException('aborted', 'AbortError'))
+        : new Promise<Response>(() => {}),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    prefetch('/api/creator/biz_Pre9/session');
+    const screen = new AbortController();
+    const reading = getJson('/api/creator/biz_Pre9/session', screen.signal);
+    screen.abort();
+    await expect(reading).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });
