@@ -122,6 +122,7 @@ import {
 } from './retention';
 import { REQUEST_RISK_BATCH, refreshDetection } from './risk';
 import {
+  isDashboardPlatform,
   isDay,
   isPlatform,
   readPlatformDashboard,
@@ -2258,7 +2259,7 @@ export function createApp(deps: AppDeps) {
   );
 
   /**
-   * Integrations › Discord or › Telegram (brief v4 §9.6): the platform's dashboard, over 30 days
+   * Integrations › Whop, › Discord or › Telegram (brief v4 §9.6): the platform's dashboard, over 30 days
    * (90 for who went silent), in the company's calendar.
    */
   app.get(
@@ -2270,7 +2271,7 @@ export function createApp(deps: AppDeps) {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
       const platform = c.req.param('platform');
-      if (!isPlatform(platform)) return apiError('not_found', 'no such platform');
+      if (!isDashboardPlatform(platform)) return apiError('not_found', 'no such platform');
       const view = await readPlatformDashboard(
         db,
         c.get('userId'),
@@ -2293,7 +2294,7 @@ export function createApp(deps: AppDeps) {
       if (!db) return apiError('not_configured', 'the database is not configured');
       const platform = c.req.param('platform');
       const day = c.req.param('day');
-      if (!isPlatform(platform)) return apiError('not_found', 'no such platform');
+      if (!isDashboardPlatform(platform)) return apiError('not_found', 'no such platform');
       if (!isDay(day)) return apiError('invalid_request', 'expected a day, yyyy-mm-dd');
       const view = await readPlatformDay(
         db,
@@ -2317,7 +2318,7 @@ export function createApp(deps: AppDeps) {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
       const platform = c.req.param('platform');
-      if (!isPlatform(platform)) return apiError('not_found', 'no such platform');
+      if (!isDashboardPlatform(platform)) return apiError('not_found', 'no such platform');
       const dow = /^[1-7]$/.test(c.req.param('dow')) ? Number(c.req.param('dow')) : null;
       const hour = /^(?:[0-9]|1[0-9]|2[0-3])$/.test(c.req.param('hour'))
         ? Number(c.req.param('hour'))

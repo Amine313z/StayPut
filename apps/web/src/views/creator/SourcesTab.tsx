@@ -10,17 +10,19 @@ import { SyncPanel } from '../../components/SyncPanel';
 import { TelegramCard } from '../../components/TelegramCard';
 import { useI18n } from '../../i18n';
 import { useCreatorData } from '../CreatorView';
-import { PlatformDashboardView } from './platform/PlatformDashboard';
+import { PlatformDashboardView, WhopDashboardView } from './platform/PlatformDashboard';
 
 /**
- * Where StayPut reads activity, one tab each: Whop (always), Discord and Telegram, each a
- * dashboard of its own once connected (brief v4 §9.6; their activity, once a tab of its own, is
+ * Where StayPut reads activity, one tab each: Whop (always), Discord and Telegram (once
+ * connected), each a dashboard of its own (brief v4 §9.6; their activity, once a tab of its own, is
  * in each). Only who wrote, where and when is ever kept.
  */
 
 /**
- * Integrations › Whop: the synchronization with Whop, and what StayPut keeps of it. While neither
- * Discord nor Telegram is connected, first what StayPut misses without them (brief v4 §11).
+ * Integrations › Whop: a dashboard like Discord's and Telegram's (what the members write in the
+ * community's chats and forums), then the synchronization with Whop and what StayPut keeps of it.
+ * While neither Discord nor Telegram is connected, first what StayPut misses without them (brief
+ * v4 §11).
  */
 export function WhopTab() {
   const { sync, integrations, root } = useCreatorData();
@@ -28,6 +30,7 @@ export function WhopTab() {
   return (
     <div className="space-y-6">
       {status && !connected(status) ? <ConnectInvite status={status} root={root} /> : null}
+      <WhopDashboardView />
       <SyncPanel sync={sync} />
       <Privacy />
     </div>

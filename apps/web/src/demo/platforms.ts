@@ -8,6 +8,7 @@ import {
   zonedDay,
   zonedMoment,
   type AccountPlatform,
+  type ActivityPlatform,
   type ActivityWindow,
   type HeatCell,
   type MemberRow,
@@ -25,7 +26,8 @@ import {
 import { seeded } from './random';
 
 /**
- * What the demo community wrote on Discord and Telegram, message by message (fix prompt v4.1,
+ * What the demo community wrote on Discord and Telegram (and on Whop, a log of its own: its chats
+ * and forums, 0049), message by message (fix prompt v4.1,
  * block 7; brief v4 §9.6): when, where, and from which account, never what. Each account's 30
  * days add up to its count of the pages (pages.ts: the members' drawers, the people, the accounts
  * to tie) and end on its last message; the members wrote there in the two months before too, so
@@ -39,7 +41,7 @@ const DAY = 24 * 60 * MINUTE;
 
 /** An account as the pages keep it: what the log needs of it. */
 export interface LogAccount {
-  platform: AccountPlatform;
+  platform: ActivityPlatform;
   accountId: string;
   status: 'member' | 'unlinked' | 'team' | 'guest';
   member: MemberRow | null;
@@ -83,9 +85,9 @@ const WINDOWS: readonly [ActivityWindow, number][] = [
 ];
 
 export interface PlatformLog {
-  dashboard: (platform: AccountPlatform) => PlatformDashboard;
-  day: (platform: AccountPlatform, day: string) => PlatformDayView;
-  slot: (platform: AccountPlatform, dow: number, hour: number) => PlatformSlotView;
+  dashboard: (platform: ActivityPlatform) => PlatformDashboard;
+  day: (platform: ActivityPlatform, day: string) => PlatformDayView;
+  slot: (platform: ActivityPlatform, dow: number, hour: number) => PlatformSlotView;
   /** A member's figures on each platform, as risk_features gives them (none: no account). */
   figures: (memberId: string) => Partial<Record<SignalPlatform, PlatformInputs>>;
   /** What a member's score is made of beyond its five factors; null for one not scored. */
@@ -100,7 +102,7 @@ export interface PlatformLog {
   /** The account's last message was at `at` (a line of the feed): its latest one moves there. */
   moveLast: (account: LogAccount, at: number) => void;
   /** Each of the 30 days' messages on a platform, the first first. */
-  daily: (platform: AccountPlatform) => number[];
+  daily: (platform: ActivityPlatform) => number[];
 }
 
 export function createPlatformLog(input: {
@@ -109,7 +111,7 @@ export function createPlatformLog(input: {
   accounts: readonly LogAccount[];
   rows: readonly MemberRow[];
   /** The places of a platform now (the channels followed may change). */
-  places: (platform: AccountPlatform) => readonly LogPlace[];
+  places: (platform: ActivityPlatform) => readonly LogPlace[];
   /** The levels' thresholds now (Settings › Risk score). */
   thresholds: () => { mediumFrom: number; highFrom: number };
 }): PlatformLog {
@@ -148,7 +150,7 @@ export function createPlatformLog(input: {
     const start = zonedMoment(day, 0, 0, zone);
     return start + Math.floor(random() * Math.max(1, before - start));
   };
-  const placeFor = (platform: AccountPlatform) => {
+  const placeFor = (platform: ActivityPlatform) => {
     const places = input.places(platform).filter((p) => p.weight > 0);
     return places[pick(places.map((p) => p.weight))]?.id ?? '';
   };
@@ -208,8 +210,8 @@ export function createPlatformLog(input: {
   // ---- Counting it, as the Worker does ----
   const atRisk = (member: MemberRow | null) =>
     member?.risk?.level === 'high' || member?.risk?.level === 'scheduled_departure';
-  const of = (platform: AccountPlatform) => log.filter((m) => m.account.platform === platform);
-  const within = (platform: AccountPlatform, daysBack: number) =>
+  const of = (platform: ActivityPlatform) => log.filter((m) => m.account.platform === platform);
+  const within = (platform: ActivityPlatform, daysBack: number) =>
     of(platform).filter((m) => back(m.at) < daysBack);
   /** A member of the community wrote it (the team, guests and accounts not tied yet aside). */
   const byMember = (m: Logged) => m.account.status === 'member' && m.account.member !== null;
@@ -224,7 +226,7 @@ export function createPlatformLog(input: {
   });
 
   /** The places, each with its messages, members and 3 most active members. */
-  const placesOf = (platform: AccountPlatform, messages: readonly Logged[]): PlatformPlace[] => {
+  const placesOf = (platform: ActivityPlatform, messages: readonly Logged[]): PlatformPlace[] => {
     const known = input.places(platform);
     const ids = new Set([
       ...known.filter((p) => p.followed && p.kind !== 'topic').map((p) => p.id),
@@ -242,7 +244,9 @@ export function createPlatformLog(input: {
         }
         return {
           id,
-          kind: place?.kind ?? (platform === 'discord' ? 'channel' : 'group'),
+          kind:
+            place?.kind ??
+            (platform === 'discord' ? 'channel' : platform === 'whop' ? 'chat' : 'group'),
           name: place?.name ?? null,
           parent: place?.parent ?? null,
           messages: there.length,
@@ -264,7 +268,7 @@ export function createPlatformLog(input: {
   };
 
   /** The community's members who wrote there over 90 days: their counts, their last message. */
-  const people = (platform: AccountPlatform) => {
+  const people = (platform: ActivityPlatform) => {
     const byId = new Map<string, { member: MemberRow; at: number[] }>();
     for (const m of within(platform, 90).filter(byMember)) {
       const member = memberOf(m);

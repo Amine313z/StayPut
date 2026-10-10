@@ -856,16 +856,17 @@ describe('Analytics › Reports in the demo (SPEC Phase 6.9)', () => {
   });
 });
 
-describe('Integrations › Discord and › Telegram in the demo (fix prompt v4.1, block 7)', () => {
+describe('Integrations › Discord, › Telegram and › Whop in the demo (fix prompt v4.1, block 7)', () => {
   const PLATFORMS = ['discord', 'telegram'] as const;
 
   it('adds up: the hero is its lists, the days its 30 days, the places and the hours its messages', () => {
     const world = createWorld(NOW);
     const joined = world.members.members.filter((m) => m.status === 'joined');
     const activity = world.pages.platformActivity();
-    for (const platform of PLATFORMS) {
+    for (const platform of [...PLATFORMS, 'whop'] as const) {
       const view = world.pages.platforms.dashboard(platform);
       const { hero } = view;
+      expect(view.platform).toBe(platform);
       expect(view.daily).toHaveLength(30);
       expect(view.to).toBe(zonedDay(NOW, 'Europe/Paris'));
       expect(sum(view.daily.map((d) => d.messages))).toBe(hero.messages30d);
@@ -873,10 +874,15 @@ describe('Integrations › Discord and › Telegram in the demo (fix prompt v4.1
       expect(sum(view.heatmap.map((c) => c.messages))).toBe(hero.messages30d);
       // Each message in one place: a channel, a group, its « General » or one of its topics.
       expect(sum(view.places.map((p) => p.messages))).toBe(hero.messages30d);
-      // The live tile (the dashboard's « new message » mark) counts the same messages.
-      const tile = activity.platforms.find((p) => p.platform === platform)!;
-      expect(tile.messages).toBe(hero.messages30d);
-      expect(tile.daily).toEqual(view.daily.map((d) => d.messages));
+      // The live tile (the dashboard's « new message » mark) counts the same messages; Whop
+      // has none (its synchronization brings its news).
+      const tile = activity.platforms.find((p) => p.platform === platform);
+      if (platform === 'whop') {
+        expect(tile).toBeUndefined();
+      } else {
+        expect(tile!.messages).toBe(hero.messages30d);
+        expect(tile!.daily).toEqual(view.daily.map((d) => d.messages));
+      }
       // Active or gone silent: every member who wrote there over 90 days is one or the other.
       expect(view.silent.d7.total).toBe(hero.silentMembers7d);
       expect(view.active.d7).toHaveLength(Math.min(10, hero.activeMembers7d));
@@ -908,6 +914,34 @@ describe('Integrations › Discord and › Telegram in the demo (fix prompt v4.1
         expect(sum(slot.members.map((m) => m.messages)) + slot.others).toBe(cell.messages);
       }
     }
+  });
+
+  it('writes on Whop what its members wrote beyond Discord and Telegram, in its chats and forum', () => {
+    const world = createWorld(NOW);
+    const joined = world.members.members.filter((m) => m.status === 'joined');
+    const view = world.pages.platforms.dashboard('whop');
+    // The team writes there too (38 messages), never counted as the members'.
+    expect(view.hero.messages30d - view.hero.memberMessages30d).toBe(38);
+    // The members' part never exceeds what their own 30 days hold (messages and forum posts).
+    expect(view.hero.memberMessages30d).toBeGreaterThan(0);
+    expect(view.hero.memberMessages30d).toBeLessThanOrEqual(
+      sum(joined.map((m) => m.activity.messages + m.activity.posts)),
+    );
+    // Its two chats and its forum by name; the announcements, followed, nobody writes in.
+    expect(
+      view.places
+        .map((p) => [p.kind, p.name, p.messages > 0])
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1]))),
+    ).toEqual([
+      ['chat', 'Announcements', false],
+      ['chat', 'General', true],
+      ['chat', 'Trade ideas', true],
+      ['forum', 'Wins', true],
+    ]);
+    // Discord's and Telegram's figures are what they were: Whop's log is its own.
+    expect(
+      world.pages.platforms.dashboard('discord').places.every((p) => p.kind === 'channel'),
+    ).toBe(true);
   });
 
   it('previews exactly what saving the signals does to the levels, and undoes it', () => {

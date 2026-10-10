@@ -1,10 +1,12 @@
 import type {
   AccountPlatform,
+  ActivityPlatform,
   IntegrationsStatus,
   PlatformActivityView,
   PlatformDashboard,
   PlatformDayView,
 } from '@stayput/core';
+import type { MessageKey } from '@stayput/i18n';
 import { Clock3, MessagesSquare, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useApi, usePolling, useReloadOnReturn, type Loadable } from '../../../api';
@@ -20,7 +22,7 @@ import { MetricSkeleton, RowsSkeleton, Skeleton } from '../../../ui/Skeleton';
 import { useCreatorData } from '../../CreatorView';
 import { BotSettings } from './BotSettings';
 import { PlaceBars } from './PlaceBars';
-import { PlatformHero } from './PlatformHero';
+import { PlatformHero, WhopHero } from './PlatformHero';
 import { PickedChip, Resolved } from './parts';
 import { PlatformMembers, SlotMembers } from './PlatformMembers';
 import { SignalsPanel } from './SignalsPanel';
@@ -61,7 +63,6 @@ export function PlatformDashboardView({
     setAccountsKey((key) => key + 1);
     setPeopleKey((key) => key + 1);
   });
-  const [picked, setPicked] = useState<string | null>(null);
   const view = dashboard.state.status === 'ready' ? dashboard.state.data : null;
   return (
     <div className="space-y-6" data-platform={platform}>
@@ -71,111 +72,23 @@ export function PlatformDashboardView({
         hero={view?.hero ?? (dashboard.state.status === 'loading' ? 'loading' : null)}
         lastMessageAt={live.lastAt}
       />
-      {dashboard.state.status === 'error' ? (
-        // The blocks below share one reading: one error, one « Retry », no empty cards.
-        <ErrorPanel
-          error={dashboard.state.error}
-          forbiddenKey="error.forbidden.creator"
-          onRetry={dashboard.retry}
-        />
-      ) : (
-        <>
-          <Card
-            icon={<MessagesSquare aria-hidden="true" className="size-4" />}
-            title={t('platform.chart.title')}
-            description={t(
-              platform === 'discord'
-                ? 'platform.chart.pick.discord'
-                : 'platform.chart.pick.telegram',
-            )}
-            actions={
-              picked ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<X aria-hidden="true" className="size-4" />}
-                  onClick={() => setPicked(null)}
-                >
-                  {t('platform.day.clear')}
-                </Button>
-              ) : null
-            }
-          >
-            {view ? (
-              <DailyChart view={view} picked={picked} onPick={setPicked} />
-            ) : (
-              <Skeleton className="h-[200px] w-full" />
-            )}
+      <ActivityBlocks platform={platform} path={path} dashboard={dashboard}>
+        {view ? (
+          <SignalsPanel
+            key={JSON.stringify(view.signals.settings[platform])}
+            platform={platform}
+            view={view.signals}
+            onSaved={() => {
+              dashboard.reload();
+              members.reload();
+            }}
+          />
+        ) : (
+          <Card title={t('signals.title')}>
+            <MetricSkeleton />
           </Card>
-          <DayData path={path} day={picked}>
-            {(day, retryDay) => (
-              <>
-                <div className="grid min-w-0 gap-6 xl:grid-cols-2">
-                  <Card
-                    icon={<Clock3 aria-hidden="true" className="size-4" />}
-                    title={t('platform.heat.title')}
-                    description={t('platform.heat.description')}
-                  >
-                    {view ? (
-                      <HeatBlock path={path} view={view} />
-                    ) : (
-                      <Skeleton className="h-48 w-full" />
-                    )}
-                  </Card>
-                  <Card
-                    title={t(
-                      platform === 'discord'
-                        ? 'platform.places.title.discord'
-                        : 'platform.places.title.telegram',
-                    )}
-                    description={
-                      day ? <PickedChip day={day} onClear={() => setPicked(null)} /> : undefined
-                    }
-                  >
-                    {day ? (
-                      <Resolved state={day} retry={retryDay}>
-                        {(data) => <PlaceBars platform={platform} places={data.places} />}
-                      </Resolved>
-                    ) : view ? (
-                      <PlaceBars platform={platform} places={view.places} />
-                    ) : (
-                      <RowsSkeleton rows={4} />
-                    )}
-                  </Card>
-                </div>
-                {view ? (
-                  <PlatformMembers
-                    view={view}
-                    day={day}
-                    retryDay={retryDay}
-                    onClearDay={() => setPicked(null)}
-                    members={members.state.status === 'ready' ? members.state.data.members : []}
-                  />
-                ) : (
-                  <Card title={t('platform.members.title')}>
-                    <RowsSkeleton rows={5} />
-                  </Card>
-                )}
-              </>
-            )}
-          </DayData>
-          {view ? (
-            <SignalsPanel
-              key={JSON.stringify(view.signals.settings[platform])}
-              platform={platform}
-              view={view.signals}
-              onSaved={() => {
-                dashboard.reload();
-                members.reload();
-              }}
-            />
-          ) : (
-            <Card title={t('signals.title')}>
-              <MetricSkeleton />
-            </Card>
-          )}
-        </>
-      )}
+        )}
+      </ActivityBlocks>
       <section aria-labelledby={`${platform}-who`} className="space-y-4">
         <h2 id={`${platform}-who`} className="title-section">
           {t('platform.linking.title')}
@@ -206,6 +119,161 @@ export function PlatformDashboardView({
         onTesting={setTesting}
       />
     </div>
+  );
+}
+
+/**
+ * Integrations › Whop, the same dashboard (0049): what the members write in the community's
+ * chats and forums, read by the synchronization. No signals (Whop's activity already makes the
+ * score), no accounts to tie (whoever writes on Whop is known), no bot. A synchronization that
+ * ends brings it up to date.
+ */
+export function WhopDashboardView() {
+  const { api, sync } = useCreatorData();
+  const path = `${api}/platforms/whop`;
+  const dashboard = useApi<PlatformDashboard>(path);
+  const lastSyncAt = sync.status?.lastSyncAt ?? null;
+  const seen = useRef(lastSyncAt);
+  const reload = useRef(dashboard.reload);
+  useEffect(() => {
+    reload.current = dashboard.reload;
+  });
+  useEffect(() => {
+    // The status's first reading is no news: the dashboard was read with it.
+    if (seen.current !== null && lastSyncAt !== null && seen.current !== lastSyncAt) {
+      reload.current();
+    }
+    seen.current = lastSyncAt;
+  }, [lastSyncAt]);
+  const view = dashboard.state.status === 'ready' ? dashboard.state.data : null;
+  return (
+    <div className="space-y-6" data-platform="whop">
+      <WhopHero
+        sync={sync}
+        hero={view?.hero ?? (dashboard.state.status === 'loading' ? 'loading' : null)}
+      />
+      <ActivityBlocks platform="whop" path={path} dashboard={dashboard} />
+    </div>
+  );
+}
+
+const CHART_PICK = {
+  discord: 'platform.chart.pick.discord',
+  telegram: 'platform.chart.pick.telegram',
+  whop: 'platform.chart.pick.whop',
+} as const satisfies Record<ActivityPlatform, MessageKey>;
+
+const PLACES_TITLE = {
+  discord: 'platform.places.title.discord',
+  telegram: 'platform.places.title.telegram',
+  whop: 'platform.places.title.whop',
+} as const satisfies Record<ActivityPlatform, MessageKey>;
+
+/**
+ * What every platform's dashboard shows of its activity: the messages day by day (a day picked
+ * shows its places and members), when the community writes, each place, the most active and the
+ * silent members; then `children`. One error and one « Retry » when the reading failed.
+ */
+function ActivityBlocks({
+  platform,
+  path,
+  dashboard,
+  children,
+}: {
+  platform: ActivityPlatform;
+  path: string;
+  dashboard: { state: Loadable<PlatformDashboard>; retry: () => void };
+  children?: ReactNode;
+}) {
+  const { t } = useI18n();
+  const { members } = useCreatorData();
+  const [picked, setPicked] = useState<string | null>(null);
+  const view = dashboard.state.status === 'ready' ? dashboard.state.data : null;
+  if (dashboard.state.status === 'error') {
+    // The blocks share one reading: one error, one « Retry », no empty cards.
+    return (
+      <ErrorPanel
+        error={dashboard.state.error}
+        forbiddenKey="error.forbidden.creator"
+        onRetry={dashboard.retry}
+      />
+    );
+  }
+  return (
+    <>
+      <Card
+        icon={<MessagesSquare aria-hidden="true" className="size-4" />}
+        title={t('platform.chart.title')}
+        description={t(CHART_PICK[platform])}
+        actions={
+          picked ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<X aria-hidden="true" className="size-4" />}
+              onClick={() => setPicked(null)}
+            >
+              {t('platform.day.clear')}
+            </Button>
+          ) : null
+        }
+      >
+        {view ? (
+          <DailyChart view={view} picked={picked} onPick={setPicked} />
+        ) : (
+          <Skeleton className="h-[200px] w-full" />
+        )}
+      </Card>
+      <DayData path={path} day={picked}>
+        {(day, retryDay) => (
+          <>
+            <div className="grid min-w-0 gap-6 xl:grid-cols-2">
+              <Card
+                icon={<Clock3 aria-hidden="true" className="size-4" />}
+                title={t('platform.heat.title')}
+                description={t('platform.heat.description')}
+              >
+                {view ? (
+                  <HeatBlock platform={platform} path={path} view={view} />
+                ) : (
+                  <Skeleton className="h-48 w-full" />
+                )}
+              </Card>
+              <Card
+                title={t(PLACES_TITLE[platform])}
+                description={
+                  day ? <PickedChip day={day} onClear={() => setPicked(null)} /> : undefined
+                }
+              >
+                {day ? (
+                  <Resolved state={day} retry={retryDay}>
+                    {(data) => <PlaceBars platform={platform} places={data.places} />}
+                  </Resolved>
+                ) : view ? (
+                  <PlaceBars platform={platform} places={view.places} />
+                ) : (
+                  <RowsSkeleton rows={4} />
+                )}
+              </Card>
+            </div>
+            {view ? (
+              <PlatformMembers
+                view={view}
+                day={day}
+                retryDay={retryDay}
+                onClearDay={() => setPicked(null)}
+                members={members.state.status === 'ready' ? members.state.data.members : []}
+              />
+            ) : (
+              <Card title={t('platform.members.title')}>
+                <RowsSkeleton rows={5} />
+              </Card>
+            )}
+          </>
+        )}
+      </DayData>
+      {children}
+    </>
   );
 }
 
@@ -294,7 +362,15 @@ function DailyChart({
 }
 
 /** When the community writes; a cell picked lists who wrote then. */
-function HeatBlock({ path, view }: { path: string; view: PlatformDashboard }) {
+function HeatBlock({
+  platform,
+  path,
+  view,
+}: {
+  platform: ActivityPlatform;
+  path: string;
+  view: PlatformDashboard;
+}) {
   const { t, locale, number, plural } = useI18n();
   const [slot, setSlot] = useState<{ dow: number; hour: number } | null>(null);
   // 5 January 2026 was a Monday: its week names the days.
@@ -340,6 +416,7 @@ function HeatBlock({ path, view }: { path: string; view: PlatformDashboard }) {
       {slot ? (
         <SlotMembers
           key={`${slot.dow}:${slot.hour}`}
+          platform={platform}
           path={`${path}/slots/${slot.dow}/${slot.hour}`}
           title={t('platform.slot.title', {
             day: days[slot.dow - 1]?.full ?? '',

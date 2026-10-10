@@ -52,9 +52,13 @@ export const en = {
   'platform.status.reading': 'Reading the last 90 days',
   'platform.status.problem': 'Needs your attention',
   'platform.status.off': 'Not set up',
+  'platform.status.synced': 'Synchronized',
   'platform.since.discord': 'channels read {when}',
   'platform.since.telegram': 'last message received {when}',
   'platform.since.never': 'nothing received yet',
+  'platform.since.whop': 'last read {when}',
+  'platform.since.whopNever': 'not read yet',
+  'platform.problem.whop': 'Part of your Whop data cannot be read: see Data sync, below.',
   'platform.reconnect': 'Reconnect',
   'platform.problem.noChannel':
     'No channel followed: choose the channels StayPut reads in the bot settings, below.',
@@ -71,8 +75,12 @@ export const en = {
   'platform.hero.messages': 'Messages (30d)',
   'platform.hero.messages.tip':
     'Everyone’s messages over 30 days: your members, your team, guests and accounts not tied yet. {members} of them are your members’.',
+  'platform.hero.messages.tip.whop':
+    'Chat messages and forum posts over 30 days, your team’s included. {members} of them are your members’.',
   'platform.chart.title': 'Messages per day',
   'platform.chart.pick.discord': 'Over 30 days. Click a day to see its channels and who wrote.',
+  'platform.chart.pick.whop':
+    'Over 30 days. Click a day to see its chats, its forums and who wrote.',
   'platform.chart.pick.telegram':
     'Over 30 days. Click a day to see its groups, its topics and who wrote.',
   'platform.chart.summary':
@@ -94,9 +102,13 @@ export const en = {
   'platform.slot.others.one': '+ {count} message from your team, guests or accounts not tied yet',
   'platform.slot.others.other':
     '+ {count} messages from your team, guests or accounts not tied yet',
+  'platform.slot.empty.whop': 'No member wrote then: only your team.',
+  'platform.slot.others.whop.one': '+ {count} message from your team',
+  'platform.slot.others.whop.other': '+ {count} messages from your team',
   'platform.slot.close': 'Close',
   'platform.places.title.discord': 'Channels',
   'platform.places.title.telegram': 'Groups and topics',
+  'platform.places.title.whop': 'Chats and forums',
   'platform.places.sort': 'Sort by',
   'platform.places.sort.messages': 'Messages',
   'platform.places.sort.members': 'Members',
@@ -104,11 +116,16 @@ export const en = {
   'platform.places.general': 'General',
   'platform.places.unnamed.channel': 'Channel without a name',
   'platform.places.unnamed.topic': 'Topic created before the bot came',
+  'platform.places.unnamed.chat': 'Chat without a name',
+  'platform.places.unnamed.forum': 'Forum without a name',
   'platform.places.none.discord':
     'No channel followed yet: choose the channels StayPut reads in the bot settings.',
   'platform.places.none.telegram': 'No group connected yet.',
+  'platform.places.none.whop':
+    'No chat or forum read yet: they show here after the next synchronization.',
   'platform.places.empty': 'No message there over this period.',
   'platform.places.noMember': 'Only your team, guests or accounts not tied yet wrote there.',
+  'platform.places.noMember.whop': 'Only your team wrote there.',
   'platform.places.top': 'Most active here:',
   'platform.members.one': '{count} member',
   'platform.members.other': '{count} members',

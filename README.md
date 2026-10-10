@@ -134,6 +134,13 @@ connexion, les salons). Chaque bloc montre ses données, dit qu'il n'y en a pas,
 va pas avec « Retry » en moins de 5 secondes. StayPut ne lit jamais ce que les membres écrivent :
 seulement qui a écrit, où et quand.
 
+Intégrations › Whop a le même tableau de bord pour les chats et les forums Whop de la communauté
+(messages et publications, migration 0049) : l'en-tête dit où en est la synchronisation avec
+Whop (« Synchronisé », la dernière lecture, ou ce qui ne peut pas être lu), puis les mêmes
+chiffres, jours, heures, lieux (chats et forums par leur nom) et membres. Ni signaux, ni comptes
+à relier, ni bot : l'activité Whop fait déjà le score, et qui écrit sur Whop est un membre connu.
+La synchronisation et « Sync now » restent en bas de l'onglet.
+
 Dans Automatisations › File d'attente › Historique, chaque action qui a atteint un membre dit ce qu'il en est sorti
 : « Recovered $49.00 » (l'argent sauvé grâce à elle), « Still failing », « Paused until Nov 2 »,
 « Came back », « No reply yet » ou « Left ». C'est la preuve de ce que StayPut rapporte.

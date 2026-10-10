@@ -498,6 +498,13 @@ async function readStream(
         ],
       );
       next = row?.next ?? null;
+      // The names of Whop's chats and forums, for Integrations › Whop (0049).
+      if (stream.kind === 'chat_channels' || stream.kind === 'forums') {
+        await ctx.db.query(
+          'select stayput.note_whop_places($1, $2, $3::text::jsonb, $4::timestamptz)',
+          [companyId, stream.kind, page, ctx.now.toISOString()],
+        );
+      }
       // The end of the list: who the reading did not meet has left the server.
       if (roster && next === null) {
         await ctx.db.query('select stayput.discord_roster_end($1, $2, $3::timestamptz)', [

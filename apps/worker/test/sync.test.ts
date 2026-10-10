@@ -332,6 +332,26 @@ describe('syncing a company', () => {
     ).toBe('49.00');
   });
 
+  it('names the Whop chats and forums it lists, for Integrations › Whop (0049)', async () => {
+    const { id, u } = await company();
+    const lists = community(u);
+    lists['/chat_channels'] = [
+      { id: u('chat_C1'), experience: { id: u('exp_E1'), name: 'General' } },
+    ];
+    lists['/forums'] = [{ id: u('forum_F1'), experience: { id: u('exp_F1'), name: 'Wins' } }];
+    const whop = fakeWhop(lists);
+    await syncIfFree(context(whop.client), id, 0);
+    const places = await t.db.query<{ id: string; kind: string; name: string }>(
+      'select id, kind, name from stayput.whop_places where company_id = $1 order by id',
+      [id],
+    );
+    // A chat under its own id, a forum under its experience's: the ids their messages carry.
+    expect(places).toEqual([
+      { id: u('chat_C1'), kind: 'chat', name: 'General' },
+      { id: u('exp_F1'), kind: 'forum', name: 'Wins' },
+    ]);
+  });
+
   it('stops when the budget is spent, then goes on from the cursor', async () => {
     const { id, u } = await company();
     const whop = fakeWhop(community(u));

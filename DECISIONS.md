@@ -4268,3 +4268,26 @@ expérience StayPut, rattachée à son produit gratuit, où un ancien membre n'a
 - Textes : la carte Alumni ne parle plus du questionnaire de départ ni d'espace StayPut ; la page
   Discover dit « une réduction ou une pause proposée dans leur chat d'assistance » au lieu du
   questionnaire de départ.
+
+## 2026-10-10 — Intégrations › Whop : un tableau de bord comme Discord et Telegram
+
+Demande du fondateur : l'onglet Whop, qui ne montrait que la synchronisation, a le même tableau
+de bord que Discord et Telegram (migration **0049**).
+
+- **Un « message » Whop** est un message de chat ou une publication de forum (`activity_events`
+  de type `message` ou `forum_post`) : qui, où, quand, jamais le contenu. Les fonctions de 0033
+  (`platform_messages`, `platform_places`, `platform_dashboard`, `platform_day`,
+  `platform_slot`) lisent Whop comme une troisième plateforme ; l'équipe est un compte
+  `admin` de la communauté, jamais compté parmi les membres.
+- **Les lieux par leur nom** : `whop_places` (chats et forums), remplie par
+  `note_whop_places` à chaque lecture des listes `chat_channels` et `forums` (une fois par
+  jour). Un chat sous son id, un forum sous l'id de son expérience : les ids que portent leurs
+  messages.
+- **Ni signaux, ni comptes à relier, ni bot** sous Whop : l'activité Whop fait déjà les cinq
+  facteurs du score, et qui écrit sur Whop est un membre connu. L'en-tête dit où en est la
+  synchronisation (« Synchronisé », « Lecture des 90 derniers jours », ou « À vérifier » quand
+  une permission manque) ; le tableau se relit à la fin de chaque synchronisation, sans
+  interrogation toutes les 10 secondes (les messages Whop arrivent par la synchronisation).
+- **La démo** a son propre journal Whop (deux chats, un forum, les annonces) : la part des
+  messages de chaque membre qui n'est ni sur Discord ni sur Telegram, plus ses publications ; ce
+  que la démo montrait de Discord et Telegram ne change pas.

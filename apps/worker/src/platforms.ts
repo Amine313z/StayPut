@@ -1,6 +1,7 @@
 import {
   allPlatformSignals,
   type AccountPlatform,
+  type ActivityPlatform,
   type PlatformDashboard,
   type PlatformDayView,
   type PlatformSignals,
@@ -10,13 +11,19 @@ import {
 import { withUser, type Db, type TransactionalDb } from './db';
 
 /**
- * Integrations › Discord and › Telegram (brief v4 §9.6), each a dashboard: read as the creator
+ * Integrations › Whop, › Discord and › Telegram (brief v4 §9.6; Whop's since 0049), each a
+ * dashboard: read as the creator
  * (each SQL function checks they administer the company, 0033), in the company's calendar. Who
  * wrote, where and when; never what.
  */
 
 export function isPlatform(value: string): value is AccountPlatform {
   return value === 'discord' || value === 'telegram';
+}
+
+/** A platform with a dashboard: Discord, Telegram, and Whop (its chats and forums, 0049). */
+export function isDashboardPlatform(value: string): value is ActivityPlatform {
+  return isPlatform(value) || value === 'whop';
 }
 
 /** A day of the company's calendar, as the chart names it. */
@@ -31,7 +38,7 @@ export async function readPlatformDashboard(
   db: TransactionalDb,
   userId: string,
   companyId: string,
-  platform: AccountPlatform,
+  platform: ActivityPlatform,
   now: Date,
 ): Promise<PlatformDashboard | null> {
   const [row] = await withUser(db, userId, (tx) =>
@@ -54,7 +61,7 @@ export async function readPlatformDay(
   db: TransactionalDb,
   userId: string,
   companyId: string,
-  platform: AccountPlatform,
+  platform: ActivityPlatform,
   day: string,
   now: Date,
 ): Promise<PlatformDayView | null> {
@@ -72,7 +79,7 @@ export async function readPlatformSlot(
   db: TransactionalDb,
   userId: string,
   companyId: string,
-  platform: AccountPlatform,
+  platform: ActivityPlatform,
   dow: number,
   hour: number,
   now: Date,

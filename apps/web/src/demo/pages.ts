@@ -17,6 +17,7 @@ import {
   normalizeWeights,
   renderMessage,
   type AccountPlatform,
+  type ActivityPlatform,
   type AccountsView,
   type ActionRow,
   type ActionType,
@@ -42,7 +43,7 @@ import {
   type UnlinkedAccount,
 } from '@stayput/core';
 import { DEMO_WHOP_ID } from '../api';
-import { createPlatformLog, type LogPlace, type PlatformLog } from './platforms';
+import { createPlatformLog, type LogAccount, type LogPlace, type PlatformLog } from './platforms';
 
 /**
  * The demo's other pages (Automations, Analytics, Integrations › Activity, Settings › Risk
@@ -779,42 +780,58 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     questions: 0.16,
     wins: 0.12,
   };
-  const places = (platform: AccountPlatform): LogPlace[] =>
-    platform === 'discord'
-      ? channels.map((c) => ({
-          id: c.id,
-          kind: 'channel' as const,
-          name: c.name,
-          parent: community,
-          weight: c.followed ? (SHARES[c.name] ?? 0) : 0,
-          followed: c.followed,
-        }))
-      : [
-          {
-            id: `${input.chatId}:`,
-            kind: 'general' as const,
-            name: input.telegramTitle,
-            parent: null,
-            weight: 0.3,
-            followed: true,
-          },
-          {
-            id: `${input.chatId}:2`,
-            kind: 'topic' as const,
-            name: 'Signals',
-            parent: input.telegramTitle,
-            weight: 0.5,
-            followed: true,
-          },
-          {
-            id: `${input.chatId}:3`,
-            kind: 'topic' as const,
-            name: 'Questions',
-            parent: input.telegramTitle,
-            weight: 0.2,
-            followed: true,
-          },
-        ];
+  // The community's Whop chats and forum, as its Whop listings name them (0049).
+  const WHOP_PLACES: LogPlace[] = [
+    ['chat_DemoGeneral', 'chat', 'General', 0.55, true],
+    ['chat_DemoTradeIdeas', 'chat', 'Trade ideas', 0.25, true],
+    ['exp_DemoWins', 'forum', 'Wins', 0.2, true],
+    ['chat_DemoAnnouncements', 'chat', 'Announcements', 0, true],
+  ].map(([id, kind, name, weight, followed]) => ({
+    id: String(id),
+    kind: kind as 'chat' | 'forum',
+    name: String(name),
+    parent: null,
+    weight: Number(weight),
+    followed: Boolean(followed),
+  }));
+  const places = (platform: ActivityPlatform): LogPlace[] =>
+    platform === 'whop'
+      ? WHOP_PLACES
+      : platform === 'discord'
+        ? channels.map((c) => ({
+            id: c.id,
+            kind: 'channel' as const,
+            name: c.name,
+            parent: community,
+            weight: c.followed ? (SHARES[c.name] ?? 0) : 0,
+            followed: c.followed,
+          }))
+        : [
+            {
+              id: `${input.chatId}:`,
+              kind: 'general' as const,
+              name: input.telegramTitle,
+              parent: null,
+              weight: 0.3,
+              followed: true,
+            },
+            {
+              id: `${input.chatId}:2`,
+              kind: 'topic' as const,
+              name: 'Signals',
+              parent: input.telegramTitle,
+              weight: 0.5,
+              followed: true,
+            },
+            {
+              id: `${input.chatId}:3`,
+              kind: 'topic' as const,
+              name: 'Questions',
+              parent: input.telegramTitle,
+              weight: 0.2,
+              followed: true,
+            },
+          ];
 
   // ---- Every message, one by one (Integrations › Discord and › Telegram) ----
   const log = createPlatformLog({
@@ -825,6 +842,53 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     places,
     thresholds: () => ({ mediumFrom: riskSettings.mediumFrom, highFrom: riskSettings.highFrom }),
   });
+
+  // ---- Whop: what the members wrote in the community's chats and forums (Integrations › Whop) ----
+  // The rest of a member's own messages (Members, 30 days) once Discord and Telegram took their
+  // part, and their forum posts; the team writes there too (its admins, set aside). A log of its
+  // own: the Discord and Telegram one draws the same numbers as before.
+  const whopAccounts: LogAccount[] = joined.map((m, i) => {
+    const elsewhere = sum(
+      accounts.filter((a) => a.status === 'member' && a.member?.id === m.id).map((a) => a.messages),
+    );
+    const messages = Math.max(0, m.activity.messages - elsewhere) + m.activity.posts;
+    return {
+      platform: 'whop',
+      accountId: `user_Demo${String(i).padStart(5, '0')}`,
+      status: 'member',
+      member: m,
+      messages,
+      lastAt: messages > 0 && m.lastActivityAt ? Date.parse(m.lastActivityAt) : null,
+      joinedAt: m.joinedAt ? Date.parse(m.joinedAt) : now - 120 * DAY,
+      leftAt: null,
+    };
+  });
+  whopAccounts.push({
+    platform: 'whop',
+    accountId: 'user_DemoTeam',
+    status: 'team',
+    member: null,
+    messages: 38,
+    lastAt: now - 1 * HOUR,
+    joinedAt: now - 300 * DAY,
+    leftAt: null,
+  });
+  const whopLog = createPlatformLog({
+    now,
+    zone: input.zone,
+    accounts: whopAccounts,
+    rows,
+    places,
+    thresholds: () => ({ mediumFrom: riskSettings.mediumFrom, highFrom: riskSettings.highFrom }),
+  });
+  const logOf = (platform: ActivityPlatform) => (platform === 'whop' ? whopLog : log);
+  const platformLog: PlatformLog = {
+    ...log,
+    dashboard: (platform) => logOf(platform).dashboard(platform),
+    day: (platform, day) => logOf(platform).day(platform, day),
+    slot: (platform, dow, hour) => logOf(platform).slot(platform, dow, hour),
+    daily: (platform) => logOf(platform).daily(platform),
+  };
 
   const platformActivity = (): PlatformActivityView => {
     const tile = (platform: AccountPlatform) => {
@@ -1159,7 +1223,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     insights,
     platformActivity,
     people,
-    platforms: log,
+    platforms: platformLog,
     accounts: accountsView,
     integrations: (status) => {
       const counts = (platform: AccountPlatform) => ({

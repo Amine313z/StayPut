@@ -1,8 +1,10 @@
 import type { AccountPlatform, IntegrationsStatus, PlatformDashboard } from '@stayput/core';
 import type { MessageKey, PluralKey } from '@stayput/i18n';
 import { LoaderCircle, RefreshCw } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useDemo } from '../../../demoMode';
 import { useI18n } from '../../../i18n';
+import type { SyncState } from '../../../sync';
 import { ExternalButton } from '../../../ui/ExternalLink';
 import { MetricHero, SecondaryMetric } from '../../../ui/Metric';
 import { MetricSkeleton } from '../../../ui/Skeleton';
@@ -88,17 +90,112 @@ export function PlatformHero({
   hero: PlatformDashboard['hero'] | 'loading' | null;
   lastMessageAt: string | null;
 }) {
-  const { t, plural, number, relative } = useI18n();
+  const { t, relative } = useI18n();
   const demo = useDemo();
   const discord = platform === 'discord';
-  const name = t(discord ? 'sources.discord.name' : 'sources.telegram.name');
   const connection = connectionOf(platform, status, lastMessageAt);
   const link = discord ? status.discord.install : status.telegram.addToGroup;
-  const when = connection.lastAt
-    ? t(discord ? 'platform.since.discord' : 'platform.since.telegram', {
-        when: relative(new Date(connection.lastAt)),
-      })
-    : t('platform.since.never');
+  return (
+    <HeroCard
+      name={t(discord ? 'sources.discord.name' : 'sources.telegram.name')}
+      connection={connection}
+      label={t(STATE_LABELS[connection.state])}
+      when={
+        connection.lastAt
+          ? t(discord ? 'platform.since.discord' : 'platform.since.telegram', {
+              when: relative(new Date(connection.lastAt)),
+            })
+          : t('platform.since.never')
+      }
+      action={
+        demo || link ? (
+          <ExternalButton
+            href={link?.url ?? null}
+            whopAppId={status.whopAppId}
+            variant={connection.state === 'problem' ? 'primary' : 'secondary'}
+            size="sm"
+            icon={<RefreshCw aria-hidden="true" className="size-4" />}
+            tour={discord ? 'connect-discord' : undefined}
+          >
+            {t('platform.reconnect')}
+          </ExternalButton>
+        ) : null
+      }
+      hero={hero}
+      messagesTip="platform.hero.messages.tip"
+    />
+  );
+}
+
+/**
+ * Where the reading of Whop stands, from the synchronization: synchronized (a turquoise pulse)
+ * and when StayPut last read Whop; the history being read; or data StayPut cannot read (the
+ * synchronization says which, below). Whop needs no connection: StayPut is installed there.
+ */
+export function whopConnectionOf(sync: SyncState): Connection {
+  const status = sync.status;
+  const lastAt = status?.lastSyncAt ?? null;
+  if (status?.streams.some((s) => s.error && /^403\b/.test(s.error))) {
+    return { state: 'problem', problem: { key: 'platform.problem.whop' }, lastAt };
+  }
+  const reading = status === null || sync.running || !status.backfillDone;
+  return { state: reading ? 'reading' : 'live', problem: null, lastAt };
+}
+
+/** The top of Integrations › Whop: the synchronization and the same three figures. */
+export function WhopHero({
+  sync,
+  hero,
+}: {
+  sync: SyncState;
+  hero: PlatformDashboard['hero'] | 'loading' | null;
+}) {
+  const { t, relative } = useI18n();
+  const connection = whopConnectionOf(sync);
+  return (
+    <HeroCard
+      name={t('sources.whop.name')}
+      connection={connection}
+      label={t(
+        connection.state === 'live'
+          ? 'platform.status.synced'
+          : connection.state === 'reading'
+            ? sync.status === null
+              ? 'common.loading'
+              : 'platform.status.reading'
+            : STATE_LABELS[connection.state],
+      )}
+      when={
+        connection.lastAt
+          ? t('platform.since.whop', { when: relative(new Date(connection.lastAt)) })
+          : t('platform.since.whopNever')
+      }
+      action={null}
+      hero={hero}
+      messagesTip="platform.hero.messages.tip.whop"
+    />
+  );
+}
+
+/** The connection's line, what to fix, and the three figures. */
+function HeroCard({
+  name,
+  connection,
+  label,
+  when,
+  action,
+  hero,
+  messagesTip,
+}: {
+  name: string;
+  connection: Connection;
+  label: string;
+  when: string;
+  action: ReactNode;
+  hero: PlatformDashboard['hero'] | 'loading' | null;
+  messagesTip: MessageKey;
+}) {
+  const { t, plural, number } = useI18n();
   return (
     <section
       aria-label={name}
@@ -110,24 +207,13 @@ export function PlatformHero({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
           <Pulse state={connection.state} />
-          <span className="font-medium text-fg">{t(STATE_LABELS[connection.state])}</span>
+          <span className="font-medium text-fg">{label}</span>
           <span aria-hidden="true" className="text-subtle">
             ·
           </span>
           <span className="text-subtle">{when}</span>
         </p>
-        {demo || link ? (
-          <ExternalButton
-            href={link?.url ?? null}
-            whopAppId={status.whopAppId}
-            variant={connection.state === 'problem' ? 'primary' : 'secondary'}
-            size="sm"
-            icon={<RefreshCw aria-hidden="true" className="size-4" />}
-            tour={discord ? 'connect-discord' : undefined}
-          >
-            {t('platform.reconnect')}
-          </ExternalButton>
-        ) : null}
+        {action}
       </div>
       {connection.problem ? (
         <p role="status" className="mt-2 max-w-prose text-sm text-muted">
@@ -157,9 +243,7 @@ export function PlatformHero({
               />
               <SecondaryMetric
                 label={t('platform.hero.messages')}
-                tip={t('platform.hero.messages.tip', {
-                  members: number(hero.memberMessages30d),
-                })}
+                tip={t(messagesTip, { members: number(hero.memberMessages30d) })}
                 value={hero.messages30d}
                 format={(n) => number(Math.round(n))}
                 better="up"

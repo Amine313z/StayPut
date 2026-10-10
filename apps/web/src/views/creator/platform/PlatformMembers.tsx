@@ -1,4 +1,5 @@
 import type {
+  ActivityPlatform,
   ActivityWindow,
   MemberRow,
   PlatformDashboard,
@@ -182,10 +183,12 @@ function MemberList({
 
 /** Who wrote in a cell of the heatmap: the members, the most first, and the others' messages. */
 export function SlotMembers({
+  platform,
   path,
   title,
   onClose,
 }: {
+  platform: ActivityPlatform;
   path: string;
   title: string;
   onClose: () => void;
@@ -209,7 +212,9 @@ export function SlotMembers({
         <Resolved state={state} retry={retry}>
           {(slot) =>
             slot.members.length === 0 ? (
-              <p className="text-sm text-muted">{t('platform.slot.empty')}</p>
+              <p className="text-sm text-muted">
+                {t(platform === 'whop' ? 'platform.slot.empty.whop' : 'platform.slot.empty')}
+              </p>
             ) : (
               <>
                 <ul className="flex flex-wrap gap-x-5 gap-y-3">
@@ -225,7 +230,10 @@ export function SlotMembers({
                 </ul>
                 {slot.others > 0 ? (
                   <p className="mt-3 text-xs text-subtle">
-                    {plural('platform.slot.others', slot.others)}
+                    {plural(
+                      platform === 'whop' ? 'platform.slot.others.whop' : 'platform.slot.others',
+                      slot.others,
+                    )}
                   </p>
                 ) : null}
               </>

@@ -53,9 +53,14 @@ export const fr: Messages = {
   'platform.status.reading': 'Lecture des 90 derniers jours',
   'platform.status.problem': 'À vérifier',
   'platform.status.off': 'Non configuré',
+  'platform.status.synced': 'Synchronisé',
   'platform.since.discord': 'salons lus {when}',
   'platform.since.telegram': 'dernier message reçu {when}',
   'platform.since.never': 'rien reçu pour l’instant',
+  'platform.since.whop': 'lu {when}',
+  'platform.since.whopNever': 'pas encore lu',
+  'platform.problem.whop':
+    'Une partie de vos données Whop ne peut pas être lue : voyez Synchronisation des données, plus bas.',
   'platform.reconnect': 'Reconnecter',
   'platform.problem.noChannel':
     'Aucun salon suivi : choisissez les salons que StayPut lit dans les réglages du bot, plus bas.',
@@ -72,9 +77,13 @@ export const fr: Messages = {
   'platform.hero.messages': 'Messages (30 j)',
   'platform.hero.messages.tip':
     'Les messages de tous sur 30 jours : vos membres, votre équipe, les invités et les comptes pas encore reliés. {members} sont ceux de vos membres.',
+  'platform.hero.messages.tip.whop':
+    'Les messages des chats et les publications des forums sur 30 jours, ceux de votre équipe compris. {members} sont ceux de vos membres.',
   'platform.chart.title': 'Messages par jour',
   'platform.chart.pick.discord':
     'Sur 30 jours. Cliquez sur un jour pour voir ses salons et qui a écrit.',
+  'platform.chart.pick.whop':
+    'Sur 30 jours. Cliquez sur un jour pour voir ses chats, ses forums et qui a écrit.',
   'platform.chart.pick.telegram':
     'Sur 30 jours. Cliquez sur un jour pour voir ses groupes, ses sujets et qui a écrit.',
   'platform.chart.summary':
@@ -99,9 +108,13 @@ export const fr: Messages = {
     '+ {count} message de votre équipe, d’invités ou de comptes pas encore reliés',
   'platform.slot.others.other':
     '+ {count} messages de votre équipe, d’invités ou de comptes pas encore reliés',
+  'platform.slot.empty.whop': 'Aucun membre n’a écrit à ce moment-là : seulement votre équipe.',
+  'platform.slot.others.whop.one': '+ {count} message de votre équipe',
+  'platform.slot.others.whop.other': '+ {count} messages de votre équipe',
   'platform.slot.close': 'Fermer',
   'platform.places.title.discord': 'Salons',
   'platform.places.title.telegram': 'Groupes et sujets',
+  'platform.places.title.whop': 'Chats et forums',
   'platform.places.sort': 'Trier par',
   'platform.places.sort.messages': 'Messages',
   'platform.places.sort.members': 'Membres',
@@ -109,12 +122,17 @@ export const fr: Messages = {
   'platform.places.general': 'Général',
   'platform.places.unnamed.channel': 'Salon sans nom',
   'platform.places.unnamed.topic': 'Sujet créé avant l’arrivée du bot',
+  'platform.places.unnamed.chat': 'Chat sans nom',
+  'platform.places.unnamed.forum': 'Forum sans nom',
   'platform.places.none.discord':
     'Aucun salon suivi pour l’instant : choisissez les salons que StayPut lit dans les réglages du bot.',
   'platform.places.none.telegram': 'Aucun groupe connecté pour l’instant.',
+  'platform.places.none.whop':
+    'Aucun chat ni forum lu pour l’instant : ils s’affichent ici après la prochaine synchronisation.',
   'platform.places.empty': 'Aucun message ici sur cette période.',
   'platform.places.noMember':
     'Seuls votre équipe, des invités ou des comptes pas encore reliés ont écrit ici.',
+  'platform.places.noMember.whop': 'Seule votre équipe a écrit ici.',
   'platform.places.top': 'Les plus actifs ici :',
   'platform.members.one': '{count} membre',
   'platform.members.other': '{count} membres',

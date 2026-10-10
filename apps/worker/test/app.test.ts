@@ -2272,7 +2272,7 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
     expect((await request(path, put(customer, { enabled: false }))).status).toBe(403);
   });
 
-  it('reads Integrations › Discord and › Telegram, and saves a platform’s signals', async () => {
+  it('reads Integrations › Whop, › Discord and › Telegram, and saves a platform’s signals', async () => {
     const { request } = setup({ 'user_rita:biz_Plat1': 'admin', 'user_sam:biz_Plat1': 'customer' });
     const init = await asUser('user_rita');
     await request('/api/creator/biz_Plat1/session', init);
@@ -2322,8 +2322,17 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
       ).toBe(400);
     }
     expect((await request(`${path}/irc/signals`, put(init, signals))).status).toBe(404);
+    // Integrations › Whop (0049): the same readings; its signals are none (Whop's activity
+    // already makes the score).
+    const whop = (await (await request(`${path}/whop`, init)).json()) as PlatformDashboard;
+    expect(whop).toMatchObject({ platform: 'whop', places: [], heatmap: [] });
+    expect(whop.daily).toHaveLength(30);
+    expect((await request(`${path}/whop/days/2026-10-01`, init)).status).toBe(200);
+    expect((await request(`${path}/whop/slots/1/9`, init)).status).toBe(200);
+    expect((await request(`${path}/whop/signals`, put(init, signals))).status).toBe(404);
     const customer = await asUser('user_sam');
     expect((await request(`${path}/discord`, customer)).status).toBe(403);
+    expect((await request(`${path}/whop`, customer)).status).toBe(403);
     expect((await request(`${path}/discord/signals`, put(customer, signals))).status).toBe(403);
   });
 

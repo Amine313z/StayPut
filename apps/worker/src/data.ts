@@ -35,6 +35,7 @@ export const EXPORTED_TABLES = [
   'discord_guilds',
   'telegram_chats',
   'telegram_topics',
+  'whop_places',
   'goals',
   'results',
   'proofs',

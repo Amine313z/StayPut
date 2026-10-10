@@ -1148,6 +1148,12 @@ export interface GoalProposalsUpdate {
 /** Discord or Telegram: where StayPut sees members write beside Whop. */
 export type AccountPlatform = 'discord' | 'telegram';
 
+/**
+ * Where Integrations reads activity, each with its dashboard: Whop (its chats and forums, 0049),
+ * Discord and Telegram.
+ */
+export type ActivityPlatform = AccountPlatform | 'whop';
+
 /** A Discord or Telegram account no member has yet: its messages wait 30 days for one. */
 export interface UnlinkedAccount {
   platform: AccountPlatform;
@@ -1277,7 +1283,7 @@ export interface AlumniCreation {
  * §9.6), in the company's calendar. Who wrote, where and when; never what.
  */
 export interface PlatformDashboard {
-  platform: AccountPlatform;
+  platform: ActivityPlatform;
   /** The 30 days counted (yyyy-mm-dd). */
   from: string;
   to: string;
@@ -1330,10 +1336,13 @@ export interface HeatCell {
 }
 
 export interface PlatformPlace {
-  /** A Discord channel's id; a Telegram group's, then its topic's after a colon. */
+  /**
+   * A Discord channel's id; a Telegram group's, then its topic's after a colon; a Whop chat's, or
+   * a Whop forum's experience.
+   */
   id: string;
-  /** `general`: a forum group's messages outside its topics. */
-  kind: 'channel' | 'group' | 'general' | 'topic';
+  /** `general`: a forum group's messages outside its topics; `chat`, `forum`: Whop's. */
+  kind: 'channel' | 'group' | 'general' | 'topic' | 'chat' | 'forum';
   /** Null while StayPut does not know it (a topic created before the bot came). */
   name: string | null;
   /** The Discord server, the topic's group. */

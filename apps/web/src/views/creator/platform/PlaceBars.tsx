@@ -1,5 +1,5 @@
-import type { AccountPlatform, PlatformPlace } from '@stayput/core';
-import { Hash, MessagesSquare } from 'lucide-react';
+import type { ActivityPlatform, PlatformPlace } from '@stayput/core';
+import { Hash, MessageCircle, MessagesSquare, Newspaper } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useState } from 'react';
 import { useI18n } from '../../../i18n';
@@ -10,7 +10,7 @@ type Sort = 'messages' | 'members' | 'name';
 
 /**
  * Where members write (brief v4 §9.6): a horizontal bar for each Discord channel, each Telegram
- * group and topic, its messages over the period, its members beside them; sorted by messages,
+ * group and topic, each Whop chat and forum, its messages over the period, its members beside them; sorted by messages,
  * members or name. Pointing at a row or focusing it shows its three most active members (on a
  * touch screen, always). A followed channel nobody wrote in shows its empty track: a channel to
  * revive, or to stop reading.
@@ -19,7 +19,7 @@ export function PlaceBars({
   platform,
   places,
 }: {
-  platform: AccountPlatform;
+  platform: ActivityPlatform;
   places: readonly PlatformPlace[];
 }) {
   const { t, plural, number, locale } = useI18n();
@@ -29,14 +29,22 @@ export function PlaceBars({
     return (
       <p className="text-sm text-muted">
         {t(
-          platform === 'discord' ? 'platform.places.none.discord' : 'platform.places.none.telegram',
+          platform === 'whop'
+            ? 'platform.places.none.whop'
+            : platform === 'discord'
+              ? 'platform.places.none.discord'
+              : 'platform.places.none.telegram',
         )}
       </p>
     );
   }
   // A server's name, or a group's title before its topics, only when there are several.
   const groupOf = (place: PlatformPlace) =>
-    place.kind === 'topic' ? place.parent : place.kind === 'channel' ? place.parent : place.name;
+    place.kind === 'topic' || place.kind === 'channel'
+      ? place.parent
+      : place.kind === 'chat' || place.kind === 'forum'
+        ? null
+        : place.name;
   const several = new Set(places.map((p) => groupOf(p) ?? '')).size > 1;
   const nameOf = (place: PlatformPlace) =>
     place.kind === 'channel'
@@ -47,7 +55,11 @@ export function PlaceBars({
         ? t('platform.places.general')
         : place.kind === 'topic'
           ? (place.name ?? t('platform.places.unnamed.topic'))
-          : (place.name ?? t('telegram.unnamed'));
+          : place.kind === 'chat'
+            ? (place.name ?? t('platform.places.unnamed.chat'))
+            : place.kind === 'forum'
+              ? (place.name ?? t('platform.places.unnamed.forum'))
+              : (place.name ?? t('telegram.unnamed'));
   const parentOf = (place: PlatformPlace) =>
     several && place.kind !== 'group' ? groupOf(place) : null;
   const collator = new Intl.Collator(locale);
@@ -79,7 +91,14 @@ export function PlaceBars({
       <ul className="space-y-1" data-places={sort}>
         {sorted.map((place, index) => {
           const parent = parentOf(place);
-          const Icon = place.kind === 'channel' ? Hash : MessagesSquare;
+          const Icon =
+            place.kind === 'channel'
+              ? Hash
+              : place.kind === 'chat'
+                ? MessageCircle
+                : place.kind === 'forum'
+                  ? Newspaper
+                  : MessagesSquare;
           return (
             <li
               key={place.id}
@@ -130,7 +149,11 @@ export function PlaceBars({
                 {place.messages === 0 ? (
                   t('platform.places.empty')
                 ) : place.top.length === 0 ? (
-                  t('platform.places.noMember')
+                  t(
+                    platform === 'whop'
+                      ? 'platform.places.noMember.whop'
+                      : 'platform.places.noMember',
+                  )
                 ) : (
                   <>
                     <span className="text-subtle">{t('platform.places.top')} </span>

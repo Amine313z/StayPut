@@ -2377,6 +2377,142 @@ describe('activity sources', () => {
     expect(document.querySelector('[data-places]')!.textContent).not.toContain('VIP ›');
   });
 
+  /** Whop: a chat, a forum and a quiet chat; Alice and Bruno wrote in the chat, the team in the forum. */
+  const WHOP_VIEW: PlatformDashboard = {
+    ...DISCORD_VIEW,
+    platform: 'whop',
+    hero: { activeMembers7d: 2, silentMembers7d: 1, messages30d: 9, memberMessages30d: 7 },
+    places: [
+      {
+        id: 'chat_General',
+        kind: 'chat',
+        name: 'General',
+        parent: null,
+        messages: 7,
+        members: 2,
+        lastAt: '2026-10-01T09:00:00.000Z',
+        top: [
+          { id: 'mber_1', name: 'Alice Martin', messages: 5 },
+          { id: 'mber_3', name: 'Bruno Petit', messages: 2 },
+        ],
+      },
+      {
+        id: 'exp_Wins',
+        kind: 'forum',
+        name: 'Wins',
+        parent: null,
+        messages: 2,
+        members: 0,
+        lastAt: '2026-09-30T09:00:00.000Z',
+        top: [],
+      },
+      {
+        id: 'chat_Quiet',
+        kind: 'chat',
+        name: null,
+        parent: null,
+        messages: 0,
+        members: 0,
+        lastAt: null,
+        top: [],
+      },
+    ],
+  };
+
+  it('gives Whop the same dashboard: its chats and forums, who writes, who went silent', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/platforms/whop': times(2, WHOP_VIEW),
+    });
+    renderAt('/dashboard/biz_A1/sources');
+    // Whop needs no connection: the synchronization says where the reading stands.
+    const hero = (await screen.findByText('Synchronized')).closest<HTMLElement>('[data-hero]')!;
+    expect(hero.getAttribute('data-connection')).toBe('live');
+    expect(hero.getAttribute('aria-label')).toBe('Whop');
+    await vi.waitFor(() => expect(heroFigures()).toEqual(['2', '1', '9']));
+    expect(
+      screen.getByText('Over 30 days. Click a day to see its chats, its forums and who wrote.'),
+    ).toBeTruthy();
+    // Each chat and forum by its Whop name; a place only the team wrote in says so.
+    expect(screen.getByRole('heading', { name: 'Chats and forums' })).toBeTruthy();
+    const general = document.querySelector('[data-place="chat_General"]')!;
+    expect(general.getAttribute('data-kind')).toBe('chat');
+    expect(general.textContent).toContain('General');
+    expect(general.textContent).toContain('Most active here: Alice Martin 5 · Bruno Petit 2');
+    const wins = document.querySelector('[data-place="exp_Wins"]')!;
+    expect(wins.getAttribute('data-kind')).toBe('forum');
+    expect(wins.textContent).toContain('Only your team wrote there.');
+    expect(document.querySelector('[data-place="chat_Quiet"]')!.textContent).toContain(
+      'Chat without a name',
+    );
+    // The most active and who went silent, as on Discord and Telegram.
+    const active = document.querySelector<HTMLElement>('[data-list="active"]')!;
+    expect(within(active).getByText('Alice Martin')).toBeTruthy();
+    const silent = document.querySelector<HTMLElement>('[data-list="silent"]')!;
+    expect(within(silent).getByText('Denis Moreau')).toBeTruthy();
+    // No signals, no accounts to tie, no bot: Whop's activity already makes the score, and
+    // whoever writes there is a member. The synchronization stays below.
+    expect(screen.queryByRole('heading', { name: 'Signals' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Who is who' })).toBeNull();
+    expect(calls).not.toContain('POST /api/creator/biz_A1/platform-activity/refresh');
+    expect(screen.getByText('Data sync')).toBeTruthy();
+  });
+
+  it('reads the Whop dashboard again when a synchronization ends', async () => {
+    const calls = mockApi({
+      ...dashboard(),
+      'POST /api/creator/biz_A1/sync': [
+        {
+          status: 200,
+          body: {
+            ...syncStatus({ lastSyncAt: '2026-10-01T11:00:00.000Z' }).body,
+            ran: true,
+            calls: 3,
+          },
+        },
+      ],
+      '/api/creator/biz_A1/members': times(2, MEMBERS),
+      '/api/creator/biz_A1/integrations?lang=en': times(2, INTEGRATIONS),
+      '/api/creator/biz_A1/platforms/whop': times(2, WHOP_VIEW),
+    });
+    renderAt('/dashboard/biz_A1/sources');
+    await vi.waitFor(() => expect(heroFigures()).toEqual(['2', '1', '9']));
+    expect(calls.filter((c) => c === '/api/creator/biz_A1/platforms/whop')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Sync now' }));
+    await vi.waitFor(() =>
+      expect(calls.filter((c) => c === '/api/creator/biz_A1/platforms/whop')).toHaveLength(2),
+    );
+  });
+
+  it('says on Whop’s dashboard when part of its data cannot be read', async () => {
+    mockApi({
+      ...dashboard(),
+      '/api/creator/biz_A1/sync': [
+        syncStatus({
+          streams: [
+            {
+              stream: 'messages:chat_1',
+              backfillDone: false,
+              inProgress: false,
+              lastPassAt: null,
+              error: '403 missing permission chat:read',
+            },
+          ],
+        }),
+      ],
+      '/api/creator/biz_A1/platforms/whop': times(1, WHOP_VIEW),
+    });
+    renderAt('/dashboard/biz_A1/sources', 'fr');
+    const hero = (await screen.findByText('À vérifier')).closest<HTMLElement>('[data-hero]')!;
+    expect(hero.getAttribute('data-connection')).toBe('problem');
+    expect(
+      within(hero).getByText(
+        'Une partie de vos données Whop ne peut pas être lue : voyez Synchronisation des données, plus bas.',
+      ),
+    ).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Chats et forums' })).toBeTruthy();
+  });
+
   it('ties an account to a member in one click, from what StayPut suggests', async () => {
     const alice = {
       platform: 'telegram',

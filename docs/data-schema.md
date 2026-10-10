@@ -47,6 +47,7 @@ en retard.
 | `activity_events`  | l'activité détaillée d'un membre (message, réaction, leçon, connexion…), gardée 12 mois                                                                         | équipe         |
 | `pending_activity` | une activité reçue avant que son auteur soit connu comme membre ; rattachée ensuite, ou effacée                                                                 | Worker seul    |
 | `webhook_events`   | les envois de Whop, tels que reçus, le temps d'être traités (rejeu, puis suppression) ; `company_id` sans clé étrangère : un envoi peut précéder l'installation | Worker seul    |
+| `whop_places`      | les chats et forums Whop de la communauté, par leur nom (Intégrations › Whop) ; lus chaque jour avec leur liste                                                 | équipe         |
 
 ## Discord et Telegram
 
