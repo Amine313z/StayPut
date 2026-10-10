@@ -20,6 +20,9 @@ WHOP_APP_ID = "app_rjFkp2xKgjfPxY"
 # The member space (goals, results, testimonial cards, buddies, rescue challenges) is off in V1
 # (decision of 2026-10-02): "true" turns it back on. The departure survey always runs.
 MEMBER_SPACE_ENABLED = "false"
+# The legal pages (/privacy, /terms, /dpa) are off (decision of 2026-10-10: Whop asks for none,
+# no app shows any): "true" serves them again, once legal.ts names who runs StayPut.
+LEGAL_PAGES_ENABLED = "false"
 # The operator's own community, whose team sees StayPut's internal status page (SPEC Phase 8.5):
 # « StayPut Test » in the sandbox. At the switch to production, the repository variable
 # OPERATOR_COMPANY_ID replaces it (a community's id, not a secret).

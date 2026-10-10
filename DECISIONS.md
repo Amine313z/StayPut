@@ -4207,3 +4207,26 @@ saved », le montant, le graphique, l'action prioritaire) part du bord gauche.
   un cran au-dessus du titre d'une page (22 px).
 - **« Getting started » sous le titre, à gauche** (`Overview.tsx`), ses étapes ouvertes dans le
   même alignement.
+
+## 2026-10-10 — Pas de pages légales dans StayPut
+
+Question du fondateur : faut-il vraiment publier un nom, une adresse et un e-mail, alors qu'aucune
+app de Whop ne le fait ? Vérifié chez Whop le 10/10/2026 :
+
+- **Whop n'en demande aucune** : les réglages d'une app (`GET /apps/{id}`, chaque champ) n'ont ni
+  politique de confidentialité ni conditions ; l'écran d'installation ne peut donc en montrer
+  aucune. Whop vérifie l'identité du développeur avant de lui verser de l'argent (« Legal identity
+  required before payouts », sa documentation), sans rien publier.
+- **Aucune app n'en parle** : les 100 apps les plus installées de l'App Store (`GET /apps`,
+  public), aucune description ne mentionne confidentialité, conditions ou RGPD.
+- Non vérifié : le bas des pages Discover des autres apps (whop.com et `*.apps.whop.com` sont
+  hors d'atteinte depuis l'environnement de travail).
+
+Décision du fondateur : **éteintes**. Un seul interrupteur de chaque côté, comme l'espace membre :
+`LEGAL_PAGES_ENABLED` (Worker, `wrangler.toml`, `"false"` : `/privacy`, `/terms`, `/dpa`
+répondent 404) et `VITE_LEGAL_PAGES_ENABLED` (app, absent : ni carte « Legal » dans Settings, ni
+liens en bas de Discover, ni lien dans l'espace membre). Les textes restent dans `legal.ts`,
+prêts à revenir le jour où un créateur les demande ou si StayPut vise de grandes communautés
+européennes (le RGPD demande alors de dire ce qui est collecté et pourquoi) : compléter
+`OPERATOR`, puis allumer les deux interrupteurs ensemble. Inspect et `look.mjs` vérifient
+désormais leur absence (404, aucune carte).

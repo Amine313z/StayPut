@@ -8,3 +8,13 @@
 export function memberSpaceEnabled(): boolean {
   return import.meta.env.VITE_MEMBER_SPACE_ENABLED === 'true';
 }
+
+/**
+ * The legal pages (privacy policy, terms, DPA) are off (decision of 2026-10-10): Whop asks for
+ * none and no app on Whop shows any. Off, StayPut links to none of them (Settings, Discover, the
+ * member space); built with VITE_LEGAL_PAGES_ENABLED=true they come back, the Worker's own
+ * switch (LEGAL_PAGES_ENABLED) saying the same.
+ */
+export function legalPagesEnabled(): boolean {
+  return import.meta.env.VITE_LEGAL_PAGES_ENABLED === 'true';
+}

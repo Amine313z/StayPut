@@ -23,12 +23,25 @@ const app = createApp({
   accessCache: new AccessCache(),
 });
 
-const ENV: Env = { WHOP_ENV: 'sandbox', WHOP_APP_ID: 'app_stayput' };
+const ENV: Env = { WHOP_ENV: 'sandbox', WHOP_APP_ID: 'app_stayput', LEGAL_PAGES_ENABLED: 'true' };
 
 const get = (path: string, headers: Record<string, string> = {}) =>
   app.request(`http://localhost${path}`, { headers }, ENV);
 
 describe('the legal pages', () => {
+  it('are not served while they are off (LEGAL_PAGES_ENABLED, off since 2026-10-10)', async () => {
+    for (const env of [
+      { WHOP_ENV: 'sandbox' },
+      { WHOP_ENV: 'production', LEGAL_PAGES_ENABLED: 'false' },
+    ]) {
+      for (const document of LEGAL_DOCUMENTS) {
+        const res = await app.request(`http://localhost/${document}?lang=fr`, {}, env);
+        expect(res.status).toBe(404);
+        expect(await res.text()).not.toContain('to be completed');
+      }
+    }
+  });
+
   it('each answers in English by default, with its own style and nothing else', async () => {
     for (const document of LEGAL_DOCUMENTS) {
       const res = await get(`/${document}`);

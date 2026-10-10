@@ -27,10 +27,12 @@ describe('readConfig', () => {
       dev: null,
       // V1: the member space is off unless MEMBER_SPACE_ENABLED says "true".
       memberSpace: false,
+      legalPages: false,
       operatorCompanyId: null,
     });
     expect(readConfig({ MEMBER_SPACE_ENABLED: 'true' }).memberSpace).toBe(true);
     expect(readConfig({ MEMBER_SPACE_ENABLED: 'yes' }).memberSpace).toBe(false);
+    expect(readConfig({ LEGAL_PAGES_ENABLED: 'true' }).legalPages).toBe(true);
   });
 
   it('turns "Sign in with Whop" on in the sandbox only, once the app id and key exist', () => {

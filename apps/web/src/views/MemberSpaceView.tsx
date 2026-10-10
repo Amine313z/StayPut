@@ -9,7 +9,7 @@ import { MemberRetention, useRetention } from '../components/MemberRetention';
 import { MemberSpace } from '../components/MemberSpace';
 import { SignOut } from '../components/SignOut';
 import { ErrorPanel, Loading } from '../components/Status';
-import { memberSpaceEnabled } from '../features';
+import { legalPagesEnabled, memberSpaceEnabled } from '../features';
 import { useI18n } from '../i18n';
 import { Badge } from '../ui/Badge';
 import { TelegramIcon } from '../ui/BrandIcons';
@@ -83,10 +83,13 @@ function MemberPage({
       ) : null}
       {space ? <MemberSpace api={api} /> : null}
       <TelegramLink api={api} />
-      {/* What StayPut does with their data, within reach of every member (SPEC Phase 8.1). */}
-      <footer className="flex justify-center pt-2">
-        <PrivacyLink />
-      </footer>
+      {/* What StayPut does with their data, within reach of every member (SPEC Phase 8.1), while
+          the legal pages are on. */}
+      {legalPagesEnabled() ? (
+        <footer className="flex justify-center pt-2">
+          <PrivacyLink />
+        </footer>
+      ) : null}
     </div>
   );
 }

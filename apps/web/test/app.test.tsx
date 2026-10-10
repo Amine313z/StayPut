@@ -400,6 +400,8 @@ const dashboard = (
 
 /** The member space is off in V1 (MEMBER_SPACE_ENABLED): its tests turn it on. */
 const spaceOn = () => vi.stubEnv('VITE_MEMBER_SPACE_ENABLED', 'true');
+/** The legal pages, off since 2026-10-10 (features.ts), back on. */
+const legalOn = () => vi.stubEnv('VITE_LEGAL_PAGES_ENABLED', 'true');
 
 const NOBODY: MembersPage = {
   summary: {
@@ -3975,6 +3977,7 @@ describe('member view (with the member space)', () => {
   });
 
   it('gives every member the privacy policy, in their community’s language', async () => {
+    legalOn();
     mockApi({
       '/api/member/exp_E1/session': [memberSession],
       '/api/member/exp_E1/retention': [retention({ locale: 'fr' })],
@@ -5084,6 +5087,7 @@ describe('the views Whop opens', () => {
   });
 
   it('shows the Discover view without any call, nothing leaving Whop’s frame', async () => {
+    legalOn();
     const calls = mockApi({});
     renderAt('/discover');
     expect(
@@ -5249,7 +5253,22 @@ describe('the creator’s frame', () => {
     expect(within(developer).getByRole('button', { name: 'Copy' })).toBeTruthy();
   });
 
+  it('links to no legal page while they are off: not in Settings, not on Discover', async () => {
+    mockApi(dashboard());
+    renderAt('/dashboard/biz_A1/settings');
+    expect(await screen.findByRole('heading', { name: 'Developer' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Legal' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Privacy policy/ })).toBeNull();
+    cleanup();
+    renderAt('/discover');
+    expect(await screen.findByRole('link', { name: 'See the live demo' })).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'Legal' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Privacy policy' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Terms of service' })).toBeNull();
+  });
+
   it('reads the privacy policy, the terms and the DPA inside StayPut, in its language', async () => {
+    legalOn();
     mockApi(dashboard());
     renderAt('/dashboard/biz_A1/settings');
     const legal = (await screen.findByRole('heading', { name: 'Legal' })).closest('section')!;

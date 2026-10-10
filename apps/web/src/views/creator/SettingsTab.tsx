@@ -27,6 +27,7 @@ import { DEMO_WHOP_ID, putJson, useApi } from '../../api';
 import { BadgeCard } from '../../components/BadgeCard';
 import { DataCard, TeamCard } from '../../components/DataCards';
 import { LegalCard } from '../../components/Legal';
+import { legalPagesEnabled } from '../../features';
 import { LEVELS } from '../../components/Risk';
 import { ErrorPanel, Loading } from '../../components/Status';
 import { useDemo } from '../../demoMode';
@@ -111,7 +112,7 @@ export function GeneralSettingsTab() {
       />
       <TeamCard api={api} />
       <DataCard api={api} companyId={companyId} companyName={companyName} />
-      <LegalCard />
+      {legalPagesEnabled() ? <LegalCard /> : null}
       <Card
         icon={<Code aria-hidden="true" className="size-4" />}
         title={t('settings.developer')}

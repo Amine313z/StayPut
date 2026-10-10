@@ -44,7 +44,7 @@ de l'iframe n'est envoyé qu'à cette origine) :
 | `/api/*`                               | le Worker (`apps/worker`), jeton Whop vérifié        |
 | `/webhooks/whop`                       | le Worker : signature vérifiée, événement enregistré |
 | `/health`                              | le Worker : état de la base et de la configuration   |
-| `/privacy`, `/terms`, `/dpa`           | le Worker : les textes légaux, anglais et français   |
+| `/privacy`, `/terms`, `/dpa`           | le Worker : les textes légaux (éteints : 404)        |
 | `/badge/:companyId.svg`, `/verify/…`   | le Worker : le badge de rétention vérifiée           |
 | `/webhooks/telegram`, `/auth/*`        | le Worker : le bot Telegram, Discord et l'OAuth      |
 

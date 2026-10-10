@@ -89,7 +89,8 @@ réelle ; les liens vers l'extérieur et les envois y sont désactivés.
 ## Pages publiques du Worker
 
 `/health` (l'état de la base et de la configuration), `/privacy`, `/terms`, `/dpa` (les textes
-légaux, anglais et français), `/badge/:companyId.svg` et `/verify/:companyId` (le badge de
+légaux, anglais et français, éteints tant que `LEGAL_PAGES_ENABLED` n'est pas `true` : 404),
+`/badge/:companyId.svg` et `/verify/:companyId` (le badge de
 rétention vérifiée, s'il est activé). Chaque chemin servi par le Worker est listé dans
 `run_worker_first` de `apps/worker/wrangler.toml` (un test le vérifie) ; tous les autres sont
 l'app React.

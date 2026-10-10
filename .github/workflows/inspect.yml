@@ -125,13 +125,10 @@ jobs:
           # run_worker_first): for no community, each says so.
           expect /verify/biz_NoSuchCommunity 404 text/html
           expect /badge/biz_NoSuchCommunity.svg 404 json
-          # The legal pages too (SPEC 8.1): the page itself, never the app's index.html.
+          # The legal pages are off (decision of 2026-10-10, LEGAL_PAGES_ENABLED): the Worker says
+          # so, never the app's index.html and never a page with its blanks still to fill.
           for page in privacy terms dpa; do
-            expect "/$page?lang=fr" 200 text/html
-            if ! grep -q '<p class="draft">' "$body"; then
-              echo "  not the legal page (FAILED)" | tee -a "$GITHUB_STEP_SUMMARY"
-              failed=1
-            fi
+            expect "/$page?lang=fr" 404 json
           done
           exit $failed
 

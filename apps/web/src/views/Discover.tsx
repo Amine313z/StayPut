@@ -13,6 +13,7 @@ import {
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { LegalDialog, type LegalDocument } from '../components/Legal';
+import { legalPagesEnabled } from '../features';
 import { useI18n } from '../i18n';
 import { StayPutMark } from '../ui/BrandIcons';
 import { buttonClass } from '../ui/Button';
@@ -121,18 +122,20 @@ export function Discover() {
         </Card>
       </div>
 
-      <nav aria-label={t('legal.title')} className="flex flex-wrap justify-center gap-4">
-        {(['privacy', 'terms'] as const).map((document) => (
-          <button
-            key={document}
-            type="button"
-            className="rounded-sm text-sm text-muted underline underline-offset-4 transition-colors duration-150 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            onClick={() => setLegal(document)}
-          >
-            {t(document === 'privacy' ? 'legal.privacy' : 'legal.terms')}
-          </button>
-        ))}
-      </nav>
+      {legalPagesEnabled() ? (
+        <nav aria-label={t('legal.title')} className="flex flex-wrap justify-center gap-4">
+          {(['privacy', 'terms'] as const).map((document) => (
+            <button
+              key={document}
+              type="button"
+              className="rounded-sm text-sm text-muted underline underline-offset-4 transition-colors duration-150 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              onClick={() => setLegal(document)}
+            >
+              {t(document === 'privacy' ? 'legal.privacy' : 'legal.terms')}
+            </button>
+          ))}
+        </nav>
+      ) : null}
       {legal ? <LegalDialog document={legal} onClose={() => setLegal(null)} /> : null}
     </div>
   );

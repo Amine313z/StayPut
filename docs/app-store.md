@@ -96,9 +96,9 @@ d'échelle (1,5) en tête de `scripts/ops/store.mjs`.
 
 ## Liens
 
-- Politique de confidentialité : `https://stayput-app.chezbenz18.workers.dev/privacy`
-- Conditions d'utilisation : `https://stayput-app.chezbenz18.workers.dev/terms`
-- Accord de traitement des données : `https://stayput-app.chezbenz18.workers.dev/dpa`
+- Pas de page légale : Whop n'en demande aucune, aucune app de l'App Store n'en montre, et elles
+  sont éteintes (`LEGAL_PAGES_ENABLED`, décision du 10/10/2026). Rallumées, elles seraient à
+  `/privacy`, `/terms` et `/dpa`.
 
 Les trois pages attendent encore l'identité de l'éditeur (raison sociale, adresse, e-mail, droit
 applicable) et une relecture : voir `docs/production.md`, étape 5.

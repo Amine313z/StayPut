@@ -3282,13 +3282,18 @@ export function createApp(deps: AppDeps) {
   /**
    * The privacy policy, the terms of service and the data processing agreement (SPEC Phase 8.1),
    * public: in the language asked (`?lang=fr`), else the browser's, else English; in StayPut's
-   * colors inside its window (`?view=app`).
+   * colors inside its window (`?view=app`). Only while they are on (LEGAL_PAGES_ENABLED, off
+   * since 2026-10-10): off, no page with its blanks still to fill is ever shown.
    */
   for (const document of LEGAL_DOCUMENTS) {
     app.get(`/${document}`, (c) =>
-      legalPage(document, legalLocale(c.req.query('lang'), c.req.header('accept-language') ?? ''), {
-        app: c.req.query('view') === 'app',
-      }),
+      c.get('config').legalPages
+        ? legalPage(
+            document,
+            legalLocale(c.req.query('lang'), c.req.header('accept-language') ?? ''),
+            { app: c.req.query('view') === 'app' },
+          )
+        : apiError('not_found', 'no such route'),
     );
   }
 

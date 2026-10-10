@@ -67,9 +67,9 @@ Sur **whop.com** (pas le sandbox) → **Dashboard → Developer → Create app**
    `course_lesson_interaction.completed`, `chat.message.created`, `chat.reaction.created`.
 5. Copier la **clé API de l'app** (`apik_…`) et le **secret du webhook** (`ws_…`) directement
    dans les secrets de l'étape 3, et l'**identifiant de l'app** (`app_…`, pas un secret).
-6. Fiche de l'App Store : textes et captures dans [`docs/app-store.md`](./app-store.md) ;
-   politique de confidentialité `https://stayput-app.chezbenz18.workers.dev/privacy`,
-   conditions `https://stayput-app.chezbenz18.workers.dev/terms`.
+6. Fiche de l'App Store : textes et captures dans [`docs/app-store.md`](./app-store.md). Pas
+   de page légale : Whop n'en demande aucune et elles sont éteintes (`LEGAL_PAGES_ENABLED`,
+   décision du 10/10/2026).
 
 ## 3. GitHub : les réglages de production
 
@@ -117,7 +117,7 @@ La toute première publication d'une nouvelle adresse `workers.dev` peut mettre 
 à répondre : relancer le workflow si la vérification échoue de ce seul fait.
 
 Puis **Actions → Inspect → Run workflow → target : production** : il relit l'app chez Whop comme
-le déploiement, et vérifie le site, les pages légales et la démo dans Chrome, sans lire la base (ce dépôt est public, ses journaux
+le déploiement, et vérifie le site, l'absence des pages légales et la démo dans Chrome, sans lire la base (ce dépôt est public, ses journaux
 aussi : aucune communauté cliente ne doit y apparaître). L'état de la production se lit dans
 StayPut même : **Réglages › État**, dans ta communauté.
 
@@ -137,8 +137,10 @@ StayPut même : **Réglages › État**, dans ta communauté.
 3. Une nouvelle communauté démarre en **mode manuel** (rien ne part sans l'accord de l'équipe),
    le mode test désactivé, et à l'**heure de New York** (migration 0044) ; l'équipe change l'un
    et l'autre dans Settings.
-4. Compléter l'éditeur dans `apps/worker/src/legal.ts` (`OPERATOR` : raison sociale, adresse,
-   e-mail, droit applicable) et faire relire les textes avant d'ouvrir l'app au public.
+4. Les pages légales sont éteintes (décision du 10/10/2026 : Whop n'en demande aucune, aucune app
+   n'en montre). Pour les rallumer : compléter `OPERATOR` dans `apps/worker/src/legal.ts`, puis
+   `LEGAL_PAGES_ENABLED = "true"` (`apps/worker/wrangler.toml`) et `VITE_LEGAL_PAGES_ENABLED=true`
+   au build de l'app, ensemble.
 
 ## 6. Ensuite
 

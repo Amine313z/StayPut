@@ -34,6 +34,11 @@ export interface Env {
    */
   MEMBER_SPACE_ENABLED?: string;
   /**
+   * "true" serves the legal pages (/privacy, /terms, /dpa): off since 2026-10-10 (no Whop app
+   * shows any, Whop asks for none); their texts stay in legal.ts, ready to come back.
+   */
+  LEGAL_PAGES_ENABLED?: string;
+  /**
    * The operator's own community (`biz_…`): its team sees StayPut's internal status page
    * (SPEC Phase 8.5). Not a secret: a community's id.
    */
@@ -62,6 +67,8 @@ export interface Config {
   dev: { userId: string; accessLevel: AccessLevel | null } | null;
   /** The member space is on (MEMBER_SPACE_ENABLED=true); off, its routes and its work stop. */
   memberSpace: boolean;
+  /** The legal pages are served (LEGAL_PAGES_ENABLED=true); off, they answer 404. */
+  legalPages: boolean;
   /** The community whose team sees the internal status page; null: nobody's. */
   operatorCompanyId: string | null;
 }
@@ -85,6 +92,7 @@ export function readConfig(env: Env): Config {
     telegram: env.TELEGRAM_BOT_TOKEN ? { botToken: env.TELEGRAM_BOT_TOKEN } : null,
     dev: devUser ? { userId: devUser, accessLevel: devLevel } : null,
     memberSpace: env.MEMBER_SPACE_ENABLED === 'true',
+    legalPages: env.LEGAL_PAGES_ENABLED === 'true',
     operatorCompanyId: isCompanyId(env.OPERATOR_COMPANY_ID) ? env.OPERATOR_COMPANY_ID : null,
   };
 }
