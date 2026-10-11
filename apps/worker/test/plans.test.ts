@@ -792,3 +792,207 @@ describe('the private beta (INVITE_ONLY)', () => {
     );
   });
 });
+
+/**
+ * Every combination (decision of 2026-10-11, the founder's « vérif complète »): the private beta
+ * on or off, the founder's account set or not, the operator's community set or not; and, in each,
+ * the founder, a moderator of the operator's community, an invited tester, a stranger who got the
+ * link, the members of both, and no one signed in, against every route that must stay shut. What
+ * each should get is worked out here from the rules alone (`expected`), never from the code.
+ */
+describe('the access matrix', () => {
+  const MOD = 'user_OpMod';
+  const INV_OWNER = 'user_InvOwner';
+  const STR_OWNER = 'user_StrOwner';
+  const INV_MEMBER = 'user_InvMember';
+  const STR_MEMBER = 'user_StrMember';
+  const ACTORS = [ADMIN, MOD, INV_OWNER, STR_OWNER] as const;
+
+  interface Setting {
+    inviteOnly: boolean;
+    founder: boolean;
+    operator: boolean;
+  }
+  const SETTINGS: Setting[] = [false, true].flatMap((inviteOnly) =>
+    [false, true].flatMap((founder) =>
+      [false, true].map((operator) => ({ inviteOnly, founder, operator })),
+    ),
+  );
+
+  /** A delivery from Whop about `company`, signed as Whop signs it. */
+  async function deliver(env: ReturnType<typeof setup>, id: string, company: string) {
+    const body = JSON.stringify({
+      type: 'member.created',
+      company_id: company,
+      data: { id: `mber_${id}`, company: { id: company }, user: { id: `user_${id}` } },
+    });
+    const res = await env.request('/webhooks/whop', {
+      method: 'POST',
+      body,
+      headers: {
+        'webhook-id': `msg_${id}`,
+        'webhook-timestamp': String(NOW_S),
+        'webhook-signature': await signWebhook(body, SECRET, `msg_${id}`, NOW_S),
+        'content-type': 'application/json',
+      },
+    });
+    expect(res.status).toBe(200);
+    await settle();
+    return ((await res.json()) as { ignored?: boolean }).ignored !== true;
+  }
+
+  it.each(SETTINGS.map((s, i) => [i, s] as const))(
+    'setting %i (%o): each one gets exactly what the rules give',
+    async (k, setting) => {
+      const op = `biz_OpM${k}`;
+      const inv = `biz_InvM${k}`;
+      const str = `biz_StrM${k}`;
+      const fresh = `biz_NewM${k}`;
+      const { ADMIN_USER_ID: _founder, ...withoutFounder } = ENV;
+      const config: Env = {
+        ...(setting.founder ? ENV : withoutFounder),
+        INVITE_ONLY: setting.inviteOnly ? 'true' : 'false',
+        ...(setting.operator ? { OPERATOR_COMPANY_ID: op } : {}),
+      };
+      const env = setup(config);
+      // Who is on which team (Whop's answer), who owns what, and the two experiences.
+      const team: Record<string, string[]> = {
+        [ADMIN]: [op, str],
+        [MOD]: [op],
+        [INV_OWNER]: [inv],
+        [STR_OWNER]: [str],
+      };
+      for (const [user, companies] of Object.entries(team)) {
+        for (const company of companies) env.whop.access[`${user}:${company}`] = 'admin';
+      }
+      env.whop.owners[op] = ADMIN;
+      env.whop.owners[inv] = INV_OWNER;
+      env.whop.owners[str] = STR_OWNER;
+      env.whop.experiences[`exp_InvM${k}`] = inv;
+      env.whop.experiences[`exp_StrM${k}`] = str;
+      env.whop.access[`${INV_MEMBER}:exp_InvM${k}`] = 'customer';
+      env.whop.access[`${STR_MEMBER}:exp_StrM${k}`] = 'customer';
+      await t.db.query(`insert into stayput.founders (company_id, invited_at) values ($1, now())`, [
+        inv,
+      ]);
+
+      // The rules, written once: who StayPut opens to, and who sees the founder's tabs.
+      const founderHere = (user: string) => setting.founder && user === ADMIN;
+      const open = (company: string, user: string) =>
+        !setting.inviteOnly ||
+        company === inv ||
+        (setting.operator && company === op) ||
+        founderHere(user);
+      const statusTab = (company: string, user: string) =>
+        setting.operator && company === op && founderHere(user);
+
+      // 1. Whop's deliveries, before anyone opened anything: kept only for an open community.
+      for (const company of [op, inv, str]) {
+        const kept = !setting.inviteOnly || company === inv || (setting.operator && company === op);
+        expect(await deliver(env, `${company.slice(4)}a`, company), `webhook ${company}`).toBe(
+          kept,
+        );
+      }
+
+      // 2. The dashboard's session, for every team member and every community.
+      const refusedTeams = new Set<string>();
+      for (const user of ACTORS) {
+        for (const company of [op, inv, str]) {
+          const res = await env.request(`/api/creator/${company}/session`, await as(user));
+          await settle();
+          const label = `session ${user} → ${company}`;
+          if (!team[user]!.includes(company)) {
+            expect(res.status, label).toBe(403);
+            expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+              'forbidden',
+            );
+          } else if (!open(company, user)) {
+            expect(res.status, label).toBe(403);
+            expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+              'not_invited',
+            );
+            refusedTeams.add(company);
+          } else {
+            expect(res.status, label).toBe(200);
+            expect(await res.json(), label).toMatchObject({
+              admin: founderHere(user),
+              operator: statusTab(company, user),
+            });
+          }
+        }
+      }
+      // No one signed in: never.
+      expect((await env.request(`/api/creator/${inv}/session`)).status).toBe(401);
+
+      // 3. Settings › Status and its replay: the founder alone, in the operator's community.
+      for (const user of [ADMIN, MOD]) {
+        const status = await env.request(`/api/creator/${op}/operator/status`, await as(user));
+        const replay = await env.request(
+          `/api/creator/${op}/operator/webhooks/replay`,
+          await as(user, post({})),
+        );
+        await settle();
+        const want = !open(op, user) ? 403 : statusTab(op, user) ? 200 : 404;
+        expect(status.status, `status ${user}`).toBe(want);
+        expect(replay.status, `replay ${user}`).toBe(want);
+      }
+      expect(
+        (await env.request(`/api/creator/${inv}/operator/status`, await as(INV_OWNER))).status,
+      ).toBe(404);
+
+      // 4. Settings › Admin, read and every change: the founder alone; « not found » for others.
+      for (const user of ACTORS) {
+        const want = founderHere(user) ? 200 : 404;
+        expect(
+          (await env.request('/api/admin/companies', await as(user))).status,
+          `admin read ${user}`,
+        ).toBe(want);
+        const invite = await env.request(
+          '/api/admin/founders',
+          await as(user, post({ companyId: fresh })),
+        );
+        expect(invite.status, `admin invite ${user}`).toBe(want);
+        const change = await env.request(
+          `/api/admin/founders/${fresh}`,
+          await as(user, { method: 'PUT', body: JSON.stringify({ note: 'x' }) }),
+        );
+        expect(change.status, `admin change ${user}`).toBe(founderHere(user) ? 200 : 404);
+        const ignore = await env.request(
+          `/api/admin/requests/${str}`,
+          await as(user, { method: 'DELETE', body: '{}' }),
+        );
+        expect(ignore.status, `admin ignore ${user}`).toBe(want);
+        // Put the registry back as it was, whoever could change it.
+        await t.db.query('delete from stayput.founders where company_id = $1', [fresh]);
+      }
+      expect((await env.request('/api/admin/companies')).status).toBe(401);
+
+      // 5. The members, in their community: StayPut opens only where it is open to all.
+      for (const [user, experience, company] of [
+        [INV_MEMBER, `exp_InvM${k}`, inv],
+        [STR_MEMBER, `exp_StrM${k}`, str],
+      ] as const) {
+        const res = await env.request(`/api/member/${experience}/home`, await as(user));
+        await settle();
+        expect(res.status, `member ${user}`).toBe(open(company, user) ? 200 : 403);
+      }
+
+      // 6. The requests the founder sees: exactly the communities whose team found the door shut
+      //    (the founder's own ignore, above, may have taken the stranger's away: it comes back on
+      //    its team's next visit).
+      await env.request(`/api/creator/${str}/session`, await as(STR_OWNER));
+      await settle();
+      const asked = await t.db.query<{ company_id: string }>(
+        "select company_id from stayput.access_requests where company_id = any(string_to_array($1, ','))",
+        [[op, inv, str].join(',')],
+      );
+      expect(asked.map((row) => row.company_id).sort()).toEqual([...refusedTeams].sort());
+
+      // 7. Once the founder opened the stranger's community, its deliveries are kept.
+      const founderOpened = open(str, ADMIN);
+      expect(await deliver(env, `${str.slice(4)}b`, str), 'webhook after the founder').toBe(
+        !setting.inviteOnly || founderOpened,
+      );
+    },
+  );
+});
