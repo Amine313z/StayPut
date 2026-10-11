@@ -3543,6 +3543,18 @@ describe('risk settings', () => {
     });
     expect(page.textContent).toBe('');
     expect(document.body.textContent?.trim()).toBe('');
+    cleanup();
+
+    // In the community too: the empty page covers the whole window, StayPut's header with it.
+    mockApi({ '/api/member/exp_A1/home': [shut, shut, shut] });
+    renderAt('/experiences/exp_A1');
+    const cover = await vi.waitFor(() => {
+      const found = document.querySelector('[data-invite-only]');
+      if (!found) throw new Error('not yet');
+      return found;
+    });
+    expect(cover.textContent).toBe('');
+    expect(cover.className).toMatch(/\bfixed\b.*\binset-0\b/);
   });
 
   it('shows the founder the private beta’s requests, invited in one click', async () => {

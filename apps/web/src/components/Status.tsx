@@ -18,10 +18,11 @@ export function Loading() {
 
 /**
  * The private beta's closed door (INVITE_ONLY): an empty page, nothing of StayPut, for a community
- * the founder did not invite (the founder's choice, 2026-10-11: not even a line).
+ * the founder did not invite (the founder's choice, 2026-10-11: not even a line). It covers the
+ * whole window, the shell's header with StayPut's name too.
  */
 export function InviteOnly() {
-  return <div data-invite-only="" className="min-h-screen" />;
+  return <div data-invite-only="" className="fixed inset-0 z-50 bg-bg" />;
 }
 
 /**
