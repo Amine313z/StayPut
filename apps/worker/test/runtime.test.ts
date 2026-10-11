@@ -33,8 +33,8 @@ describe('readConfig', () => {
       // Plans are off until both products are set: every community has everything.
       plans: {
         enabled: false,
-        proProduct: null,
-        scaleProduct: null,
+        proPlans: [],
+        scalePlans: [],
         founderPlan: null,
         checkout: { pro: null, scale: null },
         adminUserId: null,
@@ -48,8 +48,8 @@ describe('readConfig', () => {
 
   it('reads the plans from Whop’s ids, its checkout links only, plan B by its switch', () => {
     const plans = readConfig({
-      WHOP_PROD_PRO: 'prod_Pro1',
-      WHOP_PROD_SCALE: ' prod_Scale1 ',
+      WHOP_PLANS_PRO: 'plan_Pro1, plan_ProYear1',
+      WHOP_PLANS_SCALE: ' plan_Scale1 ,prod_Wrong,plan_Scale1',
       WHOP_PLAN_SCALE_FOUNDER: 'plan_Founder1',
       CHECKOUT_URL_PRO: 'https://whop.com/checkout/plan_Pro1',
       CHECKOUT_URL_SCALE: 'https://evil.example/checkout',
@@ -59,14 +59,14 @@ describe('readConfig', () => {
     }).plans;
     expect(plans).toEqual({
       enabled: true,
-      proProduct: 'prod_Pro1',
-      scaleProduct: 'prod_Scale1',
+      proPlans: ['plan_Pro1', 'plan_ProYear1'],
+      scalePlans: ['plan_Scale1'],
       founderPlan: 'plan_Founder1',
       checkout: { pro: 'https://whop.com/checkout/plan_Pro1', scale: null },
       adminUserId: 'user_Founder',
       founderFallback: { on: true, betaEnd: new Date('2026-12-01T00:00:00Z') },
     });
-    expect(readConfig({ WHOP_PROD_PRO: 'prod_Pro1' }).plans.enabled).toBe(false);
+    expect(readConfig({ WHOP_PLANS_PRO: 'plan_Pro1' }).plans.enabled).toBe(false);
     expect(
       readConfig({ FOUNDER_FALLBACK_MODE: 'off', BETA_END: 'soon' }).plans.founderFallback,
     ).toEqual({

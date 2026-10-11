@@ -44,12 +44,13 @@ export interface Env {
    */
   OPERATOR_COMPANY_ID?: string;
   /**
-   * StayPut's plans (decision of 2026-10-10), all set on Whop: the products of the app (Pro,
-   * Scale), the founders' hidden plan, the visible plans' checkout links. Not secrets. Without
-   * the two products, plans are off and every community has everything (as before plans).
+   * StayPut's plans (decisions of 2026-10-10 and 2026-10-11), all set on Whop as plans of the
+   * app's own product (its App Store listing): Pro's plans and Scale's (`plan_…`, comma-separated:
+   * monthly, yearly), the founders' hidden plan, the visible plans' checkout links. Not secrets.
+   * Without Pro's and Scale's plans, plans are off and every community has everything.
    */
-  WHOP_PROD_PRO?: string;
-  WHOP_PROD_SCALE?: string;
+  WHOP_PLANS_PRO?: string;
+  WHOP_PLANS_SCALE?: string;
   WHOP_PLAN_SCALE_FOUNDER?: string;
   CHECKOUT_URL_PRO?: string;
   CHECKOUT_URL_SCALE?: string;
@@ -70,11 +71,12 @@ export interface Env {
   INVITE_ONLY?: string;
 }
 
-/** StayPut's plans as configured; `enabled` once both products are set. */
+/** StayPut's plans as configured; `enabled` once Pro's and Scale's plans are set. */
 export interface PlansConfig {
   enabled: boolean;
-  proProduct: string | null;
-  scaleProduct: string | null;
+  /** Whop's plans that give Pro, and Scale (the founders' plan gives Scale too). */
+  proPlans: readonly string[];
+  scalePlans: readonly string[];
   founderPlan: string | null;
   checkout: { pro: string | null; scale: string | null };
   adminUserId: string | null;
@@ -112,7 +114,6 @@ export interface Config {
   plans: PlansConfig;
 }
 
-const PRODUCT_ID = /^prod_[A-Za-z0-9]+$/;
 const PLAN_ID = /^plan_[A-Za-z0-9]+$/;
 
 /** A checkout link on Whop (https, whop.com), else null: never a link elsewhere. */
@@ -128,18 +129,28 @@ function checkoutUrl(raw: string | undefined): string | null {
   }
 }
 
+/** Whop plan ids, comma-separated; anything else left out. */
+function planIds(raw: string | undefined): string[] {
+  return [
+    ...new Set(
+      (raw ?? '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => PLAN_ID.test(id)),
+    ),
+  ];
+}
+
 export function readPlansConfig(env: Env): PlansConfig {
-  const pro = env.WHOP_PROD_PRO?.trim() ?? '';
-  const scale = env.WHOP_PROD_SCALE?.trim() ?? '';
   const founder = env.WHOP_PLAN_SCALE_FOUNDER?.trim() ?? '';
   const admin = env.ADMIN_USER_ID?.trim();
   const betaEnd = env.BETA_END?.trim() ? new Date(env.BETA_END.trim()) : null;
-  const proProduct = PRODUCT_ID.test(pro) ? pro : null;
-  const scaleProduct = PRODUCT_ID.test(scale) ? scale : null;
+  const proPlans = planIds(env.WHOP_PLANS_PRO);
+  const scalePlans = planIds(env.WHOP_PLANS_SCALE);
   return {
-    enabled: proProduct !== null && scaleProduct !== null,
-    proProduct,
-    scaleProduct,
+    enabled: proPlans.length > 0 && scalePlans.length > 0,
+    proPlans,
+    scalePlans,
     founderPlan: PLAN_ID.test(founder) ? founder : null,
     checkout: {
       pro: checkoutUrl(env.CHECKOUT_URL_PRO),

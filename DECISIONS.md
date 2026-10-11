@@ -4382,3 +4382,19 @@ La grille vient du brief des abonnements (2026-10-10) et remplace celle de `SPEC
 visibles ; **Scale Fondateur** 39,50 $/mois à vie, essai de 44 jours, 20 places, non répertorié.
 Aucun prix n'est dans le code : Whop les porte (plans, essais, paiement), StayPut lit le
 niveau et, pour le bandeau des fondateurs, le prix du plan chez Whop.
+
+## 2026-10-11 — Le niveau se lit au plan, pas au produit
+
+Vérifié chez Whop : une app a **une seule fiche App Store**, son produit (`App.product_id`,
+`prod_6S7xpEfw0hPwc` pour StayPut), et installer l'app, c'est prendre un plan de ce produit (le
+plan gratuit aujourd'hui). Pro, Scale et le plan Fondateurs sont donc des **plans** de ce même
+produit ; « avoir accès au produit » ne distingue plus rien (le plan gratuit y donne accès).
+
+- StayPut lit la liste des abonnements du propriétaire chez Whop (`GET /memberships?user_id`)
+  et prend le plan le plus haut : `WHOP_PLANS_SCALE` (mensuel, annuel) ou le plan Fondateurs →
+  Scale, `WHOP_PLANS_PRO` → Pro, sinon Free. Remplace `WHOP_PROD_PRO` et `WHOP_PROD_SCALE`.
+- Seuls les abonnements aux plans de StayPut sont gardés (`app_memberships`), jamais les autres
+  abonnements de la personne (aux communautés dont elle est membre).
+- Le reste ne change pas : 5 minutes de cache, webhook qui relit, dernier niveau connu si Whop ne
+  répond pas, Pro pour un seul whop, plan Fondateurs signalé sans invitation. Marche aussi si
+  Whop permet plusieurs produits : les plans y restent distincts.

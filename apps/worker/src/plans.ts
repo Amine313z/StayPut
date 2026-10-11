@@ -16,17 +16,17 @@ import {
   type Tier,
   type TierSource,
 } from '@stayput/core';
-import { WhopApiError, type WhopClient } from '@stayput/whop';
+import { type Page, type WhopClient } from '@stayput/whop';
 import type { Db } from './db';
 import type { PlansConfig } from './env';
 
 /**
- * A community's plan (decision of 2026-10-10; packages/core/src/plans.ts says what each level
- * opens). The level is the company's, from its OWNER's access to StayPut's products on Whop:
- * Scale, else Pro, else Free, a trial running counting as access (Whop charges at its end, never
- * StayPut). The whole team has it. Kept in stayput.company_plans and read again from Whop after
- * PLAN_FRESH_MS, or at once after a membership webhook; when Whop does not answer, the last
- * known level stays, never less.
+ * A community's plan (decisions of 2026-10-10 and 2026-10-11; packages/core/src/plans.ts says
+ * what each level opens). The level is the company's, from the plan its OWNER holds on StayPut's
+ * App Store product: one of Scale's plans (or the founders'), else one of Pro's, else Free; a
+ * trial running counts (Whop charges at its end, never StayPut). The whole team has it. Kept in
+ * stayput.company_plans and read again from Whop after PLAN_FRESH_MS, or at once after a
+ * membership webhook; when Whop does not answer, the last known level stays, never less.
  */
 
 /** How long a level read from Whop holds before it is read again. */
@@ -139,18 +139,11 @@ async function readFromWhop(
     if (!whop) throw new Error('WHOP_API_KEY is not set');
     const owner = row.company_owner ?? (await readOwner(db, whop, companyId));
     if (!owner) throw new Error('Whop named no owner for this company');
-    let tier: Tier = 'free';
-    let product: string | null = null;
-    if (await hasAccess(whop, owner, config.scaleProduct!)) {
-      tier = 'scale';
-      product = config.scaleProduct;
-    } else if (await hasAccess(whop, owner, config.proProduct!)) {
-      tier = 'pro';
-      product = config.proProduct;
-    }
+    // The owner's live StayPut plan, highest level first; none: Free.
+    const membership = await ownerMembership(db, whop, config, owner, now);
+    let tier: Tier = membership?.tier ?? 'free';
     // Pro covers one whop: the owner's first installed community. Scale covers them all.
     if (tier === 'pro' && !(await firstOfOwner(db, owner, companyId))) tier = 'free';
-    const membership = product ? await ownerMembership(db, whop, owner, product, now) : null;
     let source: TierSource = tier === 'free' ? 'none' : 'whop';
     // Plan B for the founders (FOUNDER_FALLBACK_MODE): Scale until BETA_END for the registry.
     if (tier !== 'scale' && (await fallbackScale(db, config, companyId, now))) {
@@ -203,14 +196,21 @@ async function readFromWhop(
   }
 }
 
-/** Whether the user has access to the product; an id Whop does not know is no access. */
-async function hasAccess(whop: WhopClient, userId: string, productId: string): Promise<boolean> {
-  try {
-    return (await whop.checkAccess(userId, productId)).hasAccess;
-  } catch (error) {
-    if (error instanceof WhopApiError && [400, 404, 422].includes(error.status)) return false;
-    throw error;
-  }
+/** The level a Whop plan gives: Scale for Scale's plans and the founders', Pro for Pro's. */
+export function tierOfPlan(config: PlansConfig, planId: unknown): Tier | null {
+  if (typeof planId !== 'string') return null;
+  if (planId === config.founderPlan || config.scalePlans.includes(planId)) return 'scale';
+  if (config.proPlans.includes(planId)) return 'pro';
+  return null;
+}
+
+/** Every plan of StayPut's that gives a level. */
+function ourPlans(config: PlansConfig): string[] {
+  return [
+    ...config.proPlans,
+    ...config.scalePlans,
+    ...(config.founderPlan ? [config.founderPlan] : []),
+  ];
 }
 
 /** The company's owner as Whop's company says it (`owner_user`), kept on the company. */
@@ -258,52 +258,73 @@ async function fallbackScale(
 
 interface OwnerMembership {
   id: string;
-  planId: string | null;
+  planId: string;
+  tier: Tier;
   trialEndsAt: Date | null;
 }
 
+/** Pages of the owner's memberships read from Whop at most (50 each). */
+const MEMBERSHIP_PAGES = 4;
+
 /**
- * The owner's live StayPut membership for the product: which plan, and when a trial running
- * ends. From the memberships Whop's webhooks told, else asked to Whop (best effort: without it,
- * the level holds, only the banners lack their date).
+ * The owner's live StayPut membership that gives the highest level: which plan, and when a
+ * trial running ends. Whop's list of the owner's memberships is read (a failure is Whop not
+ * answering: the caller keeps the last level known); StayPut's own are kept with those the
+ * webhooks told, never anyone's other memberships.
  */
 async function ownerMembership(
   db: Db,
   whop: WhopClient,
+  config: PlansConfig,
   owner: string,
-  product: string,
   now: Date,
 ): Promise<OwnerMembership | null> {
-  try {
-    const page = await whop.listPage<Record<string, unknown>>('/memberships', {
-      user_id: owner,
-      product_id: product,
-    });
-    for (const membership of page.items) await noteAppMembership(db, membership, now);
-  } catch (error) {
-    console.info(
-      'StayPut memberships not listed:',
-      error instanceof Error ? error.message : String(error),
+  const plans = ourPlans(config);
+  let after: string | null = null;
+  for (let page = 0; page < MEMBERSHIP_PAGES; page += 1) {
+    const listed: Page<Record<string, unknown>> = await whop.listPage<Record<string, unknown>>(
+      '/memberships',
+      { user_id: owner },
+      { after, first: 50 },
     );
+    for (const membership of listed.items) {
+      const plan = (membership.plan as { id?: unknown } | undefined)?.id ?? membership.plan_id;
+      if (typeof plan === 'string' && plans.includes(plan)) {
+        await noteAppMembership(db, membership, now);
+      }
+    }
+    if (!listed.nextCursor) break;
+    after = listed.nextCursor;
   }
-  const [row] = await db.query<{
+  const rows = await db.query<{
     id: string;
-    plan_id: string | null;
+    plan_id: string;
     status: string;
     renewal_period_end: Date | string | null;
   }>(
     `select id, plan_id, status, renewal_period_end from stayput.app_memberships
-      where user_id = $1 and product_id = $2
+      where user_id = $1 and plan_id = any(string_to_array($2, ','))
         and status = any(string_to_array($3, ','))
-      order by updated_at desc limit 1`,
-    [owner, product, [...LIVE_STATUSES].join(',')],
+      order by updated_at desc`,
+    [owner, plans.join(','), [...LIVE_STATUSES].join(',')],
   );
-  if (!row) return null;
-  return {
-    id: row.id,
-    planId: row.plan_id,
-    trialEndsAt: row.status === 'trialing' ? asDate(row.renewal_period_end) : null,
-  };
+  let best: OwnerMembership | null = null;
+  for (const row of rows) {
+    const tier = tierOfPlan(config, row.plan_id);
+    if (!tier || (best && !tierAbove(tier, best.tier))) continue;
+    best = {
+      id: row.id,
+      planId: row.plan_id,
+      tier,
+      trialEndsAt: row.status === 'trialing' ? asDate(row.renewal_period_end) : null,
+    };
+  }
+  return best;
+}
+
+/** Whether `tier` is above `than`. */
+function tierAbove(tier: Tier, than: Tier): boolean {
+  return higherTier(tier, than) === tier && tier !== than;
 }
 
 /** A membership of StayPut's products as Whop gives it (a webhook's data, a listing's item). */
@@ -564,8 +585,8 @@ export function planningAt(tier: Tier): { automations: boolean; winback: boolean
 
 /**
  * A membership webhook (`membership.activated`, `.updated`, `.deactivated`, Whop's app events
- * alike): the person it names, and the membership when it is one of StayPut's own products (or
- * the founders' plan). Null for anything else.
+ * alike): the person it names, and the membership when it is on one of StayPut's plans (Pro's,
+ * Scale's, the founders'). Null for anything else.
  */
 export function membershipEvent(
   event: unknown,
@@ -578,13 +599,8 @@ export function membershipEvent(
   const membership = data as Record<string, unknown>;
   const user = (membership.user as { id?: unknown } | undefined)?.id ?? membership.user_id;
   if (typeof user !== 'string' || !/^user_[A-Za-z0-9]+$/.test(user)) return null;
-  const product = (membership.product as { id?: unknown } | undefined)?.id ?? membership.product_id;
   const plan = (membership.plan as { id?: unknown } | undefined)?.id ?? membership.plan_id;
-  const ours =
-    (typeof product === 'string' &&
-      (product === config.proProduct || product === config.scaleProduct)) ||
-    (typeof plan === 'string' && plan === config.founderPlan);
-  return { userId: user, stayput: ours ? membership : null };
+  return { userId: user, stayput: tierOfPlan(config, plan) ? membership : null };
 }
 
 /**

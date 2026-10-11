@@ -36,8 +36,13 @@ const NOW_S = Math.floor(NOW.getTime() / 1000);
 const DAY = 86_400_000;
 const APP_ID = 'app_stayput';
 const SECRET = 'ws_test_secret';
-const PRO = 'prod_StayPutPro';
-const SCALE = 'prod_StayPutScale';
+// StayPut's App Store product and its plans (decision of 2026-10-11: the level is the plan's).
+const APP_PRODUCT = 'prod_StayPutApp';
+const FREE_PLAN = 'plan_StayPutFree';
+const PRO_MONTHLY = 'plan_ProMonthly';
+const PRO_YEARLY = 'plan_ProYearly';
+const SCALE_MONTHLY = 'plan_ScaleMonthly';
+const SCALE_YEARLY = 'plan_ScaleYearly';
 const FOUNDER = 'plan_StayPutFounder';
 const ADMIN = 'user_Founder';
 const CHECKOUT_PRO = 'https://whop.com/checkout/plan_ProMonthly';
@@ -47,8 +52,8 @@ const ENV: Env = {
   WHOP_APP_ID: APP_ID,
   WHOP_API_KEY: 'test_key',
   WHOP_WEBHOOK_SECRET: SECRET,
-  WHOP_PROD_PRO: PRO,
-  WHOP_PROD_SCALE: SCALE,
+  WHOP_PLANS_PRO: `${PRO_MONTHLY},${PRO_YEARLY}`,
+  WHOP_PLANS_SCALE: `${SCALE_MONTHLY},${SCALE_YEARLY}`,
   WHOP_PLAN_SCALE_FOUNDER: FOUNDER,
   CHECKOUT_URL_PRO: CHECKOUT_PRO,
   CHECKOUT_URL_SCALE: CHECKOUT_SCALE,
@@ -77,7 +82,7 @@ async function settle() {
 }
 afterEach(settle);
 
-/** StayPut's own memberships, as Whop lists them (GET /memberships?user_id&product_id). */
+/** Memberships as Whop lists a person's (GET /memberships?user_id): StayPut's and others'. */
 interface AppMembership {
   id: string;
   user: { id: string };
@@ -153,9 +158,7 @@ function fakeWhop() {
       }
       const items =
         path === '/memberships' && query.user_id
-          ? memberships.filter(
-              (m) => m.user.id === query.user_id && m.product.id === query.product_id,
-            )
+          ? memberships.filter((m) => m.user.id === query.user_id)
           : [];
       return Promise.resolve({ items, nextCursor: null });
     },
@@ -285,12 +288,28 @@ describe('the plans’ acceptance', () => {
     const env = setup();
     await community(env, 'biz_NoSub', 'user_NoSubOwner');
     const ids = await joinMembers('biz_NoSub', 6);
+    // StayPut installed on its free plan, and the owner a paying member of another community:
+    // neither gives a level, and the other community's membership is never kept.
+    env.whop.memberships.push(
+      appMembership('mem_NoSubFree', 'user_NoSubOwner', APP_PRODUCT, FREE_PLAN, 'active', null),
+      appMembership(
+        'mem_NoSubElsewhere',
+        'user_NoSubOwner',
+        'prod_SomeoneElse',
+        'plan_SomeoneElse',
+        'active',
+        null,
+      ),
+    );
     // Test mode: the messages are simulated, nothing leaves.
     await t.db.query('update stayput.company_settings set dry_run = true where company_id = $1', [
       'biz_NoSub',
     ]);
 
     const opened = await session(env, 'biz_NoSub', 'user_NoSubOwner');
+    expect(
+      await t.db.query(`select id from stayput.app_memberships where user_id = 'user_NoSubOwner'`),
+    ).toEqual([]);
     expect(opened.plan).toMatchObject({
       tier: 'free',
       source: 'none',
@@ -351,12 +370,11 @@ describe('the plans’ acceptance', () => {
     const trial = appMembership(
       'mem_Trial1',
       'user_TrialOwner',
-      PRO,
-      'plan_ProMonthly',
+      APP_PRODUCT,
+      PRO_MONTHLY,
       'trialing',
       trialEnds,
     );
-    env.whop.access[`user_TrialOwner:${PRO}`] = 'customer';
     env.whop.memberships.push(trial);
     await membershipWebhook(env, 'membership.activated', trial);
 
@@ -390,12 +408,11 @@ describe('the plans’ acceptance', () => {
     const founding = appMembership(
       'mem_Founding1',
       'user_FoundingOwner',
-      SCALE,
+      APP_PRODUCT,
       FOUNDER,
       'trialing',
       firstCharge,
     );
-    env.whop.access[`user_FoundingOwner:${SCALE}`] = 'customer';
     env.whop.memberships.push(founding);
     await membershipWebhook(env, 'membership.activated', founding);
 
@@ -435,12 +452,11 @@ describe('the plans’ acceptance', () => {
     const leaked = appMembership(
       'mem_Leak1',
       'user_LeakOwner',
-      SCALE,
+      APP_PRODUCT,
       FOUNDER,
       'trialing',
       new Date(NOW.getTime() + 30 * DAY),
     );
-    env.whop.access[`user_LeakOwner:${SCALE}`] = 'customer';
     env.whop.memberships.push(leaked);
     await membershipWebhook(env, 'membership.activated', leaked);
 
@@ -462,12 +478,11 @@ describe('the plans’ acceptance', () => {
     const subscription = appMembership(
       'mem_Cancel1',
       'user_CancelOwner',
-      SCALE,
-      'plan_ScaleMonthly',
+      APP_PRODUCT,
+      SCALE_MONTHLY,
       'active',
       new Date(NOW.getTime() + 20 * DAY),
     );
-    env.whop.access[`user_CancelOwner:${SCALE}`] = 'customer';
     env.whop.memberships.push(subscription);
     expect((await session(env, 'biz_Cancel', 'user_CancelOwner')).plan.tier).toBe('scale');
     // Automatic mode (Scale's), and a follow-up of StayPut's own due now.
@@ -495,7 +510,6 @@ describe('the plans’ acceptance', () => {
     expect(await due()).toBe(1);
 
     // The owner cancels: Whop takes the access away, and tells StayPut.
-    env.whop.access[`user_CancelOwner:${SCALE}`] = 'no_access';
     subscription.status = 'canceled';
     await membershipWebhook(env, 'membership.deactivated', subscription);
 
@@ -530,7 +544,17 @@ describe('the plans’ acceptance', () => {
   it('6. a moderator of a Scale community has Scale: the owner pays, the team has it', async () => {
     const env = setup();
     await community(env, 'biz_Team', 'user_TeamOwner', ['user_TeamMod']);
-    env.whop.access[`user_TeamOwner:${SCALE}`] = 'customer';
+    // The owner holds Scale, its yearly plan.
+    env.whop.memberships.push(
+      appMembership(
+        'mem_Team1',
+        'user_TeamOwner',
+        APP_PRODUCT,
+        SCALE_YEARLY,
+        'active',
+        new Date(NOW.getTime() + 300 * DAY),
+      ),
+    );
     // The moderator has no StayPut subscription of their own, and opens StayPut first.
     const opened = await session(env, 'biz_Team', 'user_TeamMod');
     expect(opened.plan).toMatchObject({ tier: 'scale', source: 'whop' });
@@ -544,7 +568,16 @@ describe('the plans’ acceptance', () => {
   it('7. Whop unreachable: the last level known stays', async () => {
     const env = setup();
     await community(env, 'biz_Down', 'user_DownOwner');
-    env.whop.access[`user_DownOwner:${PRO}`] = 'customer';
+    env.whop.memberships.push(
+      appMembership(
+        'mem_Down1',
+        'user_DownOwner',
+        APP_PRODUCT,
+        PRO_MONTHLY,
+        'active',
+        new Date(NOW.getTime() + 20 * DAY),
+      ),
+    );
     expect((await session(env, 'biz_Down', 'user_DownOwner')).plan.tier).toBe('pro');
 
     // Five minutes later Whop does not answer.

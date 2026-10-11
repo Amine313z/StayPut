@@ -47,9 +47,9 @@ export const PRODUCTION_OWN = [
   'TELEGRAM_BOT_TOKEN',
   'WHOP_APP_ID',
   'OPERATOR_COMPANY_ID',
-  // The plans (decision of 2026-10-10): each Whop has its own products, plans and checkouts.
-  'WHOP_PROD_PRO',
-  'WHOP_PROD_SCALE',
+  // The plans (decision of 2026-10-11): each Whop has its own plans and checkouts.
+  'WHOP_PLANS_PRO',
+  'WHOP_PLANS_SCALE',
   'WHOP_PLAN_SCALE_FOUNDER',
   'CHECKOUT_URL_PRO',
   'CHECKOUT_URL_SCALE',
