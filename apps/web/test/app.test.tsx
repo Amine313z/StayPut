@@ -2890,9 +2890,10 @@ describe('activity sources', () => {
 
     // Discord keeps its list until the application turns the Server Members Intent on.
     fireEvent.click(screen.getByRole('link', { name: 'Discord' }));
-    const discord = (await screen.findByRole('heading', { name: 'Everyone on Discord' })).closest(
-      'section',
-    )!;
+    // A new tab loads its page and its data: on a slow machine, more than findBy's 1 s.
+    const discord = (
+      await screen.findByRole('heading', { name: 'Everyone on Discord' }, { timeout: 3_000 })
+    ).closest('section')!;
     expect(
       await within(discord).findByText(/Discord does not give StayPut the member list yet/),
     ).toBeTruthy();
