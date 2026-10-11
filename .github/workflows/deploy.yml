@@ -112,7 +112,9 @@ jobs:
           WHOP_PLAN_SCALE_FOUNDER: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_PLAN_SCALE_FOUNDER' || 'WHOP_PLAN_SCALE_FOUNDER'] }}
           CHECKOUT_URL_PRO: ${{ vars[inputs.target == 'production' && 'PRODUCTION_CHECKOUT_URL_PRO' || 'CHECKOUT_URL_PRO'] }}
           CHECKOUT_URL_SCALE: ${{ vars[inputs.target == 'production' && 'PRODUCTION_CHECKOUT_URL_SCALE' || 'CHECKOUT_URL_SCALE'] }}
-          ADMIN_USER_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_ADMIN_USER_ID' || 'ADMIN_USER_ID'] }}
+          # The founder's Whop id: a repository secret keeps it out of this public log (GitHub
+          # prints a step's variables before the step can mask them); a variable still works.
+          ADMIN_USER_ID: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_ADMIN_USER_ID' || 'ADMIN_USER_ID'] || vars[inputs.target == 'production' && 'PRODUCTION_ADMIN_USER_ID' || 'ADMIN_USER_ID'] }}
           # The private beta: production opens to invited communities only unless
           # PRODUCTION_INVITE_ONLY says « false » (the public launch).
           INVITE_ONLY: ${{ inputs.target == 'production' && (vars.PRODUCTION_INVITE_ONLY || 'true') || vars.INVITE_ONLY }}
