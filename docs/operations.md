@@ -7,7 +7,8 @@ pour la production ; pour la production, les réglages GitHub portent le préfix
 
 ## Surveiller
 
-- **Réglages › État**, dans la communauté de l'opérateur (`OPERATOR_COMPANY_ID`) : Whop (sandbox
+- **Réglages › État**, dans la communauté de l'opérateur (`OPERATOR_COMPANY_ID`), pour le fondateur
+  seul (`ADMIN_USER_ID`, ni son équipe ni personne d'autre) : Whop (sandbox
   ou production), la base (à jour ou non), chaque tâche planifiée (en retard après deux périodes
   sans passage), les envois de Whop des dernières 24 heures et ceux en échec, les communautés
   (actives, accès refusé, désinstallées), les lectures refusées par Whop, les actions en échec de

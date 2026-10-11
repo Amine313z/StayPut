@@ -536,6 +536,17 @@ export function createApp(deps: AppDeps) {
     return db ? openInBeta(db, config, companyId, null) : companyId === config.operatorCompanyId;
   }
 
+  /** Settings › Status: the operator's own community, opened by the founder (ADMIN_USER_ID). */
+  function operatorView(c: Context<AppEnv>, companyId: string): boolean {
+    const config = c.get('config');
+    return (
+      config.operatorCompanyId !== null &&
+      companyId === config.operatorCompanyId &&
+      config.plans.adminUserId !== null &&
+      c.get('userId') === config.plans.adminUserId
+    );
+  }
+
   /**
    * A team member of a community not invited opened StayPut: the founder sees the request in
    * Settings › Admin (decision of 2026-10-11), with the community's name, read from Whop on a new
@@ -1076,7 +1087,7 @@ export function createApp(deps: AppDeps) {
       companyName: company.name,
       companyLogo: company.logo,
       testMode: company.testMode,
-      operator: companyId === c.get('config').operatorCompanyId,
+      operator: operatorView(c, companyId),
       plan: db
         ? await planView(db, c.get('config').plans, companyId, await planOf(c), deps.now(), {
             whop: deps.whopClient(c.get('config')),
@@ -3553,13 +3564,12 @@ export function createApp(deps: AppDeps) {
   );
 
   /**
-   * StayPut's internal status page (SPEC Phase 8.5), for the team of the operator's own
-   * community only (OPERATOR_COMPANY_ID): for any other, these routes do not exist.
+   * StayPut's internal status page (SPEC Phase 8.5), in the operator's own community
+   * (OPERATOR_COMPANY_ID), for the founder alone (ADMIN_USER_ID, decision of 2026-10-11: not
+   * their team either): for anyone else, these routes do not exist.
    */
   const requireOperator = createMiddleware<AppEnv>(async (c, next) => {
-    if (c.get('companyId') !== c.get('config').operatorCompanyId) {
-      return apiError('not_found', 'no such route');
-    }
+    if (!operatorView(c, c.get('companyId'))) return apiError('not_found', 'no such route');
     await next();
     return undefined;
   });

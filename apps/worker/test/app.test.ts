@@ -761,10 +761,15 @@ describe('POST /webhooks/whop', () => {
 });
 
 describe('the internal status page (SPEC Phase 8.5)', () => {
-  const OPERATOR_ENV: Env = { ...ENV, OPERATOR_COMPANY_ID: 'biz_Op1' };
+  // The founder (ADMIN_USER_ID) is user_olga: the status page is hers alone.
+  const OPERATOR_ENV: Env = { ...ENV, OPERATOR_COMPANY_ID: 'biz_Op1', ADMIN_USER_ID: 'user_olga' };
 
-  it('is for the team of the operator’s own community only', async () => {
-    const { request } = setup({ 'user_olga:biz_Op1': 'admin', 'user_olga:biz_A1': 'admin' });
+  it('is for the founder alone, in the operator’s own community', async () => {
+    const { request } = setup({
+      'user_olga:biz_Op1': 'admin',
+      'user_olga:biz_A1': 'admin',
+      'user_tom:biz_Op1': 'admin',
+    });
     const as = await asUser('user_olga');
     const session = await request('/api/creator/biz_Op1/session', as, OPERATOR_ENV);
     expect(await session.json()).toMatchObject({ companyId: 'biz_Op1', operator: true });
@@ -776,6 +781,26 @@ describe('the internal status page (SPEC Phase 8.5)', () => {
     );
     // No operator set: nobody's.
     expect((await request('/api/creator/biz_Op1/operator/status', as)).status).toBe(404);
+    // No founder set: nobody's either.
+    const noFounder: Env = { ...ENV, OPERATOR_COMPANY_ID: 'biz_Op1' };
+    expect((await request('/api/creator/biz_Op1/operator/status', as, noFounder)).status).toBe(404);
+    // Another admin of the operator's own community (a moderator): neither the tab nor the page.
+    const tom = await asUser('user_tom');
+    expect(
+      await (await request('/api/creator/biz_Op1/session', tom, OPERATOR_ENV)).json(),
+    ).toMatchObject({ companyId: 'biz_Op1', operator: false });
+    expect((await request('/api/creator/biz_Op1/operator/status', tom, OPERATOR_ENV)).status).toBe(
+      404,
+    );
+    expect(
+      (
+        await request(
+          '/api/creator/biz_Op1/operator/webhooks/replay',
+          { ...tom, method: 'POST', body: '{}' },
+          OPERATOR_ENV,
+        )
+      ).status,
+    ).toBe(404);
     // A member of the operator's community who is not on its team: refused.
     const { request: asMember } = setup({ 'user_max:biz_Op1': 'customer' });
     const refused = await asMember(

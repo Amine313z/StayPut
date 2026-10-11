@@ -4477,3 +4477,12 @@ communautés) ; installée, l'app n'affiche rien, ne fait rien et ne garde rien,
 arrive dans Réglages › Admin, où le fondateur l'ignore. À lever avant de soumettre la fiche App
 Store (`PRODUCTION_INVITE_ONLY=false`) : un examinateur de Whop devant une page vide refuserait
 l'app.
+
+## 2026-10-11 — Réglages › État : le fondateur seul
+
+La page d'état (tâches, envois de Whop, liste des communautés, erreurs) était ouverte à toute
+l'équipe de la communauté de l'opérateur ; le fondateur la veut pour lui seul, comme Admin. Elle
+demande désormais les deux : la communauté de l'opérateur (`OPERATOR_COMPANY_ID`) et le compte du
+fondateur (`ADMIN_USER_ID`). Pour tout autre, même admin de cette communauté, l'onglet n'existe
+pas et ses routes répondent 404. Sans `ADMIN_USER_ID` (le sandbox aujourd'hui), elle n'existe
+pour personne.
