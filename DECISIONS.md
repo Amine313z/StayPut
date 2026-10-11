@@ -4374,3 +4374,11 @@ certaines communautés : la porte est donc dans StayPut (`INVITE_ONLY`).
   déjà listée.
 - **En production par défaut** (`deploy.yml`) ; le sandbox reste ouvert. Le lancement public :
   `PRODUCTION_INVITE_ONLY=false`, puis un déploiement.
+
+## 2026-10-11 — La grille de prix du fondateur (remplace SPEC Phase 7)
+
+La grille vient du brief des abonnements (2026-10-10) et remplace celle de `SPEC.md` (Scale à
+99 $) : **Pro** 29 $/mois ou 290 $/an, **Scale** 79 $/mois ou 790 $/an, essai de 7 jours,
+visibles ; **Scale Fondateur** 39,50 $/mois à vie, essai de 44 jours, 20 places, non répertorié.
+Aucun prix n'est dans le code : Whop les porte (plans, essais, paiement), StayPut lit le
+niveau et, pour le bandeau des fondateurs, le prix du plan chez Whop.
