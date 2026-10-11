@@ -4465,3 +4465,15 @@ Fondateur »). Deux failles trouvées et corrigées, chacune avec son test :
   - pas de secret dans le dépôt ni dans son historique ;
   - `npm audit` sans vulnérabilité ;
   - `access_requests` réservée au serveur (RLS).
+
+## 2026-10-11 — Bêta privée : une page vide, sans un mot
+
+Le fondateur ne veut rien montrer à quelqu'un qui a reçu le lien sans faire partie de ses
+testeurs : la page « bêta privée » ne dit plus rien (elle remplace la ligne « StayPut est en bêta
+privée… »), côté créateur comme côté membres. Seul l'écran de chargement de StayPut paraît le
+temps que la réponse arrive. Limite assumée : l'installation elle-même se fait chez Whop, avant
+StayPut, qui ne peut pas l'empêcher (Whop ne réserve pas une app non répertoriée à certaines
+communautés) ; installée, l'app n'affiche rien, ne fait rien et ne garde rien, et la demande
+arrive dans Réglages › Admin, où le fondateur l'ignore. À lever avant de soumettre la fiche App
+Store (`PRODUCTION_INVITE_ONLY=false`) : un examinateur de Whop devant une page vide refuserait
+l'app.

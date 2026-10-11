@@ -3529,6 +3529,22 @@ describe('risk settings', () => {
   const share = (name: string) =>
     screen.getByRole('slider', { name }).closest('div')!.querySelector('output')!.textContent;
 
+  it('shows a community the founder did not invite an empty page, not a word', async () => {
+    const shut = {
+      status: 403,
+      body: { error: { code: 'not_invited', message: 'StayPut is open by invitation only' } },
+    };
+    mockApi({ '/api/creator/biz_A1/session': [shut, shut, shut] });
+    renderAt('/dashboard/biz_A1');
+    const page = await vi.waitFor(() => {
+      const found = document.querySelector('[data-invite-only]');
+      if (!found) throw new Error('not yet');
+      return found;
+    });
+    expect(page.textContent).toBe('');
+    expect(document.body.textContent?.trim()).toBe('');
+  });
+
   it('shows the founder the private beta’s requests, invited in one click', async () => {
     const admin: AdminCompaniesView = {
       companies: [],

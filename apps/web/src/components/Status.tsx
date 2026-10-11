@@ -17,16 +17,11 @@ export function Loading() {
 }
 
 /**
- * The private beta's closed door (INVITE_ONLY): one quiet line on an empty page, nothing else of
- * StayPut, for a community the founder did not invite.
+ * The private beta's closed door (INVITE_ONLY): an empty page, nothing of StayPut, for a community
+ * the founder did not invite (the founder's choice, 2026-10-11: not even a line).
  */
 export function InviteOnly() {
-  const { t } = useI18n();
-  return (
-    <p data-invite-only="" className="px-4 py-24 text-center text-sm text-subtle">
-      {t('error.not_invited')}
-    </p>
-  );
+  return <div data-invite-only="" className="min-h-screen" />;
 }
 
 /**
