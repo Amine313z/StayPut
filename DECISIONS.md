@@ -4379,7 +4379,8 @@ certaines communautés : la porte est donc dans StayPut (`INVITE_ONLY`).
 
 La grille vient du brief des abonnements (2026-10-10) et remplace celle de `SPEC.md` (Scale à
 99 $) : **Pro** 29 $/mois ou 290 $/an, **Scale** 79 $/mois ou 790 $/an, essai de 7 jours,
-visibles ; **Scale Fondateur** 39,50 $/mois à vie, essai de 44 jours, 20 places, non répertorié.
+visibles ; **Scale Fondateur** 39,50 $/mois à vie, essai d'un mois (30 jours, réglé le 2026-10-11 ;
+44 jours avant), 20 places, non répertorié.
 Aucun prix n'est dans le code : Whop les porte (plans, essais, paiement), StayPut lit le
 niveau et, pour le bandeau des fondateurs, le prix du plan chez Whop.
 
@@ -4420,3 +4421,12 @@ l'essaie, rien ne fonctionne »). Complète l'entrée du 2026-10-10.
 - **Un lien transféré ne donne rien** : la personne qui le reçoit installe, voit la page de bêta
   privée, et n'apparaît que comme une demande que le fondateur peut ignorer. Le formulaire
   « Inviter un fondateur » (lien ou id `biz_…`) reste pour inviter une communauté d'avance.
+
+## 2026-10-11 — Le plan Fondateur : un mois gratuit, à partir de la souscription
+
+Le fondateur remplace les 44 jours d'essai par **un mois** : 30 jours (Whop compte l'essai en
+jours, `trial_period_days`), dans les bornes que son tableau de bord propose, donc le plan B ne
+devrait pas servir. L'essai part du moment où le créateur prend le plan Fondateur (carte
+enregistrée, rien de prélevé), pas de l'installation : le lien Fondateur n'est envoyé qu'à la fin
+de la bêta, et chacun a alors un mois gratuit puis 39,50 $/mois à vie. StayPut n'a aucune durée
+dans son code : le bandeau lit la date de fin chez Whop.

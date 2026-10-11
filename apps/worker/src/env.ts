@@ -57,7 +57,7 @@ export interface Env {
   /** The founder's Whop user (`user_…`): the only one who sees the admin page. */
   ADMIN_USER_ID?: string;
   /**
-   * The founders' plan B, if Whop refuses a 44-day trial: "on" gives Scale to the registry's
+   * The founders' plan B, if Whop refuses the founders' trial: "on" gives Scale to the registry's
    * communities until BETA_END (an ISO date). Set in Cloudflare's dashboard, it applies without
    * a deployment (wrangler.toml keeps the dashboard's variables).
    */
