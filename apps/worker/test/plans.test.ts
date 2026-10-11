@@ -603,6 +603,40 @@ describe('the plans’ acceptance', () => {
 });
 
 describe('the private beta (INVITE_ONLY)', () => {
+  /** A delivery from Whop about `company`, signed as Whop signs it. */
+  async function companyWebhook(env: ReturnType<typeof setup>, id: string, company: string) {
+    const body = JSON.stringify({
+      type: 'member.created',
+      company_id: company,
+      data: { id: `mber_${id}`, company: { id: company }, user: { id: `user_${id}` } },
+    });
+    const res = await env.request('/webhooks/whop', {
+      method: 'POST',
+      body,
+      headers: {
+        'webhook-id': `msg_${id}`,
+        'webhook-timestamp': String(NOW_S),
+        'webhook-signature': await signWebhook(body, SECRET, `msg_${id}`, NOW_S),
+        'content-type': 'application/json',
+      },
+    });
+    expect(res.status).toBe(200);
+    await settle();
+    return (await res.json()) as { received: boolean; ignored?: boolean };
+  }
+  const kept = async (company: string) =>
+    (
+      await t.db.query<{ n: number }>(
+        'select count(*)::int as n from stayput.webhook_events where company_id = $1',
+        [company],
+      )
+    )[0]?.n;
+  const requests = async (env: ReturnType<typeof setup>) => {
+    const res = await env.request('/api/admin/companies', await as(ADMIN));
+    expect(res.status).toBe(200);
+    return ((await res.json()) as AdminCompaniesView).requests;
+  };
+
   it('opens StayPut to the invited, the operator’s community and the founder; shuts the rest', async () => {
     const env = setup({ ...ENV, INVITE_ONLY: 'true', OPERATOR_COMPANY_ID: 'biz_Operator' });
     const closed = async (res: Response) => {
@@ -611,19 +645,61 @@ describe('the private beta (INVITE_ONLY)', () => {
     };
 
     // A community that installed StayPut through a link passed on: the door shut, and nothing of
-    // it kept (the session that records a community is never reached).
+    // it kept (the session that records a community is never reached) but its request, for the
+    // founder: its name, read from Whop, and when. Its creator is asked for nothing.
     env.whop.access['user_StrangerOwner:biz_Stranger'] = 'admin';
     await closed(
       await env.request('/api/creator/biz_Stranger/session', await as('user_StrangerOwner')),
     );
+    await settle();
     expect(await t.db.query(`select id from stayput.companies where id = 'biz_Stranger'`)).toEqual(
       [],
     );
-    // Its members, opening StayPut in the community, find the same.
+    expect(await requests(env)).toEqual([
+      {
+        companyId: 'biz_Stranger',
+        name: 'Club Stranger',
+        firstSeenAt: NOW.toISOString(),
+        lastSeenAt: NOW.toISOString(),
+        visits: 1,
+      },
+    ]);
+    // The dashboard's other calls of the same visit count once.
+    await closed(
+      await env.request('/api/creator/biz_Stranger/dashboard', await as('user_StrangerOwner')),
+    );
+    await settle();
+    expect((await requests(env))[0]?.visits).toBe(1);
+    // Its members, opening StayPut in the community, find the same, and ask for nothing.
     env.whop.experiences.exp_Stranger = 'biz_Stranger';
     env.whop.access['user_StrangerMember:exp_Stranger'] = 'customer';
     await closed(
       await env.request('/api/member/exp_Stranger/home', await as('user_StrangerMember')),
+    );
+    await settle();
+    expect(
+      await t.db.query(`select user_id from stayput.access_requests where company_id = $1`, [
+        'biz_Stranger',
+      ]),
+    ).toEqual([{ user_id: 'user_StrangerOwner' }]);
+    // Its webhooks are acknowledged, never kept: no member, no automation.
+    expect(await companyWebhook(env, 'Stranger1', 'biz_Stranger')).toEqual({
+      received: true,
+      ignored: true,
+    });
+    expect(await kept('biz_Stranger')).toBe(0);
+    expect(await t.db.query(`select id from stayput.companies where id = 'biz_Stranger'`)).toEqual(
+      [],
+    );
+    // A request the founder does not answer can be ignored.
+    expect(
+      (await env.request('/api/admin/requests/biz_Stranger', await as(ADMIN, { method: 'DELETE' })))
+        .status,
+    ).toBe(200);
+    expect(await requests(env)).toEqual([]);
+    // Nobody but the founder reads or answers the requests.
+    expect((await env.request('/api/admin/companies', await as('user_StrangerOwner'))).status).toBe(
+      404,
     );
 
     // The operator's own community opens without an invitation.
@@ -633,21 +709,34 @@ describe('the private beta (INVITE_ONLY)', () => {
         .status,
     ).toBe(200);
     await settle();
+    expect(await requests(env)).toEqual([]);
 
-    // The founder invites a tester's community, by the link of its dashboard: it opens.
+    // A tester installs StayPut from the founder's link: the founder sees the request and invites
+    // it in one click; it opens, and the request is gone.
     await community(env, 'biz_Tester', 'user_TesterOwner');
     await closed(
       await env.request('/api/creator/biz_Tester/session', await as('user_TesterOwner')),
     );
+    await settle();
+    expect((await requests(env)).map((r) => [r.companyId, r.name])).toEqual([
+      ['biz_Tester', 'Club Tester'],
+    ]);
     const invite = await env.request(
       '/api/admin/founders',
       await as(ADMIN, post({ companyId: 'biz_Tester' })),
     );
     expect(invite.status).toBe(200);
+    expect(((await invite.json()) as AdminCompaniesView).requests).toEqual([]);
+    expect(await t.db.query('select company_id from stayput.access_requests')).toEqual([]);
     expect(
       (await env.request('/api/creator/biz_Tester/session', await as('user_TesterOwner'))).status,
     ).toBe(200);
     await settle();
+    expect(await companyWebhook(env, 'Tester1', 'biz_Tester')).toEqual({
+      received: true,
+      duplicate: false,
+    });
+    expect(await kept('biz_Tester')).toBe(1);
     // Removed from the registry: shut again.
     expect(
       (await env.request('/api/admin/founders/biz_Tester', await as(ADMIN, { method: 'DELETE' })))
@@ -656,11 +745,19 @@ describe('the private beta (INVITE_ONLY)', () => {
     await closed(
       await env.request('/api/creator/biz_Tester/session', await as('user_TesterOwner')),
     );
+    await settle();
 
-    // The founder opens any community they are on the team of.
+    // The founder opens any community they are on the team of; its webhooks are then kept, and
+    // its team stays shut out.
     env.whop.access[`${ADMIN}:biz_Stranger`] = 'admin';
     expect((await env.request('/api/creator/biz_Stranger/session', await as(ADMIN))).status).toBe(
       200,
+    );
+    await settle();
+    expect((await companyWebhook(env, 'Stranger2', 'biz_Stranger')).ignored).toBeUndefined();
+    expect(await kept('biz_Stranger')).toBe(1);
+    await closed(
+      await env.request('/api/creator/biz_Stranger/session', await as('user_StrangerOwner')),
     );
   });
 });

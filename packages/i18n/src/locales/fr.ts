@@ -1861,7 +1861,8 @@ export const fr: Messages = {
   'lessons.chart': 'Où les membres décrochent',
   'lessons.detail': '{stalled} membres sur {reached} ont décroché après elle',
   'error.payment_required': "Votre forfait n'inclut pas cela.",
-  'error.not_invited': 'StayPut est ouvert sur invitation seulement.',
+  'error.not_invited':
+    'StayPut est en bêta privée : votre accès s’ouvrira dès que votre place sera confirmée.',
   'plan.tier.free': 'Free',
   'plan.tier.pro': 'Pro',
   'plan.tier.scale': 'Scale',
@@ -1948,4 +1949,12 @@ export const fr: Messages = {
   'admin.remove': 'Retirer',
   'admin.mark': 'Remettre en invité',
   'admin.none': 'Aucune communauté pour l’instant.',
+  'admin.requests': 'Demandes d’accès',
+  'admin.requests.hint':
+    'Les communautés qui ont installé StayPut sans invitation. Rien ne fonctionne pour elles tant que vous ne les invitez pas.',
+  'admin.requests.none': 'Aucune demande.',
+  'admin.requests.seen': 'Première visite {first} · dernière {last}',
+  'admin.requests.visits.one': '{count} visite',
+  'admin.requests.visits.other': '{count} visites',
+  'admin.requests.ignore': 'Ignorer',
 };

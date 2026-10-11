@@ -52,6 +52,7 @@ export const EXPORTED_TABLES = [
 
 /** The tables with a `company_id` the export leaves out, and why. */
 export const NOT_EXPORTED: Readonly<Record<string, string>> = {
+  access_requests: 'the private beta’s request: which community asked, by whom, when',
   company_admins: 'who on the team opened StayPut: in the export as `team`',
   company_plans: 'the community’s StayPut plan, as Whop tells it: StayPut’s own billing state',
   company_sync: 'the Worker’s own bookkeeping of its passes',

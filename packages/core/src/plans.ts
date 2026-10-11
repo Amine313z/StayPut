@@ -185,8 +185,20 @@ export interface PaymentRequiredBody {
 /** The founders' registry and the communities on a plan (GET /api/admin/companies). */
 export interface AdminCompaniesView {
   companies: AdminCompanyRow[];
+  /** The private beta's requests: communities not invited whose team opened StayPut. */
+  requests: AccessRequestRow[];
   founders: { places: number; taken: number; left: number };
   fallback: { on: boolean; betaEnd: string | null };
+}
+
+export interface AccessRequestRow {
+  companyId: string;
+  /** Its name as Whop gives it, once read. */
+  name: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  /** Its team's visits (calls less than a minute apart count once). */
+  visits: number;
 }
 
 export interface AdminCompanyRow {

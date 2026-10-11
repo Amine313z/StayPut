@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import type {
   AccountsView,
+  AdminCompaniesView,
   AlumniView,
   AnnouncementsView,
   BuddiesView,
@@ -3527,6 +3528,49 @@ describe('risk settings', () => {
     });
   const share = (name: string) =>
     screen.getByRole('slider', { name }).closest('div')!.querySelector('output')!.textContent;
+
+  it('shows the founder the private beta’s requests, invited in one click', async () => {
+    const admin: AdminCompaniesView = {
+      companies: [],
+      requests: [
+        {
+          companyId: 'biz_Tester',
+          name: 'Club Tester',
+          firstSeenAt: new Date(Date.now() - 3_600_000).toISOString(),
+          lastSeenAt: new Date(Date.now() - 600_000).toISOString(),
+          visits: 2,
+        },
+      ],
+      founders: { places: 20, taken: 0, left: 20 },
+      fallback: { on: false, betaEnd: null },
+    };
+    const invited: AdminCompaniesView = {
+      ...admin,
+      requests: [],
+      founders: { places: 20, taken: 1, left: 19 },
+    };
+    const calls = settings({
+      '/api/creator/biz_A1/session': [
+        { status: 200, body: { ...creatorSession.body, admin: true } },
+      ],
+      '/api/admin/companies': [{ status: 200, body: admin }],
+      'POST /api/admin/founders': [{ status: 200, body: invited }],
+    });
+    renderAt('/dashboard/biz_A1/settings/admin');
+    const request = (await screen.findByText('Club Tester')).closest('li')!;
+    expect(
+      within(request).getByText(/biz_Tester · First visit .+ · last .+ · 2 visits/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Communities that installed StayPut without an invitation. Nothing works for them until you invite them.',
+      ),
+    ).toBeTruthy();
+    fireEvent.click(within(request).getByRole('button', { name: 'Invite' }));
+    expect(await screen.findByText('No request.')).toBeTruthy();
+    expect(bodies.get('POST /api/admin/founders')).toEqual({ companyId: 'biz_Tester' });
+    expect(calls).toContain('POST /api/admin/founders');
+  });
 
   it('proposes the goals of the niche saved to members', async () => {
     spaceOn();

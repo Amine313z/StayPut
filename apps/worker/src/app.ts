@@ -521,22 +521,52 @@ export function createApp(deps: AppDeps) {
    * The private beta (INVITE_ONLY, decision of 2026-10-10): StayPut opens for the communities the
    * founder invited (the founders' registry, Settings › Admin), the operator's own, and the
    * founder anywhere. Any other community that installs it through a link passed on finds the
-   * door shut: nothing of it is read or kept (the session, which records it, is never reached).
+   * door shut: nothing of it is read or kept (the session, which records it, is never reached;
+   * its webhooks are acknowledged unkept), only its request for the founder (accessRequest).
    */
   async function invited(c: Context<AppEnv>, companyId: string): Promise<boolean> {
     const config = c.get('config');
-    if (!config.inviteOnly || companyId === config.operatorCompanyId) return true;
+    if (!config.inviteOnly) return true;
     if (config.plans.adminUserId !== null && c.get('userId') === config.plans.adminUserId) {
       return true;
     }
     const db = c.get('db');
-    if (!db) return false;
-    const [row] = await db.query<{ invited: boolean }>(
-      `select exists (select 1 from stayput.founders
-                       where company_id = $1 and status in ('invited', 'subscribed')) as invited`,
-      [companyId],
+    return db ? openInBeta(db, config, companyId, null) : companyId === config.operatorCompanyId;
+  }
+
+  /**
+   * A team member of a community not invited opened StayPut: the founder sees the request in
+   * Settings › Admin (decision of 2026-10-11), with the community's name, read from Whop on a new
+   * visit while StayPut has none. The creator is asked for nothing; never in the way of the
+   * answer.
+   */
+  function accessRequest(c: Context<AppEnv>, companyId: string): void {
+    const db = c.get('db');
+    if (!db) return;
+    const whop = deps.whopClient(c.get('config'));
+    defer(
+      c,
+      (async () => {
+        const [row] = await db.query<{ unnamed: boolean }>(
+          'select stayput.note_access_request($1, $2, $3::timestamptz) as unnamed',
+          [companyId, c.get('userId'), deps.now().toISOString()],
+        );
+        if (!row?.unnamed || !whop) return;
+        const company = await whop.request<{ title?: unknown }>(
+          'GET',
+          `/companies/${encodeURIComponent(companyId)}`,
+        );
+        const title = typeof company.title === 'string' ? company.title.trim().slice(0, 200) : '';
+        if (title) {
+          await db.query('update stayput.access_requests set name = $2 where company_id = $1', [
+            companyId,
+            title,
+          ]);
+        }
+      })().catch((error: unknown) => {
+        console.error('Access request not noted:', describe(error));
+      }),
     );
-    return row?.invited === true;
   }
 
   /** The routes of the creator view: a company id, and a team member of it (checked with Whop). */
@@ -549,6 +579,7 @@ export function createApp(deps: AppDeps) {
       return apiError('forbidden', "the creator view is for the account's team");
     }
     if (!(await invited(c, companyId))) {
+      accessRequest(c, companyId);
       return apiError('not_invited', 'StayPut is open by invitation only');
     }
     c.set('companyId', companyId);
@@ -886,17 +917,25 @@ export function createApp(deps: AppDeps) {
     const db = deps.openDb(c.env);
     if (!db) return apiError('not_configured', 'webhooks are not configured yet');
     const now = deps.now();
-    // Stored as received, so that a delivery is never lost; a retry of the same delivery (same
-    // webhook-id) is stored once.
-    let stored: unknown[];
+    const companyId = companyIdOf(event);
+    // The private beta: a community nobody invited leaves nothing behind, its deliveries are
+    // acknowledged and dropped (it opens StayPut's history when invited, by the first sync).
+    // Stored as received otherwise, so that a delivery is never lost; a retry of the same
+    // delivery (same webhook-id) is stored once.
+    let kept: boolean;
+    let stored: unknown[] = [];
     try {
-      stored = await db.query(
-        `insert into stayput.webhook_events (id, company_id, type, payload, received_at)
-         values ($1, $2, $3, $4::text::jsonb, $5::timestamptz)
-         on conflict (id) do nothing
-         returning id`,
-        [verification.id, companyIdOf(event), type, raw, now.toISOString()],
-      );
+      kept =
+        companyId === null || (await openInBeta(db, config, companyId, config.plans.adminUserId));
+      if (kept) {
+        stored = await db.query(
+          `insert into stayput.webhook_events (id, company_id, type, payload, received_at)
+           values ($1, $2, $3, $4::text::jsonb, $5::timestamptz)
+           on conflict (id) do nothing
+           returning id`,
+          [verification.id, companyId, type, raw, now.toISOString()],
+        );
+      }
     } catch (error) {
       defer(c, db.close());
       throw error;
@@ -907,6 +946,10 @@ export function createApp(deps: AppDeps) {
       await onMembershipEvent(db, config.plans, event, now);
     } catch (error) {
       console.error('Plan webhook not applied:', describe(error));
+    }
+    if (!kept) {
+      defer(c, db.close());
+      return c.json({ received: true, ignored: true });
     }
     // Filed after the answer (SPEC Phase 2, 1); the cron retries a delivery that fails.
     defer(
@@ -951,6 +994,18 @@ export function createApp(deps: AppDeps) {
     if (!row?.made.ok) {
       return apiError('conflict', row?.made.error === 'full' ? 'no place left' : 'already there');
     }
+    // Its request, answered: nothing of it is kept once invited.
+    await db.query('delete from stayput.access_requests where company_id = $1', [body.companyId]);
+    return c.json(await readAdmin(db, c.get('config').plans));
+  });
+
+  /** A request the founder does not answer (a link passed on): gone until its next visit. */
+  app.delete('/api/admin/requests/:companyId', authenticate, requireAdmin, withDb, async (c) => {
+    const db = c.get('db');
+    if (!db) return apiError('not_configured', 'the database is not configured');
+    const companyId = c.req.param('companyId');
+    if (!isCompanyId(companyId)) return apiError('invalid_request', 'expected a biz_… id');
+    await db.query('delete from stayput.access_requests where company_id = $1', [companyId]);
     return c.json(await readAdmin(db, c.get('config').plans));
   });
 
@@ -2977,6 +3032,7 @@ export function createApp(deps: AppDeps) {
       const companyId = await companyOfExperience(whop, c.get('experienceId'));
       if (!companyId) return apiError('not_found', 'no community for this experience');
       if (!(await invited(c, companyId))) {
+        if (c.get('accessLevel') === 'admin') accessRequest(c, companyId);
         return apiError('not_invited', 'StayPut is open by invitation only');
       }
       // Whop notifications to the company's members go through this experience (Phase 4).
@@ -3692,6 +3748,29 @@ async function fileWebhook(db: Db, id: string, now: Date): Promise<void> {
   } catch (error) {
     console.error(`Webhook ${id} could not be filed:`, describe(error));
   }
+}
+
+/**
+ * Whether the private beta lets the company in: always without INVITE_ONLY; else the operator's
+ * community and the communities the founder invited (still invited, or subscribed); and, with
+ * `opener`, those this user opened StayPut in (the founder's own, for their webhooks: their team
+ * stays shut out).
+ */
+async function openInBeta(
+  db: Db,
+  config: Config,
+  companyId: string,
+  opener: string | null,
+): Promise<boolean> {
+  if (!config.inviteOnly || companyId === config.operatorCompanyId) return true;
+  const [row] = await db.query<{ open: boolean }>(
+    `select exists (select 1 from stayput.founders
+                     where company_id = $1 and status in ('invited', 'subscribed'))
+         or exists (select 1 from stayput.company_admins
+                     where company_id = $1 and user_id = $2) as open`,
+    [companyId, opener],
+  );
+  return row?.open === true;
 }
 
 /**

@@ -1808,7 +1808,8 @@ export const en = {
   'lessons.chart': 'Where members stall',
   'lessons.detail': '{stalled} of {reached} members stalled after it',
   'error.payment_required': 'Your plan does not include this.',
-  'error.not_invited': 'StayPut is open by invitation only.',
+  'error.not_invited':
+    'StayPut is in private beta: your access opens as soon as your spot is confirmed.',
   'plan.tier.free': 'Free',
   'plan.tier.pro': 'Pro',
   'plan.tier.scale': 'Scale',
@@ -1895,6 +1896,14 @@ export const en = {
   'admin.remove': 'Remove',
   'admin.mark': 'Mark as invited',
   'admin.none': 'No community yet.',
+  'admin.requests': 'Access requests',
+  'admin.requests.hint':
+    'Communities that installed StayPut without an invitation. Nothing works for them until you invite them.',
+  'admin.requests.none': 'No request.',
+  'admin.requests.seen': 'First visit {first} · last {last}',
+  'admin.requests.visits.one': '{count} visit',
+  'admin.requests.visits.other': '{count} visits',
+  'admin.requests.ignore': 'Ignore',
 } as const;
 
 export type MessageKey = keyof typeof en;

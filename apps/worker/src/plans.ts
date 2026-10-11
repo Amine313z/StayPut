@@ -5,6 +5,7 @@ import {
   forecastRevenue,
   higherTier,
   isTier,
+  type AccessRequestRow,
   type AdminCompaniesView,
   type AdminCompanyRow,
   type DashboardView,
@@ -749,8 +750,30 @@ export async function readAdmin(db: Db, config: PlansConfig): Promise<AdminCompa
     stale: row.failed_at !== null,
   }));
   const taken = companies.filter((c) => c.founder && c.founder.status !== 'flagged').length;
+  // The private beta's requests (0052), the latest first; a community in the registry is answered.
+  const asked = await db.query<{
+    company_id: string;
+    name: string | null;
+    first_seen_at: Date | string;
+    last_seen_at: Date | string;
+    visits: number;
+  }>(
+    `select r.company_id, r.name, r.first_seen_at, r.last_seen_at, r.visits
+       from stayput.access_requests r
+      where not exists (select 1 from stayput.founders f where f.company_id = r.company_id)
+      order by r.last_seen_at desc, r.company_id
+      limit 100`,
+  );
+  const requests: AccessRequestRow[] = asked.map((row) => ({
+    companyId: row.company_id,
+    name: row.name,
+    firstSeenAt: iso(row.first_seen_at)!,
+    lastSeenAt: iso(row.last_seen_at)!,
+    visits: Number(row.visits),
+  }));
   return {
     companies,
+    requests,
     founders: { places: FOUNDER_PLACES, taken, left: Math.max(0, FOUNDER_PLACES - taken) },
     fallback: {
       on: config.founderFallback.on,

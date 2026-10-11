@@ -4398,3 +4398,25 @@ produit ; « avoir accès au produit » ne distingue plus rien (le plan gratuit 
 - Le reste ne change pas : 5 minutes de cache, webhook qui relit, dernier niveau connu si Whop ne
   répond pas, Pro pour un seul whop, plan Fondateurs signalé sans invitation. Marche aussi si
   Whop permet plusieurs produits : les plans y restent distincts.
+
+## 2026-10-11 — Bêta privée : le lien seul n'ouvre rien, les demandes viennent toutes seules
+
+Demandes du fondateur : ne pas brusquer un créateur en lui demandant l'adresse de son tableau de
+bord, et que le lien d'installation ne serve qu'à ceux à qui il l'envoie (« si un autre
+l'essaie, rien ne fonctionne »). Complète l'entrée du 2026-10-10.
+
+- **Le testeur ne fait qu'installer** : quand son équipe ouvre StayPut sans invitation, la
+  communauté est notée dans `access_requests` (0052) et apparaît dans Réglages › Admin ›
+  Demandes d'accès, avec son nom lu chez Whop ; le fondateur clique « Inviter ». On ne lui
+  demande rien ; sa page dit seulement « StayPut est en bêta privée : votre accès s'ouvrira dès
+  que votre place sera confirmée. » La demande disparaît à l'invitation ; « Ignorer » l'efface
+  (elle revient à la visite suivante). Seuls l'id, le nom, qui a ouvert et quand sont gardés ;
+  les appels d'une même visite (moins d'une minute d'écart) comptent une fois.
+- **Rien ne tourne pour une communauté refusée** : ses webhooks sont acquittés sans être gardés
+  (plus de `webhook_events`, donc aucune ligne `companies`, aucun membre, aucune automatisation).
+  Une fois invitée, la première synchronisation lit son historique chez Whop. Exception : les
+  communautés que le fondateur a ouvertes lui-même gardent leurs webhooks (leur équipe reste
+  dehors), et les webhooks des plans de StayPut (abonnements) sont toujours lus.
+- **Un lien transféré ne donne rien** : la personne qui le reçoit installe, voit la page de bêta
+  privée, et n'apparaît que comme une demande que le fondateur peut ignorer. Le formulaire
+  « Inviter un fondateur » (lien ou id `biz_…`) reste pour inviter une communauté d'avance.

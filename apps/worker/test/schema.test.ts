@@ -8,6 +8,7 @@ import { createTestDb, type TestDb } from './helpers/db';
 
 // Tables no Whop user may read, even their own rows: the Worker alone uses them.
 const SERVER_ONLY = [
+  'access_requests',
   'app_memberships',
   'app_settings',
   'company_admins',
@@ -23,6 +24,7 @@ const SERVER_ONLY = [
 
 // Tables with a company_id that is not a foreign key to companies, and why.
 const COMPANY_ID_WITHOUT_FK: Record<string, string> = {
+  access_requests: 'a community asks for the private beta before StayPut records it',
   error_log: 'an error can name a company that never opened StayPut, or is gone',
   founders: 'a founder can be invited before installing StayPut, and the registry outlives it',
   webhook_events: 'a delivery can name a company that has not opened StayPut yet',

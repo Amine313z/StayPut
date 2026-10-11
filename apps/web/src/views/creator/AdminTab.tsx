@@ -1,5 +1,5 @@
-import type { AdminCompaniesView, AdminCompanyRow } from '@stayput/core';
-import { Flag, UserPlus } from 'lucide-react';
+import type { AccessRequestRow, AdminCompaniesView, AdminCompanyRow } from '@stayput/core';
+import { Flag, Inbox, UserPlus } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router';
 import { ApiError, deleteJson, postJson, useApi } from '../../api';
@@ -14,7 +14,9 @@ import { useCreatorData } from '../CreatorView';
  * Settings › Admin (decision of 2026-10-10), for the founder alone (ADMIN_USER_ID, the Worker
  * answers no one else): every community with its level, its Whop plan, the end of its trial and
  * its place in the founders' registry; the communities that bought the founders' plan without an
- * invitation first (a link that leaked); the places left; plan B's state; and the invitations.
+ * invitation first (a link that leaked); the places left; plan B's state; the private beta's
+ * requests (communities that installed StayPut without an invitation, invited in one click: the
+ * creator is asked for nothing); and the invitations.
  */
 export function AdminTab() {
   const { root, admin } = useCreatorData();
@@ -56,6 +58,7 @@ function AdminPage() {
           ) : null}
         </div>
       </Card>
+      <Requests requests={shown.requests} onChange={setView} />
       <Invite onDone={setView} />
       <Card>
         <div className="overflow-x-auto p-2">
@@ -174,6 +177,102 @@ function Row({
         )}
       </td>
     </tr>
+  );
+}
+
+function Requests({
+  requests,
+  onChange,
+}: {
+  requests: readonly AccessRequestRow[];
+  onChange: (view: AdminCompaniesView) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <Card title={t('admin.requests')} icon={<Inbox aria-hidden="true" className="size-4" />}>
+      <div className="space-y-3 p-5 text-sm">
+        <p className="text-muted">{t('admin.requests.hint')}</p>
+        {requests.length === 0 ? (
+          <p className="text-muted">{t('admin.requests.none')}</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {requests.map((request) => (
+              <RequestRow key={request.companyId} request={request} onChange={onChange} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function RequestRow({
+  request,
+  onChange,
+}: {
+  request: AccessRequestRow;
+  onChange: (view: AdminCompaniesView) => void;
+}) {
+  const { t, plural, relative } = useI18n();
+  const [busy, setBusy] = useState<'invite' | 'ignore' | null>(null);
+  const [full, setFull] = useState(false);
+  const path = encodeURIComponent(request.companyId);
+  const invite = async () => {
+    setBusy('invite');
+    try {
+      onChange(
+        await postJson<AdminCompaniesView>('/api/admin/founders', {
+          companyId: request.companyId,
+        }),
+      );
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'conflict') setFull(true);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const ignore = async () => {
+    setBusy('ignore');
+    try {
+      onChange(await deleteJson<AdminCompaniesView>(`/api/admin/requests/${path}`));
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <li data-admin-request={request.companyId} className="flex flex-wrap items-center gap-3 py-3">
+      <div className="min-w-0 flex-1">
+        <span className="block font-medium">{request.name ?? request.companyId}</span>
+        <span className="block text-xs text-muted">
+          {request.name ? `${request.companyId} · ` : ''}
+          {t('admin.requests.seen', {
+            first: relative(new Date(request.firstSeenAt)),
+            last: relative(new Date(request.lastSeenAt)),
+          })}
+          {' · '}
+          {plural('admin.requests.visits', request.visits)}
+        </span>
+        {full ? <span className="block text-xs text-muted">{t('admin.invite.full')}</span> : null}
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        loading={busy === 'ignore'}
+        disabled={busy !== null}
+        onClick={() => void ignore()}
+      >
+        {t('admin.requests.ignore')}
+      </Button>
+      <Button
+        variant="secondary"
+        size="sm"
+        loading={busy === 'invite'}
+        disabled={busy !== null}
+        onClick={() => void invite()}
+      >
+        {t('admin.invite.add')}
+      </Button>
+    </li>
   );
 }
 
