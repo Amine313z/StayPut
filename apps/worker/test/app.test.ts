@@ -2218,6 +2218,15 @@ describe('detection settings and analyses (SPEC Phase 3)', () => {
       'of the members who joined in the last 12 months stayed 90 days or more.',
     );
     expect(html).toContain('40 members counted');
+    // The private beta: a community it keeps out (taken out of the registry) shows no badge.
+    const beta: Env = { ...ENV, INVITE_ONLY: 'true' };
+    expect((await request('/badge/biz_Badge1.svg', {}, beta)).status).toBe(404);
+    expect((await request('/verify/biz_Badge1', {}, beta)).status).toBe(404);
+    await t.db.query(
+      `insert into stayput.founders (company_id, invited_at) values ('biz_Badge1', now())`,
+    );
+    expect((await request('/badge/biz_Badge1.svg', {}, beta)).status).toBe(200);
+    await t.db.query(`delete from stayput.founders where company_id = 'biz_Badge1'`);
     expect((await request(path, put(init, { enabled: 'yes' }))).status).toBe(400);
     await request(path, put(init, { enabled: false }));
     expect((await request('/badge/biz_Badge1.svg')).status).toBe(404);

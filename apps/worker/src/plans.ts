@@ -140,8 +140,20 @@ async function readFromWhop(
     if (!whop) throw new Error('WHOP_API_KEY is not set');
     const owner = row.company_owner ?? (await readOwner(db, whop, companyId));
     if (!owner) throw new Error('Whop named no owner for this company');
+    // The founders' plan counts only for an owner the founder invited (decision of 2026-10-11):
+    // its link passed on, or leaked, opens nothing. The registry says so.
+    const registry = config.founderPlan
+      ? await founderRegistry(db, companyId, owner)
+      : { listed: false, ownerInvited: false };
     // The owner's live StayPut plan, highest level first; none: Free.
-    const membership = await ownerMembership(db, whop, config, owner, now);
+    const { best: membership, holdsFounder } = await ownerMembership(
+      db,
+      whop,
+      config,
+      owner,
+      now,
+      registry.ownerInvited,
+    );
     let tier: Tier = membership?.tier ?? 'free';
     // Pro covers one whop: the owner's first installed community. Scale covers them all.
     if (tier === 'pro' && !(await firstOfOwner(db, owner, companyId))) tier = 'free';
@@ -152,7 +164,10 @@ async function readFromWhop(
       tier = higherTier(tier, 'scale');
     }
     const founderPlan = config.founderPlan !== null && membership?.planId === config.founderPlan;
-    if (founderPlan) {
+    // The registry follows: an invited community becomes subscribed; a community bought for
+    // without an invitation is flagged for the founder (who refunds it on Whop, or marks it
+    // invited). The other communities of an invited owner have nothing to note.
+    if (holdsFounder && (registry.listed || !registry.ownerInvited)) {
       await db.query('select stayput.note_founder_plan($1, $2::timestamptz)', [
         companyId,
         now.toISOString(),
@@ -279,7 +294,9 @@ async function ownerMembership(
   config: PlansConfig,
   owner: string,
   now: Date,
-): Promise<OwnerMembership | null> {
+  /** Whether the founders' plan gives its level: the owner is in the registry (founderRegistry). */
+  founderCounts: boolean,
+): Promise<{ best: OwnerMembership | null; holdsFounder: boolean }> {
   const plans = ourPlans(config);
   let after: string | null = null;
   for (let page = 0; page < MEMBERSHIP_PAGES; page += 1) {
@@ -310,9 +327,15 @@ async function ownerMembership(
     [owner, plans.join(','), [...LIVE_STATUSES].join(',')],
   );
   let best: OwnerMembership | null = null;
+  let holdsFounder = false;
   for (const row of rows) {
     const tier = tierOfPlan(config, row.plan_id);
-    if (!tier || (best && !tierAbove(tier, best.tier))) continue;
+    if (!tier) continue;
+    if (row.plan_id === config.founderPlan) {
+      holdsFounder = true;
+      if (!founderCounts) continue;
+    }
+    if (best && !tierAbove(tier, best.tier)) continue;
     best = {
       id: row.id,
       planId: row.plan_id,
@@ -320,7 +343,29 @@ async function ownerMembership(
       trialEndsAt: row.status === 'trialing' ? asDate(row.renewal_period_end) : null,
     };
   }
-  return best;
+  return { best, holdsFounder };
+}
+
+/**
+ * Where the company and its owner stand in the founders' registry: whether the company is in it
+ * (any status), and whether the owner has a community the founder invited (invited, or
+ * subscribed). Flagged never counts: the founder marks it invited to let it in.
+ */
+async function founderRegistry(
+  db: Db,
+  companyId: string,
+  owner: string,
+): Promise<{ listed: boolean; ownerInvited: boolean }> {
+  const [row] = await db.query<{ listed: boolean; owner_invited: boolean }>(
+    `select exists (select 1 from stayput.founders where company_id = $1) as listed,
+            exists (select 1 from stayput.founders f
+                     where f.status in ('invited', 'subscribed')
+                       and (f.company_id = $1
+                            or f.company_id in (select c.id from stayput.companies c
+                                                 where c.owner_user_id = $2))) as owner_invited`,
+    [companyId, owner],
+  );
+  return { listed: row?.listed === true, ownerInvited: row?.owner_invited === true };
 }
 
 /** Whether `tier` is above `than`. */
@@ -445,6 +490,25 @@ async function autopilotFor(db: Db, companyId: string, tier: Tier): Promise<void
       [companyId],
     );
   }
+}
+
+/**
+ * The founder changed the registry for this company (invited, marked, taken out): its level and
+ * its owner's other communities' are read again at their next request, since the founders' plan
+ * counts only for an owner the founder invited.
+ */
+export async function invalidateRegistryPlans(db: Db, companyId: string): Promise<number> {
+  const rows = await db.query<{ company_id: string }>(
+    `update stayput.company_plans p set fresh_until = null
+      where p.company_id = $1
+         or p.company_id in (select other.id from stayput.companies this
+                               join stayput.companies other
+                                 on other.owner_user_id = this.owner_user_id
+                              where this.id = $1)
+      returning p.company_id`,
+    [companyId],
+  );
+  return rows.length;
 }
 
 /**
@@ -622,9 +686,17 @@ export async function onMembershipEvent(
     await noteAppMembership(db, found.stayput, now);
     const plan = (found.stayput.plan as { id?: unknown } | undefined)?.id ?? found.stayput.plan_id;
     if (config.founderPlan && plan === config.founderPlan) {
+      // As readFromWhop notes it: the communities of the registry; all of them when the owner has
+      // none invited (a link passed on, flagged); never an invited owner's other communities.
       await db.query(
         `select stayput.note_founder_plan(c.id, $2::timestamptz)
-           from stayput.companies c where c.owner_user_id = $1`,
+           from stayput.companies c
+          where c.owner_user_id = $1
+            and (exists (select 1 from stayput.founders f where f.company_id = c.id)
+                 or not exists (select 1 from stayput.founders f
+                                  join stayput.companies o on o.id = f.company_id
+                                 where o.owner_user_id = $1
+                                   and f.status in ('invited', 'subscribed')))`,
         [found.userId, now.toISOString()],
       );
     }

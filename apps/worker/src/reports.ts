@@ -109,18 +109,25 @@ export async function sendWeeklyReports(
   whop: WhopClient | null,
   now: Date,
   limit = WEEKLY_REPORT_BATCH,
+  /** The communities the private beta keeps out (beta.ts): no report goes to their team. */
+  shut: ReadonlySet<string> = new Set(),
 ): Promise<{ sent: string[]; failed: string[] }> {
   const at = now.toISOString();
-  const due = await db.query<{
-    company_id: string;
-    week_start: string;
-    zone: string;
-    locale: string;
-  }>(
-    `select company_id, to_char(week_start, 'YYYY-MM-DD') as week_start, zone, locale
-       from stayput.weekly_reports_due($1::timestamptz, $2)`,
-    [at, limit],
-  );
+  // Read past those kept out, so that they never hold the others' place in the batch.
+  const due = (
+    await db.query<{
+      company_id: string;
+      week_start: string;
+      zone: string;
+      locale: string;
+    }>(
+      `select company_id, to_char(week_start, 'YYYY-MM-DD') as week_start, zone, locale
+         from stayput.weekly_reports_due($1::timestamptz, $2)`,
+      [at, limit + shut.size],
+    )
+  )
+    .filter((company) => !shut.has(company.company_id))
+    .slice(0, limit);
   const sent: string[] = [];
   const failed: string[] = [];
   for (const company of due) {

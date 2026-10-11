@@ -1,4 +1,5 @@
 import { EXECUTE_BATCH, executeDueActions, prepareActions } from './actions';
+import { shutInBeta } from './beta';
 import { companyPlan, planningAt } from './plans';
 import { planRescues } from './space';
 import type { CronJob } from './cron';
@@ -31,7 +32,7 @@ export const replayWebhooks: CronJob = {
 /** SPEC Phase 2, 2 and 3: the companies that waited longest, within the run's Whop calls. */
 export const syncWithWhop: CronJob = {
   name: 'sync',
-  async run({ db, syncWhop, discord, now }) {
+  async run({ config, db, syncWhop, discord, now }) {
     if (!db || !syncWhop) return;
     const results = await syncDueCompanies({
       db,
@@ -39,6 +40,8 @@ export const syncWithWhop: CronJob = {
       discord: discord ?? null,
       now,
       budget: { left: SYNC_REQUEST_BUDGET },
+      // The private beta: nothing more is read for a community it keeps out.
+      shut: await shutInBeta(db, config),
     });
     for (const result of results) console.info(summarize(result));
   },
@@ -94,7 +97,10 @@ export const runActions: CronJob = {
       `select id from stayput.companies where status = 'active' and not is_demo order by id`,
     );
     const memberSpace = config.memberSpace;
+    // The private beta: nothing is planned or sent for a community it keeps out.
+    const shut = await shutInBeta(db, config);
     for (const { id } of companies) {
+      if (shut.has(id)) continue;
       // The level read again first (from Whop once stale): a community back on Free plans
       // nothing of its own, and its scheduled follow-ups wait (stayput.due_actions).
       const { tier } = await companyPlan(db, whop, config.plans, id, now);
@@ -111,7 +117,7 @@ export const runActions: CronJob = {
         if (challenges > 0) console.info(`Rescue challenges ${id}: ${challenges} made.`);
       }
     }
-    const ran = await executeDueActions(db, whop, now, EXECUTE_BATCH, { discord, telegram });
+    const ran = await executeDueActions(db, whop, now, EXECUTE_BATCH, { discord, telegram }, shut);
     if (Object.keys(ran).length > 0) console.info(`Actions run: ${JSON.stringify(ran)}.`);
   },
 };
@@ -140,9 +146,16 @@ export const countSaves: CronJob = {
  */
 export const weeklyReports: CronJob = {
   name: 'weekly-reports',
-  async run({ db, whop, now }) {
+  async run({ config, db, whop, now }) {
     if (!db) return;
-    const { sent, failed } = await sendWeeklyReports(db, whop, now);
+    // The private beta: no report to the team of a community it keeps out.
+    const { sent, failed } = await sendWeeklyReports(
+      db,
+      whop,
+      now,
+      undefined,
+      await shutInBeta(db, config),
+    );
     if (sent.length + failed.length > 0) {
       console.info(`Monday reports: ${sent.length} sent, ${failed.length} refused.`);
     }

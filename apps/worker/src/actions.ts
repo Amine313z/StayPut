@@ -48,6 +48,9 @@ export interface Platforms {
 export const SCHEDULE_BATCH = 50;
 /** Actions run per cron run: each is a Whop call, within the run's subrequests. */
 export const EXECUTE_BATCH = 20;
+
+/** How long an action of a community the private beta keeps out waits before its next look. */
+const SHUT_WAIT_MS = 60 * 60 * 1000;
 /** A Whop outage is tried again an hour later, three attempts in all. */
 export const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 3_600_000;
@@ -864,6 +867,8 @@ export async function executeDueActions(
   now: Date,
   limit = EXECUTE_BATCH,
   platforms: Platforms = {},
+  /** The communities the private beta keeps out (beta.ts): their actions wait, unsent. */
+  shut: ReadonlySet<string> = new Set(),
 ): Promise<Record<string, number>> {
   const at = now.toISOString();
   const [row] = await db.query<{ actions: DueAction[] | null }>(
@@ -872,6 +877,16 @@ export async function executeDueActions(
   );
   const counts: Record<string, number> = {};
   for (const action of row?.actions ?? []) {
+    if (shut.has(action.companyId)) {
+      // Out of the next runs' way for an hour; sent (or found stale) only if the founder
+      // invites the community again.
+      await db.query('select stayput.postpone_action($1, $2::timestamptz)', [
+        action.id,
+        new Date(now.getTime() + SHUT_WAIT_MS).toISOString(),
+      ]);
+      counts.shut = (counts.shut ?? 0) + 1;
+      continue;
+    }
     const key = await finish(
       db,
       action,

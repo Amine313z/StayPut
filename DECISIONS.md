@@ -4430,3 +4430,38 @@ devrait pas servir. L'essai part du moment où le créateur prend le plan Fondat
 enregistrée, rien de prélevé), pas de l'installation : le lien Fondateur n'est envoyé qu'à la fin
 de la bêta, et chacun a alors un mois gratuit puis 39,50 $/mois à vie. StayPut n'a aucune durée
 dans son code : le bandeau lit la date de fin chez Whop.
+
+## 2026-10-11 — Audit : la bêta s'applique aussi au cron, et le lien Fondateur seul n'ouvre rien
+
+Audit demandé par le fondateur (« aucune erreur, aucune fuite, aucun moyen de contourner le lien
+Fondateur »). Deux failles trouvées et corrigées, chacune avec son test :
+
+- **Le cron ignorait la bêta.** Le rapport du lundi part par défaut à l'équipe de toute
+  communauté active (niveau Scale sans forfait) : une communauté enregistrée par ses webhooks
+  avant la porte de la bêta, ou un testeur retiré du registre, l'aurait reçu. Désormais
+  `shutInBeta` (`beta.ts`) liste les communautés que la bêta tient dehors, et le cron ne fait
+  rien pour elles : aucune action envoyée (elles attendent, reportées d'une heure, et repartent
+  si le fondateur les invite), aucun rapport du lundi, aucune synchronisation. Elles ne prennent
+  jamais la place des autres dans les lots. Leur badge public et sa page de vérification sont
+  fermés aussi. Les actions d'une communauté jamais ouverte restaient déjà « proposées » (mode
+  manuel par défaut), donc rien n'était parti.
+- **Le lien Fondateur donnait Scale à n'importe qui.** Acheté sans invitation, il était
+  seulement « signalé » et donnait Scale en attendant la décision du fondateur ; au lancement
+  public, un lien fuité aurait valu Scale à 39,50 $ à vie. Désormais le plan Fondateur ne compte
+  que pour un propriétaire dont une communauté est au registre (invitée ou abonnée). Sinon : Free,
+  pas de bandeau Fondateur, communauté signalée dans Admin. Le fondateur la rembourse chez Whop,
+  ou la passe en invitée pour la laisser entrer. Les autres communautés d'un fondateur invité ont
+  Scale (Scale les couvre toutes) sans être signalées. Chaque changement du registre fait relire
+  le niveau aussitôt.
+- **Reste côté Whop** (hors de portée du code) : un achat avec le lien fuité consomme une unité
+  du stock de 20. Il faut donc envoyer le lien Fondateur à la fin de la bêta, un par un, et en
+  cas d'achat signalé, rembourser chez Whop et remettre +1 au stock. Aucun code promo public sur
+  ce plan.
+- **Vérifié sans rien à corriger** :
+  - toutes les routes créateur (71) et membres passent par la porte ;
+  - les routes Admin répondent 404 à tout autre que `ADMIN_USER_ID` ;
+  - les jetons Whop sont vérifiés (émetteur, audience = l'app) ;
+  - les erreurs renvoient un message générique ;
+  - pas de secret dans le dépôt ni dans son historique ;
+  - `npm audit` sans vulnérabilité ;
+  - `access_requests` réservée au serveur (RLS).

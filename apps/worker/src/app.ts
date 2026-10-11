@@ -73,6 +73,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { createMiddleware } from 'hono/factory';
 import type { CryptoKey, JWTVerifyGetKey } from 'jose';
 import { AccessCache } from './access';
+import { openInBeta } from './beta';
 import { readBadge, readPublicBadge, saveBadgeSetting } from './badge';
 import { readBenchmarks, saveBenchmarksSetting } from './benchmarks';
 import {
@@ -106,6 +107,7 @@ import {
   giveBackManualActions,
   dashboardAt,
   dayWithin,
+  invalidateRegistryPlans,
   readAdmin,
   insightsAt,
   onMembershipEvent,
@@ -996,6 +998,7 @@ export function createApp(deps: AppDeps) {
     }
     // Its request, answered: nothing of it is kept once invited.
     await db.query('delete from stayput.access_requests where company_id = $1', [body.companyId]);
+    await invalidateRegistryPlans(db, body.companyId);
     return c.json(await readAdmin(db, c.get('config').plans));
   });
 
@@ -1034,6 +1037,7 @@ export function createApp(deps: AppDeps) {
       [companyId, status ?? null, body?.note !== undefined, (body?.note as string | null) ?? null],
     );
     if (rows.length === 0) return apiError('not_found', 'not in the registry');
+    await invalidateRegistryPlans(db, companyId);
     return c.json(await readAdmin(db, c.get('config').plans));
   });
 
@@ -1043,6 +1047,7 @@ export function createApp(deps: AppDeps) {
     const companyId = c.req.param('companyId');
     if (!isCompanyId(companyId)) return apiError('invalid_request', 'expected a biz_… id');
     await db.query('delete from stayput.founders where company_id = $1', [companyId]);
+    await invalidateRegistryPlans(db, companyId);
     return c.json(await readAdmin(db, c.get('config').plans));
   });
 
@@ -3610,6 +3615,17 @@ export function createApp(deps: AppDeps) {
   );
 
   /**
+   * The community's public badge, when its team turned it on and the private beta lets the
+   * community in (a community taken out of the registry shows none).
+   */
+  async function publicBadge(c: Context<AppEnv>, companyId: string) {
+    const db = c.get('db');
+    const config = c.get('config');
+    if (!db || !(await openInBeta(db, config, companyId, config.plans.adminUserId))) return null;
+    return readPublicBadge(db, companyId, deps.now());
+  }
+
+  /**
    * The public « Verified retention » badge (SPEC Phase 6.11): the community's retention at 90
    * days as an SVG, once its team turned it on and the figure exists; 404 otherwise, never why.
    * Cached an hour: the figure changes once a week.
@@ -3617,8 +3633,7 @@ export function createApp(deps: AppDeps) {
   app.get('/badge/:file', withDb, async (c) => {
     const file = /^(biz_[A-Za-z0-9]+)\.svg$/.exec(c.req.param('file'));
     if (!file) return apiError('invalid_request', 'expected /badge/<company id>.svg');
-    const db = c.get('db');
-    const badge = db ? await readPublicBadge(db, file[1]!, deps.now()) : null;
+    const badge = await publicBadge(c, file[1]!);
     if (!badge) return apiError('not_found', 'no public badge for this company');
     return new Response(retentionBadgeSvg(badge.locale, badge.retention), {
       headers: {
@@ -3635,8 +3650,7 @@ export function createApp(deps: AppDeps) {
     if (!/^biz_[A-Za-z0-9]+$/.test(companyId)) {
       return apiError('invalid_request', 'not a company id');
     }
-    const db = c.get('db');
-    const badge = db ? await readPublicBadge(db, companyId, deps.now()) : null;
+    const badge = await publicBadge(c, companyId);
     if (!badge) {
       const language = c.req.header('accept-language') ?? '';
       return goneVerifyPage(/^fr\b/i.test(language) ? 'fr' : 'en');
@@ -3748,29 +3762,6 @@ async function fileWebhook(db: Db, id: string, now: Date): Promise<void> {
   } catch (error) {
     console.error(`Webhook ${id} could not be filed:`, describe(error));
   }
-}
-
-/**
- * Whether the private beta lets the company in: always without INVITE_ONLY; else the operator's
- * community and the communities the founder invited (still invited, or subscribed); and, with
- * `opener`, those this user opened StayPut in (the founder's own, for their webhooks: their team
- * stays shut out).
- */
-async function openInBeta(
-  db: Db,
-  config: Config,
-  companyId: string,
-  opener: string | null,
-): Promise<boolean> {
-  if (!config.inviteOnly || companyId === config.operatorCompanyId) return true;
-  const [row] = await db.query<{ open: boolean }>(
-    `select exists (select 1 from stayput.founders
-                     where company_id = $1 and status in ('invited', 'subscribed'))
-         or exists (select 1 from stayput.company_admins
-                     where company_id = $1 and user_id = $2) as open`,
-    [companyId, opener],
-  );
-  return row?.open === true;
 }
 
 /**

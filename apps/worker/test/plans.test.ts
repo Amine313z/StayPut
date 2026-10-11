@@ -24,7 +24,8 @@ import { createTestDb, type TestDb } from './helpers/db';
  * 1. No subscription: Free, and the sixth manual action of the month is refused (402).
  * 2. A Pro trial: Pro at once, through the membership webhook (no 5-minute wait).
  * 3. The founders' plan: Scale, and the founders' banner with its date and price.
- * 4. The founders' plan bought by a community outside the registry: flagged.
+ * 4. The founders' plan bought by a community outside the registry: flagged, and it gives nothing
+ *    until the founder lets the community in (a link passed on, or leaked, opens nothing).
  * 5. A cancellation: Free, the automations stop, the data stays.
  * 6. A moderator of a Scale community: Scale (the owner pays, the team has it).
  * 7. Whop unreachable: the last level known stays.
@@ -441,9 +442,18 @@ describe('the plans’ acceptance', () => {
     expect((await env.request('/api/admin/companies', await as('user_FoundingOwner'))).status).toBe(
       404,
     );
+
+    // The founder's other community: Scale too (Scale covers them all), never flagged.
+    await community(env, 'biz_Founding2', 'user_FoundingOwner');
+    expect((await session(env, 'biz_Founding2', 'user_FoundingOwner')).plan.tier).toBe('scale');
+    const after = (await (
+      await env.request('/api/admin/companies', await as(ADMIN))
+    ).json()) as AdminCompaniesView;
+    expect(after.companies.find((c) => c.companyId === 'biz_Founding2')?.founder).toBeNull();
+    expect(after.founders).toMatchObject({ places: 20, left: 19 });
   });
 
-  it('4. the founders’ plan bought by a community outside the registry: flagged', async () => {
+  it('4. the founders’ plan bought outside the registry: flagged, nothing given', async () => {
     const env = setup();
     await community(env, 'biz_Leak', 'user_LeakOwner');
     expect((await session(env, 'biz_Leak', 'user_LeakOwner')).plan.tier).toBe('free');
@@ -466,9 +476,30 @@ describe('the plans’ acceptance', () => {
     expect(admin.companies.find((c) => c.companyId === 'biz_Leak')?.founder).toMatchObject({
       status: 'flagged',
     });
-    // Flagged takes no place; Whop gave access, so the level is Scale until the founder decides.
+    // Flagged takes no place, and the leaked link opens nothing: Free, no founders' banner
+    // (decision of 2026-10-11). The founder refunds it on Whop, or lets the community in.
     expect(admin.founders.left).toBe(19);
-    expect((await session(env, 'biz_Leak', 'user_LeakOwner')).plan.tier).toBe('scale');
+    expect((await session(env, 'biz_Leak', 'user_LeakOwner')).plan).toMatchObject({
+      tier: 'free',
+      founder: null,
+    });
+
+    // The founder lets it in (Settings › Admin, marked invited): Scale at once, subscribed.
+    const marked = await env.request(
+      '/api/admin/founders/biz_Leak',
+      await as(ADMIN, { method: 'PUT', body: JSON.stringify({ status: 'invited' }) }),
+    );
+    expect(marked.status).toBe(200);
+    expect((await session(env, 'biz_Leak', 'user_LeakOwner')).plan).toMatchObject({
+      tier: 'scale',
+      founder: { price: { amount: 39.5, currency: 'usd' } },
+    });
+    const now = (await (
+      await env.request('/api/admin/companies', await as(ADMIN))
+    ).json()) as AdminCompaniesView;
+    expect(now.companies.find((c) => c.companyId === 'biz_Leak')?.founder?.status).toBe(
+      'subscribed',
+    );
   });
 
   it('5. a cancellation: Free, the automations stop, the data stays', async () => {

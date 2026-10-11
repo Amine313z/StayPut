@@ -283,6 +283,8 @@ export interface SyncContext {
    * wait for the next run, Whop's lists go on.
    */
   discordPaused?: string | null;
+  /** The communities the private beta keeps out (beta.ts): the cron reads nothing more of them. */
+  shut?: ReadonlySet<string>;
 }
 
 export type StreamOutcome = 'caught_up' | 'more' | 'failed';
@@ -630,10 +632,16 @@ export async function refreshDiscordNow(
 
 /** The cron's run: the companies that waited longest, while the budget lasts. */
 export async function syncDueCompanies(ctx: SyncContext, limit = 10): Promise<CompanySync[]> {
-  const due = await ctx.db.query<{ id: string }>(
-    'select stayput.companies_to_sync($1::timestamptz, $2, $3) as id',
-    [ctx.now.toISOString(), SYNC_INTERVAL_SECONDS, limit],
-  );
+  const shut = ctx.shut ?? new Set<string>();
+  // Read past the communities the private beta keeps out: they never hold the others' place.
+  const due = (
+    await ctx.db.query<{ id: string }>(
+      'select stayput.companies_to_sync($1::timestamptz, $2, $3) as id',
+      [ctx.now.toISOString(), SYNC_INTERVAL_SECONDS, limit + shut.size],
+    )
+  )
+    .filter(({ id }) => !shut.has(id))
+    .slice(0, limit);
   const results: CompanySync[] = [];
   for (const { id } of due) {
     if (ctx.budget.left <= 0) break;
