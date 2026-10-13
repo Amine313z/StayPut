@@ -57,9 +57,12 @@ Les mêmes noms préfixés **`PRODUCTION_`**, rangés dans l'environnement GitHu
 `PRODUCTION_TELEGRAM_BOT_TOKEN` (facultatif, un second bot), `PRODUCTION_WHOP_APP_ID`,
 `PRODUCTION_OPERATOR_COMPANY_ID`, `PRODUCTION_STAYPUT_URL` (facultatif), et les forfaits
 `PRODUCTION_WHOP_PLANS_PRO`, `PRODUCTION_WHOP_PLANS_SCALE`, `PRODUCTION_WHOP_PLAN_SCALE_FOUNDER`,
-`PRODUCTION_CHECKOUT_URL_PRO`, `PRODUCTION_CHECKOUT_URL_SCALE`, `PRODUCTION_ADMIN_USER_ID`
-(facultatifs). `PRODUCTION_ADMIN_USER_ID` se range de préférence en **secret** : GitHub affiche
-les variables d'une étape dans son journal, public ici, avant qu'elle puisse les masquer.
+`PRODUCTION_CHECKOUT_URL_PRO`, `PRODUCTION_CHECKOUT_URL_SCALE`, `PRODUCTION_ADMIN_USER_ID`,
+`PRODUCTION_INVITE_ONLY` (facultatifs). Ces réglages des forfaits et de la bêta sont lus **en
+secret ou en variable**, au choix (Deploy essaie le secret, puis la variable) : rangés dans le
+mauvais tableau de l'environnement, ils marchent quand même. `PRODUCTION_ADMIN_USER_ID` se range
+de préférence en **secret** : GitHub affiche les variables d'une étape dans son journal, public
+ici, avant qu'elle puisse les masquer.
 Un réglage obligatoire
 manquant arrête le déploiement : il n'est jamais remplacé par celui du sandbox. `WHOP_ENV` y vaut
 toujours `production`. Cloudflare et Discord restent ceux du dépôt. Détails :

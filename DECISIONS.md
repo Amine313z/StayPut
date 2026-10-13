@@ -4497,3 +4497,27 @@ community… / Leave the demo » n'apparaît plus sur la démo publique : le bad
 barre du haut suffit à dire que c'est la démo. Elle reste pour un créateur entré dans la démo
 depuis son propre tableau de bord (l'aide, `?from=`), seul chemin pour y revenir dans le cadre de
 Whop.
+
+## 2026-10-13 — Lancement public : plus de plan Fondateur, Free / Pro / Scale
+
+Le fondateur abandonne le plan Fondateur (20 places, recrutement par messages privés : trop long)
+et lance StayPut en public avec trois niveaux : Free, Pro (29 $/mois ou 290 $/an), Scale
+(79 $/mois ou 790 $/an), essai de 7 jours sur Pro et Scale (la durée que Whop propose). Les deux
+produits payants vivent dans l'app StayPut sur whop.com (`StayPut Pro`, `StayPut Scale`, un prix
+mensuel et un annuel chacun) ; leurs identifiants de plan sont lus par l'API publique de Whop
+(`GET /variants?product_ids=`), sans clé. Rien ne change dans le code : le plan Fondateur était
+facultatif (`WHOP_PLAN_SCALE_FOUNDER` absent, pas de bandeau), le registre des invités reste pour
+une bêta future.
+
+Deux règles apprises le même jour :
+
+- **Ne jamais publier l'app dans l'App Store tant que `PRODUCTION_INVITE_ONLY` n'est pas à
+  `false`** : les installateurs (et l'examinateur de Whop) verraient la page vide de la bêta
+  privée. Le fondateur avait cliqué « Publier » avant que la bêta soit ouverte ; l'examen a été
+  annulé à temps.
+- **Les réglages des forfaits sont lus en secret ou en variable.** Le fondateur les avait saisis
+  dans le tableau des secrets de l'environnement GitHub ; Deploy ne lisait que les variables, et
+  la production est partie avec les forfaits éteints et la bêta encore fermée. Deploy essaie
+  désormais le secret puis la variable pour `WHOP_PLANS_*`, `CHECKOUT_URL_*`,
+  `WHOP_PLAN_SCALE_FOUNDER` et `INVITE_ONLY`, comme pour `ADMIN_USER_ID`. Effet de bord
+  accepté : un secret `false` masque ce mot dans les journaux publics de Deploy.
