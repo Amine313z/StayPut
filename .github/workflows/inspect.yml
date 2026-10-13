@@ -55,6 +55,18 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         run: npx tsx scripts/ops/telegram-groups.ts
 
+      # What Whop answers the app key about the founder on the operator's community: the access
+      # level the dashboard needs, the permissions granted there, whether the key reads it.
+      # Levels, statuses and permission names only: never an id, never a name.
+      - name: Ask Whop what the founder may open (levels and statuses only)
+        if: always()
+        env:
+          WHOP_API_KEY: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_WHOP_API_KEY' || 'WHOP_API_KEY'] }}
+          WHOP_ENV: ${{ inputs.target == 'production' && 'production' || vars.WHOP_ENV }}
+          OPERATOR_COMPANY_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_OPERATOR_COMPANY_ID' || 'OPERATOR_COMPANY_ID'] }}
+          ADMIN_USER_ID: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_ADMIN_USER_ID' || 'ADMIN_USER_ID'] || vars[inputs.target == 'production' && 'PRODUCTION_ADMIN_USER_ID' || 'ADMIN_USER_ID'] }}
+        run: npx tsx scripts/ops/whop-access.ts
+
       # The Whop app as Whop holds it, and StayPut reached through Whop's relay in production
       # (scripts/deploy/check-app.ts, as at deployment): a setting changed since on whop.com
       # shows here. The app's own settings only, never a community's.
