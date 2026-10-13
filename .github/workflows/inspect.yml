@@ -16,6 +16,12 @@ on:
         type: choice
         options: [sandbox, production]
         default: sandbox
+      user_id:
+        description: >-
+          A Whop user id (user_…) to ask Whop about instead of the founder's, as a refusal's
+          detail line showed it. Levels and statuses only are printed.
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -67,6 +73,7 @@ jobs:
           WHOP_APP_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_APP_ID' || 'WHOP_APP_ID'] }}
           OPERATOR_COMPANY_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_OPERATOR_COMPANY_ID' || 'OPERATOR_COMPANY_ID'] }}
           ADMIN_USER_ID: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_ADMIN_USER_ID' || 'ADMIN_USER_ID'] || vars[inputs.target == 'production' && 'PRODUCTION_ADMIN_USER_ID' || 'ADMIN_USER_ID'] }}
+          CHECK_USER_ID: ${{ inputs.user_id }}
         run: npx tsx scripts/ops/whop-access.ts
 
       # The Whop app as Whop holds it, and StayPut reached through Whop's relay in production
