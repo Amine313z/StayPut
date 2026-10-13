@@ -4546,3 +4546,13 @@ Deux aides pour la prochaine fois :
   de la communauté de l'opérateur que la clé peut voir, combien sont celles de l'app
   (`WHOP_APP_ID`), et ce que Whop répond sur le fondateur pour chacune : un 404 là est une
   expérience que la clé n'atteint pas (celle de l'ancienne app de production, par exemple).
+
+Suite, le même soir : une fois cette correction en production, le refus restait, et sa ligne
+`detail` a tout dit. Le jeton portait `user_Re1sK47SsPkaC`, que l'API de Whop ne connaît pas
+(`GET /users/…` → 404, accès → 404), alors que le fondateur était bien connecté (@dev313,
+`user_4cFeF6wea5ODL`) ; la clé, elle, lisait la communauté, l'expérience de l'app et ses 25
+permissions. La cause : le hub de la communauté était en **« Aperçu en tant que : Admin »**.
+Dans cet aperçu, Whop envoie aux apps un jeton d'utilisateur fictif, et toute vérification
+d'accès échoue. Hors aperçu, par https://whop.com/dashboard/biz_… → StayPut, tout s'ouvre.
+**Ne jamais tester StayPut depuis l'aperçu du hub** ; un refus dont la ligne grise montre un
+identifiant inconnu de l'API est cet aperçu, pas StayPut.
