@@ -21,6 +21,7 @@ const members = () => import('./views/creator/MembersTab');
 const settings = () => import('./views/creator/SettingsTab');
 const sources = () => import('./views/creator/SourcesTab');
 const space = () => import('./views/creator/SpaceTab');
+const help = () => import('./views/creator/HelpTab');
 
 /** A section of the dashboard: its tabs, and its first tab for any other address in it. */
 function section(id: SectionId, path: string | undefined, tabs: RouteObject[]): RouteObject {
@@ -86,6 +87,10 @@ function creatorSections(): RouteObject[] {
       { path: 'telegram', ...screen(() => sources().then((m) => <m.TelegramTab />)) },
       // Its content is in each platform's tab now (fix prompt v4.1, block 7).
       { path: 'activity', ...screen(() => sources().then((m) => <m.ActivityAddress />)) },
+    ]),
+    section('help', 'help', [
+      { index: true, ...screen(() => help().then((m) => <m.FaqTab />)) },
+      { path: 'support', ...screen(() => help().then((m) => <m.SupportTab />)) },
     ]),
     section('settings', 'settings', [
       { index: true, ...screen(() => settings().then((m) => <m.GeneralSettingsTab />)) },

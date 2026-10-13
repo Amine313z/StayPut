@@ -62,6 +62,8 @@ export const NOT_EXPORTED: Readonly<Record<string, string>> = {
     'StayPut’s own errors (no person, no secret), kept 30 days for its operator: deleted with the community',
   manual_action_counts: 'how many manual actions Free used this month: a counter, nothing personal',
   pending_activity: 'messages waiting a few minutes for their member, never kept',
+  support_messages:
+    'what the team wrote to StayPut’s founder from Help & support: correspondence with StayPut, deleted with the community',
   webhook_events: 'Whop’s deliveries without their personal fields, kept 7 days for replays',
 };
 

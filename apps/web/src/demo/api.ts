@@ -8,6 +8,7 @@ import type {
   MemberDataExport,
   RiskSettingsView,
   SyncRun,
+  PlanOffersView,
 } from '@stayput/core';
 import {
   ACTION_VIEWS,
@@ -27,6 +28,20 @@ import { createWorld, type DemoWorld } from './world';
  */
 
 /** A short wait, as a real answer takes: the screens show their loading and working states. */
+/** Pro's and Scale's plans as the demo shows them: StayPut's prices, no checkout. */
+const DEMO_OFFERS: PlanOffersView = {
+  offers: {
+    pro: [
+      { period: 'month', amount: 29, currency: 'usd', trialDays: 7, checkout: null },
+      { period: 'year', amount: 290, currency: 'usd', trialDays: 7, checkout: null },
+    ],
+    scale: [
+      { period: 'month', amount: 79, currency: 'usd', trialDays: 7, checkout: null },
+      { period: 'year', amount: 790, currency: 'usd', trialDays: 7, checkout: null },
+    ],
+  },
+};
+
 export const DEMO_READ_MS = 250;
 export const DEMO_WRITE_MS = 600;
 
@@ -99,6 +114,9 @@ export async function answerDemo(method: string, path: string, body: unknown): P
         return answer(pages.benchmarks());
       case 'badge':
         return answer(pages.badge(window.location.origin));
+      // Settings › Plan's prices, as StayPut's Whop plans sell them (nothing is bought here).
+      case 'offers':
+        return answer(DEMO_OFFERS);
     }
     if (/^discord\/[^/]+\/channels$/.test(route)) return answer(pages.discordChannels());
     // Integrations › Discord, › Telegram (fix prompt v4.1, block 7) and › Whop (0049).

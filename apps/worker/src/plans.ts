@@ -12,8 +12,11 @@ import {
   type FounderStatus,
   type InsightsOverview,
   type InsightsReport,
+  type PlanOffer,
+  type PlanOffersView,
   type PlanView,
   type PlatformDashboard,
+  type SupportMessageRow,
   type Tier,
   type TierSource,
 } from '@stayput/core';
@@ -604,6 +607,79 @@ async function readFounderPrice(
   return price;
 }
 
+/**
+ * Pro's and Scale's plans as Whop sells them (Settings › Plan): each plan's price, period, trial
+ * and checkout, read with `GET /plans/{id}`, kept an hour per Worker instance (five minutes when
+ * Whop did not answer). A plan that is not monthly or yearly, or has no price, is left out. Null
+ * while plans are off, or when Whop gave none of them.
+ */
+let offersRead: { until: number; key: string; offers: PlanOffersView['offers'] } | null = null;
+
+export async function readOffers(
+  whop: WhopClient | null,
+  config: PlansConfig,
+  now: Date,
+): Promise<PlanOffersView['offers']> {
+  if (!whop || !config.enabled) return null;
+  const key = `${config.proPlans.join(',')}|${config.scalePlans.join(',')}`;
+  if (offersRead && offersRead.key === key && now.getTime() < offersRead.until) {
+    return offersRead.offers;
+  }
+  const read = async (ids: readonly string[]): Promise<PlanOffer[]> => {
+    const offers = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          return planOffer(
+            await whop.request<Record<string, unknown>>('GET', `/plans/${encodeURIComponent(id)}`),
+          );
+        } catch (error) {
+          console.info('Plan not read:', error instanceof Error ? error.message : error);
+          return null;
+        }
+      }),
+    );
+    // The month first, then the year.
+    return offers
+      .filter((offer): offer is PlanOffer => offer !== null)
+      .sort((a, b) => (a.period === b.period ? 0 : a.period === 'month' ? -1 : 1));
+  };
+  const [pro, scale] = await Promise.all([read(config.proPlans), read(config.scalePlans)]);
+  const offers = pro.length > 0 || scale.length > 0 ? { pro, scale } : null;
+  offersRead = { until: now.getTime() + (offers ? 3_600_000 : 300_000), key, offers };
+  return offers;
+}
+
+/** A Whop plan as an offer, or null when it is not one the page can show. */
+export function planOffer(plan: Record<string, unknown>): PlanOffer | null {
+  const days = Number(plan.billing_period);
+  const period = days >= 28 && days <= 31 ? 'month' : days >= 360 && days <= 366 ? 'year' : null;
+  const amount = Number(plan.renewal_price);
+  if (!period || !Number.isFinite(amount) || amount <= 0) return null;
+  if (typeof plan.currency !== 'string' || !/^[a-z]{3}$/i.test(plan.currency)) return null;
+  const trial = Number(plan.trial_period_days);
+  return {
+    period,
+    amount,
+    currency: plan.currency.toLowerCase(),
+    trialDays: Number.isInteger(trial) && trial > 0 ? trial : null,
+    checkout: whopCheckout(plan.purchase_url),
+  };
+}
+
+/** A checkout on Whop (https, whop.com or one of its subdomains), else null. */
+function whopCheckout(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' &&
+      (url.hostname === 'whop.com' || url.hostname.endsWith('.whop.com'))
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The plan as the dashboard shows it. */
 export async function planView(
   db: Db,
@@ -843,9 +919,37 @@ export async function readAdmin(db: Db, config: PlansConfig): Promise<AdminCompa
     lastSeenAt: iso(row.last_seen_at)!,
     visits: Number(row.visits),
   }));
+  // Help & support's messages (0054), the latest first.
+  const written = await db.query<{
+    id: string;
+    company_id: string;
+    name: string | null;
+    user_id: string;
+    body: string;
+    created_at: Date | string;
+    notified: boolean;
+    in_chat: boolean;
+  }>(
+    `select m.id, m.company_id, c.name, m.user_id, m.body, m.created_at, m.notified, m.in_chat
+       from stayput.support_messages m
+       join stayput.companies c on c.id = m.company_id
+      order by m.created_at desc, m.id
+      limit 50`,
+  );
+  const support: SupportMessageRow[] = written.map((row) => ({
+    id: row.id,
+    companyId: row.company_id,
+    name: row.name,
+    userId: row.user_id,
+    body: row.body,
+    createdAt: iso(row.created_at)!,
+    notified: row.notified,
+    inChat: row.in_chat,
+  }));
   return {
     companies,
     requests,
+    support,
     founders: { places: FOUNDER_PLACES, taken, left: Math.max(0, FOUNDER_PLACES - taken) },
     fallback: {
       on: config.founderFallback.on,

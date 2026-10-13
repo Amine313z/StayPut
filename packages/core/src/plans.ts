@@ -175,6 +175,28 @@ export interface PlanView {
   stale: boolean;
 }
 
+/**
+ * One of Pro's or Scale's Whop plans, as Settings › Plan shows it: its price, its trial, its
+ * checkout. Read from Whop (`GET /plans/{id}`), never typed in StayPut: what Whop charges is
+ * what the page says.
+ */
+export interface PlanOffer {
+  /** How often Whop charges: every month, or every year. */
+  period: 'month' | 'year';
+  /** What Whop charges each period, in the currency's units (29 is $29). */
+  amount: number;
+  currency: string;
+  /** The free days before the first charge, when the plan has a trial. */
+  trialDays: number | null;
+  /** Whop's checkout of this plan (https, whop.com), when Whop gave it. */
+  checkout: string | null;
+}
+
+/** GET /api/creator/:companyId/offers: Pro's and Scale's plans, null when Whop did not answer. */
+export interface PlanOffersView {
+  offers: { pro: PlanOffer[]; scale: PlanOffer[] } | null;
+}
+
 /** The body of a 402: the level that opens what was asked, and where to get it. */
 export interface PaymentRequiredBody {
   error: { code: 'payment_required'; message: string };
@@ -187,6 +209,8 @@ export interface AdminCompaniesView {
   companies: AdminCompanyRow[];
   /** The private beta's requests: communities not invited whose team opened StayPut. */
   requests: AccessRequestRow[];
+  /** Help & support › Support: what teams wrote to the founder, the latest first. */
+  support: SupportMessageRow[];
   founders: { places: number; taken: number; left: number };
   fallback: { on: boolean; betaEnd: string | null };
 }
@@ -199,6 +223,22 @@ export interface AccessRequestRow {
   lastSeenAt: string;
   /** Its team's visits (calls less than a minute apart count once). */
   visits: number;
+}
+
+/** A message a team wrote to the founder from Help & support. */
+export interface SupportMessageRow {
+  id: string;
+  companyId: string;
+  /** The community's name as Whop gives it, once read. */
+  name: string | null;
+  /** Who on the team wrote it. */
+  userId: string;
+  body: string;
+  createdAt: string;
+  /** Whop's notification reached the founder's team. */
+  notified: boolean;
+  /** The copy is in the support chat with the writer: the founder answers there. */
+  inChat: boolean;
 }
 
 export interface AdminCompanyRow {

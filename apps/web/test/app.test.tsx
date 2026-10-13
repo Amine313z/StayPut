@@ -561,7 +561,15 @@ describe('creator view', () => {
       within(menu)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Dashboard', 'Members', 'Automations', 'Analytics', 'Integrations', 'Settings']);
+    ).toEqual([
+      'Dashboard',
+      'Members',
+      'Automations',
+      'Analytics',
+      'Integrations',
+      'Settings',
+      'Help & support',
+    ]);
     expect(within(menu).getByRole('link', { name: 'Dashboard' }).getAttribute('aria-current')).toBe(
       'page',
     );
@@ -1756,6 +1764,7 @@ describe('creator view', () => {
       'Analyses',
       'Intégrations',
       'Réglages',
+      'Aide et support',
     ]);
     // Each tab with how many members it holds, once they are read.
     await vi.waitFor(() =>
@@ -3580,6 +3589,18 @@ describe('risk settings', () => {
           visits: 2,
         },
       ],
+      support: [
+        {
+          id: 'sup_1',
+          companyId: 'biz_Tester',
+          name: 'Club Tester',
+          userId: 'user_tess',
+          body: 'The Discord tab is empty.',
+          createdAt: new Date(Date.now() - 1_800_000).toISOString(),
+          notified: true,
+          inChat: false,
+        },
+      ],
       founders: { places: 20, taken: 0, left: 20 },
       fallback: { on: false, betaEnd: null },
     };
@@ -3596,7 +3617,14 @@ describe('risk settings', () => {
       'POST /api/admin/founders': [{ status: 200, body: invited }],
     });
     renderAt('/dashboard/biz_A1/settings/admin');
-    const request = (await screen.findByText('Club Tester')).closest('li')!;
+    // Help & support's messages: what was written, and how it reached the founder.
+    const written = (await screen.findByText('The Discord tab is empty.')).closest('li')!;
+    expect(within(written).getByText('No support chat: write to them on Whop')).toBeTruthy();
+    expect(within(written).getByText('Notified')).toBeTruthy();
+    const request = screen
+      .getAllByText('Club Tester')
+      .map((name) => name.closest('li')!)
+      .find((li) => !li.hasAttribute('data-support-message'))!;
     expect(
       within(request).getByText(/biz_Tester · First visit .+ · last .+ · 2 visits/),
     ).toBeTruthy();
@@ -5680,7 +5708,7 @@ describe('the creator’s frame', () => {
       within(more)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Integrations', 'Settings']);
+    ).toEqual(['Integrations', 'Settings', 'Help & support']);
   });
 
   it('shows the demo’s one Whop-shaped id in Settings › Developer, as its badge does', async () => {

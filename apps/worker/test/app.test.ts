@@ -917,6 +917,89 @@ describe('the message to whoever installs StayPut', () => {
   });
 });
 
+describe('Help & support › Support', () => {
+  const OPERATED: Env = { ...ENV, OPERATOR_COMPANY_ID: 'biz_Op1' };
+  // The iframe's token, no session cookie: no CSRF header to send.
+  const write = async (request: ReturnType<typeof setup>['request'], message: unknown) =>
+    request(
+      '/api/creator/biz_Help1/support',
+      {
+        method: 'POST',
+        headers: {
+          ...(await asUser('user_hal')).headers,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ message }),
+      },
+      OPERATED,
+    );
+
+  it('keeps the message, tells the founder, and copies it in the support chat with its writer', async () => {
+    const { request, whop } = setup({ 'user_hal:biz_Help1': 'admin' });
+    const res = await write(request, '  The Discord tab shows no server since this morning.  ');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ received: true });
+    await settle();
+    const [kept] = await t.db.query<{
+      body: string;
+      user_id: string;
+      notified: boolean;
+      in_chat: boolean;
+    }>(
+      `select body, user_id, notified, in_chat from stayput.support_messages
+        where company_id = 'biz_Help1'`,
+    );
+    expect(kept).toEqual({
+      body: 'The Discord tab shows no server since this morning.',
+      user_id: 'user_hal',
+      notified: true,
+      in_chat: true,
+    });
+    const notice = whop.writes.find((w) => w.path === '/notifications');
+    expect(notice?.body).toMatchObject({
+      account_id: 'biz_Op1',
+      content: 'The Discord tab shows no server since this morning.',
+    });
+    expect(whop.writes.find((w) => w.path === '/support_channels')?.body).toEqual({
+      account_id: 'biz_Op1',
+      user_id: 'user_hal',
+    });
+    expect(
+      (whop.writes.find((w) => w.path === '/messages')?.body as { content: string }).content,
+    ).toBe(
+      '**Your message to StayPut**\n\n> The Discord tab shows no server since this morning.\n\nThanks! The founder answers you right here.',
+    );
+  });
+
+  it('refuses a message too short or too long, and more than 5 a day', async () => {
+    const { request } = setup({ 'user_hal:biz_Help1': 'admin' });
+    expect((await write(request, 'hi')).status).toBe(400);
+    expect((await write(request, 'x'.repeat(2001))).status).toBe(400);
+    expect((await write(request, 42)).status).toBe(400);
+    // The first test wrote one: four more today, then no more.
+    for (let i = 0; i < 4; i += 1) {
+      expect((await write(request, `Message number ${i} for the founder`)).status).toBe(200);
+    }
+    const sixth = await write(request, 'One message too many for today');
+    expect(sixth.status).toBe(409);
+    await settle();
+  });
+
+  it('is for the community’s team only', async () => {
+    const { request } = setup({ 'user_hal:biz_Help1': 'customer' });
+    expect((await write(request, 'A customer trying to write')).status).toBe(403);
+  });
+});
+
+describe('Settings › Plan’s prices', () => {
+  it('answers no offers while plans are off', async () => {
+    const { request } = setup({ 'user_alice:biz_A1': 'admin' });
+    const res = await request('/api/creator/biz_A1/offers', await asUser('user_alice'));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ offers: null });
+  });
+});
+
 describe('the internal status page (SPEC Phase 8.5)', () => {
   // The founder (ADMIN_USER_ID) is user_olga: the status page is hers alone.
   const OPERATOR_ENV: Env = { ...ENV, OPERATOR_COMPANY_ID: 'biz_Op1', ADMIN_USER_ID: 'user_olga' };

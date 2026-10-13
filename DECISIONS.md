@@ -4581,3 +4581,42 @@ lien de paiement à suivre (Sendoo, lui, envoie un lien de produit gratuit pour 
   ni dans la communauté de l'opérateur elle-même.
 - Le texte est en anglais, en français pour une communauté réglée en français
   (`packages/core/src/install-message.ts`).
+
+## 2026-10-13 — Réglages › Forfait, à la manière de Sendoo
+
+Le fondateur veut une page des forfaits « impactante », sur le modèle de celle de Sendoo : les
+trois niveaux côte à côte, chacun avec son prix en grand, un bandeau « Recommended » sur Pro, un
+choix Mensuel / Annuel (« 2 mois offerts »), l'essai de 7 jours, ce que le niveau ouvre rangé par
+usage (Détecter, Agir, Récupérer, Connecter, Analyser, Support) avec les chiffres en gras, et un
+seul bouton en bas : « Forfait actuel » sur celui de la communauté, « Inclus dans votre forfait »
+en dessous, « Commencer l'essai gratuit de 7 jours » au-dessus.
+
+- **Les prix viennent de Whop**, jamais de StayPut : `GET /api/creator/:companyId/offers` lit
+  chaque plan de `WHOP_PLANS_PRO` et `WHOP_PLANS_SCALE` (`GET /plans/{id}` : prix de
+  renouvellement, période de 30 ou 365 jours, essai, lien de paiement), une heure par instance
+  (cinq minutes si Whop ne répond pas). Lu à part de la session : ouvrir le tableau de bord n'attend
+  jamais les prix. Un plan d'une autre période, sans prix, ou un lien hors de whop.com est écarté.
+  Sans réponse de Whop, la page garde les liens `CHECKOUT_URL_*` sans prix.
+- **Un seul bouton principal** (brief v3 §5) : le premier niveau au-dessus de celui de la
+  communauté ; les autres sont en contour. Toujours turquoise, jamais l'orange de Sendoo.
+- Le bouton choisit le lien de paiement de la période affichée (mensuel ou annuel).
+
+## 2026-10-13 — Aide et support
+
+Une nouvelle section **Aide et support** (menu de gauche, après Réglages ; « Plus » sur téléphone),
+sur le modèle de celle de Sendoo :
+
+- **FAQ** : douze questions dépliables (ce que fait StayPut, le score, l'accord avant envoi, les
+  garde-fous, où les membres reçoivent les messages, les bots, l'argent sauvé, les données, l'équipe,
+  l'essai, changer ou résilier, nous joindre), et « Faire la visite » qui lance le tour. Chaque
+  réponse reprend ce que fait le code (garde-fous de 0001, attribution de `attribution.ts`, 12 mois
+  d'activité, suppression 30 jours après la désinstallation). L'essai de 7 jours y est écrit en
+  dur : à changer si le fondateur change l'essai sur Whop.
+- **Support** : un formulaire (10 à 2 000 caractères, 5 messages par jour et par communauté).
+  Le message est gardé (`support_messages`, migration 0054, serveur seul, supprimé avec la
+  communauté, hors export : c'est une correspondance avec StayPut), puis porté de deux façons :
+  une notification Whop à l'équipe de la communauté de StayPut (le téléphone du fondateur), et
+  une copie dans le chat de support de cette communauté avec son auteur, où le fondateur répond.
+  Réglages › Admin liste les 50 derniers messages, avec ce qui a atteint le fondateur ; une voie
+  qui échoue va au journal d'erreurs. Dans la démo, le bouton est désactivé (« Disabled in the
+  demo »).

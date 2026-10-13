@@ -9,14 +9,17 @@ import type { ReactNode } from 'react';
 export function IconTip({
   label,
   id,
+  block = false,
   children,
 }: {
   label: string;
   id?: string;
+  /** The whole width of its place, as the button it wraps. */
+  block?: boolean;
   children: ReactNode;
 }) {
   return (
-    <span className="group/tip relative inline-flex">
+    <span className={`group/tip relative ${block ? 'flex w-full' : 'inline-flex'}`}>
       {children}
       <span
         id={id}

@@ -2,6 +2,7 @@ import type { MessageKey } from '@stayput/i18n';
 import {
   ChartColumn,
   LayoutDashboard,
+  LifeBuoy,
   Plug,
   SlidersHorizontal,
   Target,
@@ -44,7 +45,7 @@ export interface Tab {
 }
 
 export type SectionId =
-  'dashboard' | 'members' | 'actions' | 'insights' | 'sources' | 'settings' | 'space';
+  'dashboard' | 'members' | 'actions' | 'insights' | 'sources' | 'settings' | 'help' | 'space';
 
 export const SECTIONS: readonly Section[] = [
   {
@@ -117,6 +118,18 @@ export const SECTIONS: readonly Section[] = [
       { path: 'space', label: 'nav.space', memberSpace: true },
       { path: 'status', label: 'tab.status', operator: true },
       { path: 'admin', label: 'tab.admin', admin: true },
+    ],
+  },
+  // Help & support (decision of 2026-10-13): the questions creators ask, and a line to the founder.
+  {
+    id: 'help',
+    path: 'help',
+    label: 'nav.help',
+    description: 'nav.help.description',
+    Icon: LifeBuoy,
+    tabs: [
+      { path: '', label: 'tab.faq' },
+      { path: 'support', label: 'tab.support' },
     ],
   },
   {

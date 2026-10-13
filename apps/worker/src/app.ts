@@ -6,6 +6,9 @@ import {
   canOpenMemberView,
   installChatMessage,
   installNotification,
+  SUPPORT_MESSAGE_LIMITS,
+  supportChatCopy,
+  type SupportReceived,
   isCompanyId,
   isMemberId,
   isExperienceId,
@@ -41,6 +44,7 @@ import {
   type MemberRetentionView,
   type MemberHome,
   type MemberSession,
+  type PlanOffersView,
   type AnnouncementsView,
   type ResultAnswer,
   type RiskSettingsView,
@@ -115,6 +119,7 @@ import {
   onMembershipEvent,
   overviewAt,
   planView,
+  readOffers,
   platformAt,
   planningAt,
   storedTier,
@@ -328,6 +333,9 @@ type AppEnv = {
     plan: CompanyPlan | undefined;
   };
 };
+
+/** Help & support › Support: messages a community may send a day (the founder has the others). */
+export const SUPPORT_PER_DAY = 5;
 
 /** Telegram's updates are small JSON documents; anything bigger is refused unread. */
 export const MAX_TELEGRAM_UPDATE_BYTES = 64 * 1024;
@@ -1237,6 +1245,128 @@ export function createApp(deps: AppDeps) {
       admin: userId === c.get('config').plans.adminUserId,
     };
     return c.json(session);
+  });
+
+  /**
+   * Help & support › Support (decision of 2026-10-13): a message from the team to StayPut's
+   * founder, kept (Settings › Admin lists them), then carried in the background (deliverSupport).
+   * At most SUPPORT_PER_DAY a day per community: the founder has the others already.
+   */
+  app.post(
+    '/api/creator/:companyId/support',
+    authenticate,
+    withDb,
+    requireCreator,
+    audited('support.message'),
+    async (c) => {
+      const db = c.get('db');
+      if (!db) return apiError('not_configured', 'the database is not configured');
+      const body = (await c.req.json().catch(() => null)) as { message?: unknown } | null;
+      const message = typeof body?.message === 'string' ? body.message.trim() : '';
+      if (
+        message.length < SUPPORT_MESSAGE_LIMITS.min ||
+        message.length > SUPPORT_MESSAGE_LIMITS.max
+      ) {
+        return apiError(
+          'invalid_request',
+          `expected { message } of ${SUPPORT_MESSAGE_LIMITS.min} to ${SUPPORT_MESSAGE_LIMITS.max} characters`,
+        );
+      }
+      const companyId = c.get('companyId');
+      const userId = c.get('userId');
+      const now = deps.now();
+      const [recent] = await db.query<{ n: number }>(
+        `select count(*)::int as n from stayput.support_messages
+        where company_id = $1 and created_at > $2::timestamptz - interval '1 day'`,
+        [companyId, now.toISOString()],
+      );
+      if ((recent?.n ?? 0) >= SUPPORT_PER_DAY) {
+        return apiError('conflict', 'too many support messages today');
+      }
+      const [row] = await db.query<{ id: string }>(
+        `insert into stayput.support_messages (company_id, user_id, body, created_at)
+       values ($1, $2, $3, $4::timestamptz) returning id`,
+        [companyId, userId, message, now.toISOString()],
+      );
+      if (row) deliverSupport(c, row.id, message);
+      const received: SupportReceived = { received: true };
+      // The journal keeps that the team wrote, never the words.
+      c.set('audit', { length: message.length });
+      return c.json(received);
+    },
+  );
+
+  /**
+   * A support message carried to the founder, two ways, each tried apart: a Whop notification to
+   * the team of StayPut's own community (OPERATOR_COMPANY_ID: the founder's phone), and a copy in
+   * that community's support chat with the writer, where the founder answers them. What reached
+   * the founder is noted on the message; a way that failed goes to the error log. No operator's
+   * community: nowhere to carry it, Settings › Admin still lists it.
+   */
+  function deliverSupport(c: Context<AppEnv>, id: string, message: string): void {
+    const config = c.get('config');
+    const operator = config.operatorCompanyId;
+    const whop = deps.whopClient(config);
+    if (!operator || !whop) return;
+    const companyId = c.get('companyId');
+    const userId = c.get('userId');
+    inBackground(c, 'Support message', async (db) => {
+      const [company] = await db.query<{ name: string | null; locale: string | null }>(
+        'select name, locale from stayput.companies where id = $1',
+        [companyId],
+      );
+      let notified = false;
+      let inChat = false;
+      try {
+        await whop.request('POST', '/notifications', {
+          body: {
+            account_id: operator,
+            title: `Support · ${company?.name ?? companyId}`.slice(0, 120),
+            content: message.slice(0, 500),
+          },
+          idempotencyKey: `stayput-support-${id}-notice`,
+        });
+        notified = true;
+      } catch (error) {
+        await logError(db, 'support:notification', companyId, error, deps.now());
+      }
+      // The operator's own community writing to itself has no one to open a chat with.
+      if (companyId !== operator) {
+        try {
+          const channel = await whop.request<{ id?: unknown }>('POST', '/support_channels', {
+            body: { account_id: operator, user_id: userId },
+            idempotencyKey: `stayput-support-${id}-channel`,
+          });
+          if (typeof channel.id !== 'string') throw new Error('Whop opened no support chat');
+          await whop.request('POST', '/messages', {
+            body: {
+              channel_id: channel.id,
+              content: supportChatCopy(company?.locale === 'fr' ? 'fr' : 'en', message),
+            },
+            idempotencyKey: `stayput-support-${id}`,
+          });
+          inChat = true;
+        } catch (error) {
+          await logError(db, 'support:support-chat', companyId, error, deps.now());
+        }
+      }
+      await db.query(
+        'update stayput.support_messages set notified = $2, in_chat = $3 where id = $1',
+        [id, notified, inChat],
+      );
+    });
+  }
+
+  /**
+   * Settings › Plan's prices (decision of 2026-10-13): Pro's and Scale's plans as Whop sells them,
+   * read apart from the session so that opening the dashboard never waits on them.
+   */
+  app.get('/api/creator/:companyId/offers', authenticate, withDb, requireCreator, async (c) => {
+    const config = c.get('config');
+    const view: PlanOffersView = {
+      offers: await readOffers(deps.whopClient(config), config.plans, deps.now()),
+    };
+    return c.json(view);
   });
 
   /**

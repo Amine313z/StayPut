@@ -19,6 +19,7 @@ const SERVER_ONLY = [
   'job_runs',
   'manual_action_counts',
   'pending_activity',
+  'support_messages',
   'webhook_events',
 ];
 

@@ -20,6 +20,7 @@ export function ExternalButton({
   variant = 'primary',
   size = 'md',
   tour,
+  block = false,
   children,
 }: {
   href: string | null;
@@ -29,6 +30,8 @@ export function ExternalButton({
   size?: ButtonSize;
   /** Where the guide may light it up (`data-tour`, guide.ts). */
   tour?: string;
+  /** The whole width of its place (a plan's card). */
+  block?: boolean;
   children: ReactNode;
 }) {
   const { t } = useI18n();
@@ -37,14 +40,14 @@ export function ExternalButton({
   const [fallback, setFallback] = useState(false);
   if (demo) {
     return (
-      <IconTip label={t('demo.disabled')} id={tip}>
+      <IconTip label={t('demo.disabled')} id={tip} block={block}>
         <button
           type="button"
           aria-disabled="true"
           aria-describedby={tip}
           data-tour={tour}
           data-demo-disabled=""
-          className={buttonClass(variant, size)}
+          className={buttonClass(variant, size, block ? 'w-full' : '')}
           // Tapped (no hover on a phone), the button takes the focus: its tip shows.
           onClick={(event) => event.currentTarget.focus()}
         >
@@ -57,13 +60,19 @@ export function ExternalButton({
   }
   if (!href) return null;
   return (
-    <span className="inline-flex flex-col items-start gap-1">
+    <span
+      className={
+        block
+          ? 'flex w-full flex-col items-stretch gap-1'
+          : 'inline-flex flex-col items-start gap-1'
+      }
+    >
       <a
         href={href}
         target="_blank"
         rel="noopener noreferrer"
         data-tour={tour}
-        className={buttonClass(variant, size)}
+        className={buttonClass(variant, size, block ? 'w-full' : '')}
         onClick={(event) => {
           if (!whopAppId || !insideWhop()) return;
           event.preventDefault();

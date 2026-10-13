@@ -1,5 +1,10 @@
-import type { AccessRequestRow, AdminCompaniesView, AdminCompanyRow } from '@stayput/core';
-import { Flag, Inbox, UserPlus } from 'lucide-react';
+import type {
+  AccessRequestRow,
+  AdminCompaniesView,
+  AdminCompanyRow,
+  SupportMessageRow,
+} from '@stayput/core';
+import { Flag, Inbox, LifeBuoy, UserPlus } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router';
 import { ApiError, deleteJson, postJson, useApi } from '../../api';
@@ -58,6 +63,7 @@ function AdminPage() {
           ) : null}
         </div>
       </Card>
+      <Support messages={shown.support} />
       <Requests requests={shown.requests} onChange={setView} />
       <Invite onDone={setView} />
       <Card>
@@ -177,6 +183,46 @@ function Row({
         )}
       </td>
     </tr>
+  );
+}
+
+/**
+ * What teams wrote from Help & support (0054), the latest first: who, from which community, and
+ * whether it reached you (the Whop notification, the copy in the support chat where you answer).
+ */
+function Support({ messages }: { messages: readonly SupportMessageRow[] }) {
+  const { t, relative } = useI18n();
+  return (
+    <Card title={t('admin.support')} icon={<LifeBuoy aria-hidden="true" className="size-4" />}>
+      <div className="space-y-3 p-5 text-sm">
+        <p className="text-muted">{t('admin.support.hint')}</p>
+        {messages.length === 0 ? (
+          <p className="text-muted">{t('admin.support.none')}</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {messages.map((message) => (
+              <li key={message.id} className="space-y-2 py-3" data-support-message={message.id}>
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="font-medium">{message.name ?? message.companyId}</span>
+                  <span className="text-xs text-subtle">
+                    {message.userId} · {relative(new Date(message.createdAt))}
+                  </span>
+                </p>
+                <p className="whitespace-pre-wrap text-fg">{message.body}</p>
+                <p className="flex flex-wrap gap-2">
+                  <Badge tone={message.inChat ? 'accent' : 'neutral'}>
+                    {t(message.inChat ? 'admin.support.inChat' : 'admin.support.noChat')}
+                  </Badge>
+                  {message.notified ? (
+                    <Badge tone="neutral">{t('admin.support.notified')}</Badge>
+                  ) : null}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Card>
   );
 }
 

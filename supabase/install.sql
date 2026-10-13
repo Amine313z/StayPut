@@ -1,5 +1,5 @@
 -- StayPut: the whole database schema, for a new Supabase project or to update one.
--- Generated from supabase/migrations (0001_foundation.sql to 0053_install_message.sql) by `npm run db:bundle`:
+-- Generated from supabase/migrations (0001_foundation.sql to 0054_support_messages.sql) by `npm run db:bundle`:
 -- do not edit.
 --
 -- Supabase -> SQL Editor -> New query -> paste this whole file -> Run. Only the migrations not
@@ -11561,6 +11561,40 @@ alter table stayput.company_settings
 update stayput.company_settings set install_message_at = now() where install_message_at is null;
 $migration$;
   insert into stayput.schema_migrations (name) values ('0053_install_message.sql');
+end $install$;
+
+-- ==========================================================================================
+-- 0054_support_messages.sql
+-- ==========================================================================================
+
+do $install$
+begin
+  if exists (select 1 from stayput.schema_migrations where name = '0054_support_messages.sql') then
+    raise notice 'already applied: 0054_support_messages.sql';
+    return;
+  end if;
+  execute $migration$
+-- Help & support › Support (decision of 2026-10-13): what a community's team writes to StayPut's
+-- founder from StayPut. Kept so that the founder sees every message in Settings › Admin, even
+-- when Whop's notification or support chat did not carry it, and deleted with the community.
+-- Server only: no policy, no grant (the Worker writes and reads it).
+create table stayput.support_messages (
+  id uuid primary key default gen_random_uuid(),
+  company_id text not null references stayput.companies (id) on delete cascade,
+  -- Who on the team wrote it (the Whop user the iframe token named).
+  user_id text not null check (user_id ~ '^user_[A-Za-z0-9]+$'),
+  body text not null check (char_length(body) between 1 and 2000),
+  created_at timestamptz not null,
+  -- How it reached the founder: the Whop notification to the team of StayPut's own community,
+  -- and the copy in that community's support chat with the writer, where the founder answers.
+  notified boolean not null default false,
+  in_chat boolean not null default false
+);
+create index support_messages_recent on stayput.support_messages (created_at desc);
+create index support_messages_company on stayput.support_messages (company_id, created_at desc);
+alter table stayput.support_messages enable row level security;
+$migration$;
+  insert into stayput.schema_migrations (name) values ('0054_support_messages.sql');
 end $install$;
 
 commit;

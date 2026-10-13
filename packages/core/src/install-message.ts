@@ -63,3 +63,26 @@ export function installNotification(locale: InstallMessageLocale): {
           'StayPut now watches your community. To start: connect Discord or Telegram in Integrations, choose manual or automatic in Automations, then open Members to see who is at risk.',
       };
 }
+
+/** Help & support › Support: a message is this long at least, and at most. */
+export const SUPPORT_MESSAGE_LIMITS = { min: 10, max: 2000 } as const;
+
+/** POST /api/creator/:companyId/support's answer: the message is kept and on its way. */
+export interface SupportReceived {
+  received: true;
+}
+
+/**
+ * The copy of a support message in the support chat of StayPut's community with its writer
+ * (Markdown): their words quoted, and where the founder answers.
+ */
+export function supportChatCopy(locale: InstallMessageLocale, message: string): string {
+  const quoted = message
+    .trim()
+    .split('\n')
+    .map((line) => `> ${line}`)
+    .join('\n');
+  return locale === 'fr'
+    ? `**Votre message à StayPut**\n\n${quoted}\n\nMerci ! Le fondateur vous répond ici même.`
+    : `**Your message to StayPut**\n\n${quoted}\n\nThanks! The founder answers you right here.`;
+}
