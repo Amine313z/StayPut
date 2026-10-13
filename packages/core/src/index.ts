@@ -16,6 +16,7 @@ export * from './dashboard';
 export * from './calendar';
 export * from './outcomes';
 export * from './forecast';
+export * from './install-message';
 export * from './weekly';
 export * from './badge';
 export * from './alumni';

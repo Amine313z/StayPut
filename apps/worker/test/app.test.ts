@@ -810,6 +810,113 @@ describe('POST /webhooks/whop', () => {
   });
 });
 
+describe('the message to whoever installs StayPut', () => {
+  // StayPut's own community writes from its support chat.
+  const OPERATED: Env = { ...ENV, OPERATOR_COMPANY_ID: 'biz_Op1' };
+  const sent = (whop: ReturnType<typeof setup>['whop'], path: string) =>
+    whop.writes.filter((write) => write.path === path);
+  const stateOf = async (companyId: string) =>
+    (
+      await t.db.query<{ taken: boolean; via: string | null }>(
+        `select install_message_at is not null as taken, install_message_via as via
+           from stayput.company_settings where company_id = $1`,
+        [companyId],
+      )
+    )[0];
+
+  it('writes once, at the first opening, from StayPut’s support chat to whoever opened it', async () => {
+    const { request, whop } = setup({ 'user_ina:biz_New1': 'admin' });
+    const init = await asUser('user_ina');
+    expect((await request('/api/creator/biz_New1/session', init, OPERATED)).status).toBe(200);
+    await settle();
+    expect(sent(whop, '/support_channels')).toEqual([
+      {
+        method: 'POST',
+        path: '/support_channels',
+        body: { account_id: 'biz_Op1', user_id: 'user_ina' },
+        key: 'stayput-install-biz_New1-channel',
+      },
+    ]);
+    const [message] = sent(whop, '/messages');
+    expect(message?.key).toBe('stayput-install-biz_New1');
+    expect(message?.body).toEqual({
+      channel_id: 'supp_user_ina',
+      // Whop's public profile gave a username, no name.
+      content: expect.stringMatching(
+        /^Hey ina 👋 Thanks for installing \*\*StayPut\*\*!/,
+      ) as string,
+    });
+    expect(await stateOf('biz_New1')).toEqual({ taken: true, via: 'support_chat' });
+    // Opened again, by them or anyone on the team: nothing more.
+    await request('/api/creator/biz_New1/session', init, OPERATED);
+    await settle();
+    expect(sent(whop, '/messages')).toHaveLength(1);
+  });
+
+  it('sends nothing without an operator’s community, nor in the operator’s own', async () => {
+    const { request, whop } = setup({ 'user_ina:biz_New2': 'admin', 'user_ina:biz_Op1': 'admin' });
+    const init = await asUser('user_ina');
+    await request('/api/creator/biz_New2/session', init);
+    await request('/api/creator/biz_Op1/session', init, OPERATED);
+    await settle();
+    expect(sent(whop, '/support_channels')).toEqual([]);
+    expect(sent(whop, '/notifications')).toEqual([]);
+    // Still to send: the community gets it once an operator is set.
+    expect(await stateOf('biz_New2')).toEqual({ taken: false, via: null });
+  });
+
+  it('tells the team by a Whop notification when Whop will not open the support chat', async () => {
+    const { request, whop } = setup({ 'user_ina:biz_New3': 'admin' });
+    whop.refusals['POST /support_channels'] = new WhopApiError(
+      400,
+      'bad_request',
+      'not a customer',
+      {
+        method: 'POST',
+        path: '/support_channels',
+      },
+    );
+    await request('/api/creator/biz_New3/session', await asUser('user_ina'), OPERATED);
+    await settle();
+    expect(sent(whop, '/messages')).toEqual([]);
+    expect(sent(whop, '/notifications')).toEqual([
+      {
+        method: 'POST',
+        path: '/notifications',
+        body: {
+          account_id: 'biz_New3',
+          title: 'Welcome to StayPut',
+          content: expect.stringContaining('Integrations') as string,
+        },
+        key: 'stayput-install-biz_New3-notice',
+      },
+    ]);
+    expect(await stateOf('biz_New3')).toEqual({ taken: true, via: 'notification' });
+    // The refusal is in the error log, for the founder.
+    const [logged] = await t.db.query<{ n: number }>(
+      `select count(*)::int as n from stayput.error_log
+        where company_id = 'biz_New3' and source = 'install-message:support-chat'`,
+    );
+    expect(logged).toEqual({ n: 1 });
+  });
+
+  it('gives it back when Whop took it neither way, and the next opening sends it', async () => {
+    const { request, whop } = setup({ 'user_ina:biz_New4': 'admin' });
+    const refused = (path: string) =>
+      new WhopApiError(503, 'unavailable', 'Whop is down', { method: 'POST', path });
+    whop.refusals['POST /support_channels'] = refused('/support_channels');
+    whop.refusals['POST /notifications'] = refused('/notifications');
+    const init = await asUser('user_ina');
+    await request('/api/creator/biz_New4/session', init, OPERATED);
+    await settle();
+    expect(await stateOf('biz_New4')).toEqual({ taken: false, via: null });
+    await request('/api/creator/biz_New4/session', init, OPERATED);
+    await settle();
+    expect(sent(whop, '/messages')).toHaveLength(1);
+    expect(await stateOf('biz_New4')).toEqual({ taken: true, via: 'support_chat' });
+  });
+});
+
 describe('the internal status page (SPEC Phase 8.5)', () => {
   // The founder (ADMIN_USER_ID) is user_olga: the status page is hers alone.
   const OPERATOR_ENV: Env = { ...ENV, OPERATOR_COMPANY_ID: 'biz_Op1', ADMIN_USER_ID: 'user_olga' };

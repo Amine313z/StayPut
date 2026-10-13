@@ -4,6 +4,8 @@ import {
   RISK_FACTORS,
   canOpenCreatorView,
   canOpenMemberView,
+  installChatMessage,
+  installNotification,
   isCompanyId,
   isMemberId,
   isExperienceId,
@@ -583,6 +585,85 @@ export function createApp(deps: AppDeps) {
   }
 
   /**
+   * The message to whoever installs StayPut (decision of 2026-10-13), once per community, at its
+   * first opening: in the support chat of StayPut's own community (OPERATOR_COMPANY_ID) with the
+   * person who opened it, where they can answer the founder (Whop opens that chat, or gives the
+   * one there is). When Whop will not open it, a Whop notification to the community's team says
+   * it instead, and the refusal goes to the error log. Taken in the database first, so that two
+   * openings at once send it once; a send that failed both ways gives it back, for the next
+   * opening to try again (Whop's idempotency keys keep a retry from sending it twice). No
+   * operator's community set: nobody to write from, nothing sent. The operator's own community:
+   * the founder installed it.
+   */
+  function sendInstallMessage(c: Context<AppEnv>, companyId: string): void {
+    const config = c.get('config');
+    const operator = config.operatorCompanyId;
+    if (!operator || companyId === operator) return;
+    const whop = deps.whopClient(config);
+    if (!whop) return;
+    const userId = c.get('userId');
+    inBackground(c, 'Install message', async (db) => {
+      const now = deps.now();
+      const taken = await db.query<{ locale: string | null }>(
+        `update stayput.company_settings s set install_message_at = $2::timestamptz
+           from stayput.companies c
+          where s.company_id = $1 and c.id = s.company_id and s.install_message_at is null
+         returning c.locale`,
+        [companyId, now.toISOString()],
+      );
+      if (taken.length === 0) return;
+      const locale = taken[0]?.locale === 'fr' ? 'fr' : 'en';
+      let via: 'support_chat' | 'notification' | null = null;
+      let failure: unknown = null;
+      try {
+        // Their name, for « Hey … »: the public profile; without it, the message goes all the same.
+        const profile = await whop
+          .request<{ name?: unknown; username?: unknown }>(
+            'GET',
+            `/users/${encodeURIComponent(userId)}`,
+          )
+          .catch(() => null);
+        const name =
+          typeof profile?.name === 'string' && profile.name.trim()
+            ? profile.name
+            : typeof profile?.username === 'string'
+              ? profile.username
+              : null;
+        const channel = await whop.request<{ id?: unknown }>('POST', '/support_channels', {
+          body: { account_id: operator, user_id: userId },
+          idempotencyKey: `stayput-install-${companyId}-channel`,
+        });
+        if (typeof channel.id !== 'string') throw new Error('Whop opened no support chat');
+        await whop.request('POST', '/messages', {
+          body: { channel_id: channel.id, content: installChatMessage(locale, name) },
+          idempotencyKey: `stayput-install-${companyId}`,
+        });
+        via = 'support_chat';
+      } catch (error) {
+        await logError(db, 'install-message:support-chat', companyId, error, now);
+        try {
+          const { title, content } = installNotification(locale);
+          await whop.request('POST', '/notifications', {
+            body: { account_id: companyId, title, content },
+            idempotencyKey: `stayput-install-${companyId}-notice`,
+          });
+          via = 'notification';
+        } catch (second) {
+          failure = second;
+        }
+      }
+      await db.query(
+        `update stayput.company_settings
+            set install_message_via = $2::text,
+                install_message_at = case when $2::text is null then null else install_message_at end
+          where company_id = $1`,
+        [companyId, via],
+      );
+      if (via === null) throw failure;
+    });
+  }
+
+  /**
    * The team members recorded for RLS (recordAdmin) within the last minutes on this instance,
    * and the recordings under way. A dashboard's first readings all leave at once (apps/web,
    * prefetch.ts): whichever reaches the Worker first records the member, the others wait for
@@ -1112,11 +1193,12 @@ export function createApp(deps: AppDeps) {
     const companyId = c.get('companyId');
     const userId = c.get('userId');
     const db = c.get('db');
-    let company: { timezoneSet: boolean; name: string | null; logo: boolean; testMode: boolean } = {
+    let company: CompanyCard = {
       timezoneSet: true,
       name: null,
       logo: false,
       testMode: false,
+      installMessageDue: false,
     };
     if (db) {
       // Recorded by requireCreator (recordTeamMember): what the dashboard shows of the company.
@@ -1124,6 +1206,8 @@ export function createApp(deps: AppDeps) {
       // The first visit starts the backfill, later ones bring the data up to date (SPEC
       // Phase 2, 2).
       syncInBackground(c, companyId);
+      // The community's first opening: the message to whoever installed StayPut.
+      if (company.installMessageDue) sendInstallMessage(c, companyId);
     }
     const session: CreatorSession = {
       companyId,
@@ -3855,19 +3939,29 @@ async function recordAdmin(
   });
 }
 
-/** What the session says of the company: its time zone set, its name and logo, the test mode. */
-async function companyCard(
-  db: ClosableDb,
-  companyId: string,
-): Promise<{ timezoneSet: boolean; name: string | null; logo: boolean; testMode: boolean }> {
+/**
+ * What the session says of the company: its time zone set, its name and logo, the test mode;
+ * and whether the message to whoever installed StayPut is still to send (sendInstallMessage).
+ */
+interface CompanyCard {
+  timezoneSet: boolean;
+  name: string | null;
+  logo: boolean;
+  testMode: boolean;
+  installMessageDue: boolean;
+}
+
+async function companyCard(db: ClosableDb, companyId: string): Promise<CompanyCard> {
   const [company] = await db.query<{
     timezone_set: boolean;
     name: string | null;
     logo: boolean;
     test_mode: boolean;
+    install_message_due: boolean;
   }>(
     `select c.timezone_set_at is not null as timezone_set, c.name,
-            c.logo_url is not null as logo, coalesce(s.dry_run, false) as test_mode
+            c.logo_url is not null as logo, coalesce(s.dry_run, false) as test_mode,
+            s.company_id is not null and s.install_message_at is null as install_message_due
        from stayput.companies c
        left join stayput.company_settings s on s.company_id = c.id
       where c.id = $1`,
@@ -3878,6 +3972,7 @@ async function companyCard(
     name: company?.name ?? null,
     logo: company?.logo ?? false,
     testMode: company?.test_mode ?? false,
+    installMessageDue: company?.install_message_due ?? false,
   };
 }
 

@@ -4556,3 +4556,28 @@ Dans cet aperçu, Whop envoie aux apps un jeton d'utilisateur fictif, et toute v
 d'accès échoue. Hors aperçu, par https://whop.com/dashboard/biz_… → StayPut, tout s'ouvre.
 **Ne jamais tester StayPut depuis l'aperçu du hub** ; un refus dont la ligne grise montre un
 identifiant inconnu de l'API est cet aperçu, pas StayPut.
+
+## 2026-10-13 — Un message à chaque installation
+
+Comme Sendoo, StayPut écrit à la personne qui l'installe. À la première ouverture d'une
+communauté, la personne qui l'a ouverte reçoit un message dans le **chat de support de la
+communauté de StayPut** (`OPERATOR_COMPANY_ID`, StayPut Community en production) : merci, ce que
+fait StayPut, les trois premières choses à faire (Intégrations, Automatisations, Membres), et
+« répondez ici, je lis chaque message ». La réponse arrive dans la boîte Support du fondateur, sans
+lien de paiement à suivre (Sendoo, lui, envoie un lien de produit gratuit pour ouvrir son support).
+
+- **Pourquoi le chat de support et pas un message privé** : `POST /dm_channels` demande
+  `dms:channel:manage`, que StayPut ne demande pas (chaque communauté devrait le réapprouver) ;
+  `support_chat:create` et `support_chat:message:create` sont déjà accordés sur la communauté de
+  StayPut. L'auteur affiché est celui que Whop donne aux messages de la clé de l'app, pas le profil
+  du fondateur (Whop ne permet pas à une app d'écrire au nom d'un utilisateur).
+- **Si Whop refuse d'ouvrir ce chat** (la personne n'est pas cliente de StayPut Community, par
+  exemple), une notification Whop à l'équipe de sa communauté dit la même chose en court, et le
+  refus va au journal d'erreurs (Réglages › État).
+- **Une seule fois par communauté** (`company_settings.install_message_at`, migration 0053),
+  prise en base avant l'envoi ; un envoi raté des deux façons est rendu, la prochaine ouverture
+  réessaie, et les clés d'idempotence de Whop empêchent un double envoi. Les communautés déjà
+  installées avant 0053 ne le reçoivent jamais. Rien n'est envoyé sans communauté d'opérateur,
+  ni dans la communauté de l'opérateur elle-même.
+- Le texte est en anglais, en français pour une communauté réglée en français
+  (`packages/core/src/install-message.ts`).
