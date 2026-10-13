@@ -457,8 +457,8 @@ report.story = await desktop.page.evaluate(() => {
         ?.querySelectorAll('[role=cell]') ?? []),
     ].map((cell) => cell.textContent.trim());
   return {
-    juliette: cells('Juliette Caron'),
-    hugo: cells('Hugo Bernard'),
+    juliette: cells('Julia Carter'),
+    hugo: cells('Hunter Blake'),
     kevin: cells('Kevin Nguyen'),
     sarah: cells('Sarah Cohen'),
     paul: cells('Paul Henry'),
@@ -477,9 +477,9 @@ report.members.chipsTop = await desktop.page.evaluate(() =>
 );
 await desktop.page.screenshot({ path: `${out}/members-1440-scrolled.png` });
 await desktop.page.mouse.wheel(0, -5_000);
-// The search, typed fast (fix prompt v4.1, block 3): every key kept, Hugo Bernard alone.
+// The search, typed fast (fix prompt v4.1, block 3): every key kept, Hunter Blake alone.
 const searchField = desktop.page.getByRole('searchbox', { name: 'Search a member' });
-await searchField.pressSequentially('hugo', { delay: 30 });
+await searchField.pressSequentially('hunter', { delay: 30 });
 await desktop.page.waitForTimeout(600);
 report.members.search = {
   value: await searchField.inputValue(),
@@ -527,8 +527,8 @@ await desktop.page.screenshot({ path: `${out}/members-drawer-1440-end.png` });
 await drawer.getByRole('button', { name: 'Close' }).click();
 // Juliette's drawer: paused, and until when (fix prompt v4.1, block 4).
 await desktop.page.waitForTimeout(600);
-await members.getByRole('row').filter({ hasText: 'Juliette Caron' }).click();
-const paused = desktop.page.getByRole('dialog', { name: 'Juliette Caron' });
+await members.getByRole('row').filter({ hasText: 'Julia Carter' }).click();
+const paused = desktop.page.getByRole('dialog', { name: 'Julia Carter' });
 await paused.waitFor({ timeout: 30_000 });
 await desktop.page.waitForTimeout(1_800);
 report.story.julietteDrawer = await paused.evaluate((dialog) =>
@@ -869,7 +869,7 @@ const ok =
   report.balance.monthMark === report.balance.monthStart &&
   /^[+−]\$[\d,]+\.\d{2} vs last month$/.test(report.balance.delta ?? '') &&
   report.balance.periods.join(' ') === '7D 30D 90D' &&
-  report.firstNeedingAttention === 'Margaux Picard' &&
+  report.firstNeedingAttention === 'Madison Parker' &&
   report.attentionRow.atRest === '0' &&
   report.attentionRow.hovered === '1' &&
   ['discord', 'telegram'].every((platform) => {
@@ -912,7 +912,7 @@ const ok =
   report.members.columns.join(' | ') ===
     'Member | Risk | Status | MRR | Last activity | Next renewal | Do not contact' &&
   report.members.rows > 0 &&
-  report.members.first === 'Hugo Bernard' &&
+  report.members.first === 'Hunter Blake' &&
   report.members.heights.every((height) => height <= 60) &&
   report.members.cutHeaders === 0 &&
   report.members.redWords === 0 &&
@@ -924,10 +924,10 @@ const ok =
   report.members.drawer.left >= 0 &&
   report.members.drawer.right <= report.members.drawer.window &&
   report.members.drawer.pageLocked &&
-  report.members.search.value === 'hugo' &&
+  report.members.search.value === 'hunter' &&
   report.members.search.rows.length === 1 &&
-  report.members.search.rows[0].includes('Hugo Bernard') &&
-  report.members.search.address === 'hugo' &&
+  report.members.search.rows[0].includes('Hunter Blake') &&
+  report.members.search.address === 'hunter' &&
   ['Why', 'Quick actions', 'Risk over 30 days', 'Payments', 'Activity over 30 days'].every(
     (title) => report.members.drawer.sections.includes(title),
   ) &&
@@ -941,7 +941,7 @@ const ok =
   report.story.kevin.some((cell) => /^Ends \w{3} \d{1,2}/.test(cell)) &&
   report.story.sarah.some((cell) => /^Unpaid since \w{3} \d{1,2}/.test(cell)) &&
   report.story.paul.some((cell) => cell === 'Gone') &&
-  ['Recovered $49.00', 'Still failing', 'Came back', 'No reply yet'].every((outcome) =>
+  ['Recovered $197.00', 'Still failing', 'Came back', 'No reply yet'].every((outcome) =>
     report.history.some((item) => item.outcome === outcome),
   ) &&
   report.history.some((item) => /^Paused until /.test(item.outcome)) &&
@@ -1007,7 +1007,7 @@ const ok =
   report.badge.greyed === 1 &&
   report.team.rows === 3 &&
   report.team.greyed === 1 &&
-  JSON.stringify(report.alumni) === JSON.stringify(['9', '17%', '$147.00']) &&
+  JSON.stringify(report.alumni) === JSON.stringify(['9', '17%', '$591.00']) &&
   report.legal.card === 0 &&
   report.legal.page === 404 &&
   Object.values(report.pages).every(Boolean) &&
