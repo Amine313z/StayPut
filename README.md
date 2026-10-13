@@ -142,7 +142,7 @@ chiffres, jours, heures, lieux (chats et forums par leur nom) et membres. Ni sig
 La synchronisation et « Sync now » restent en bas de l'onglet.
 
 Dans Automatisations › File d'attente › Historique, chaque action qui a atteint un membre dit ce qu'il en est sorti
-: « Recovered $49.00 » (l'argent sauvé grâce à elle), « Still failing », « Paused until Nov 2 »,
+: « Recovered $197.00 » (l'argent sauvé grâce à elle), « Still failing », « Paused until Nov 2 »,
 « Came back », « No reply yet » ou « Left ». C'est la preuve de ce que StayPut rapporte.
 
 Chaque onglet a son adresse (`/dashboard/<communauté>/<rubrique>/<onglet>`) ; une adresse

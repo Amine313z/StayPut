@@ -72,9 +72,9 @@ const HISTORY_REACH = 124;
 
 /** What a member pays: per month, per month for VIPs, or once a year. */
 const PLANS = {
-  monthly: { price: 49, days: 30 },
-  vip: { price: 149, days: 30 },
-  annual: { price: 470, days: 365 },
+  monthly: { price: 197, days: 30 },
+  vip: { price: 497, days: 30 },
+  annual: { price: 1970, days: 365 },
 } as const;
 type Plan = keyof typeof PLANS;
 
@@ -147,16 +147,16 @@ const H = 1 / 24;
 
 /**
  * The most at risk first, as the Worker sends them. Each date follows from the day they joined
- * and their plan (fix prompt v4.1, block 4): Hugo paid on the 29th, so he leaves a month later;
+ * and their plan (fix prompt v4.1, block 4): Hunter paid on the 29th, so he leaves a month later;
  * Kevin's year runs to the day he paid it; a renewal that failed failed on its day.
  */
 const PEOPLE: readonly Person[] = [
-  person('Hugo Bernard', 'vip', 'scheduled_departure', 100, 214, 9, reasons(cancel(), drop(100)), {
+  person('Hunter Blake', 'vip', 'scheduled_departure', 100, 214, 9, reasons(cancel(), drop(100)), {
     cancels: true,
   }),
   // Her month ends this week: the most urgent departure.
   person(
-    'Margaux Picard',
+    'Madison Parker',
     'monthly',
     'scheduled_departure',
     100,
@@ -189,7 +189,7 @@ const PEOPLE: readonly Person[] = [
     },
   ),
   person(
-    'Yanis Benali',
+    'Jason Bennett',
     'monthly',
     'high',
     84,
@@ -197,16 +197,16 @@ const PEOPLE: readonly Person[] = [
     19,
     reasons(inactive(19), stalled(23, 'Module 3 · Risk management')),
   ),
-  person('Maxime Vidal', 'vip', 'high', 81, 152.1, 24, reasons(paymentFailed(), inactive(24)), {
+  person('Mason Reed', 'vip', 'high', 81, 152.1, 24, reasons(paymentFailed(), inactive(24)), {
     failed: 'Card expired',
   }),
   // Three days ago; StayPut's retry failed again two hours ago.
   person('Elena Novak', 'monthly', 'high', 79, 63, 15, reasons(paymentFailed(), inactive(15)), {
     failed: 'Insufficient funds',
   }),
-  person('Théo Fontaine', 'monthly', 'high', 74, 59, 4, reasons(drop(82), quiet(100))),
+  person('Tyler Foster', 'monthly', 'high', 74, 59, 4, reasons(drop(82), quiet(100))),
   person(
-    'Omar Fassi',
+    'Owen Fisher',
     'monthly',
     'high',
     71,
@@ -214,47 +214,47 @@ const PEOPLE: readonly Person[] = [
     11,
     reasons(stalled(31, 'Module 2 · Reading the order book'), drop(71)),
   ),
-  person('Lou Marchand', 'monthly', 'medium', 62, 88, 6, reasons(drop(55), quiet(60))),
-  person('Rose Gauthier', 'monthly', 'medium', 58, 205, 5, reasons(ticket(4), drop(41))),
+  person('Logan Marsh', 'monthly', 'medium', 62, 88, 6, reasons(drop(55), quiet(60))),
+  person('Rachel Gardner', 'monthly', 'medium', 58, 205, 5, reasons(ticket(4), drop(41))),
   // High two days ago; StayPut's message brought him back.
-  person('Victor Leclerc', 'annual', 'medium', 55, 251, 1, reasons(stalled(14), drop(38)), {
+  person('Victor Lane', 'annual', 'medium', 55, 251, 1, reasons(stalled(14), drop(38)), {
     seenHoursAgo: 20,
   }),
-  person('Nora Chabane', 'monthly', 'medium', 53, 47, 5, reasons(drop(47), quiet(50))),
+  person('Nora Chapman', 'monthly', 'medium', 53, 47, 5, reasons(drop(47), quiet(50))),
   // Paused at her renewal, five hours ago, for 30 days.
-  person('Juliette Caron', 'vip', 'medium', 49, 150 + 5 * H, 6, reasons(quiet(75), drop(35)), {
+  person('Julia Carter', 'vip', 'medium', 49, 150 + 5 * H, 6, reasons(quiet(75), drop(35)), {
     paused: { hoursAgo: 5, days: 30 },
   }),
-  person('Tom Barbier', 'monthly', 'medium', 45, 154, 9, reasons(inactive(9), quiet(58))),
+  person('Tom Baker', 'monthly', 'medium', 45, 154, 9, reasons(inactive(9), quiet(58))),
   person('Laura Weber', 'monthly', 'medium', 43, 71, 4, reasons(drop(39), quiet(52))),
   person('Ethan Brooks', 'monthly', 'medium', 41, 5, null, reasons(never(5), stalled(5))),
   person('Maya Fernandes', 'monthly', 'low', 28, 4, null, reasons(never(4), stalled(4))),
-  person('Emma Rousseau', 'monthly', 'low', 14, 175, 1, reasons(quiet(25))),
+  person('Emma Russell', 'monthly', 'low', 14, 175, 1, reasons(quiet(25))),
   // Her renewal failed two days ago; StayPut's retry got it paid.
-  person('Clara Faure', 'monthly', 'low', 12, 92, 0),
+  person('Chloe Ford', 'monthly', 'low', 12, 92, 0),
   person('Sofia Ricci', 'monthly', 'low', 12, 36.5, 1),
-  person('Nathan Girard', 'monthly', 'low', 11, 160, 2),
-  person('Arthur Lemoine', 'monthly', 'low', 11, 62, 1),
-  person('Anaïs Robin', 'vip', 'low', 10, 56, 1),
+  person('Nathan Gray', 'monthly', 'low', 11, 160, 2),
+  person('Aaron Lewis', 'monthly', 'low', 11, 62, 1),
+  person('Ashley Robinson', 'vip', 'low', 10, 56, 1),
   // Joined this morning; StayPut's welcome brought her in two hours ago.
-  person('Pauline Giraud', 'monthly', 'low', 10, 0.4, 0, undefined, { seenHoursAgo: 2 }),
-  person('Lucas Petit', 'annual', 'low', 9, 290, 1),
-  person('Inès Haddad', 'monthly', 'low', 7, 233, 0),
+  person('Paige Gordon', 'monthly', 'low', 10, 0.4, 0, undefined, { seenHoursAgo: 2 }),
+  person('Lucas Price', 'annual', 'low', 9, 290, 1),
+  person('Renée Hayes', 'monthly', 'low', 7, 233, 0),
   // Renewed 18 hours ago.
-  person('Gabriel Roux', 'vip', 'low', 7, 90.75, 1),
+  person('Gavin Ross', 'vip', 'low', 7, 90.75, 1),
   // Renewed 44 hours ago.
-  person('Léa Moreau', 'monthly', 'low', 6, 241 + 20 * H, 0),
-  person('Jade Mercier', 'monthly', 'low', 6, 138.5, 0),
-  person('Karim Belkacem', 'monthly', 'low', 6, 52, 0),
-  person('Mehdi Amrani', 'monthly', 'low', 5, 198, 0),
-  person('Zoé Lambert', 'monthly', 'low', 5, 109, 0),
-  person('Camille Laurent', 'vip', 'low', 4, 302, 0),
+  person('Lily Morgan', 'monthly', 'low', 6, 241 + 20 * H, 0),
+  person('Jade Mitchell', 'monthly', 'low', 6, 138.5, 0),
+  person('Kyle Bell', 'monthly', 'low', 6, 52, 0),
+  person('Marcus Allen', 'monthly', 'low', 5, 198, 0),
+  person('Zoë Lambert', 'monthly', 'low', 5, 109, 0),
+  person('Claire Lawrence', 'vip', 'low', 4, 302, 0),
   // Joined 26 minutes ago: not scored yet (the scores run every hour).
   person('Jonas Keller', 'monthly', null, 0, 0.018, null),
   // Those who left, at the end of the last month they paid.
-  person('Benoît Lacroix', 'monthly', null, 0, 162, 31, undefined, { left: 12 }),
-  person('Sabrina Aït', 'monthly', null, 0, 81, 40, undefined, { left: 21 }),
-  person('Lucie Moulin', 'monthly', null, 0, 130, 52, undefined, { left: 40 }),
+  person('Brandon Lee', 'monthly', null, 0, 162, 31, undefined, { left: 12 }),
+  person('Sabrina Adams', 'monthly', null, 0, 81, 40, undefined, { left: 21 }),
+  person('Lucy Moore', 'monthly', null, 0, 130, 52, undefined, { left: 40 }),
   // Never a member without a membership scored among the others: he left (block 4, rule 8).
   person('Paul Henry', 'monthly', null, 0, 69, 10, undefined, { left: 9 }),
 ];
@@ -272,27 +272,27 @@ type SaveVia = 'retry' | 'notice' | 'pause' | 'extend';
  * hour the demo opens. Far enough back to fill the chart's first month whatever the date.
  */
 const SAVES: readonly { name: string; ago: number; via: SaveVia }[] = [
-  { name: 'Clara Faure', ago: 43 * MINUTE, via: 'retry' },
-  { name: 'Anaïs Robin', ago: 26 * HOUR, via: 'extend' },
-  { name: 'Arthur Lemoine', ago: 41 * HOUR, via: 'retry' },
+  { name: 'Chloe Ford', ago: 43 * MINUTE, via: 'retry' },
+  { name: 'Ashley Robinson', ago: 26 * HOUR, via: 'extend' },
+  { name: 'Aaron Lewis', ago: 41 * HOUR, via: 'retry' },
   { name: 'Sofia Ricci', ago: 6 * DAY + 7 * HOUR, via: 'notice' },
-  { name: 'Camille Laurent', ago: 11 * DAY + 3 * HOUR, via: 'pause' },
-  { name: 'Jade Mercier', ago: 18 * DAY + 9 * HOUR, via: 'retry' },
-  { name: 'Inès Haddad', ago: 23 * DAY + 5 * HOUR, via: 'pause' },
-  { name: 'Gabriel Roux', ago: 31 * DAY + 4 * HOUR, via: 'notice' },
-  { name: 'Karim Belkacem', ago: 34 * DAY + 6 * HOUR, via: 'retry' },
-  { name: 'Mehdi Amrani', ago: 45 * DAY + 3 * HOUR, via: 'retry' },
+  { name: 'Claire Lawrence', ago: 11 * DAY + 3 * HOUR, via: 'pause' },
+  { name: 'Jade Mitchell', ago: 18 * DAY + 9 * HOUR, via: 'retry' },
+  { name: 'Renée Hayes', ago: 23 * DAY + 5 * HOUR, via: 'pause' },
+  { name: 'Gavin Ross', ago: 31 * DAY + 4 * HOUR, via: 'notice' },
+  { name: 'Kyle Bell', ago: 34 * DAY + 6 * HOUR, via: 'retry' },
+  { name: 'Marcus Allen', ago: 45 * DAY + 3 * HOUR, via: 'retry' },
   // The year's plan, once.
-  { name: 'Lucas Petit', ago: 52 * DAY + 5 * HOUR, via: 'notice' },
-  { name: 'Rose Gauthier', ago: 58 * DAY + 9 * HOUR, via: 'retry' },
-  { name: 'Emma Rousseau', ago: 64 * DAY + 2 * HOUR, via: 'pause' },
-  { name: 'Gabriel Roux', ago: 70 * DAY + 6 * HOUR, via: 'retry' },
-  { name: 'Léa Moreau', ago: 77 * DAY + 4 * HOUR, via: 'notice' },
-  { name: 'Nathan Girard', ago: 85 * DAY + 7 * HOUR, via: 'retry' },
-  { name: 'Tom Barbier', ago: 93 * DAY + 3 * HOUR, via: 'pause' },
-  { name: 'Inès Haddad', ago: 101 * DAY + 5 * HOUR, via: 'retry' },
-  { name: 'Camille Laurent', ago: 108 * DAY + 2 * HOUR, via: 'notice' },
-  { name: 'Jade Mercier', ago: 116 * DAY + 8 * HOUR, via: 'retry' },
+  { name: 'Lucas Price', ago: 52 * DAY + 5 * HOUR, via: 'notice' },
+  { name: 'Rachel Gardner', ago: 58 * DAY + 9 * HOUR, via: 'retry' },
+  { name: 'Emma Russell', ago: 64 * DAY + 2 * HOUR, via: 'pause' },
+  { name: 'Gavin Ross', ago: 70 * DAY + 6 * HOUR, via: 'retry' },
+  { name: 'Lily Morgan', ago: 77 * DAY + 4 * HOUR, via: 'notice' },
+  { name: 'Nathan Gray', ago: 85 * DAY + 7 * HOUR, via: 'retry' },
+  { name: 'Tom Baker', ago: 93 * DAY + 3 * HOUR, via: 'pause' },
+  { name: 'Renée Hayes', ago: 101 * DAY + 5 * HOUR, via: 'retry' },
+  { name: 'Claire Lawrence', ago: 108 * DAY + 2 * HOUR, via: 'notice' },
+  { name: 'Jade Mitchell', ago: 116 * DAY + 8 * HOUR, via: 'retry' },
 ];
 
 /** How long ago StayPut last saved that member, when it was less than `within` ago. */
@@ -634,11 +634,16 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
   // Drawn once, far enough back for any chart: its days only depend on the time zone.
   const atRiskBack: number[] = [atRiskRevenue];
   for (let k = 1; k < HISTORY_REACH; k++) {
-    const trend = atRiskRevenue + ((1_180 - atRiskRevenue) * k) / (HISTORY_REACH - 1);
+    // Three months ago: what about 24 monthly plans paid (StayPut has brought it down since).
+    const trend =
+      atRiskRevenue + ((24 * PLANS.monthly.price - atRiskRevenue) * k) / (HISTORY_REACH - 1);
     let value = atRiskBack[k - 1]!;
     if (random() < 0.3) {
       const gap = trend - value;
-      const price = Math.abs(gap) > 100 && random() < 0.4 ? monthly('vip') : monthly('monthly');
+      const price =
+        Math.abs(gap) > 2 * PLANS.monthly.price && random() < 0.4
+          ? monthly('vip')
+          : monthly('monthly');
       const up = Math.abs(gap) > price / 2 ? gap > 0 : random() < 0.5;
       value += up ? price : -price;
     }
@@ -776,39 +781,39 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
   });
   const usd = (amount: number) => ({ amount, currency: CURRENCY });
   const feed: FeedItem[] = [
-    item(4 * MINUTE, 'member', 'activity', 'Camille Laurent', {
+    item(4 * MINUTE, 'member', 'activity', 'Claire Lawrence', {
       source: 'discord',
       activity: 'message',
     }),
-    item(12 * MINUTE, 'stayput', 'message_sent', 'Lou Marchand'),
+    item(12 * MINUTE, 'stayput', 'message_sent', 'Logan Marsh'),
     item(26 * MINUTE, 'member', 'joined', 'Jonas Keller'),
-    item(41 * MINUTE, 'stayput', 'saved', 'Clara Faure', usd(49)),
-    item(43 * MINUTE, 'member', 'payment_succeeded', 'Clara Faure', usd(49)),
-    item(95 * MINUTE, 'member', 'payment_failed', 'Sarah Cohen', usd(149)),
+    item(41 * MINUTE, 'stayput', 'saved', 'Chloe Ford', usd(PLANS.monthly.price)),
+    item(43 * MINUTE, 'member', 'payment_succeeded', 'Chloe Ford', usd(PLANS.monthly.price)),
+    item(95 * MINUTE, 'member', 'payment_failed', 'Sarah Cohen', usd(PLANS.vip.price)),
     // StayPut's retry failed again: Elena's payment is still unpaid (History: « Still failing »).
-    item(2 * HOUR - MINUTE, 'member', 'payment_failed', 'Elena Novak', usd(49)),
+    item(2 * HOUR - MINUTE, 'member', 'payment_failed', 'Elena Novak', usd(PLANS.monthly.price)),
     item(2 * HOUR, 'stayput', 'payment_retry', 'Elena Novak'),
-    item(3 * HOUR, 'member', 'activity', 'Léa Moreau', { source: 'whop', activity: 'lesson' }),
-    item(4 * HOUR, 'member', 'cancellation_scheduled', 'Margaux Picard'),
-    item(5 * HOUR, 'stayput', 'offer_applied', 'Juliette Caron'),
-    item(6 * HOUR, 'member', 'activity', 'Mehdi Amrani', {
+    item(3 * HOUR, 'member', 'activity', 'Lily Morgan', { source: 'whop', activity: 'lesson' }),
+    item(4 * HOUR, 'member', 'cancellation_scheduled', 'Madison Parker'),
+    item(5 * HOUR, 'stayput', 'offer_applied', 'Julia Carter'),
+    item(6 * HOUR, 'member', 'activity', 'Marcus Allen', {
       source: 'telegram',
       activity: 'message',
     }),
-    item(9 * HOUR, 'member', 'joined', 'Pauline Giraud'),
-    item(11 * HOUR, 'stayput', 'message_sent', 'Rose Gauthier'),
-    item(14 * HOUR, 'member', 'activity', 'Inès Haddad', { source: 'whop', activity: 'post' }),
-    item(18 * HOUR, 'member', 'payment_succeeded', 'Gabriel Roux', usd(149)),
-    item(22 * HOUR, 'member', 'activity', 'Zoé Lambert', { source: 'whop', activity: 'result' }),
-    item(26 * HOUR, 'stayput', 'saved', 'Anaïs Robin', usd(149)),
+    item(9 * HOUR, 'member', 'joined', 'Paige Gordon'),
+    item(11 * HOUR, 'stayput', 'message_sent', 'Rachel Gardner'),
+    item(14 * HOUR, 'member', 'activity', 'Renée Hayes', { source: 'whop', activity: 'post' }),
+    item(18 * HOUR, 'member', 'payment_succeeded', 'Gavin Ross', usd(PLANS.vip.price)),
+    item(22 * HOUR, 'member', 'activity', 'Zoë Lambert', { source: 'whop', activity: 'result' }),
+    item(26 * HOUR, 'stayput', 'saved', 'Ashley Robinson', usd(PLANS.vip.price)),
     item(29 * HOUR, 'member', 'cancellation_scheduled', 'Kevin Nguyen'),
-    item(31 * HOUR, 'stayput', 'message_sent', 'Victor Leclerc'),
-    item(38 * HOUR, 'member', 'activity', 'Nathan Girard', {
+    item(31 * HOUR, 'stayput', 'message_sent', 'Victor Lane'),
+    item(38 * HOUR, 'member', 'activity', 'Nathan Gray', {
       source: 'discord',
       activity: 'message',
     }),
-    item(41 * HOUR, 'stayput', 'saved', 'Arthur Lemoine', usd(49)),
-    item(44 * HOUR, 'member', 'payment_succeeded', 'Léa Moreau', usd(49)),
+    item(41 * HOUR, 'stayput', 'saved', 'Aaron Lewis', usd(PLANS.monthly.price)),
+    item(44 * HOUR, 'member', 'payment_succeeded', 'Lily Morgan', usd(PLANS.monthly.price)),
   ];
   // A message the feed tells is on the platform its author is on, and is their last one there.
   for (const entry of feed) {
@@ -826,12 +831,12 @@ export function createWorld(now: number, zone = 'Europe/Paris'): DemoWorld {
     NonNullable<FeedItem['activity']>,
     'discord' | 'telegram' | 'whop',
   ][] = [
-    ['Emma Rousseau', 'message', 'discord'],
-    ['Lucas Petit', 'lesson', 'whop'],
-    ['Arthur Lemoine', 'message', 'telegram'],
-    ['Gabriel Roux', 'post', 'whop'],
+    ['Emma Russell', 'message', 'discord'],
+    ['Lucas Price', 'lesson', 'whop'],
+    ['Aaron Lewis', 'message', 'telegram'],
+    ['Gavin Ross', 'post', 'whop'],
     ['Sofia Ricci', 'message', 'discord'],
-    ['Karim Belkacem', 'result', 'whop'],
+    ['Kyle Bell', 'result', 'whop'],
   ];
   let live = 0;
   let nextLive = now + 20_000;

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 /**
  * The short name of an icon button, over it while it is hovered or focused (fix prompt v4.1,
  * block 3): fades in in 120 ms (MOTION.md), nothing to wait for. Visual only: the button carries
- * its own full name for screen readers (« Message Hugo Bernard »), or names the tip by its `id`
+ * its own full name for screen readers (« Message Hunter Blake »), or names the tip by its `id`
  * in `aria-describedby` when the tip says something more (« Disabled in the demo »).
  */
 export function IconTip({

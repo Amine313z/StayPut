@@ -267,32 +267,32 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
   });
   let actions: ActionRow[] = [
     // Waiting for the creator (manual mode).
-    action('Margaux Picard', {
+    action('Madison Parker', {
       type: 'exit_survey',
       status: 'proposed',
       trigger: 'cancel_at_period_end',
       createdAt: ago(4 * HOUR),
-      message: message('exit_survey', 'Margaux Picard'),
+      message: message('exit_survey', 'Madison Parker'),
     }),
     // « Score turned high »: only ever for a member whose score is high then (block 4, rule 4).
-    action('Yanis Benali', {
+    action('Jason Bennett', {
       type: 'high_risk_message',
       status: 'proposed',
       trigger: 'score_high',
       createdAt: ago(3 * HOUR),
       sendAt: iso(evening),
-      message: message('high_risk_message', 'Yanis Benali', {
+      message: message('high_risk_message', 'Jason Bennett', {
         days_inactive: 19,
         last_lesson: 'Module 3 · Risk management',
       }),
     }),
-    action('Maxime Vidal', {
+    action('Mason Reed', {
       type: 'high_risk_message',
       status: 'proposed',
       trigger: 'score_high',
       createdAt: ago(3 * HOUR + 20 * MINUTE),
       sendAt: iso(evening + 30 * MINUTE),
-      message: message('high_risk_message', 'Maxime Vidal', { days_inactive: 24 }),
+      message: message('high_risk_message', 'Mason Reed', { days_inactive: 24 }),
     }),
     // After StayPut's retry failed again.
     action('Elena Novak', {
@@ -325,13 +325,13 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       createdAt: ago(95 * MINUTE),
       sendAt: iso(now + 5 * HOUR),
     }),
-    action('Omar Fassi', {
+    action('Owen Fisher', {
       type: 'high_risk_message',
       status: 'scheduled',
       trigger: 'score_high',
       createdAt: ago(20 * HOUR),
       sendAt: iso(nextHour(now + DAY, 19)),
-      message: message('high_risk_message', 'Omar Fassi', {
+      message: message('high_risk_message', 'Owen Fisher', {
         days_inactive: 11,
         last_lesson: 'Module 2 · Reading the order book',
       }),
@@ -344,15 +344,15 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       sendAt: iso(nextHour(now, 18, 30) + 15 * MINUTE),
       message: message('welcome_message', 'Maya Fernandes'),
     }),
-    // Done. Lou is at medium risk: the creator wrote to her from the dashboard.
-    action('Lou Marchand', {
+    // Done. Logan is at medium risk: the creator wrote to her from the dashboard.
+    action('Logan Marsh', {
       type: 'creator_message',
       status: 'sent',
       trigger: 'creator',
       createdAt: ago(26 * HOUR),
       sendAt: ago(12 * MINUTE),
       sentAt: ago(12 * MINUTE),
-      message: message('creator_message', 'Lou Marchand'),
+      message: message('creator_message', 'Logan Marsh'),
     }),
     action('Sarah Cohen', {
       type: 'payment_failed_notice',
@@ -372,7 +372,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       sendAt: ago(2 * HOUR),
       sentAt: ago(2 * HOUR),
     }),
-    action('Juliette Caron', {
+    action('Julia Carter', {
       type: 'pause_offer',
       status: 'sent',
       trigger: 'exit_survey',
@@ -381,53 +381,53 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       sentAt: ago(5 * HOUR),
       offer: { reason: 'no_time', days: 30, keep: true, resumesAt: iso(now - 5 * HOUR + 30 * DAY) },
     }),
-    action('Pauline Giraud', {
+    action('Paige Gordon', {
       type: 'welcome_message',
       status: 'sent',
       trigger: 'activation_radar',
       createdAt: ago(8 * HOUR),
       sendAt: ago(7 * HOUR),
       sentAt: ago(7 * HOUR),
-      message: message('welcome_message', 'Pauline Giraud'),
+      message: message('welcome_message', 'Paige Gordon'),
     }),
-    action('Rose Gauthier', {
+    action('Rachel Gardner', {
       type: 'creator_message',
       status: 'sent',
       trigger: 'creator',
       createdAt: ago(11 * HOUR),
       sendAt: ago(11 * HOUR),
       sentAt: ago(11 * HOUR),
-      message: message('creator_message', 'Rose Gauthier'),
+      message: message('creator_message', 'Rachel Gardner'),
     }),
     // His score turned high two days ago; the message brought him back (« Came back »).
-    action('Victor Leclerc', {
+    action('Victor Lane', {
       type: 'high_risk_message',
       status: 'sent',
       trigger: 'score_high',
       createdAt: ago(2 * DAY),
       sendAt: ago(31 * HOUR),
       sentAt: ago(31 * HOUR),
-      message: message('high_risk_message', 'Victor Leclerc', { days_inactive: 7 }),
+      message: message('high_risk_message', 'Victor Lane', { days_inactive: 7 }),
     }),
     // The creator wrote to Tom twice in two days: the second one waits for the spacing.
-    action('Tom Barbier', {
+    action('Tom Baker', {
       type: 'creator_message',
       status: 'blocked_by_guardrail',
       trigger: 'creator',
       createdAt: ago(2 * DAY + 3 * HOUR),
       blockedReason: 'message_spacing',
-      message: message('creator_message', 'Tom Barbier'),
+      message: message('creator_message', 'Tom Baker'),
     }),
-    action('Tom Barbier', {
+    action('Tom Baker', {
       type: 'creator_message',
       status: 'sent',
       trigger: 'creator',
       createdAt: ago(4 * DAY + 3 * HOUR),
       sendAt: ago(4 * DAY + 3 * HOUR),
       sentAt: ago(4 * DAY + 3 * HOUR),
-      message: message('creator_message', 'Tom Barbier'),
+      message: message('creator_message', 'Tom Baker'),
     }),
-    action('Benoît Lacroix', {
+    action('Brandon Lee', {
       type: 'alumni_followup',
       status: 'sent',
       trigger: 'alumni',
@@ -435,7 +435,7 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       sendAt: ago(5 * DAY),
       sentAt: ago(5 * DAY),
       alumniStep: 7,
-      message: message('alumni_followup', 'Benoît Lacroix', {
+      message: message('alumni_followup', 'Brandon Lee', {
         offer: '20% off for 3 months with the code STAY-K7QM2XPA',
       }),
     }),
@@ -451,14 +451,14 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
       offer: { reason: 'too_expensive', percentOff: 20, months: 3, keep: true, promoApplied: true },
     }),
     // The creator wrote to her before her membership ended; she left all the same (« Left »).
-    action('Sabrina Aït', {
+    action('Sabrina Adams', {
       type: 'creator_message',
       status: 'sent',
       trigger: 'creator',
       createdAt: ago(24 * DAY + 20 * MINUTE),
       sendAt: ago(24 * DAY),
       sentAt: ago(24 * DAY),
-      message: message('creator_message', 'Sabrina Aït'),
+      message: message('creator_message', 'Sabrina Adams'),
     }),
     ...savedActions,
   ];
@@ -617,10 +617,10 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     account({
       platform: 'discord',
       accountId: '1187420000000100001',
-      name: 'Margaux P.',
+      name: 'Madison P.',
       username: 'margauxp',
       status: 'unlinked',
-      suggestions: suggestion('Margaux Picard', true),
+      suggestions: suggestion('Madison Parker', true),
       messages: 6,
       lastAt: now - 13 * HOUR,
     }),
@@ -637,10 +637,10 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     account({
       platform: 'telegram',
       accountId: '6120000001',
-      name: 'Yanis B',
+      name: 'Jason B',
       username: 'yanisbenali',
       status: 'unlinked',
-      suggestions: suggestion('Yanis Benali', true),
+      suggestions: suggestion('Jason Bennett', true),
       messages: 9,
       lastAt: now - 2 * DAY,
     }),
@@ -727,11 +727,11 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
     }),
   );
 
-  // Two members left: Yanis the Discord server five days ago, Omar the Telegram group three days
+  // Two members left: Jason the Discord server five days ago, Owen the Telegram group three days
   // ago (Integrations: the signal « Left », the people no longer there).
   const leaves: [string, AccountPlatform, number][] = [
-    ['Yanis Benali', 'discord', 5],
-    ['Omar Fassi', 'telegram', 3],
+    ['Jason Bennett', 'discord', 5],
+    ['Owen Fisher', 'telegram', 3],
   ];
   for (const [name, platform, daysAgo] of leaves) {
     const theirs = accounts.find((a) => a.platform === platform && a.member?.name === name);
@@ -739,10 +739,10 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
   }
 
   // Three members active elsewhere went quiet on Discord a week or more ago (Integrations ›
-  // Discord: the signal « Gone quiet », and what it would change): Lou, Nora and Laura.
+  // Discord: the signal « Gone quiet », and what it would change): Logan, Nora and Laura.
   const quiet: [string, number][] = [
-    ['Lou Marchand', 9],
-    ['Nora Chabane', 11],
+    ['Logan Marsh', 9],
+    ['Nora Chapman', 11],
     ['Laura Weber', 8],
   ];
   for (const [name, daysAgo] of quiet) {
@@ -1317,9 +1317,9 @@ export function createDemoPages(input: DemoPagesInput): DemoPages {
         },
         ...counts,
         returnRate: alumniReturnRate(counts),
-        // The two who came back took the monthly plan again ($49): one five weeks ago, who has
+        // The two who came back took the monthly plan again ($197): one five weeks ago, who has
         // paid twice since, and one twelve days ago, once.
-        recovered: { amount: 3 * 49, currency: 'usd', otherCurrencies: false },
+        recovered: { amount: 3 * 197, currency: 'usd', otherCurrencies: false },
       };
     },
     discordChannels: () => channels,

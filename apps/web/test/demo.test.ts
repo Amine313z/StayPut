@@ -141,30 +141,30 @@ describe('the demo community', () => {
   it('counts each save on its day in the community’s time zone, at 00:30 as at 23:30', () => {
     const on = (history: readonly RevenueDay[], day: string) =>
       history.find((entry) => entry.day === day)?.saved;
-    // 3 October, 01:11 in Paris: Clara Faure was saved at 00:30, still 2 October in UTC.
+    // 3 October, 01:11 in Paris: Chloe Ford was saved at 00:30, still 2 October in UTC.
     const paris = createWorld(Date.parse('2026-10-02T23:11:00Z'), 'Europe/Paris');
     expect(paris.settings.timezone).toBe('Europe/Paris');
     let home = paris.dashboard();
     expect(home.revenueHistory.at(-1)!.day).toBe('2026-10-03');
-    expect(on(home.revenueHistory, '2026-10-03')).toBe(49);
-    // Anaïs Robin (149) at 23:11 and Arthur Lemoine (49) in the morning: 1 October.
-    expect(on(home.revenueHistory, '2026-10-01')).toBe(198);
+    expect(on(home.revenueHistory, '2026-10-03')).toBe(197);
+    // Ashley Robinson (497) at 23:11 and Aaron Lewis (197) in the morning: 1 October.
+    expect(on(home.revenueHistory, '2026-10-01')).toBe(694);
     expect(on(home.revenueHistory, '2026-10-02')).toBe(0);
-    expect(home.saved.thisMonth.direct).toBe(247);
-    // 3 October, 01:30 in New York: Anaïs Robin was saved at 23:30 on 1 October, already the
+    expect(home.saved.thisMonth.direct).toBe(891);
+    // 3 October, 01:30 in New York: Ashley Robinson was saved at 23:30 on 1 October, already the
     // 2nd in UTC.
     const newYork = createWorld(Date.parse('2026-10-03T05:30:00Z'), 'America/New_York');
     home = newYork.dashboard();
     expect(home.revenueHistory.at(-1)!.day).toBe('2026-10-03');
-    expect(on(home.revenueHistory, '2026-10-01')).toBe(198);
+    expect(on(home.revenueHistory, '2026-10-01')).toBe(694);
     expect(on(home.revenueHistory, '2026-10-02')).toBe(0);
-    expect(on(home.revenueHistory, '2026-10-03')).toBe(49);
-    expect(home.saved.thisMonth.direct).toBe(247);
+    expect(on(home.revenueHistory, '2026-10-03')).toBe(197);
+    expect(home.saved.thisMonth.direct).toBe(891);
     // Another zone in Settings › Automations: the same saves on that zone's days, at once.
     paris.saveSettings({ ...paris.settings, timezone: 'America/New_York' });
     home = paris.dashboard();
     expect(home.revenueHistory.at(-1)!.day).toBe('2026-10-02');
-    expect(on(home.revenueHistory, '2026-10-02')).toBe(49);
+    expect(on(home.revenueHistory, '2026-10-02')).toBe(197);
     // Whatever the zone, the month's days add up to the hero, the history starts on a 1st.
     for (const zone of ['Pacific/Honolulu', 'Asia/Tokyo', 'Australia/Sydney', 'UTC']) {
       const world = createWorld(NOW, zone);
@@ -217,21 +217,21 @@ describe('the demo community', () => {
       kind: 'approve',
       actions: 6,
       members: 6,
-      revenue: 384.17,
+      revenue: 1449.17,
     });
     // Approved, they leave at their hour; the three failed payments come next (brief v3 §6.2).
     expect(demo.pages.approve()).toBe(6);
     expect(demo.pages.actions('scheduled').counts).toEqual({ queue: 0, scheduled: 9, history: 32 });
-    expect(demo.dashboard().priority).toEqual({ kind: 'retry', payments: 3, revenue: 347 });
+    expect(demo.dashboard().priority).toEqual({ kind: 'retry', payments: 3, revenue: 1191 });
     expect(demo.retry()).toBe(3);
     expect(demo.retry()).toBe(0);
     // Then a pause for the three members leaving.
     const pause = demo.dashboard().priority;
-    expect(pause).toMatchObject({ kind: 'pause', revenue: 237.17 });
+    expect(pause).toMatchObject({ kind: 'pause', revenue: 858.17 });
     const leaving = pause?.kind === 'pause' ? pause.memberIds : [];
     expect(leaving.map((id) => joined.find((m) => m.id === id)?.name)).toEqual([
-      'Hugo Bernard',
-      'Margaux Picard',
+      'Hunter Blake',
+      'Madison Parker',
       'Kevin Nguyen',
     ]);
     for (const id of leaving)
@@ -239,14 +239,14 @@ describe('the demo community', () => {
     // Then the member at high risk nobody reached.
     const message = demo.dashboard().priority;
     const ids = message?.kind === 'message' ? message.memberIds : [];
-    expect(ids.map((id) => joined.find((m) => m.id === id)?.name)).toEqual(['Théo Fontaine']);
+    expect(ids.map((id) => joined.find((m) => m.id === id)?.name)).toEqual(['Tyler Foster']);
     expect(demo.message(ids)).toBe(1);
     // Nothing left to do, but three payments are still unpaid: never « nothing urgent ».
     expect(demo.dashboard().priority).toEqual({
       kind: 'review',
       filter: 'failed',
       members: 3,
-      revenue: 347,
+      revenue: 1191,
     });
   });
 
@@ -302,9 +302,9 @@ describe('the demo community', () => {
       status: 'failed',
       failureReason: 'Card declined',
     });
-    // Margaux's Discord account still waits to be tied: nothing counted for her there yet.
-    const margaux = joined.find((m) => m.name === 'Margaux Picard')!;
-    expect(demo.memberDetail(margaux.id)?.platforms[1]).toMatchObject({
+    // Madison's Discord account still waits to be tied: nothing counted for her there yet.
+    const madison = joined.find((m) => m.name === 'Madison Parker')!;
+    expect(demo.memberDetail(madison.id)?.platforms[1]).toMatchObject({
       platform: 'discord',
       linked: false,
       events: 0,
@@ -314,7 +314,7 @@ describe('the demo community', () => {
 
   it('remembers what the creator did until the page is reloaded', () => {
     const demo = createWorld(NOW);
-    const target = joined.find((m) => m.name === 'Théo Fontaine')!.id;
+    const target = joined.find((m) => m.name === 'Tyler Foster')!.id;
     expect(demo.message([target])).toBe(1);
     expect(demo.offer(target, 'pause_offer')).toMatchObject({
       kind: 'pause_offer',
@@ -340,15 +340,15 @@ describe('the demo community', () => {
     const queue = pages.actions('queue');
     expect(queue.mode).toBe('manual');
     expect(queue.actions.map((a) => `${a.type} ${a.member.name}`)).toEqual([
-      'exit_survey Margaux Picard',
-      'high_risk_message Yanis Benali',
-      'high_risk_message Maxime Vidal',
+      'exit_survey Madison Parker',
+      'high_risk_message Jason Bennett',
+      'high_risk_message Mason Reed',
       'payment_failed_notice Elena Novak',
       'welcome_message Ethan Brooks',
       'extend_offer Kevin Nguyen',
     ]);
     // The message as the member will read it: their first name, the community's name.
-    expect(queue.actions[0]?.message?.body).toContain('Hi Margaux, we saw you are leaving Atlas');
+    expect(queue.actions[0]?.message?.body).toContain('Hi Madison, we saw you are leaving Atlas');
     expect(queue.actions[1]?.message?.body).toContain('19 days');
     // The history, the newest first, with what a guardrail stopped.
     const history = pages.actions('history').actions;
@@ -369,7 +369,7 @@ describe('the demo community', () => {
     const everyone = alumni.entered + alumni.left + alumni.returned;
     expect(alumni.returnRate).toBe(alumni.returned / everyone);
     // Those who came back took the monthly plan again: whole monthly payments, one each at least.
-    const monthly = 49;
+    const monthly = 197;
     expect(joined.some((m) => m.membership?.price === monthly)).toBe(true);
     expect(alumni.recovered!.amount % monthly).toBe(0);
     expect(alumni.recovered!.amount / monthly).toBeGreaterThanOrEqual(alumni.returned);
@@ -541,11 +541,11 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
       expect(end).toBe(until ?? lastPaid(m) + periodOf(m));
       if (m.lastPayment?.status === 'failed') expect(unpaidSince(m)).toBe(end);
     }
-    // Hugo paid on 29 September for a month: he leaves on 29 October, as his reason says.
-    const hugo = named('Hugo Bernard');
-    expect(hugo.lastPayment!.at.slice(0, 10)).toBe('2026-09-29');
-    expect(hugo.membership!.currentPeriodEnd!.slice(0, 10)).toBe('2026-10-29');
-    expect(renewalText(hugo, AT, en)).toBe('Ends Oct 29');
+    // Hunter paid on 29 September for a month: he leaves on 29 October, as his reason says.
+    const hunter = named('Hunter Blake');
+    expect(hunter.lastPayment!.at.slice(0, 10)).toBe('2026-09-29');
+    expect(hunter.membership!.currentPeriodEnd!.slice(0, 10)).toBe('2026-10-29');
+    expect(renewalText(hunter, AT, en)).toBe('Ends Oct 29');
     // Kevin's year, paid on 13 May, runs to 13 May 2027, its year said.
     const kevin = named('Kevin Nguyen');
     expect(kevin.lastPayment!.at.slice(0, 10)).toBe('2026-05-13');
@@ -563,9 +563,9 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
   it('2. says « ended on » for every member gone, never « renews »', () => {
     const gone = members.filter((m) => m.status === 'left');
     expect(gone.map((m) => m.name)).toEqual([
-      'Benoît Lacroix',
-      'Sabrina Aït',
-      'Lucie Moulin',
+      'Brandon Lee',
+      'Sabrina Adams',
+      'Lucy Moore',
       'Paul Henry',
     ]);
     for (const m of gone) {
@@ -579,16 +579,16 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
   });
 
   it('3. shows a pause StayPut applied: « Paused · resumes Nov 2 » on Members and in the drawer', () => {
-    const juliette = named('Juliette Caron');
-    expect(memberState(juliette, AT)).toBe('paused');
-    expect(stateText(juliette, 'paused', AT, en)).toBe('Paused · resumes Nov 2');
+    const julia = named('Julia Carter');
+    expect(memberState(julia, AT)).toBe('paused');
+    expect(stateText(julia, 'paused', AT, en)).toBe('Paused · resumes Nov 2');
     expect(
-      membershipLine(juliette.membership!, en, { now: AT, pausedUntil: pausedUntil(juliette) }),
-    ).toBe('Paused · $149.00 per month · resumes on Nov 2, 2026');
+      membershipLine(julia.membership!, en, { now: AT, pausedUntil: pausedUntil(julia) }),
+    ).toBe('Paused · $497.00 per month · resumes on Nov 2, 2026');
     // The pause of the History is hers, and ends the same day.
-    const pause = history.find((a) => a.member.id === juliette.id && a.type === 'pause_offer');
-    expect(pause?.offer?.resumesAt).toBe(juliette.membership!.pausedUntil);
-    expect(pause?.outcome).toEqual({ kind: 'paused', until: juliette.membership!.pausedUntil });
+    const pause = history.find((a) => a.member.id === julia.id && a.type === 'pause_offer');
+    expect(pause?.offer?.resumesAt).toBe(julia.membership!.pausedUntil);
+    expect(pause?.outcome).toEqual({ kind: 'paused', until: julia.membership!.pausedUntil });
   });
 
   it('4. sends « Score turned high » only to a member whose score was high that day', () => {
@@ -602,9 +602,9 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
       const score = world.memberDetail(action.member.id)!.scores.find((s) => s.day === day);
       expect(score?.score, action.member.name ?? '').toBeGreaterThanOrEqual(DEFAULT_HIGH_FROM);
     }
-    // Lou, at medium risk (62), got the creator's own message, not StayPut's.
-    const lou = all.find((a) => a.member.name === 'Lou Marchand');
-    expect(lou).toMatchObject({ type: 'creator_message', trigger: 'creator' });
+    // Logan, at medium risk (62), got the creator's own message, not StayPut's.
+    const logan = all.find((a) => a.member.name === 'Logan Marsh');
+    expect(logan).toMatchObject({ type: 'creator_message', trigger: 'creator' });
   });
 
   it('5. follows each payment retry on its member: recovered and counted, or still failing', () => {
@@ -633,10 +633,10 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
         expect(member.lastPayment?.status).toBe('failed');
       }
     }
-    // Clara: retried 47 minutes ago, recovered; Elena: retried 2 hours ago, still failing.
-    expect(history.find((a) => a.member.name === 'Clara Faure')?.outcome).toEqual({
+    // Chloe: retried 47 minutes ago, recovered; Elena: retried 2 hours ago, still failing.
+    expect(history.find((a) => a.member.name === 'Chloe Ford')?.outcome).toEqual({
       kind: 'recovered',
-      amount: 49,
+      amount: 197,
       currency: 'usd',
     });
     expect(
@@ -736,8 +736,8 @@ describe('Analytics › Overview in the demo (fix prompt v4.1, block 7)', () => 
     expect(overview.activity.at(-1)!.day).toBe(zonedDay(NOW, 'Europe/Paris'));
     expect(sum(overview.activity.map((d) => d.actions))).toBe(world.members.summary.activity30d);
     // A newcomer of this morning did a thing or two, not a month's worth.
-    const pauline = world.members.members.find((m) => m.name === 'Pauline Giraud')!;
-    const { messages, reactions, posts, lessons } = pauline.activity;
+    const paige = world.members.members.find((m) => m.name === 'Paige Gordon')!;
+    const { messages, reactions, posts, lessons } = paige.activity;
     expect(messages + reactions + posts + lessons).toBeGreaterThan(0);
     expect(messages + reactions + posts + lessons).toBeLessThan(5);
   });

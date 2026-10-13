@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 /**
  * Members in a real browser (fix prompt v4.1, block 3): the search keeps every key typed fast and
- * finds Hugo Bernard alone; a member's drawer stands wholly in the window at 1024 and 1440 px,
+ * finds Hunter Blake alone; a member's drawer stands wholly in the window at 1024 and 1440 px,
  * anchored to its right edge, the page behind locked still; a « Needs attention » row shows its
  * actions only when hovered.
  */
@@ -24,20 +24,20 @@ const rows = (page: Page) =>
     .getByRole('table', { name: 'All members' })
     .locator('[role=rowgroup]:last-child > [role=row]');
 
-test('the search keeps every key, finds Hugo Bernard alone, then writes the address', async ({
+test('the search keeps every key, finds Hunter Blake alone, then writes the address', async ({
   page,
 }) => {
   await openMembers(page);
   const field = page.getByRole('searchbox', { name: 'Search a member' });
-  for (const query of ['hugo', 'HUGO', 'Hugó']) {
+  for (const query of ['hunter', 'HUNTER', 'Huntér']) {
     await field.fill('');
     await field.pressSequentially(query, { delay: 15 });
     await expect(field).toHaveValue(query);
     await expect(rows(page)).toHaveCount(1);
-    await expect(rows(page).first()).toContainText('Hugo Bernard');
+    await expect(rows(page).first()).toContainText('Hunter Blake');
   }
   // 250 ms after the last key, the address holds the words.
-  await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('Hugó');
+  await expect.poll(() => new URL(page.url()).searchParams.get('q')).toBe('Huntér');
   // Nothing found: said with the words, and one click back to everyone.
   await field.fill('zzz');
   await expect(page.getByText('No member matches “zzz”.')).toBeVisible();
@@ -55,10 +55,10 @@ for (const width of [1024, 1440]) {
     // The page's width beside its scrollbar, before the drawer locks it.
     const pageWidth = await page.evaluate(() => document.documentElement.clientWidth);
     await rows(page).first().click();
-    const drawer = page.getByRole('dialog', { name: 'Hugo Bernard' });
+    const drawer = page.getByRole('dialog', { name: 'Hunter Blake' });
     await drawer.waitFor();
     // Its quick actions are there: the drawer has landed.
-    await drawer.getByRole('button', { name: /^Offer Hugo Bernard/ }).waitFor();
+    await drawer.getByRole('button', { name: /^Offer Hunter Blake/ }).waitFor();
     await page.waitForTimeout(700);
     const box = await drawer.evaluate((dialog) => {
       const r = dialog.getBoundingClientRect();
@@ -82,7 +82,7 @@ for (const width of [1024, 1440]) {
     expect(box.right).toBeLessThanOrEqual(box.window + 0.5);
     expect(box.right).toBeGreaterThanOrEqual(pageWidth - 0.5);
     expect(box.clipped).toBe(0);
-    for (const name of [/^Message Hugo Bernard/, /^Offer Hugo Bernard/, /^Make Hugo Bernard/]) {
+    for (const name of [/^Message Hunter Blake/, /^Offer Hunter Blake/, /^Make Hunter Blake/]) {
       const button = await drawer.getByRole('button', { name }).boundingBox();
       expect(button).not.toBeNull();
       expect(button!.x + button!.width).toBeLessThanOrEqual(box.right);

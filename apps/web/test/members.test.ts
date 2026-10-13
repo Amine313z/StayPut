@@ -174,7 +174,7 @@ describe('the columns’ order', () => {
 
   it('puts what a column cannot say last, whichever way, and keeps ties in the given order', () => {
     const rows = [
-      member({ id: 'unscored', name: 'Zoé' }),
+      member({ id: 'unscored', name: 'Zoë' }),
       member({ id: 'high', name: 'élodie', ...scored(80, 'high') }),
       member({ id: 'low', name: 'Bob', ...scored(10, 'low') }),
       member({ id: 'tie', name: null, ...scored(80, 'high') }),
@@ -250,13 +250,20 @@ describe('the search (fix prompt v4.1, block 3)', () => {
   const demo = createWorld(Date.parse('2026-10-03T14:00:00Z')).members.members;
   const found = (query: string) => demo.filter((m) => matchesSearch(m, query)).map((m) => m.name);
 
-  it('finds Hugo Bernard alone, whatever the case and the accents', () => {
-    for (const query of ['hugo', 'HUGO', 'Hugó', '  hugo ', 'Hugo Bernard', 'bernard hugo']) {
-      expect(found(query), query).toEqual(['Hugo Bernard']);
+  it('finds Hunter Blake alone, whatever the case and the accents', () => {
+    for (const query of [
+      'hunter',
+      'HUNTER',
+      'Huntér',
+      '  hunter ',
+      'Hunter Blake',
+      'blake hunter',
+    ]) {
+      expect(found(query), query).toEqual(['Hunter Blake']);
     }
-    // Accents the other way round: « theo » finds Théo, « ines » Inès.
-    expect(found('theo')).toEqual(['Théo Fontaine']);
-    expect(found('INES')).toEqual(['Inès Haddad']);
+    // Accents the other way round: « zoe » finds Zoë, « renee » Renée.
+    expect(found('zoe')).toEqual(['Zoë Lambert']);
+    expect(found('RENEE')).toEqual(['Renée Hayes']);
     expect(found('zzz')).toEqual([]);
     // Nothing typed: everyone.
     expect(found('')).toHaveLength(demo.length);
@@ -264,10 +271,10 @@ describe('the search (fix prompt v4.1, block 3)', () => {
   });
 
   it('reads the Whop username too, with or without its @', () => {
-    const hugo = demo.find((m) => m.name === 'Hugo Bernard')!;
-    expect(hugo.username).toBeTruthy();
-    expect(found(hugo.username!)).toEqual(['Hugo Bernard']);
-    expect(found(`@${hugo.username!.toUpperCase()}`)).toEqual(['Hugo Bernard']);
+    const hunter = demo.find((m) => m.name === 'Hunter Blake')!;
+    expect(hunter.username).toBeTruthy();
+    expect(found(hunter.username!)).toEqual(['Hunter Blake']);
+    expect(found(`@${hunter.username!.toUpperCase()}`)).toEqual(['Hunter Blake']);
     expect(matchesSearch({ name: null, username: 'kev.trades' }, 'kev')).toBe(true);
     expect(matchesSearch({ name: null, username: null }, 'kev')).toBe(false);
     expect(matchesSearch({ name: null, username: null }, '')).toBe(true);

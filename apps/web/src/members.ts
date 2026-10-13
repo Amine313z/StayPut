@@ -13,8 +13,8 @@ export const SEARCH_DELAY_MS = 250;
 
 /**
  * Whether a member is one a search asks for (fix prompt v4.1, block 3): each word typed is in
- * their name or their Whop username, case and accents aside (« hugo », « HUGO » and « Hugó » find
- * Hugo Bernard); « @hugo » looks the same. Nothing typed: everyone.
+ * their name or their Whop username, case and accents aside (« hunter », « HUNTER » and « Huntér » find
+ * Hunter Blake); « @hunter » looks the same. Nothing typed: everyone.
  */
 export function matchesSearch(
   member: Pick<MemberRow, 'name' | 'username'>,

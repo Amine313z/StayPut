@@ -3950,7 +3950,7 @@ describe('the member space in the dashboard', () => {
       recordedAt: '2026-09-30T10:00:00.000Z',
       day: '2026-09-30',
       publishedAt: '2026-10-02T01:42:00.000Z',
-      name: 'Léa Moreau',
+      name: 'Lily Morgan',
       affiliateUrl: null,
     },
   };
@@ -6227,10 +6227,10 @@ describe('the demo (/demo)', () => {
       'section',
     )!;
     await vi.waitFor(() =>
-      expect(within(hero).getAllByRole('definition')[1]!.textContent).toBe('$731.17'),
+      expect(within(hero).getAllByRole('definition')[1]!.textContent).toBe('$2,640.17'),
     );
     expect(within(hero).getAllByRole('definition')[2]!.textContent).toBe('9');
-    expect(await screen.findByText('Hugo Bernard')).toBeTruthy();
+    expect(await screen.findByText('Hunter Blake')).toBeTruthy();
     expect(await screen.findByRole('button', { name: /^Getting started/ })).toBeTruthy();
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -6245,26 +6245,26 @@ describe('the demo (/demo)', () => {
     };
     // Manual mode: what waits for approval first, as on Automations.
     await next(
-      'Approve the 6 actions StayPut prepared: $384.17 at risk',
+      'Approve the 6 actions StayPut prepared: $1,449.17 at risk',
       'Approve all',
       '6 actions approved',
     );
     // Then the failed payments, the members leaving, the member nobody reached.
-    await next('Retry 3 failed payments: $347.00 at risk', 'Retry now', '3 payments retried now');
+    await next('Retry 3 failed payments: $1,191.00 at risk', 'Retry now', '3 payments retried now');
     await next(
-      'Offer a pause to 3 members leaving: $237.17 at risk',
+      'Offer a pause to 3 members leaving: $858.17 at risk',
       'Offer a pause',
       'A pause offered to 3 members',
     );
     await next(
-      'Message 1 high-risk member nobody reached: $49.00 at risk',
+      'Message 1 high-risk member nobody reached: $197.00 at risk',
       'Send the message',
       '1 message queued',
     );
     // Three payments still unpaid: never « nothing urgent ».
     await screen.findByRole(
       'heading',
-      { name: '3 members still have a failed payment: $347.00 at risk' },
+      { name: '3 members still have a failed payment: $1,191.00 at risk' },
       { timeout: 3_000 },
     );
     expect(screen.getByRole('link', { name: 'See who' }).getAttribute('href')).toBe(
@@ -6314,7 +6314,7 @@ describe('the demo (/demo)', () => {
     expect(rules[0]!.getAttribute('data-tour')).toBe('rule-payment-retry');
     cleanup();
     renderAt('/demo/actions/queue');
-    expect(await screen.findByText('Margaux Picard', undefined, { timeout: 3_000 })).toBeTruthy();
+    expect(await screen.findByText('Madison Parker', undefined, { timeout: 3_000 })).toBeTruthy();
     expect(screen.getByText('Before you go')).toBeTruthy();
     cleanup();
     renderAt('/demo/insights/cohorts');
@@ -6362,7 +6362,7 @@ describe('the demo (/demo)', () => {
     ).toBeTruthy();
     const accounts = await screen.findByRole('region', { name: 'Discord accounts' });
     expect(await within(accounts).findByText('To tie (2)')).toBeTruthy();
-    fireEvent.click(within(accounts).getByRole('button', { name: /^Tie to Margaux Picard/ }));
+    fireEvent.click(within(accounts).getByRole('button', { name: /^Tie to Madison Parker/ }));
     expect(await within(accounts).findByText('To tie (1)')).toBeTruthy();
     expect(await screen.findByText('1 recent author not linked to a member')).toBeTruthy();
   });
@@ -6405,21 +6405,21 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
       within(table)
         .getAllByRole('row')
         .find((r) => r.textContent?.includes(name))!;
-    await within(table).findByText('Juliette Caron', undefined, { timeout: 3_000 });
-    expect(row('Juliette Caron').textContent).toMatch(/Paused · resumes \w{3} \d{1,2}/);
+    await within(table).findByText('Julia Carter', undefined, { timeout: 3_000 });
+    expect(row('Julia Carter').textContent).toMatch(/Paused · resumes \w{3} \d{1,2}/);
     // Paul Henry has no score among the others: he left, at the end of the month he paid.
     expect(row('Paul Henry').textContent).toContain('Gone');
     expect(within(row('Paul Henry')).queryByRole('img')).toBeNull();
     // Her drawer says the pause too; Paul's, that his membership ended.
-    fireEvent.click(within(row('Juliette Caron')).getByRole('button', { name: /^Open/ }));
-    const juliette = await screen.findByRole('dialog', { name: 'Juliette Caron' });
-    await within(juliette).findByText(/^Paused · \$149\.00 per month · resumes on /);
+    fireEvent.click(within(row('Julia Carter')).getByRole('button', { name: /^Open/ }));
+    const juliette = await screen.findByRole('dialog', { name: 'Julia Carter' });
+    await within(juliette).findByText(/^Paused · \$497\.00 per month · resumes on /);
     expect(within(juliette).getByText(/^Paused · resumes /)).toBeTruthy();
     fireEvent.click(within(juliette).getByRole('button', { name: 'Close' }));
     await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     fireEvent.click(within(row('Paul Henry')).getByRole('button', { name: /^Open/ }));
     const paul = await screen.findByRole('dialog', { name: 'Paul Henry' });
-    const line = await within(paul).findByText(/^Canceled · \$49\.00 per month · /);
+    const line = await within(paul).findByText(/^Canceled · \$197\.00 per month · /);
     expect(line.textContent).toMatch(/ended on/);
     expect(paul.textContent).not.toMatch(/renews/i);
   }, 20_000);
@@ -6427,20 +6427,20 @@ describe('the demo tells one story (fix prompt v4.1, block 4)', () => {
   it('says what came of each action in the History, the proof of value', async () => {
     vi.stubGlobal('fetch', vi.fn());
     renderAt('/demo/actions/queue/history');
-    await screen.findByText('Clara Faure', undefined, { timeout: 3_000 });
+    await screen.findByText('Chloe Ford', undefined, { timeout: 3_000 });
     const badge = (name: string) =>
       [...document.querySelectorAll<HTMLElement>('[data-outcome]')]
         .filter((b) => b.closest('li')?.textContent?.includes(name))
         .map((b) => b.textContent);
-    expect(badge('Clara Faure')).toContain('Recovered $49.00');
+    expect(badge('Chloe Ford')).toContain('Recovered $197.00');
     expect(badge('Elena Novak')).toContain('Still failing');
-    expect(badge('Juliette Caron')[0]).toMatch(/^Paused until \w{3} \d{1,2}/);
-    expect(badge('Victor Leclerc')).toContain('Came back');
-    expect(badge('Lou Marchand')).toContain('No reply yet');
-    expect(badge('Sabrina Aït')).toContain('Left');
+    expect(badge('Julia Carter')[0]).toMatch(/^Paused until \w{3} \d{1,2}/);
+    expect(badge('Victor Lane')).toContain('Came back');
+    expect(badge('Logan Marsh')).toContain('No reply yet');
+    expect(badge('Sabrina Adams')).toContain('Left');
     // What was blocked says so, as before.
     const tom = screen
-      .getAllByText('Tom Barbier')
+      .getAllByText('Tom Baker')
       .map((name) => name.closest('li')!)
       .find((li) => li.textContent?.includes('Blocked'));
     expect(tom).toBeTruthy();
@@ -6639,12 +6639,12 @@ describe('the demo leads nowhere outside StayPut (fix prompt v4.1, block 5)', ()
     cleanup();
     renderAt('/demo/members');
     const table = await screen.findByRole('table', { name: 'All members' }, { timeout: 3_000 });
-    const hugo = await within(table).findByText('Hugo Bernard', undefined, { timeout: 3_000 });
+    const hugo = await within(table).findByText('Hunter Blake', undefined, { timeout: 3_000 });
     fireEvent.click(
-      within(hugo.closest('[role=row]')!).getByRole('button', { name: /^Open Hugo Bernard/ }),
+      within(hugo.closest('[role=row]')!).getByRole('button', { name: /^Open Hunter Blake/ }),
     );
-    const drawer = await screen.findByRole('dialog', { name: 'Hugo Bernard' });
-    await within(drawer).findByRole('button', { name: /^Offer Hugo Bernard/ });
+    const drawer = await screen.findByRole('dialog', { name: 'Hunter Blake' });
+    await within(drawer).findByRole('button', { name: /^Offer Hunter Blake/ });
     expectNoWayOut('drawer');
   }, 40_000);
 

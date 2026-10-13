@@ -104,7 +104,7 @@ test('a save attributed: the money a retry recovered, in the history and on the 
   await page.goto('/demo/actions/queue/history');
   const recovered = page.locator('[data-outcome="recovered"]').first();
   await expect(recovered).toBeVisible();
-  // « Recovered $49.00 »: the amount the member paid after the action, with its cents.
+  // « Recovered $197.00 »: the amount the member paid after the action, with its cents.
   await expect(recovered).toHaveText(/^Recovered \$\d[\d,]*\.\d{2}$/);
   // The dashboard counts the month's saves: an amount with its cents, above zero.
   await page.goto('/demo');
