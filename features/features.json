@@ -1,0 +1,57 @@
+{
+  "shots": [
+    {
+      "file": "01-dashboard.png",
+      "caption": "Revenue saved, revenue at risk, and the one thing to do today"
+    },
+    {
+      "file": "02-members-risk.png",
+      "caption": "Every member’s churn risk, the most likely to leave first"
+    },
+    {
+      "file": "03-member-detail.png",
+      "caption": "Why a member is leaving, and the action to take, in one click"
+    },
+    {
+      "file": "04-automation-rules.png",
+      "caption": "Automations that run within your limits"
+    },
+    {
+      "file": "05-approval-queue.png",
+      "caption": "Approve each message, or let StayPut act on its own"
+    },
+    {
+      "file": "06-saves-history.png",
+      "caption": "Every save with its proof: payments recovered, members back"
+    },
+    {
+      "file": "07-win-back.png",
+      "caption": "Win back former members with the free Alumni offer"
+    },
+    {
+      "file": "08-revenue-forecast.png",
+      "caption": "The revenue you keep by acting, over the next 90 days"
+    },
+    {
+      "file": "09-lessons.png",
+      "caption": "Where members stall, and what makes them leave"
+    },
+    {
+      "file": "10-cohorts.png",
+      "caption": "Retention by month of arrival, the weak months flagged"
+    },
+    {
+      "file": "11-monday-report.png",
+      "caption": "A Monday report: members saved, money saved, the week’s priority"
+    },
+    {
+      "file": "12-discord.png",
+      "caption": "Discord and Telegram activity in every risk score"
+    },
+    {
+      "file": "13-guardrails.png",
+      "caption": "Guardrails: manual or automatic, test mode, quiet hours"
+    }
+  ],
+  "problems": []
+}
