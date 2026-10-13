@@ -87,6 +87,12 @@ export function ErrorPanel({
       <h1 className="mt-4 text-base font-semibold text-fg">{t('error.title')}</h1>
       {signIn && signInFailed ? <p className="mt-2 font-medium">{t('auth.failed')}</p> : null}
       <p className="mt-2 text-muted">{t(messageKey)}</p>
+      {error.detail ? (
+        // What was checked (ids and Whop's answer): a screenshot of the refusal then says why.
+        <p dir="ltr" className="mt-2 break-all font-mono text-xs text-subtle">
+          {error.detail}
+        </p>
+      ) : null}
       {signIn ? (
         <ButtonLink
           href={signIn}

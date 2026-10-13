@@ -45,7 +45,9 @@ Un dépôt, des espaces de travail npm, TypeScript strict partout.
    « Sign in with Whop » (OAuth, cookie signé) le remplace.
 3. `requireCreator` demande à Whop le niveau d'accès de l'utilisateur à la communauté : seule son
    équipe (`admin`) ouvre la vue créateur ; `requireMember` fait de même pour une expérience.
-   La réponse de Whop est gardée quelques minutes.
+   La réponse de Whop est gardée quelques minutes. Dès que Whop répond `admin`, `requireCreator`
+   enregistre le membre d'équipe pour les politiques RLS (`company_admins`), quelle que soit la
+   lecture arrivée la première : les lectures d'un écran partent toutes en même temps.
 4. Le tableau de bord lit et écrit par `withUser` : une transaction sous le rôle `stayput_user`,
    l'utilisateur en paramètre. Les politiques RLS ne lui montrent que les communautés dont il
    est de l'équipe (`company_admins`, accès vérifié auprès de Whop depuis moins d'un jour).

@@ -582,6 +582,43 @@ export function createApp(deps: AppDeps) {
     );
   }
 
+  /**
+   * The team members recorded for RLS (recordAdmin) within the last minutes on this instance,
+   * and the recordings under way. A dashboard's first readings all leave at once (apps/web,
+   * prefetch.ts): whichever reaches the Worker first records the member, the others wait for
+   * that same recording. Before this, only the session recorded it, and the readings that
+   * overtook it found no row (or a row a day old) and answered « not a team member »: the
+   * dashboard opened on an error (production, 2026-10-13).
+   */
+  const RECORDED_MS = 5 * 60_000;
+  const recorded = new Map<string, number>();
+  const recording = new Map<string, Promise<void>>();
+
+  function recordTeamMember(c: Context<AppEnv>, companyId: string): Promise<void> {
+    const db = c.get('db');
+    if (!db) return Promise.resolve();
+    const userId = c.get('userId');
+    const key = `${userId}:${companyId}`;
+    const now = deps.now().getTime();
+    const last = recorded.get(key);
+    if (last !== undefined && now - last < RECORDED_MS) return Promise.resolve();
+    let underWay = recording.get(key);
+    if (!underWay) {
+      underWay = recordAdmin(db, companyId, userId, deps.now())
+        .then(() => {
+          if (recorded.size >= 1_000) recorded.clear();
+          recorded.set(key, now);
+        })
+        .catch((error: unknown) => {
+          // The reading goes on: its view says « not a team member » if the row is missing.
+          console.error('Team member not recorded:', describe(error));
+        })
+        .finally(() => recording.delete(key));
+      recording.set(key, underWay);
+    }
+    return underWay;
+  }
+
   /** The routes of the creator view: a company id, and a team member of it (checked with Whop). */
   const requireCreator = createMiddleware<AppEnv>(async (c, next) => {
     const companyId = c.req.param('companyId');
@@ -589,7 +626,9 @@ export function createApp(deps: AppDeps) {
     const level = await accessTo(c, companyId);
     if (level instanceof Response) return level;
     if (!canOpenCreatorView(level)) {
-      return apiError('forbidden', "the creator view is for the account's team");
+      return apiError('forbidden', "the creator view is for the account's team", {
+        detail: `Whop: ${level} for ${c.get('userId')} on ${companyId}`,
+      });
     }
     if (!(await invited(c, companyId))) {
       accessRequest(c, companyId);
@@ -597,9 +636,16 @@ export function createApp(deps: AppDeps) {
     }
     c.set('companyId', companyId);
     c.set('accessLevel', level);
+    await recordTeamMember(c, companyId);
     await next();
     return undefined;
   });
+
+  /** A reading RLS showed nothing to: the user is not recorded as a team member of the company. */
+  const notTeamMember = (c: Context<AppEnv>) =>
+    apiError('forbidden', 'not a team member of this company', {
+      detail: `database: ${c.get('userId')} is not recorded on ${c.get('companyId')}`,
+    });
 
   /**
    * The community's plan (plans.ts), read once per request: from the database while fresh, from
@@ -1073,7 +1119,8 @@ export function createApp(deps: AppDeps) {
       testMode: false,
     };
     if (db) {
-      company = await recordAdmin(db, companyId, userId, deps.now());
+      // Recorded by requireCreator (recordTeamMember): what the dashboard shows of the company.
+      company = await companyCard(db, companyId);
       // The first visit starts the backfill, later ones bring the data up to date (SPEC
       // Phase 2, 2).
       syncInBackground(c, companyId);
@@ -2554,7 +2601,7 @@ export function createApp(deps: AppDeps) {
     // A few names StayPut lacks, asked first: noting one may tie its account to a member.
     await waitAtMost(c, 'Account names', (names) => fillNames(names, companyId, clients));
     const view = await accountsView(db, c.get('userId'), companyId);
-    return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+    return view ? c.json(view) : notTeamMember(c);
   });
 
   /** What StayPut saw on Discord and Telegram over 30 days: per day, place, member. */
@@ -2567,7 +2614,7 @@ export function createApp(deps: AppDeps) {
       const db = c.get('db');
       if (!db) return apiError('not_configured', 'the database is not configured');
       const view = await readPlatformActivity(db, c.get('userId'), c.get('companyId'), deps.now());
-      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+      return view ? c.json(view) : notTeamMember(c);
     },
   );
 
@@ -2600,7 +2647,7 @@ export function createApp(deps: AppDeps) {
         });
       }
       const view = await readPlatformActivity(db, c.get('userId'), companyId, now);
-      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+      return view ? c.json(view) : notTeamMember(c);
     },
   );
 
@@ -2625,9 +2672,7 @@ export function createApp(deps: AppDeps) {
         platform,
         deps.now(),
       );
-      return view
-        ? c.json(platformAt(view, (await planOf(c)).tier))
-        : apiError('forbidden', 'not a team member of this company');
+      return view ? c.json(platformAt(view, (await planOf(c)).tier)) : notTeamMember(c);
     },
   );
 
@@ -2657,7 +2702,7 @@ export function createApp(deps: AppDeps) {
         day,
         deps.now(),
       );
-      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+      return view ? c.json(view) : notTeamMember(c);
     },
   );
 
@@ -2688,7 +2733,7 @@ export function createApp(deps: AppDeps) {
         hour,
         deps.now(),
       );
-      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+      return view ? c.json(view) : notTeamMember(c);
     },
   );
 
@@ -2736,7 +2781,7 @@ export function createApp(deps: AppDeps) {
     // How many people the servers and groups have, read again when older than 10 minutes.
     await waitAtMost(c, 'Head counts', (counts) => countPlaces(counts, companyId, clients, now));
     const view = await peopleView(db, c.get('userId'), companyId, now);
-    return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+    return view ? c.json(view) : notTeamMember(c);
   });
 
   /** The Alumni offer (SPEC 5.9): where former members stay in touch, and who is in it. */
@@ -2744,7 +2789,7 @@ export function createApp(deps: AppDeps) {
     const db = c.get('db');
     if (!db) return apiError('not_configured', 'the database is not configured');
     const view = await readAlumni(db, c.get('userId'), c.get('companyId'));
-    return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+    return view ? c.json(view) : notTeamMember(c);
   });
 
   /**
@@ -2778,9 +2823,7 @@ export function createApp(deps: AppDeps) {
       );
       c.set('audit', { step: problem?.step ?? 'done' });
       const view = await readAlumni(db, c.get('userId'), companyId);
-      return view
-        ? c.json({ ...view, problem } satisfies AlumniView)
-        : apiError('forbidden', 'not a team member of this company');
+      return view ? c.json({ ...view, problem } satisfies AlumniView) : notTeamMember(c);
     },
   );
 
@@ -2844,7 +2887,7 @@ export function createApp(deps: AppDeps) {
           : {}),
       });
       const view = await accountsView(db, c.get('userId'), companyId);
-      return view ? c.json(view) : apiError('forbidden', 'not a team member of this company');
+      return view ? c.json(view) : notTeamMember(c);
     },
   );
 
@@ -2997,7 +3040,11 @@ export function createApp(deps: AppDeps) {
     }
     const level = await accessTo(c, experienceId);
     if (level instanceof Response) return level;
-    if (!canOpenMemberView(level)) return apiError('forbidden', 'no access to this experience');
+    if (!canOpenMemberView(level)) {
+      return apiError('forbidden', 'no access to this experience', {
+        detail: `Whop: ${level} for ${c.get('userId')} on ${experienceId}`,
+      });
+    }
     c.set('experienceId', experienceId);
     c.set('accessLevel', level);
     await next();
@@ -3777,16 +3824,16 @@ async function fileWebhook(db: Db, id: string, now: Date): Promise<void> {
 /**
  * A team member of the company opened the dashboard: the company exists for StayPut (created on
  * the first visit, reactivated after an uninstall or a lost access), and the Whop check is
- * recorded for RLS. Answers whether the company has its time zone.
+ * recorded for RLS (company_admins.verified_at, good for a day).
  */
 async function recordAdmin(
   db: ClosableDb,
   companyId: string,
   userId: string,
   now: Date,
-): Promise<{ timezoneSet: boolean; name: string | null; logo: boolean; testMode: boolean }> {
+): Promise<void> {
   const at = now.toISOString();
-  return db.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
     await tx.query(
       `insert into stayput.companies (id, installed_at) values ($1, $2::timestamptz)
        on conflict (id) do update set status = 'active', uninstalled_at = null,
@@ -3805,26 +3852,33 @@ async function recordAdmin(
        on conflict (company_id, user_id) do update set verified_at = excluded.verified_at`,
       [companyId, userId, at],
     );
-    const [company] = await tx.query<{
-      timezone_set: boolean;
-      name: string | null;
-      logo: boolean;
-      test_mode: boolean;
-    }>(
-      `select c.timezone_set_at is not null as timezone_set, c.name,
-              c.logo_url is not null as logo, coalesce(s.dry_run, false) as test_mode
-         from stayput.companies c
-         left join stayput.company_settings s on s.company_id = c.id
-        where c.id = $1`,
-      [companyId],
-    );
-    return {
-      timezoneSet: company?.timezone_set ?? true,
-      name: company?.name ?? null,
-      logo: company?.logo ?? false,
-      testMode: company?.test_mode ?? false,
-    };
   });
+}
+
+/** What the session says of the company: its time zone set, its name and logo, the test mode. */
+async function companyCard(
+  db: ClosableDb,
+  companyId: string,
+): Promise<{ timezoneSet: boolean; name: string | null; logo: boolean; testMode: boolean }> {
+  const [company] = await db.query<{
+    timezone_set: boolean;
+    name: string | null;
+    logo: boolean;
+    test_mode: boolean;
+  }>(
+    `select c.timezone_set_at is not null as timezone_set, c.name,
+            c.logo_url is not null as logo, coalesce(s.dry_run, false) as test_mode
+       from stayput.companies c
+       left join stayput.company_settings s on s.company_id = c.id
+      where c.id = $1`,
+    [companyId],
+  );
+  return {
+    timezoneSet: company?.timezone_set ?? true,
+    name: company?.name ?? null,
+    logo: company?.logo ?? false,
+    testMode: company?.test_mode ?? false,
+  };
 }
 
 /**

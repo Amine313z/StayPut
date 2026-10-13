@@ -3,11 +3,13 @@
  * asks it (`GET /users/{id}/access/{resource}`, then the permissions granted there): the level
  * (admin, customer, no access) or the refusal (its HTTP status and code). The dashboard opens
  * for a team member only when this answers `admin`; a 404 is an account the key cannot reach
- * (the app not installed, or not authorized, there). Never prints the key, an id or a name: it
- * runs on production too, whose logs are public.
+ * (the app not installed, or not authorized, there). Then the same for the experiences of that
+ * community the key can list (the member view's doors): how many, how many are this app's
+ * (WHOP_APP_ID), and what Whop answers about the founder on each. Never prints the key, an id or
+ * a name: it runs on production too, whose logs are public.
  *
  *   WHOP_API_KEY=… WHOP_ENV=production OPERATOR_COMPANY_ID=biz_… ADMIN_USER_ID=user_… \
- *     npx tsx scripts/ops/whop-access.ts
+ *     WHOP_APP_ID=app_… npx tsx scripts/ops/whop-access.ts
  */
 import { appendFileSync } from 'node:fs';
 import {
@@ -87,10 +89,48 @@ async function main() {
       );
     }
     // Whether the key reads the community at all (status only).
-    const read = await fetch(`${WHOP_API_BASE_URL[env]}/companies/${companyId}`, {
-      headers: { Authorization: `Bearer ${key}`, 'Api-Version-Date': WHOP_API_VERSION_DATE },
-    });
+    const headers = { Authorization: `Bearer ${key}`, 'Api-Version-Date': WHOP_API_VERSION_DATE };
+    const read = await fetch(`${WHOP_API_BASE_URL[env]}/companies/${companyId}`, { headers });
     lines.push(`- Reading the community with the key: HTTP ${read.status}.`);
+    // The experiences of the community the key can list, and the founder's access to each: the
+    // member view asks Whop the same (requireMember), and a 404 there is an experience the key
+    // cannot reach (another app's, the old production app's for one).
+    const appId = process.env.WHOP_APP_ID?.trim() || null;
+    const list = new URL(`${WHOP_API_BASE_URL[env]}/experiences`);
+    list.searchParams.set('account_id', companyId);
+    list.searchParams.set('first', '20');
+    const listed = await fetch(list, { headers });
+    const experiences = (await listed.json().catch(() => null)) as {
+      data?: { id?: unknown; app?: { id?: unknown } }[];
+    } | null;
+    if (!listed.ok || !Array.isArray(experiences?.data)) {
+      lines.push(`- Experiences of the community: Whop answered HTTP ${listed.status}.`);
+    } else {
+      const all = experiences.data.filter((e) => typeof e.id === 'string');
+      const ours = appId ? all.filter((e) => e.app?.id === appId) : all;
+      lines.push(
+        `- Experiences of the community the key can list: ${all.length}` +
+          (appId ? `, of which ${ours.length} of this app (WHOP_APP_ID).` : '.'),
+      );
+      for (const [index, experience] of ours.slice(0, 3).entries()) {
+        const id = experience.id as string;
+        let access: string;
+        try {
+          const answer = await whop.checkAccess(userId, id);
+          access = `**${answer.accessLevel}** (has_access: ${answer.hasAccess})`;
+        } catch (error) {
+          access =
+            error instanceof WhopApiError
+              ? `refused, HTTP ${error.status} (${error.type})`
+              : `failed: ${error instanceof Error ? error.message : String(error)}`;
+        }
+        const one = await fetch(`${WHOP_API_BASE_URL[env]}/experiences/${id}`, { headers });
+        lines.push(
+          `  - Experience ${index + 1}: access of the founder ${access}; reading it with the` +
+            ` key: HTTP ${one.status}. The member view opens for \`admin\` or \`customer\`.`,
+        );
+      }
+    }
   }
   for (const line of lines) console.info(line);
   if (process.env.GITHUB_STEP_SUMMARY) {

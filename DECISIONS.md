@@ -4521,3 +4521,28 @@ Deux règles apprises le même jour :
   désormais le secret puis la variable pour `WHOP_PLANS_*`, `CHECKOUT_URL_*`,
   `WHOP_PLAN_SCALE_FOUNDER` et `INVITE_ONLY`, comme pour `ADMIN_USER_ID`. Effet de bord
   accepté : un secret `false` masque ce mot dans les journaux publics de Deploy.
+
+## 2026-10-13 — Le tableau de bord s'ouvre dès la première lecture
+
+En production, le fondateur ouvrait son tableau de bord sur « Seule l'équipe de cette
+communauté peut ouvrir ce tableau de bord » alors que Whop répondait bien `admin` (Inspect). Les
+journaux du Worker ont donné la cause : à l'ouverture, les lectures de l'écran partent toutes en
+même temps (`prefetch.ts` : session, membres, intégrations, synchronisation), et seule la session
+enregistrait le membre d'équipe pour les politiques RLS (`company_admins.verified_at`, valable un
+jour). Les lectures qui la devançaient ne trouvaient pas la ligne (ou une ligne vieille d'un
+jour) et répondaient 403 « not a team member » ; la session, elle, répondait 200 deux secondes
+plus tard. Désormais `requireCreator` enregistre le membre dès que Whop a répondu `admin`
+(`recordTeamMember`) : la première lecture arrivée écrit, les autres attendent cette même
+écriture (une par utilisateur et communauté toutes les cinq minutes par instance, comme la
+réponse de Whop gardée). La session ne fait plus que lire la fiche de la communauté.
+
+Deux aides pour la prochaine fois :
+
+- **Un refus dit ce qui a été vérifié.** Les 403 portent un `detail` (« Whop: customer for
+  user_… on biz_… », « database: user_… is not recorded on biz_… »), affiché en petit sous le
+  message : une capture d'écran suffit alors à comprendre. Rien de secret : l'identifiant du
+  visiteur lui-même et celui de la ressource qu'il ouvre.
+- **Inspect interroge aussi les expériences.** Le script `whop-access.ts` liste les expériences
+  de la communauté de l'opérateur que la clé peut voir, combien sont celles de l'app
+  (`WHOP_APP_ID`), et ce que Whop répond sur le fondateur pour chacune : un 404 là est une
+  expérience que la clé n'atteint pas (celle de l'ancienne app de production, par exemple).

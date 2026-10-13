@@ -1804,16 +1804,27 @@ describe('creator view', () => {
     ).toEqual(['Inactif', '49,00\u00a0$/mois', 'il y a 3 semaines']);
   });
 
-  it('tells a non-admin the dashboard is for the team', async () => {
+  it('tells a non-admin the dashboard is for the team, and what was checked', async () => {
     mockApi({
       '/api/creator/biz_A1/session': [
-        { status: 403, body: { error: { code: 'forbidden', message: 'team only' } } },
+        {
+          status: 403,
+          body: {
+            error: {
+              code: 'forbidden',
+              message: 'team only',
+              detail: 'Whop: customer for user_bob on biz_A1',
+            },
+          },
+        },
       ],
     });
     renderAt('/dashboard/biz_A1');
     expect(
       await screen.findByText('Only the team of this community can open this dashboard.'),
     ).toBeTruthy();
+    // The refusal's detail, as the server sent it: a screenshot then says why.
+    expect(screen.getByText('Whop: customer for user_bob on biz_A1')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
   });
 

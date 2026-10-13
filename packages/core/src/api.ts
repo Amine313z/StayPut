@@ -38,6 +38,12 @@ export interface ApiErrorBody {
      * to send the browser, with `?next=` the page to come back to.
      */
     login?: string;
+    /**
+     * With `forbidden`: what was checked and answered (the viewer's id, the resource, Whop's
+     * level or the database's record), in small print under the message, so that a screenshot
+     * of the refusal says why.
+     */
+    detail?: string;
   };
 }
 

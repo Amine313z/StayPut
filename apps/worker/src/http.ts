@@ -18,7 +18,7 @@ const STATUS: Record<ApiErrorCode, number> = {
 export function apiError(
   code: ApiErrorCode,
   message: string,
-  extra: Pick<ApiErrorBody['error'], 'login'> = {},
+  extra: Pick<ApiErrorBody['error'], 'login' | 'detail'> = {},
 ): Response {
   const body: ApiErrorBody = { error: { code, message, ...extra } };
   return Response.json(body, { status: STATUS[code] });

@@ -509,6 +509,56 @@ describe('GET /api/creator/:companyId/session', () => {
     expect(whop.calls.filter((call) => !/^[A-Z]+ \//.test(call))).toEqual(['user_alice:biz_A1']);
   });
 
+  it('records the team member for whichever reading comes first (a community’s first opening)', async () => {
+    // Nothing of the community yet: the four readings of the dashboard leave at once (prefetch),
+    // and the session, the only one to record the team member before, answers last.
+    const { request } = setup({ 'user_first:biz_First1': 'admin' });
+    const init = await asUser('user_first');
+    const answers = await Promise.all(
+      ['members', 'dashboard', 'integrations', 'session'].map((path) =>
+        Promise.resolve(request(`/api/creator/biz_First1/${path}`, init)),
+      ),
+    );
+    expect(answers.map((answer) => answer.status)).toEqual([200, 200, 200, 200]);
+    const [admin] = await t.db.query<{ n: number }>(
+      `select count(*)::int as n from stayput.company_admins
+        where company_id = 'biz_First1' and user_id = 'user_first' and verified_at = $1::timestamptz`,
+      [NOW.toISOString()],
+    );
+    expect(admin).toEqual({ n: 1 });
+  });
+
+  it('renews a record a day old before reading, whatever the reading', async () => {
+    // Opened two days ago (recorded then), opened again today straight on the members page:
+    // RLS wants a check from the last day, and no session has run yet.
+    await t.db.query(`insert into stayput.companies (id) values ('biz_Stale1')`);
+    await t.db.query(
+      `insert into stayput.company_admins (company_id, user_id, verified_at)
+       values ('biz_Stale1', 'user_stale', now() - interval '2 days')`,
+    );
+    const { request } = setup({ 'user_stale:biz_Stale1': 'admin' });
+    const res = await request('/api/creator/biz_Stale1/members', await asUser('user_stale'));
+    expect(res.status).toBe(200);
+    const [row] = await t.db.query<{ fresh: boolean }>(
+      `select verified_at > now() - interval '1 day' as fresh from stayput.company_admins
+        where company_id = 'biz_Stale1' and user_id = 'user_stale'`,
+    );
+    expect(row).toEqual({ fresh: true });
+  });
+
+  it('says what Whop answered when it refuses, for the screenshot', async () => {
+    const { request } = setup({ 'user_bob:biz_A1': 'customer' });
+    const res = await request('/api/creator/biz_A1/session', await asUser('user_bob'));
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({
+      error: {
+        code: 'forbidden',
+        message: "the creator view is for the account's team",
+        detail: 'Whop: customer for user_bob on biz_A1',
+      },
+    });
+  });
+
   it('learns the community’s name from Whop, for its messages and pages', async () => {
     const { request, whop } = setup({ 'user_alice:biz_Named': 'admin' });
     const init = await asUser('user_alice');

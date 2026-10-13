@@ -23,6 +23,8 @@ export class ApiError extends Error {
     readonly login: string | null = null,
     /** With `payment_required` (402): the plan that opens it, and where to subscribe. */
     readonly upgrade: UpgradeAsk | null = null,
+    /** With `forbidden`: what was checked and answered, shown under the message (Status.tsx). */
+    readonly detail: string | null = null,
   ) {
     super(message);
   }
@@ -170,6 +172,7 @@ async function requestJson<T>(
     | (Partial<ApiErrorBody> & Partial<Pick<PaymentRequiredBody, 'requiredTier' | 'checkoutUrl'>>)
     | null;
   const login = failure?.error?.login;
+  const detail = failure?.error?.detail;
   const upgrade: UpgradeAsk | null =
     response.status === 402 && isTier(failure?.requiredTier)
       ? {
@@ -186,6 +189,7 @@ async function requestJson<T>(
     failure?.error?.message ?? response.statusText,
     typeof login === 'string' && login.startsWith('/') ? login : null,
     upgrade,
+    typeof detail === 'string' && detail.length > 0 ? detail.slice(0, 300) : null,
   );
 }
 
