@@ -4486,3 +4486,14 @@ demande désormais les deux : la communauté de l'opérateur (`OPERATOR_COMPANY_
 fondateur (`ADMIN_USER_ID`). Pour tout autre, même admin de cette communauté, l'onglet n'existe
 pas et ses routes répondent 404. Sans `ADMIN_USER_ID` (le sandbox aujourd'hui), elle n'existe
 pour personne.
+
+## 2026-10-13 — La démo publique, prête pour les captures
+
+Le fondateur fait ses captures de posts sur `/demo` : la communauté imaginaire est désormais
+anglophone (noms des membres compris) et ses plans coûtent 197 $ / mois, 497 $ / mois (VIP) et
+1 970 $ / an, pour des chiffres parlants ; tout reste calculé à partir des membres, des plans et
+des sauvetages (les règles de cohérence tiennent). La barre « You are exploring an imaginary
+community… / Leave the demo » n'apparaît plus sur la démo publique : le badge « Demo data » de la
+barre du haut suffit à dire que c'est la démo. Elle reste pour un créateur entré dans la démo
+depuis son propre tableau de bord (l'aide, `?from=`), seul chemin pour y revenir dans le cadre de
+Whop.

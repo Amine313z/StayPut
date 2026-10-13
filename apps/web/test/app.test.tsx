@@ -6216,12 +6216,9 @@ describe('the demo (/demo)', () => {
     renderAt('/demo');
     expect(await screen.findByText('Atlas Trading Club')).toBeTruthy();
     expect(screen.getAllByText('Demo data').length).toBeGreaterThan(0);
-    expect(
-      screen.getByText(
-        'You are exploring an imaginary community. Nothing here is real, and nothing you do is sent.',
-      ),
-    ).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Leave the demo' }).getAttribute('href')).toBe('/');
+    // The public demo (screenshots for posts): no notice bar, the badge says it.
+    expect(document.querySelector('[data-demo-notice]')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Leave the demo' })).toBeNull();
     // Its figures, as a real community's: computed from its members.
     const hero = (await screen.findByRole('heading', { name: 'Your money this month' })).closest(
       'section',
@@ -6281,6 +6278,11 @@ describe('the demo (/demo)', () => {
         await screen.findByRole('link', { name: 'Leave the demo' }, { timeout: 3_000 })
       ).getAttribute('href'),
     ).toBe('/dashboard/biz_A1');
+    expect(
+      screen.getByText(
+        'You are exploring an imaginary community. Nothing here is real, and nothing you do is sent.',
+      ),
+    ).toBeTruthy();
   });
 
   it('fills every page of the demo: none stops on an error', async () => {

@@ -568,12 +568,15 @@ function TestModeBanner({ onTurnOff }: { onTurnOff: () => Promise<void> }) {
 }
 
 /**
- * Over every screen of the demo: what it is, and the way back to the creator's own dashboard
- * (or StayPut's home for a visitor). The same slim bar as the test mode.
+ * Over every screen of the demo opened from a creator's own dashboard: what it is, and the way
+ * back to that dashboard. The same slim bar as the test mode. A visitor of the public /demo
+ * (screenshots for posts, decision of 2026-10-13) sees none: the « Demo data » badge of the top
+ * bar says it is the demo.
  */
 function DemoNotice() {
   const { t } = useI18n();
-  const exit = readPreference(DEMO_EXIT_KEY) ?? '/';
+  const exit = readPreference(DEMO_EXIT_KEY);
+  if (!exit) return null;
   return (
     <div
       role="note"
