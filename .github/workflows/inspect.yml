@@ -172,7 +172,7 @@ jobs:
   # screenshots can be opened on GitHub.
   look:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     environment: ${{ inputs.target == 'production' && 'production stayput off' || 'sandbox' }}
     permissions:
       contents: write
@@ -187,7 +187,7 @@ jobs:
         run: |
           work="$RUNNER_TEMP/look"
           mkdir -p "$work/out"
-          cp scripts/ops/look.mjs scripts/ops/store.mjs "$work/"
+          cp scripts/ops/look.mjs scripts/ops/store.mjs scripts/ops/features.mjs "$work/"
           cd "$work"
           npm init -y > /dev/null
           npm install --no-audit --no-fund playwright-core@1.63.0 > /dev/null
@@ -195,6 +195,8 @@ jobs:
           node look.mjs "$STAYPUT_URL" out || status=$?
           # The App Store listing's five screenshots (docs/app-store.md), in StayPut's own fonts.
           node store.mjs "$STAYPUT_URL" out/store || status=$?
+          # StayPut's features in 4K, for the founder's product pages and posts.
+          node features.mjs "$STAYPUT_URL" out/features || status=$?
           {
             echo "### The deployed demo in Chrome"
             echo ""
@@ -205,6 +207,11 @@ jobs:
             echo ""
             echo '```json'
             cat out/store/store.json 2>/dev/null || echo '{ "error": "no report: see the log" }'
+            echo '```'
+            echo "### The features in 4K"
+            echo ""
+            echo '```json'
+            cat out/features/features.json 2>/dev/null || echo '{ "error": "no report: see the log" }'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"

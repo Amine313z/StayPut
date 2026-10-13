@@ -73,6 +73,12 @@ inventées dans le navigateur), en **1920 × 1080**, dans `docs/app-store/`. Ell
 chaque Inspect par `scripts/ops/store.mjs` sur le site déployé (avec les polices de StayPut), sans
 le bandeau de la démo ; les dernières sont aussi sur la branche `screenshots`, dossier `store/`.
 
+Treize captures des fonctionnalités, en **4K (3840 × 2160)**, pour les pages produit et les posts,
+sont refaites au même moment par `scripts/ops/features.mjs` : branche `screenshots`, dossier
+`features/` (tableau de bord, risque des membres, fiche d'un membre, automatisations, file
+d'approbation, historique des sauvetages, offre Alumni, prévision, leçons, cohortes, rapport du
+lundi, Discord, garde-fous).
+
 | Fichier                 | Légende (anglais)                                             |
 | ----------------------- | ------------------------------------------------------------- |
 | `1-dashboard.png`       | Revenue saved, revenue at risk, and the one thing to do today |
