@@ -4620,3 +4620,27 @@ sur le modèle de celle de Sendoo :
   Réglages › Admin liste les 50 derniers messages, avec ce qui a atteint le fondateur ; une voie
   qui échoue va au journal d'erreurs. Dans la démo, le bouton est désactivé (« Disabled in the
   demo »).
+
+## 2026-10-24 — La vente passe par les produits Whop, pas par l'App Store ; l'offre MVP
+
+L'app est toujours en examen sur l'App Store de Whop. Le fondateur vend StayPut par ses
+**produits Whop** : Free, MVP, Pro et Scale. Le créateur choisit son offre, puis installe
+StayPut sur son whop par le lien d'installation (`https://whop.com/apps/<app_…>/install`).
+
+- **Aucun code ne change.** StayPut lit déjà le niveau dans les abonnements du propriétaire de la
+  communauté (2026-10-11), d'où qu'ils viennent.
+- **Free** : un plan gratuit sur la page produit, pour la vitrine. Son identifiant n'entre
+  **jamais** dans `WHOP_PLANS_*` : toute communauté qui installe StayPut est déjà en Free.
+- **MVP** : tout Scale pendant un mois, choix du fondateur (option « essai avec carte ») : un plan
+  du produit Scale à 79 $/mois avec **30 jours d'essai**, prélevé à la fin sauf résiliation.
+  L'essai en cours compte déjà (`trialing`), et la date de fin s'affiche dans Réglages › Forfait.
+  Son identifiant va **à la fin** de `PRODUCTION_WHOP_PLANS_SCALE`, après le mensuel et l'annuel
+  ordinaires : la page des forfaits montre le premier plan mensuel de la liste, donc le prix
+  ordinaire et son essai de 7 jours, jamais le MVP.
+- **Écartée** : un mois offert sans carte (plan gratuit à durée d'accès). Le statut que Whop donne
+  à un tel abonnement pendant ses 30 jours n'est pas vérifié, et StayPut ne compte que `trialing`,
+  `active`, `past_due` et `canceling` : la communauté risquait de rester en Free.
+- **Acheter n'installe sans doute pas StayPut** (à vérifier sur un vrai achat). Chaque produit
+  donne donc le lien d'installation : sa description, et le message de bienvenue automatique des
+  chats de support de Whop, signé par le fondateur.
+- La FAQ dit toujours « 7 jours d'essai » : c'est l'essai des plans ordinaires, toujours vrai.

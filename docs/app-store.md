@@ -35,13 +35,13 @@ StayPut keeps your members from leaving, and shows you the money it saved.
 
 StayPut follows your Whop community (memberships, payments, chats, forums, courses, and your Discord and Telegram if you connect them) and every hour gives each member a churn risk score from 0 to 100, with the reasons behind it: a failed payment, a cancellation scheduled, a member gone quiet. You see who is about to leave before they do.
 
-Then it acts, within the limits you set:
-• Failed payments: a Whop notification asking the member to update their card, and a retry of the payment.
+Then it acts, within the limits you set. Every message reaches the member in your community's support chat, where they can answer you:
+• Failed payments: a message with the link to update their card, and a retry of the payment.
 • Members at risk: a short check-in message, sent at the hour they are usually online.
-• Members who cancel: a one-tap departure survey, with the offer that answers their reason (a discount, a pause, free days, your help). Their membership is only kept with their consent.
+• Members who cancel: a message asking what made them leave, with your offer: a discount on their membership, or a pause they can say yes to. A cancellation is never withdrawn without their consent.
 • Former members: a free Alumni offer keeps them in touch, with a unique comeback code 7, 30 and 60 days after they left.
 
-Automatic or manual: let StayPut send on its own, or approve each message from a queue, one click at a time or all at once. Quiet hours, frequency limits, a do-not-contact list and a global stop apply to every message. A new community starts in manual mode: nothing is sent until you approve it. Test mode, one switch away, computes everything and sends nothing. And when you want to say it yourself, write to any member in your own words: it goes out as a Whop notification with your picture.
+Automatic or manual: let StayPut send on its own, or approve each message from a queue, one click at a time or all at once. Quiet hours, frequency limits, a do-not-contact list and a global stop apply to every message. A new community starts in manual mode: nothing is sent until you approve it. Test mode, one switch away, computes everything and sends nothing. And when you want to say it yourself, write to any member in your own words, in the same chat.
 
 Every save is counted with its proof (the payment recovered, the cancellation withdrawn, the member who came back), so your dashboard shows revenue saved, not guesses. Every Monday, a Whop notification sums up your week.
 
@@ -54,8 +54,9 @@ Built for privacy: StayPut never reads your members' e-mail addresses or phone n
 
 - **Member risk score** — 0 to 100 for every member, every hour, with its reasons.
 - **Revenue saved dashboard** — money saved this month, revenue at risk, members at risk, and the one action to take today.
-- **Failed payment recovery** — card update notices and payment retries through Whop.
-- **Departure survey and offers** — the right offer for each reason to leave: discount, pause, free days, the creator's help.
+- **Failed payment recovery** — a message with the link to update the card, and payment retries
+  through Whop.
+- **Departure offers** — a discount or a pause, offered in the member's support chat.
 - **Win-back with the Alumni offer** — a free space for former members, comeback codes at 7, 30 and 60 days.
 - **Automatic or manual mode** — act on its own, or approve every message from a queue.
 - **Guardrails** — quiet hours, frequency limits, do-not-contact list, global stop, test mode.
@@ -63,8 +64,7 @@ Built for privacy: StayPut never reads your members' e-mail addresses or phone n
 - **Discord and Telegram** — their activity counts in the score.
 - **Analytics** — why members leave, cohorts, lessons, and a Monday report.
 - **Verified retention badge and anonymous benchmarks** — both optional.
-- **Privacy first** — no e-mail or phone read, a member's data exported or deleted on request,
-  a data processing agreement.
+- **Privacy first** — no e-mail or phone read, a member's data exported or deleted on request.
 
 ## Captures d'écran
 
@@ -111,4 +111,6 @@ applicable) et une relecture : voir `docs/production.md`, étape 5.
 
 ## Prix
 
-À remplir après la phase 7 (les formules et ce que chacune donne).
+Free, Pro (29 $/mois ou 290 $/an) et Scale (79 $/mois ou 790 $/an), essai de 7 jours sur Pro et
+Scale (décision du 13/10/2026). Whop les montre d'après les produits `StayPut Pro` et
+`StayPut Scale` ; ce que chaque niveau ouvre est sur Réglages › Forfait.
