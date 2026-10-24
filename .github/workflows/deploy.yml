@@ -75,6 +75,19 @@ jobs:
           WHOP_APP_ID: ${{ vars[inputs.target == 'production' && 'PRODUCTION_WHOP_APP_ID' || 'WHOP_APP_ID'] }}
         run: npx tsx scripts/deploy/check-app.ts settings apps/worker/wrangler.toml
 
+      # The plans StayPut sells (scripts/deploy/check-plans.ts): a plan id Whop does not know, or
+      # a checkout link to a plan outside its level's list (a buyer would pay for nothing), stops
+      # a production deployment here, before anything changes. The sandbox only reports.
+      - name: Check the plans StayPut sells
+        env:
+          WHOP_API_KEY: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_WHOP_API_KEY' || 'WHOP_API_KEY'] }}
+          WHOP_ENV: ${{ inputs.target == 'production' && 'production' || vars.WHOP_ENV }}
+          WHOP_PLANS_PRO: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_WHOP_PLANS_PRO' || 'WHOP_PLANS_PRO'] || vars[inputs.target == 'production' && 'PRODUCTION_WHOP_PLANS_PRO' || 'WHOP_PLANS_PRO'] }}
+          WHOP_PLANS_SCALE: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_WHOP_PLANS_SCALE' || 'WHOP_PLANS_SCALE'] || vars[inputs.target == 'production' && 'PRODUCTION_WHOP_PLANS_SCALE' || 'WHOP_PLANS_SCALE'] }}
+          CHECKOUT_URL_PRO: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_CHECKOUT_URL_PRO' || 'CHECKOUT_URL_PRO'] || vars[inputs.target == 'production' && 'PRODUCTION_CHECKOUT_URL_PRO' || 'CHECKOUT_URL_PRO'] }}
+          CHECKOUT_URL_SCALE: ${{ secrets[inputs.target == 'production' && 'PRODUCTION_CHECKOUT_URL_SCALE' || 'CHECKOUT_URL_SCALE'] || vars[inputs.target == 'production' && 'PRODUCTION_CHECKOUT_URL_SCALE' || 'CHECKOUT_URL_SCALE'] }}
+        run: npx tsx scripts/deploy/check-plans.ts
+
       # Also claims the database for this deployment, or stops when the other one claimed it
       # (scripts/deploy/claim.ts): one database, one deployment.
       - name: Apply the database migrations

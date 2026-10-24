@@ -3064,8 +3064,9 @@ describe("the member's departure survey and payments (SPEC Phase 4)", () => {
     expect(await home(await env.boss())).toEqual({
       dashboard: '/dashboard/biz_Ret18',
       locale: 'fr',
+      welcome: null,
     });
-    expect(await home(env.ana)).toEqual({ dashboard: null, locale: 'fr' });
+    expect(await home(env.ana)).toEqual({ dashboard: null, locale: 'fr', welcome: null });
     // Nobody outside the community.
     expect((await env.request('/api/member/exp_Ret18/home')).status).toBe(401);
   });

@@ -1579,6 +1579,23 @@ export const fr: Messages = {
   'legal.frame': '{document}, la page',
   'legal.draft': 'Brouillon en cours de relecture : il peut encore changer avant le lancement.',
   'member.privacy': 'Confidentialité',
+  'welcome.title': 'Bienvenue sur StayPut',
+  'welcome.body':
+    'StayPut fonctionne dans votre propre whop : installez-le dessus, et il lit vos membres tout de suite.',
+  'welcome.plan': 'Votre forfait : {tier}',
+  'welcome.trial': 'Essai gratuit jusqu’au {date}',
+  'welcome.install': 'Installer StayPut sur mon whop',
+  'welcome.installed': 'Déjà installé sur {names}. Ouvrez StayPut depuis ce whop.',
+  'welcome.step.install.title': 'Installez-le sur le whop dont vous êtes propriétaire',
+  'welcome.step.install.body':
+    'Choisissez votre whop sur la page de Whop et acceptez. Utilisez le compte propriétaire du whop : votre forfait vient avec lui.',
+  'welcome.step.open.title': 'Ouvrez-le depuis votre whop',
+  'welcome.step.open.body':
+    'StayPut est dans les applications de votre whop. Les premiers scores de risque de vos membres arrivent dans l’heure.',
+  'welcome.step.plan.title': 'Votre forfait vous suit',
+  'welcome.step.plan.body':
+    'StayPut le lit sur votre compte Whop : aucune clé ni aucun code à saisir.',
+  'welcome.help': 'Une question ? Écrivez-nous dans le chat de support de cette communauté.',
   'member.none.title': 'Rien à faire ici',
   'member.none.body': 'Les messages de votre communauté vous arrivent dans son chat de support.',
   'member.subscription.title': 'Votre abonnement',

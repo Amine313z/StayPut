@@ -21,7 +21,7 @@ import type {
   SignalPlatform,
 } from './risk';
 import type { MessageAction, MessageTemplate, TemplateLocale } from './templates';
-import type { PlanView } from './plans';
+import type { PlanView, Tier } from './plans';
 
 /**
  * The shapes the Worker's API returns and the frontend reads. Both sides import them from here,
@@ -114,6 +114,30 @@ export interface MemberHome {
   /** The dashboard's address, for the team only. */
   dashboard: string | null;
   locale: 'en' | 'fr';
+  /**
+   * A customer of StayPut's own community (OPERATOR_COMPANY_ID), who opened StayPut in one of
+   * the products it sells: how to install it on the whop they own. Null anywhere else.
+   */
+  welcome: BuyerWelcome | null;
+}
+
+/**
+ * What a buyer of StayPut finds in the products of StayPut's own community (decision of
+ * 2026-10-24): StayPut works on the whop they own, not on StayPut's, so the screen says where to
+ * install it and what plan follows them there.
+ */
+export interface BuyerWelcome {
+  /** Whop's install page for StayPut: the buyer picks their whop there. */
+  installUrl: string;
+  /** For Whop's `openExternalUrl`, inside its frame. */
+  whopAppId: string;
+  /**
+   * Their own StayPut plan, as Whop holds it (the highest live one; a trial counts); it applies
+   * to the whops they own. Null when plans are off or Whop did not answer.
+   */
+  plan: { tier: Tier; trialEndsAt: string | null } | null;
+  /** The communities they own where StayPut is already installed, newest first (5 at most). */
+  installedOn: string[];
 }
 
 /** GET /api/creator/:companyId/sync: how far StayPut has read the company's Whop data. */

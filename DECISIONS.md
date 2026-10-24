@@ -4641,6 +4641,39 @@ StayPut sur son whop par le lien d'installation (`https://whop.com/apps/<app_…
   à un tel abonnement pendant ses 30 jours n'est pas vérifié, et StayPut ne compte que `trialing`,
   `active`, `past_due` et `canceling` : la communauté risquait de rester en Free.
 - **Acheter n'installe sans doute pas StayPut** (à vérifier sur un vrai achat). Chaque produit
-  donne donc le lien d'installation : sa description, et le message de bienvenue automatique des
-  chats de support de Whop, signé par le fondateur.
+  donne donc le lien d'installation : sa description, le message de bienvenue automatique des
+  chats de support de Whop, signé par le fondateur, et l'app StayPut elle-même dans le contenu du
+  produit (ci-dessous).
+
+### L'écran d'accueil de l'acheteur
+
+Ajouter StayPut au contenu d'un produit de StayPut Community menait l'acheteur, simple client de
+cette communauté, à « Rien à faire ici » : StayPut ne travaille que sur le whop qu'il possède.
+Désormais, un client de la communauté de l'opérateur (`OPERATOR_COMPANY_ID`) qui ouvre StayPut
+voit **Bienvenue sur StayPut** (`apps/web/src/views/BuyerWelcome.tsx`) :
+
+- son forfait, lu comme celui d'un propriétaire (`personPlan`, `plans.ts` : le plan vivant le
+  plus haut de ses abonnements, un essai compte, avec sa date de fin) ; le plan Fondateurs n'y
+  compte pas, puisqu'il n'ouvre Scale que sur une communauté invitée ;
+- un seul bouton, **Installer StayPut sur mon whop**, vers la page d'installation de Whop
+  (`https://whop.com/apps/<WHOP_APP_ID>/install`, l'app de l'environnement) ;
+- les whops qu'il possède où StayPut est déjà installé (5 au plus), puis trois étapes :
+  installer sur le whop dont il est propriétaire, l'ouvrir depuis ce whop, le forfait qui suit.
+- Whop qui ne répond pas ne coûte que le forfait : le bouton reste. L'équipe de la communauté
+  de l'opérateur va toujours à son tableau de bord ; les membres des autres communautés lisent
+  toujours « Rien à faire ici ». Champ `welcome` de `GET /api/member/:experienceId/home`.
+
+### Les prix respectés : un contrôle à chaque déploiement
+
+Les forfaits sont désormais des produits que le fondateur crée à la main, et leurs identifiants
+sont recopiés dans GitHub : une faute de frappe ferait payer un acheteur pour rien. Le déploiement
+lit donc chaque plan de `WHOP_PLANS_PRO` et `WHOP_PLANS_SCALE` chez Whop
+(`scripts/deploy/check-plans.ts`, étape « Check the plans StayPut sells ») et écrit son niveau,
+sa période, son prix et son essai. La production s'arrête, avant tout changement, sur : une valeur
+qui n'est pas un `plan_…`, un plan que Whop ne connaît pas, un plan dans les deux listes, une seule
+liste remplie (les forfaits seraient éteints, tout gratuit), ou un lien `CHECKOUT_URL_*` vers un
+plan hors de la liste de son niveau. Simple avertissement : un plan que Whop refuse de montrer, ou
+la page des forfaits qui montrerait l'essai de 30 jours du MVP au lieu du plan ordinaire. Le
+sandbox ne fait que signaler.
+
 - La FAQ dit toujours « 7 jours d'essai » : c'est l'essai des plans ordinaires, toujours vrai.

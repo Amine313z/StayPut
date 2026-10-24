@@ -215,6 +215,24 @@ async function readFromWhop(
   }
 }
 
+/**
+ * A person's own StayPut plan, for the buyer's welcome (decision of 2026-10-24): the highest
+ * live one among their memberships, read as an owner's is. The founders' plan is not counted
+ * here: it opens Scale only on a community the founder invited, which a person alone does not
+ * say. Null while plans are off; throws when Whop does not answer.
+ */
+export async function personPlan(
+  db: Db,
+  whop: WhopClient,
+  config: PlansConfig,
+  userId: string,
+  now: Date,
+): Promise<{ tier: Tier; trialEndsAt: string | null } | null> {
+  if (!config.enabled) return null;
+  const { best } = await ownerMembership(db, whop, config, userId, now, false);
+  return { tier: best?.tier ?? 'free', trialEndsAt: best?.trialEndsAt?.toISOString() ?? null };
+}
+
 /** The level a Whop plan gives: Scale for Scale's plans and the founders', Pro for Pro's. */
 export function tierOfPlan(config: PlansConfig, planId: unknown): Tier | null {
   if (typeof planId !== 'string') return null;

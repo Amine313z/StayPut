@@ -23,6 +23,13 @@ import {
 } from '../../../scripts/deploy/check-crons';
 import { checkWhopKey, deployedVar } from '../../../scripts/deploy/check-whop';
 import {
+  checkoutPlan,
+  describePlan,
+  planIdList,
+  reviewPlans,
+  type PlanRead,
+} from '../../../scripts/deploy/check-plans';
+import {
   hyperdriveName,
   hyperdriveOrigin,
   sameOrigin,
@@ -1244,6 +1251,106 @@ describe('the cron triggers, read back from Cloudflare', () => {
     expect(levels(cronFindings('stayput', [], { crons: [] }, { total: 0 }))).toEqual([
       'error',
       'note',
+    ]);
+  });
+});
+
+describe('the plans StayPut sells (check-plans)', () => {
+  // Whop's plans, as GET /plans/{id} gives them.
+  const WHOP: Record<string, Record<string, unknown>> = {
+    plan_ProM: { billing_period: 30, renewal_price: 29, currency: 'usd', trial_period_days: 7 },
+    plan_ProY: { billing_period: 365, renewal_price: 290, currency: 'usd', trial_period_days: 7 },
+    plan_ScaleM: { billing_period: 30, renewal_price: 79, currency: 'usd', trial_period_days: 7 },
+    plan_ScaleY: { billing_period: 365, renewal_price: 790, currency: 'usd' },
+    plan_Mvp: {
+      billing_period: 30,
+      renewal_price: 79,
+      currency: 'usd',
+      trial_period_days: 30,
+      visibility: 'visible',
+    },
+  };
+  const read = (id: string): Promise<PlanRead> =>
+    Promise.resolve(
+      WHOP[id]
+        ? { found: true, plan: WHOP[id] }
+        : { found: false, status: 404, detail: '404 not_found' },
+    );
+  const settings = {
+    pro: 'plan_ProM,plan_ProY',
+    scale: 'plan_ScaleM,plan_ScaleY,plan_Mvp',
+    checkoutPro: 'https://whop.com/checkout/plan_ProM',
+    checkoutScale: 'https://whop.com/checkout/plan_ScaleM',
+  };
+
+  it('reads the ids as the Worker does, and says what is not one', () => {
+    expect(planIdList(' plan_A , plan_B,plan_A,, prod_X ')).toEqual({
+      ids: ['plan_A', 'plan_B'],
+      invalid: ['prod_X'],
+    });
+    expect(checkoutPlan('https://whop.com/checkout/plan_ProM?d=1')).toBe('plan_ProM');
+    expect(checkoutPlan('https://whop.com/stayput/')).toBeNull();
+    expect(describePlan(WHOP.plan_Mvp!)).toBe('79 USD / month, 30-day trial, visible');
+    expect(describePlan(WHOP.plan_ScaleY!)).toBe('790 USD / year, no trial');
+  });
+
+  it('passes the founder’s grid: Pro, Scale and the MVP last, links to their own level', async () => {
+    const review = await reviewPlans(settings, read);
+    expect(review.problems).toEqual([]);
+    expect(review.warnings).toEqual([]);
+    expect(review.lines).toEqual([
+      'Pro · plan_ProM: 29 USD / month, 7-day trial',
+      'Pro · plan_ProY: 290 USD / year, 7-day trial',
+      'Scale · plan_ScaleM: 79 USD / month, 7-day trial',
+      'Scale · plan_ScaleY: 790 USD / year, no trial',
+      'Scale · plan_Mvp: 79 USD / month, 30-day trial, visible',
+      'Scale: the plan page shows plan_ScaleM, the first monthly plan.',
+    ]);
+  });
+
+  it('stops on what a buyer would pay for and not get', async () => {
+    const review = await reviewPlans(
+      {
+        pro: 'plan_ProM,plan_Typo,prod_NotAPlan',
+        scale: 'plan_ScaleM,plan_ProM',
+        checkoutPro: 'https://whop.com/checkout/plan_OldPro',
+        checkoutScale: 'https://whop.com/checkout/plan_ScaleM',
+      },
+      read,
+    );
+    expect(review.problems).toEqual([
+      expect.stringMatching(/^WHOP_PLANS_PRO holds 1 value\(s\) that are not plan ids/),
+      'plan_ProM is in both WHOP_PLANS_PRO and WHOP_PLANS_SCALE.',
+      expect.stringMatching(/^Pro: Whop knows no plan plan_Typo\./),
+      expect.stringMatching(/^CHECKOUT_URL_PRO leads to plan_OldPro, which is not in its level/),
+    ]);
+  });
+
+  it('stops when one level has no plan: plans would be off, everything free', async () => {
+    const review = await reviewPlans({ ...settings, pro: '', checkoutPro: undefined }, read);
+    expect(review.problems).toEqual([expect.stringMatching(/^WHOP_PLANS_PRO is empty/)]);
+    // Nothing set at all is the plans turned off on purpose: only said.
+    const off = await reviewPlans(
+      { pro: '', scale: '', checkoutPro: undefined, checkoutScale: undefined },
+      read,
+    );
+    expect(off.problems).toEqual([]);
+    expect(off.warnings).toEqual([expect.stringMatching(/^No plan is set/)]);
+  });
+
+  it('only warns when Whop does not show a plan, or the MVP comes first', async () => {
+    const review = await reviewPlans(
+      { ...settings, scale: 'plan_Mvp,plan_ScaleM,plan_ScaleY' },
+      (id) =>
+        id === 'plan_ScaleY'
+          ? Promise.resolve({ found: false, status: 403, detail: '403 forbidden' })
+          : read(id),
+    );
+    expect(review.problems).toEqual([]);
+    expect(review.warnings).toEqual([
+      expect.stringMatching(/^Scale: Whop did not show plan plan_ScaleY \(403 forbidden\)/),
+      'Scale: the plan page shows plan_Mvp and its 30-day trial, not the ordinary plan: put ' +
+        'the ordinary monthly plan first in the list.',
     ]);
   });
 });

@@ -2,6 +2,7 @@ import type {
   AccessLevel,
   AdminCompaniesView,
   CreatorSession,
+  MemberHome,
   MembersPage,
   PaymentRequiredBody,
 } from '@stayput/core';
@@ -995,4 +996,102 @@ describe('the access matrix', () => {
       );
     },
   );
+});
+
+describe('the buyer’s welcome, in StayPut’s own community (2026-10-24)', () => {
+  // StayPut's own community sells it (Free, MVP, Pro, Scale); StayPut sits in its products.
+  const SHOP: Env = { ...ENV, OPERATOR_COMPANY_ID: 'biz_StayPut' };
+  const INSTALL = `https://whop.com/apps/${APP_ID}/install`;
+
+  async function shop(tag: string) {
+    const env = setup(SHOP);
+    await community(env, 'biz_StayPut', ADMIN);
+    env.whop.experiences[`exp_Shop${tag}`] = 'biz_StayPut';
+    env.whop.access[`${ADMIN}:exp_Shop${tag}`] = 'admin';
+    const buyer = `user_Buyer${tag}`;
+    env.whop.access[`${buyer}:exp_Shop${tag}`] = 'customer';
+    const home = async (user: string) => {
+      const res = await env.request(`/api/member/exp_Shop${tag}/home`, await as(user));
+      expect(res.status).toBe(200);
+      return (await res.json()) as MemberHome;
+    };
+    return { env, buyer, home };
+  }
+
+  it('gives a buyer the install page, their plan with its trial, and where StayPut runs', async () => {
+    const { env, buyer, home } = await shop('A');
+    const ends = new Date(NOW.getTime() + 30 * DAY);
+    env.whop.memberships.push(
+      appMembership('mem_BuyA', buyer, 'prod_StayPutScale', SCALE_MONTHLY, 'trialing', ends),
+    );
+    // A whop of theirs where StayPut is already installed, and one they left.
+    for (const [company, name, status] of [
+      ['biz_BuyerClubA', 'Buyer Club', 'active'],
+      ['biz_BuyerOldA', 'Old Club', 'uninstalled'],
+    ] as const) {
+      await t.db.query('select stayput.ensure_company($1, $2::timestamptz)', [
+        company,
+        NOW.toISOString(),
+      ]);
+      await t.db.query(
+        `update stayput.companies
+            set owner_user_id = $2, name = $3, status = $4,
+                uninstalled_at = case when $4 = 'uninstalled' then $5::timestamptz end
+          where id = $1`,
+        [company, buyer, name, status, NOW.toISOString()],
+      );
+    }
+    expect(await home(buyer)).toEqual({
+      dashboard: null,
+      locale: 'en',
+      welcome: {
+        installUrl: INSTALL,
+        whopAppId: APP_ID,
+        plan: { tier: 'scale', trialEndsAt: ends.toISOString() },
+        installedOn: ['Buyer Club'],
+      },
+    });
+  });
+
+  it('says Free to a buyer without a paid plan, and never counts the founders’ plan alone', async () => {
+    const { env, buyer, home } = await shop('B');
+    env.whop.memberships.push(
+      appMembership('mem_BuyB', buyer, APP_PRODUCT, FOUNDER, 'active', null),
+    );
+    expect((await home(buyer)).welcome).toEqual({
+      installUrl: INSTALL,
+      whopAppId: APP_ID,
+      plan: { tier: 'free', trialEndsAt: null },
+      installedOn: [],
+    });
+  });
+
+  it('keeps the way to install when Whop does not answer about the plan', async () => {
+    const { env, buyer, home } = await shop('C');
+    Object.assign(env.whop.client, {
+      listPage: () =>
+        Promise.reject(
+          new WhopApiError(503, 'unavailable', 'Whop is down', {
+            method: 'GET',
+            path: '/memberships',
+          }),
+        ),
+    });
+    expect((await home(buyer)).welcome).toMatchObject({ installUrl: INSTALL, plan: null });
+  });
+
+  it('takes the founder to the dashboard, and shows a member elsewhere nothing of it', async () => {
+    const { env, home } = await shop('D');
+    expect(await home(ADMIN)).toEqual({
+      dashboard: '/dashboard/biz_StayPut',
+      locale: 'en',
+      welcome: null,
+    });
+    // Another creator's community: its members find nothing to do, as before.
+    await community(env, 'biz_OtherD', 'user_OtherOwnerD');
+    env.whop.experiences.exp_OtherD = 'biz_OtherD';
+    env.whop.access['user_MemberD:exp_OtherD'] = 'customer';
+    const res = await env.request('/api/member/exp_OtherD/home', await as('user_MemberD'));
+    expect(await res.json()).toEqual({ dashboard: null, locale: 'en', welcome: null });
+  });
 });

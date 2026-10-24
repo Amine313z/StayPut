@@ -42,6 +42,7 @@ import {
   type WebhookReplay,
   type AlumniView,
   type MemberRetentionView,
+  type BuyerWelcome,
   type MemberHome,
   type MemberSession,
   type PlanOffersView,
@@ -118,6 +119,7 @@ import {
   insightsAt,
   onMembershipEvent,
   overviewAt,
+  personPlan,
   planView,
   readOffers,
   platformAt,
@@ -3287,9 +3289,11 @@ export function createApp(deps: AppDeps) {
         )
       : [];
     const team = c.get('accessLevel') === 'admin';
+    const operator = c.get('config').operatorCompanyId;
     const home: MemberHome = {
       dashboard: team ? `/dashboard/${encodeURIComponent(companyId)}` : null,
       locale: company?.locale === 'fr' ? 'fr' : 'en',
+      welcome: !team && operator !== null && companyId === operator ? await buyerWelcome(c) : null,
     };
     // The dashboard's calls follow at once: Whop is asked now whether this user may open it,
     // so that they find the answer kept instead of each waiting for it (still Whop's answer).
@@ -3300,6 +3304,41 @@ export function createApp(deps: AppDeps) {
       );
     return c.json(home);
   });
+
+  /**
+   * A buyer of StayPut in its own community (decision of 2026-10-24): StayPut works on the whop
+   * they own, so they get Whop's install page, their own plan and where StayPut already runs.
+   * Whop not answering costs only the plan: the way to install stays.
+   */
+  async function buyerWelcome(c: Context<AppEnv>): Promise<BuyerWelcome | null> {
+    const config = c.get('config');
+    if (!config.appId) return null;
+    const db = c.get('db');
+    const whop = deps.whopClient(config);
+    const userId = c.get('userId');
+    let plan: BuyerWelcome['plan'] = null;
+    if (db && whop) {
+      try {
+        plan = await personPlan(db, whop, config.plans, userId, deps.now());
+      } catch (error) {
+        console.error('Buyer’s plan not read:', describe(error));
+      }
+    }
+    const installed = db
+      ? await db.query<{ id: string; name: string | null }>(
+          `select id, name from stayput.companies
+            where owner_user_id = $1 and status = 'active' and not is_demo and id <> $2
+            order by created_at desc limit 5`,
+          [userId, config.operatorCompanyId],
+        )
+      : [];
+    return {
+      installUrl: `https://whop.com/apps/${encodeURIComponent(config.appId)}/install`,
+      whopAppId: config.appId,
+      plan,
+      installedOn: installed.map((row) => row.name?.trim() || row.id),
+    };
+  }
 
   /** The company of the route's experience, or the error response to send. */
   async function memberCompany(c: Context<AppEnv>): Promise<string | Response> {

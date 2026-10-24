@@ -4157,6 +4157,66 @@ describe('member view, without a member space (2026-10-08)', () => {
     expect(calls).toEqual(['/api/member/exp_E1/home']);
   });
 
+  it('shows a buyer, in StayPut’s own community, where to install it and their plan', async () => {
+    const install = 'https://whop.com/apps/app_stayput/install';
+    mockApi({
+      '/api/member/exp_E1/home': [
+        {
+          status: 200,
+          body: {
+            dashboard: null,
+            locale: 'en',
+            welcome: {
+              installUrl: install,
+              whopAppId: 'app_stayput',
+              plan: { tier: 'scale', trialEndsAt: '2026-11-23T12:00:00.000Z' },
+              installedOn: ['Buyer Club'],
+            },
+          },
+        },
+      ],
+    });
+    renderAt('/experiences/exp_E1');
+    expect(
+      await screen.findByRole('heading', { name: 'Welcome to StayPut', level: 1 }),
+    ).toBeTruthy();
+    expect(screen.getByText('Your plan: Scale')).toBeTruthy();
+    expect(screen.getByText(/^Free trial until /)).toBeTruthy();
+    // One button, to Whop's install page, where the buyer picks the whop they own.
+    const link = screen.getByRole('link', { name: /Install StayPut on my whop/ });
+    expect(link.getAttribute('href')).toBe(install);
+    expect(
+      screen.getByText('Already installed on Buyer Club. Open StayPut from that whop.'),
+    ).toBeTruthy();
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.queryByText('Nothing to do here')).toBeNull();
+  });
+
+  it('keeps the install button when Whop gave no plan, in the community’s language', async () => {
+    mockApi({
+      '/api/member/exp_E1/home': [
+        {
+          status: 200,
+          body: {
+            dashboard: null,
+            locale: 'fr',
+            welcome: {
+              installUrl: 'https://whop.com/apps/app_stayput/install',
+              whopAppId: 'app_stayput',
+              plan: null,
+              installedOn: [],
+            },
+          },
+        },
+      ],
+    });
+    renderAt('/experiences/exp_E1');
+    expect(await screen.findByText('Bienvenue sur StayPut')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Installer StayPut sur mon whop/ })).toBeTruthy();
+    expect(screen.queryByText(/^Votre forfait :/)).toBeNull();
+    expect(screen.queryByText(/Déjà installé/)).toBeNull();
+  });
+
   it('takes the team from their community straight to their dashboard', async () => {
     mockApi({
       ...dashboard(),
@@ -6359,10 +6419,14 @@ describe('the demo (/demo)', () => {
     expect(screen.getByText('Before you go')).toBeTruthy();
     cleanup();
     renderAt('/demo/insights/cohorts');
+    // July's arrivals are flagged; the ratio moves with the date (a month counts once its
+    // members are old enough): « 1.9 », « 2 »…
     expect(
-      await screen.findByText(/left 1\.\d times more than your average within 30 days/, undefined, {
-        timeout: 3_000,
-      }),
+      await screen.findByText(
+        /July \d{4} left \d+(\.\d)? times more than your average within 30 days/,
+        undefined,
+        { timeout: 3_000 },
+      ),
     ).toBeTruthy();
   }, 40_000);
 

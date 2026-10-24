@@ -1529,6 +1529,22 @@ export const en = {
   'legal.frame': '{document}, the page',
   'legal.draft': 'Draft, being reviewed: it may still change before StayPut goes live.',
   'member.privacy': 'Privacy',
+  'welcome.title': 'Welcome to StayPut',
+  'welcome.body':
+    'StayPut works inside your own whop: install it there, and it starts reading your members right away.',
+  'welcome.plan': 'Your plan: {tier}',
+  'welcome.trial': 'Free trial until {date}',
+  'welcome.install': 'Install StayPut on my whop',
+  'welcome.installed': 'Already installed on {names}. Open StayPut from that whop.',
+  'welcome.step.install.title': 'Install it on the whop you own',
+  'welcome.step.install.body':
+    'Pick your whop on Whop’s page and approve. Use the account that owns the whop: your plan comes with it.',
+  'welcome.step.open.title': 'Open it from your whop',
+  'welcome.step.open.body':
+    'StayPut is in your whop’s apps. Your members’ first risk scores show up within the hour.',
+  'welcome.step.plan.title': 'Your plan follows you',
+  'welcome.step.plan.body': 'StayPut reads it from your Whop account: no key and no code to enter.',
+  'welcome.help': 'Questions? Write to us in this community’s support chat.',
   'member.none.title': 'Nothing to do here',
   'member.none.body': 'Messages from your community reach you in its support chat.',
   'member.subscription.title': 'Your membership',

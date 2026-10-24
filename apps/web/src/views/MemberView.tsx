@@ -7,6 +7,7 @@ import { BootHold } from '../boot';
 import { ErrorPanel, Loading } from '../components/Status';
 import { memberSpaceEnabled } from '../features';
 import { I18nProvider, useI18n } from '../i18n';
+import { BuyerWelcome } from './BuyerWelcome';
 
 /** The member space (off in V1): its code loads only when it is on. */
 const SpaceView = lazy(() => import('./MemberSpaceView').then((m) => ({ default: m.SpaceView })));
@@ -30,7 +31,8 @@ export function MemberView() {
 
 /**
  * No space: the team, who open StayPut in their community, land on their dashboard; a member
- * reads that there is nothing to do here, in the community's language, nothing to answer. The
+ * reads that there is nothing to do here, in the community's language, nothing to answer; a
+ * buyer of StayPut, in StayPut's own community, finds where to install it (BuyerWelcome). The
  * answer was asked as the page opened (prefetch.ts), and StayPut's loading screen stays until
  * it comes: the team never sees this page on their way to the dashboard.
  */
@@ -44,9 +46,10 @@ function NothingHere() {
     return <ErrorPanel error={state.error} forbiddenKey="error.forbidden.member" onRetry={retry} />;
   }
   if (state.data.dashboard) return <Navigate to={state.data.dashboard} replace />;
+  // A buyer of StayPut, in StayPut's own community: where to install it (2026-10-24).
   return (
     <SpokenIn locale={state.data.locale}>
-      <Nothing />
+      {state.data.welcome ? <BuyerWelcome welcome={state.data.welcome} /> : <Nothing />}
     </SpokenIn>
   );
 }
