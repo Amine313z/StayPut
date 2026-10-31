@@ -9,6 +9,7 @@ permissions: {}
 jobs:
   lire:
     runs-on: ubuntu-latest
+    environment: production stayput off
     timeout-minutes: 5
     steps:
       - env:
