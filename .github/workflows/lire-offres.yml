@@ -1,0 +1,24 @@
+# Lecture ponctuelle de la page publique du produit StayPut : identifiants des offres (plan_…).
+name: Lire les offres
+on:
+  push:
+    branches: [claude/lire-offres]
+permissions: {}
+jobs:
+  lire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          curl -sSL --max-time 30 -A "Mozilla/5.0" https://whop.com/housescale/stayput-pro -o page.html -w 'HTTP %{http_code}\n'
+          python3 - <<'PY'
+          import re, html
+          t = open('page.html', encoding='utf-8', errors='ignore').read()
+          ids = sorted(set(re.findall(r'plan_[A-Za-z0-9]{8,24}', t)))
+          print('Identifiants trouvés :', ids)
+          for i in ids:
+              for m in list(re.finditer(re.escape(i), t))[:2]:
+                  bout = html.unescape(t[max(0, m.start()-300):m.end()+300])
+                  bout = re.sub(r'\s+', ' ', bout)
+                  print('---', i, ':', bout[:600])
+          PY
