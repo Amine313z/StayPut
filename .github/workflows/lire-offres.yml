@@ -1,4 +1,6 @@
-# Lecture ponctuelle de la page publique du produit StayPut : identifiants des offres (plan_…).
+# Lecture ponctuelle (GET seulement), autorisée par le fondateur le 2026-10-31 : les offres Whop
+# de sa communauté, avec la clé de production de StayPut. Identifiant, nom, prix, période,
+# essai, produit. Jamais la clé.
 name: Lire les offres
 on:
   push:
@@ -9,16 +11,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - run: |
-          curl -sSL --max-time 30 -A "Mozilla/5.0" https://whop.com/housescale/stayput-pro -o page.html -w 'HTTP %{http_code}\n'
+      - env:
+          CLE: ${{ secrets.PRODUCTION_WHOP_API_KEY }}
+        run: |
           python3 - <<'PY'
-          import re, html
-          t = open('page.html', encoding='utf-8', errors='ignore').read()
-          ids = sorted(set(re.findall(r'plan_[A-Za-z0-9]{8,24}', t)))
-          print('Identifiants trouvés :', ids)
-          for i in ids:
-              for m in list(re.finditer(re.escape(i), t))[:2]:
-                  bout = html.unescape(t[max(0, m.start()-300):m.end()+300])
-                  bout = re.sub(r'\s+', ' ', bout)
-                  print('---', i, ':', bout[:600])
+          import json, os, urllib.request, urllib.error
+          url = 'https://api.whop.com/api/v1/plans?company_id=biz_8bMd4tK5uS65zD&first=50'
+          req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['CLE'].strip()})
+          try:
+              with urllib.request.urlopen(req, timeout=30) as r: d = json.load(r)
+          except urllib.error.HTTPError as e:
+              print('Whop', e.code, e.read().decode()[:300]); raise SystemExit(0)
+          for p in d.get('data', []):
+              prod = p.get('product') or {}
+              print(p.get('id'), '|', prod.get('title'), '|', p.get('title') or p.get('internal_notes'), '|',
+                    p.get('renewal_price'), p.get('billing_period'), '| essai', p.get('trial_period_days'), '|', p.get('visibility'))
           PY
